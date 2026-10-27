@@ -3,7 +3,7 @@
   publish = "."
 
 [functions]
-  directory = "."
+  directory = "netlify/functions"
   node_bundler = "esbuild"
 
 # Cualquier ruta (/app, /panel, ...) abre la app.
