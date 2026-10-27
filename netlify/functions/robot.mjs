@@ -6,7 +6,10 @@
 // Seguridad: todas las llamadas exigen el encabezado x-robot-token igual a la variable
 // de entorno ROBOT_TOKEN (configurada en Netlify, nunca en el código ni en index.html).
 import { getStore } from "@netlify/blobs";
-import { timingSafeEqual, createHash } from "node:crypto";
+import {
+  timingSafeEqual, createHash, createHmac, createECDH, createCipheriv, createPrivateKey,
+  generateKeyPairSync, randomBytes, sign,
+} from "node:crypto";
 
 export const config = { path: ["/bot", "/bot/*"] };
 
@@ -57,6 +60,97 @@ async function todos(store) {
 }
 async function cuerpo(req) {
   try { return await req.json(); } catch { return {}; }
+}
+
+// ---------- avisos push (llegan al celular aunque la app esté cerrada) ----------
+// Web Push estándar (RFC 8291 + VAPID RFC 8292) con el crypto de Node: sin dependencias extra.
+// Las claves VAPID se crean solas la primera vez y quedan guardadas en Netlify Blobs.
+const b64u = (buf) => Buffer.from(buf).toString("base64url");
+const deB64u = (s) => Buffer.from(String(s), "base64url");
+const hmac = (clave, dato) => createHmac("sha256", clave).update(dato).digest();
+
+async function vapid(store) {
+  let v = await store.get("push/vapid", { type: "json" });
+  if (!v?.publicKey || !v?.jwk) {
+    const { privateKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+    const jwk = privateKey.export({ format: "jwk" });
+    v = { jwk, publicKey: b64u(Buffer.concat([Buffer.from([4]), deB64u(jwk.x), deB64u(jwk.y)])) };
+    await store.setJSON("push/vapid", v);
+  }
+  return v;
+}
+
+// Cifra el mensaje para un teléfono (aes128gcm). `efimera` y `sal` solo se pasan en pruebas.
+export function _cifrarPush(sub, texto, efimera, sal) {
+  const uaPub = deB64u(sub.keys.p256dh), auth = deB64u(sub.keys.auth);
+  const ecdh = createECDH("prime256v1");
+  if (efimera) ecdh.setPrivateKey(efimera); else ecdh.generateKeys();
+  const asPub = ecdh.getPublicKey();
+  const secreto = ecdh.computeSecret(uaPub);
+  const ikm = hmac(hmac(auth, secreto), Buffer.concat([Buffer.from("WebPush: info\0"), uaPub, asPub, Buffer.from([1])]));
+  const salt = sal || randomBytes(16);
+  const prk = hmac(salt, ikm);
+  const cek = hmac(prk, Buffer.from("Content-Encoding: aes128gcm\0\x01")).subarray(0, 16);
+  const nonce = hmac(prk, Buffer.from("Content-Encoding: nonce\0\x01")).subarray(0, 12);
+  const c = createCipheriv("aes-128-gcm", cek, nonce);
+  const cifrado = Buffer.concat([c.update(Buffer.concat([Buffer.from(texto), Buffer.from([2])])), c.final(), c.getAuthTag()]);
+  const rs = Buffer.alloc(4); rs.writeUInt32BE(4096);
+  return Buffer.concat([salt, rs, Buffer.from([asPub.length]), asPub, cifrado]);
+}
+
+function jwtVapid(v, endpoint) {
+  const enc = (o) => b64u(JSON.stringify(o));
+  const datos = enc({ typ: "JWT", alg: "ES256" }) + "." +
+    enc({ aud: new URL(endpoint).origin, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: "mailto:avisos@cotizagil.app" });
+  const firma = sign("sha256", Buffer.from(datos), { key: createPrivateKey({ key: v.jwk, format: "jwk" }), dsaEncoding: "ieee-p1363" });
+  return datos + "." + b64u(firma);
+}
+
+async function enviarPush(v, sub, texto, urgente) {
+  const r = await fetch(sub.endpoint, {
+    method: "POST",
+    headers: {
+      "content-encoding": "aes128gcm", "content-type": "application/octet-stream",
+      ttl: "3600", urgency: urgente ? "high" : "normal",
+      authorization: `vapid t=${jwtVapid(v, sub.endpoint)}, k=${v.publicKey}`,
+    },
+    body: _cifrarPush(sub, texto),
+  });
+  return r.status;
+}
+const idSub = (endpoint) => createHash("sha256").update(String(endpoint)).digest("hex").slice(0, 32);
+
+const AVISO = {
+  lista:      (t) => ["Falta tu clic · " + t.codigo, `${clpTxt(t.total)} lista en el PC. Presiona «Enviar cotización» y acepta la declaración.`, true],
+  enviada:    (t) => ["Oferta enviada · " + t.codigo, clpTxt(t.total), false],
+  confirmada: (t) => ["Oferta confirmada · " + t.codigo, `${clpTxt(t.total)} · confirmada en Mercado Público`, false],
+  requiere:   (t) => ["Necesita tu atención · " + t.codigo, t.mensaje || "", true],
+  error:      (t) => ["No se pudo · " + t.codigo, t.mensaje || "", true],
+  probada:    (t) => ["Prueba lista · " + t.codigo, clpTxt(t.total), false],
+};
+function clpTxt(n) {
+  return n ? "$" + Math.round(n).toLocaleString("es-CL") : "Oferta";
+}
+
+async function avisar(store, t) {
+  const f = AVISO[t.estado];
+  if (!f) return;
+  const [title, body, urgente] = f(t);
+  const { blobs } = await store.list({ prefix: "push/sub/" });
+  if (!blobs.length) return;
+  const v = await vapid(store);
+  const payload = JSON.stringify({
+    title, body: (t.nombre ? t.nombre.slice(0, 70) + " · " : "") + body,
+    tag: `rb-${t.codigo}-${t.estado}`, url: `/#robot=${encodeURIComponent(t.codigo)}`, urgente,
+  });
+  await Promise.all(blobs.map(async (b) => {
+    const sub = await store.get(b.key, { type: "json" });
+    if (!sub) return;
+    try {
+      const status = await enviarPush(v, sub, payload, urgente);
+      if (status === 404 || status === 410) await store.delete(b.key);   // teléfono que ya no existe
+    } catch { /* sin red hacia el servicio push: se intenta en el próximo aviso */ }
+  }));
 }
 
 export default async (req) => {
@@ -113,6 +207,32 @@ export default async (req) => {
     return json({ ok: true });
   }
 
+  if (ruta === "push-clave" && req.method === "GET") {
+    return json({ publicKey: (await vapid(store)).publicKey });
+  }
+
+  if (ruta === "push-suscribir" && req.method === "POST") {
+    const sub = (await cuerpo(req)).sub;
+    if (!sub?.endpoint || !/^https:\/\//.test(sub.endpoint) || !sub.keys?.p256dh || !sub.keys?.auth) {
+      return json({ error: "Suscripción inválida." }, 400);
+    }
+    await store.setJSON("push/sub/" + idSub(sub.endpoint), {
+      endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth }, creado: ahora(),
+    });
+    return json({ ok: true });
+  }
+
+  if (ruta === "push-borrar" && req.method === "POST") {
+    const sub = (await cuerpo(req)).sub;
+    if (sub?.endpoint) await store.delete("push/sub/" + idSub(sub.endpoint));
+    return json({ ok: true });
+  }
+
+  if (ruta === "push-probar" && req.method === "POST") {
+    await avisar(store, { codigo: "PRUEBA", estado: "probada", total: null, nombre: "Aviso de prueba de CotizÁgil" });
+    return json({ ok: true });
+  }
+
   if (ruta === "pdf" && req.method === "GET") {
     const codigo = limpiaCodigo(url.searchParams.get("codigo"));
     const data = await store.get("pdf/" + codigo, { type: "arrayBuffer" });
@@ -163,8 +283,13 @@ export default async (req) => {
         t.pdf = true;
       }
     }
+    const cambio = b.estado && b.estado !== t.estado;
     anotar(t, b.estado || null, b.mensaje);
-    return json({ trabajo: await escribir(store, t) });
+    const guardado = await escribir(store, t);
+    if (cambio) {
+      try { await avisar(store, guardado); } catch { /* un aviso fallido no detiene al robot */ }
+    }
+    return json({ trabajo: guardado });
   }
 
   return json({ error: "Ruta no encontrada." }, 404);
