@@ -1,12 +1,12 @@
+# Versión para repositorio sin carpetas: todos los archivos están en la raíz.
 [build]
-  publish = "public"
+  publish = "."
 
 [functions]
-  directory = "netlify/functions"
+  directory = "."
   node_bundler = "esbuild"
 
-# La app es de una sola página: cualquier ruta (/app, /panel, /oportunidades/...) abre index.html.
-# Esto evita el "Not Found" al entrar directo a una dirección interna.
+# Cualquier ruta (/app, /panel, ...) abre la app.
 [[redirects]]
   from = "/*"
   to = "/index.html"

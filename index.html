@@ -942,8 +942,8 @@ window.addEventListener("hashchange", route);
   loadQuote(); renderItems();
   try {
     const [rub, est] = await Promise.all([
-      fetch("/data/rubros.json").then((r) => r.json()),
-      fetch("/data/estudio.json").then((r) => r.ok ? r.json() : null).catch(() => null),
+      fetch("/rubros.json").then((r) => r.json()),
+      fetch("/estudio.json").then((r) => r.ok ? r.json() : null).catch(() => null),
     ]);
     RUBROS = rub.rubros; ESTUDIO = est;
   } catch { toast("No se pudieron cargar los datos base"); }
