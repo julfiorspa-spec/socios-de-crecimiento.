@@ -28,6 +28,7 @@
   const b64utf8 = (t) => btoa(unescape(encodeURIComponent(t)));
   const codigoRellenar = (t) => ["CA1", t.codigo, t.firma.despacho || 0, t.firma.precios.join(","), b64utf8(t.firma.detalle || ""),
     t.firma.total || t.total || 0].join("|");
+  const firmaRapida = () => document.documentElement.dataset.firmaRapida === "1";   // extensión Tampermonkey instalada
   const portalDe = (cod) => `https://compra-agil.mercadopublico.cl/resumen-cotizacion/${encodeURIComponent(cod)}`;
   async function copiar(texto) {
     try { await navigator.clipboard.writeText(texto); return true; } catch {}
@@ -347,7 +348,9 @@
     const msg = t.estado === "lista"
       ? "Todo cargado en el PC. Presiona «Enviar cotización», marca la declaración y «Aceptar y enviar» (en el PC o desde aquí con escritorio remoto). El robot confirma solo."
       : firmable ? (t.firma.aviso || null) : t.mensaje;
-    const pasos = firmable ? `<ol class="rb-pasos">
+    const pasos = firmable && firmaRapida() ? `<ol class="rb-pasos">
+        <li><b>Ir a firmar</b> abre la compra: <b>Firma rápida</b> carga sola los precios, el detalle y el PDF.</li>
+        <li>Tú presionas <b>Enviar cotización</b>, marcas la <b>declaración</b> y <b>firmas</b>. El robot lo confirma solo.</li></ol>` : firmable ? `<div class="rb-msg" style="color:#d9c9ff">Más rápido: instala <b>Firma rápida</b> (Robot → Ajustes) y «Ir a firmar» te deja el formulario listo con el PDF.</div><ol class="rb-pasos">
         <li><b>Ir a firmar</b> copia el código y abre la compra en este navegador${t.pdf ? "; baja antes el <b>PDF</b>" : ""}.</li>
         <li>En Mercado Público presiona <b>Participar</b> (o <b>Enviar nueva cotización</b>) y toca tu marcador <b>Rellenar</b>; pega el código.</li>
         <li>Adjunta <b>${esc(t.firma.adjunto || "el PDF")}</b>, presiona <b>Enviar cotización</b>, marca la <b>declaración</b> y <b>firma</b>.</li>
@@ -506,7 +509,10 @@
         <div class="field" style="margin-top:10px"><label class="muted" for="rbRemoto">Enlace de escritorio remoto (para dar el clic final desde el celular)</label>
           <input id="rbRemoto" value="${esc(leer().remoto || REMOTO_DEF)}" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
         <div class="muted" style="margin-top:6px">Instala <b>Chrome Remote Desktop</b> en el PC y en el celular (gratis). Con «Dar el clic desde aquí» ves la ventana del robot y presionas Enviar tú mismo.</div>
-        <div class="label" style="margin-top:14px">Botón «Rellenar» (una vez por navegador)</div>
+        <div class="label" style="margin-top:14px">Firma rápida ${firmaRapida() ? "✓ instalada en este navegador" : "(recomendado)"}</div>
+        <div class="muted">Con esto, «Ir a firmar» abre Mercado Público con los precios, el detalle y el PDF ya cargados, y al terminar el robot confirma solo. Tú solo envías, declaras y firmas.</div>
+        <div class="muted" style="margin-top:6px">1) Instala la extensión gratuita <b>Tampermonkey</b> (Opera/Chrome/Edge en el PC; en Android usa Firefox o Edge). 2) Toca <a class="btn small rb-firmar" href="/cotizagil-firma.user.js" target="_blank" rel="noopener">Instalar Firma rápida</a> y confirma «Instalar». 3) Vuelve a abrir esta app una vez.</div>
+        <div class="label" style="margin-top:14px">Botón «Rellenar» (alternativa sin extensión)</div>
         <div class="muted"><b>PC:</b> muestra la barra de favoritos (Ctrl+Shift+B) y arrastra este botón: <a class="btn small rb-firmar" href="${esc(MARCADOR)}" data-rb="marcador-arrastrar">Rellenar</a></div>
         <div class="muted" style="margin-top:6px"><b>Celular:</b> toca <button class="btn small" type="button" data-rb="copiar-marcador">Copiar marcador</button>, guarda cualquier página como favorito, edítalo con nombre <b>Rellenar</b> y pega el código como dirección. En Mercado Público escribe «Rellenar» en la barra y toca el favorito.</div>
         <div class="row" style="margin-top:10px;gap:8px">
@@ -614,8 +620,11 @@
     if (a === "marcador-arrastrar") { ev.preventDefault(); toast("Arrástralo a la barra de favoritos; se usa en Mercado Público"); return; }
     if (a === "ir-firmar") {
       const t = trabajo(cod); if (!t?.firma) return;
-      const ok = await copiar(codigoRellenar(t));          // copiar mientras esta pestaña tiene el foco
-      toast(ok ? "Código copiado. En Mercado Público toca tu marcador «Rellenar» y pégalo." : "No se pudo copiar: usa «Copiar datos a mano».");
+      if (firmaRapida()) toast("Abriendo la compra: Firma rápida carga precios, detalle y PDF");
+      else {
+        const ok = await copiar(codigoRellenar(t));          // copiar mientras esta pestaña tiene el foco
+        toast(ok ? "Código copiado. En Mercado Público toca tu marcador «Rellenar» y pégalo." : "No se pudo copiar: usa «Copiar datos a mano».");
+      }
       const w = window.open(portalDe(cod), "_blank");
       if (w) { try { w.opener = null; } catch {} } else location.href = portalDe(cod);
       return;
