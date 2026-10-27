@@ -36,18 +36,18 @@ const norm = (s) =>
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function mp(path, params) {
+async function mp(path, params, intentos = 4) {
   const ticket = process.env.MP_TICKET;
   if (!ticket) throw new HttpError(500, "Falta configurar MP_TICKET en Netlify.");
   const qs = new URLSearchParams({ ...params, ticket });
   const url = `${BASE}/${path}?${qs}`;
-  for (let i = 0; i < 4; i++) {
-    const r = await fetch(url, { headers: { accept: "application/json" } });
+  for (let i = 0; i < intentos; i++) {
+    const r = await fetch(url, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(9000) });
     const j = await r.json().catch(() => null);
     // La API responde {Codigo, Mensaje} cuando hay error o exceso de peticiones simultáneas.
     if (j && (j.Listado || j.listaEmpresas)) return j;
-    if (i < 3) {
-      await sleep(800 * (i + 1));
+    if (i < intentos - 1) {
+      await sleep(600 * (i + 1));
       continue;
     }
     throw new HttpError(502, (j && j.Mensaje) || "Mercado Público no respondió.");
@@ -128,8 +128,9 @@ function resumenOC(o) {
 }
 
 async function oportunidades(rubros) {
+  const inicio = Date.now();
   const activas = await cached("activas", 30 * 60 * 1000, () =>
-    mp("licitaciones.json", { estado: "activas" })
+    mp("licitaciones.json", { estado: "activas" }, 2)
   );
   const ahora = Date.now();
   const lista = (activas.Listado || [])
@@ -143,15 +144,16 @@ async function oportunidades(rubros) {
     .filter((x) => !x.cierre || new Date(x.cierre).getTime() > ahora)
     .sort((a, b) => new Date(a.cierre) - new Date(b.cierre));
 
-  // Enriquecemos las primeras con su detalle (monto, organismo, región), de a dos en paralelo.
-  const top = lista.slice(0, 24);
+  // Enriquecemos las primeras con su detalle (monto, organismo, región), con un tope de tiempo
+  // para responder siempre rápido; las que no alcancen se completan en la próxima consulta (caché).
+  const top = lista.slice(0, 18);
   let idx = 0;
   async function worker() {
-    while (idx < top.length) {
+    while (idx < top.length && Date.now() - inicio < 7000) {
       const x = top[idx++];
       try {
         const d = await cached("lic:" + x.codigo, 6 * 3600 * 1000, async () => {
-          const j = await mp("licitaciones.json", { codigo: x.codigo });
+          const j = await mp("licitaciones.json", { codigo: x.codigo }, 1);
           return resumenLicitacion(j.Listado[0]);
         });
         Object.assign(x, {
@@ -168,7 +170,7 @@ async function oportunidades(rubros) {
       }
     }
   }
-  await Promise.all([worker(), worker()]);
+  await Promise.all([worker(), worker(), worker()]);
   return {
     actualizado: activas.FechaCreacion,
     totalActivas: activas.Cantidad,
