@@ -154,7 +154,19 @@ async function avisar(store, t) {
   }));
 }
 
+// La página de la cotización en Mercado Público puede pedir tus datos de firma y el PDF (con tu código de enlace)
+const ORIGEN_MP = "https://compra-agil.mercadopublico.cl";
 export default async (req) => {
+  const mp = req.headers.get("origin") === ORIGEN_MP;
+  const cors = { "access-control-allow-origin": ORIGEN_MP, "access-control-allow-headers": "x-robot-token, content-type",
+                 "access-control-allow-methods": "GET, POST", "access-control-max-age": "600", vary: "origin" };
+  if (req.method === "OPTIONS") return new Response(null, { status: mp ? 204 : 403, headers: mp ? cors : {} });
+  const res = await atender(req);
+  if (mp) for (const [k, v] of Object.entries(cors)) res.headers.set(k, v);
+  return res;
+};
+
+async function atender(req) {
   if (!autorizado(req)) return json({ error: "Código de enlace inválido o no configurado." }, 401);
   const store = getStore({ name: "robot", consistency: "strong" });
   const url = new URL(req.url);
@@ -310,4 +322,4 @@ export default async (req) => {
   }
 
   return json({ error: "Ruta no encontrada." }, 404);
-};
+}
