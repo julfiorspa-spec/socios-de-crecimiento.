@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Socios de Crecimiento</title>
+<meta name="description" content="Oportunidades reales de Mercado Público, estudio de mercado por rubro y caminos para crecer.">
+<link rel="icon" href="/icon-512.png" type="image/png">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Socios Crecimiento">
+<meta name="theme-color" content="#050e22">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#050e22; --bg-2:#071530;
+  --panel:#0b1c3c; --panel-2:#0f2449;
+  --line:#1c3566; --line-soft:#15294f;
+  --ink:#f6f8fc; --ink-dim:#a9b8d9; --ink-faint:#7183ae;
+  --red:#e8313f; --red-deep:#c21f2c;
+  --blue:#3f7ae0; --blue-deep:#0039a6;
+  --ok:#3fbf8a; --warn:#f0b43c;
+  --radius:16px;
+  color-scheme: dark;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;}
+body{
+  color:var(--ink); background:var(--bg);
+  font-family:"Inter",system-ui,sans-serif; font-size:15px; line-height:1.5;
+  overflow-x:hidden;
+  padding-bottom:calc(84px + env(safe-area-inset-bottom,0px));
+}
+a{color:inherit;}
+button{font:inherit;color:inherit;}
+input,select,textarea{font:inherit;}
+
+/* ===== header ===== */
+.top{
+  position:sticky; top:0; z-index:20;
+  background:rgba(5,14,34,.88); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line-soft);
+  padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px;
+}
+.top-in{max-width:760px;margin:0 auto;display:flex;align-items:center;gap:10px;}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;flex:1;min-width:0;}
+.brand-mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--blue-deep),var(--red));display:grid;place-items:center;flex-shrink:0;}
+.brand-name{font-family:"Fraunces",serif;font-weight:600;font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rubro-pill{
+  border:1px solid var(--line);background:var(--panel);border-radius:99px;
+  padding:6px 12px;font-size:.78rem;color:var(--ink-dim);cursor:pointer;white-space:nowrap;max-width:48vw;overflow:hidden;text-overflow:ellipsis;
+}
+
+main{max-width:760px;margin:0 auto;padding:0 16px;}
+section.view{display:none;padding-top:18px;}
+section.view.on{display:block;}
+
+/* ===== bottom nav ===== */
+nav.tabs{
+  position:fixed;left:0;right:0;bottom:0;z-index:30;
+  background:rgba(7,21,48,.96);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border-top:1px solid var(--line-soft);
+  padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px));
+}
+.tabs-in{max-width:760px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr);gap:2px;}
+.tabs a{
+  display:flex;flex-direction:column;align-items:center;gap:3px;text-decoration:none;
+  padding:6px 2px;border-radius:10px;color:var(--ink-faint);font-size:.68rem;font-weight:500;
+}
+.tabs a svg{width:21px;height:21px;}
+.tabs a.on{color:var(--ink);background:var(--panel);}
+.tabs a.on svg{color:var(--red);}
+
+/* ===== common ===== */
+.eyebrow{
+  display:inline-flex;align-items:center;gap:8px;
+  font-family:"IBM Plex Mono",monospace;font-size:.68rem;letter-spacing:.07em;
+  color:var(--red);background:rgba(232,49,63,.1);border:1px solid rgba(232,49,63,.3);
+  padding:5px 12px;border-radius:99px;margin-bottom:16px;
+}
+.eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--red);animation:pulse 2.2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.25;}}
+h1{font-family:"Fraunces",Georgia,serif;font-weight:600;font-size:2.3rem;line-height:1.06;letter-spacing:-.015em;margin:0 0 14px;}
+h1 .grow{font-style:italic;font-weight:500;background:linear-gradient(100deg,var(--red) 10%,#fff 90%);-webkit-background-clip:text;background-clip:text;color:transparent;}
+h2{font-family:"Fraunces",serif;font-weight:600;font-size:1.45rem;line-height:1.15;margin:0 0 6px;}
+h3{font-size:1rem;margin:0 0 8px;font-weight:600;}
+.lead{color:var(--ink-dim);font-size:.96rem;margin:0 0 18px;max-width:52ch;}
+.muted{color:var(--ink-faint);font-size:.82rem;}
+.mono{font-family:"IBM Plex Mono",monospace;}
+.label{
+  font-family:"IBM Plex Mono",monospace;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-faint);margin:26px 0 10px;display:flex;align-items:center;gap:10px;
+}
+.label::after{content:"";flex:1;height:1px;background:var(--line-soft);}
+.card{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--radius);padding:16px;}
+.card + .card{margin-top:10px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.metric{background:var(--panel);border:1px solid var(--line-soft);border-radius:13px;padding:13px 12px;min-width:0;}
+.metric b{display:block;font-family:"Fraunces",serif;font-size:1.4rem;font-weight:600;color:var(--red);line-height:1.05;word-break:break-word;}
+.metric span{display:block;font-size:.72rem;color:var(--ink-faint);margin-top:6px;line-height:1.3;}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  padding:12px 16px;border-radius:12px;border:1px solid var(--line);background:var(--panel-2);
+  font-weight:600;font-size:.88rem;cursor:pointer;text-decoration:none;color:var(--ink);
+}
+.btn.primary{background:linear-gradient(100deg,var(--blue),var(--blue-deep));border-color:transparent;color:#fff;}
+.btn.danger{background:rgba(232,49,63,.12);color:var(--red);border-color:rgba(232,49,63,.35);}
+.btn.small{padding:8px 12px;font-size:.8rem;border-radius:10px;}
+.btn.block{display:flex;width:100%;}
+.btn:disabled{opacity:.5;cursor:default;}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.chips{display:flex;flex-wrap:wrap;gap:8px;}
+.chip{
+  border:1px solid var(--line);background:var(--panel);border-radius:99px;padding:8px 13px;
+  font-size:.84rem;cursor:pointer;color:var(--ink-dim);
+}
+.chip.dim{border-style:dashed;opacity:.75;}
+.chip.on{background:rgba(63,122,224,.18);border-color:var(--blue);color:#fff;opacity:1;}
+.tag{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:.66rem;padding:3px 8px;border-radius:6px;background:var(--bg-2);border:1px solid var(--line-soft);color:var(--ink-dim);}
+.tag.ag{color:#9cc0ff;border-color:rgba(63,122,224,.45);}
+.tag.hot{color:#ffb3b9;border-color:rgba(232,49,63,.45);}
+.empty{color:var(--ink-faint);text-align:center;padding:26px 10px;font-size:.88rem;}
+.note{font-size:.78rem;color:var(--ink-faint);border-left:3px solid var(--line);padding:6px 0 6px 12px;margin-top:14px;}
+.spinner{width:18px;height:18px;border:2px solid var(--line);border-top-color:var(--red);border-radius:50%;animation:spin .8s linear infinite;display:inline-block;vertical-align:middle;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ===== hero ===== */
+.hero{position:relative;margin:0 -16px;padding:8px 16px 0;overflow:hidden;}
+.waves{position:absolute;top:0;left:0;width:100%;height:300px;z-index:0;overflow:hidden;pointer-events:none;}
+.waves svg{position:absolute;bottom:0;left:0;width:200%;height:100%;}
+.wave-a{animation:drift 22s linear infinite;opacity:.35;}
+.wave-b{animation:drift 34s linear infinite reverse;opacity:.22;}
+.wave-c{animation:drift 50s linear infinite;opacity:.18;}
+@keyframes drift{from{transform:translateX(0);}to{transform:translateX(-50%);}}
+@media (prefers-reduced-motion:reduce){.wave-a,.wave-b,.wave-c,.eyebrow .dot{animation:none;}}
+.hero-in{position:relative;z-index:1;padding-top:14px;}
+
+/* ===== deal swipe ===== */
+.demo{background:linear-gradient(160deg,var(--panel-2),var(--panel));border:1px solid var(--line);border-radius:var(--radius);padding:18px;}
+.demo-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+.demo-head .t{font-family:"IBM Plex Mono",monospace;font-size:.68rem;letter-spacing:.06em;}
+.deal-card{background:var(--bg-2);border:1px solid var(--line-soft);border-radius:13px;padding:15px;min-height:150px;display:flex;flex-direction:column;justify-content:space-between;gap:10px;transition:opacity .15s ease;}
+.deal-card .id{font-family:"IBM Plex Mono",monospace;font-size:.68rem;color:var(--ink-faint);}
+.deal-card h3{margin:4px 0 4px;font-size:.98rem;line-height:1.35;}
+.deal-figs{display:flex;gap:18px;flex-wrap:wrap;font-size:.76rem;color:var(--ink-dim);}
+.deal-figs b{display:block;color:var(--red);font-size:.95rem;}
+.deal-actions{display:flex;gap:10px;margin-top:12px;}
+.deal-actions .btn{flex:1;}
+.feedback{text-align:center;font-size:.78rem;color:var(--ink-faint);margin-top:10px;min-height:18px;font-family:"IBM Plex Mono",monospace;}
+
+/* ===== lists ===== */
+.opp{display:block;}
+.opp .top-line{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;}
+.opp h3{font-size:.95rem;line-height:1.35;margin:6px 0 6px;}
+.opp .meta{font-size:.78rem;color:var(--ink-dim);display:flex;flex-wrap:wrap;gap:4px 14px;}
+.opp .acts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
+.closing{font-family:"IBM Plex Mono",monospace;font-size:.72rem;white-space:nowrap;color:var(--warn);}
+.closing.soon{color:var(--red);}
+
+/* ===== bars ===== */
+.bars{display:flex;flex-direction:column;gap:9px;}
+.bar-row{display:grid;grid-template-columns:1fr auto;gap:4px 10px;font-size:.82rem;}
+.bar-row .name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink);}
+.bar-row .val{font-family:"IBM Plex Mono",monospace;font-size:.74rem;color:var(--ink-dim);text-align:right;}
+.bar-row .track{grid-column:1/-1;height:7px;border-radius:5px;background:var(--bg-2);overflow:hidden;}
+.bar-row .fill{height:100%;border-radius:5px;background:linear-gradient(90deg,var(--blue),#7aa6f0);}
+.bar-row.alt .fill{background:linear-gradient(90deg,var(--red),#f07a83);}
+.months{display:flex;align-items:flex-end;gap:5px;height:130px;padding-top:6px;}
+.months .m{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;height:100%;justify-content:flex-end;min-width:0;}
+.months .col{width:100%;border-radius:5px 5px 2px 2px;background:linear-gradient(180deg,#7aa6f0,var(--blue-deep));min-height:3px;}
+.months .col.peak{background:linear-gradient(180deg,#f07a83,var(--red-deep));}
+.months .lbl{font-family:"IBM Plex Mono",monospace;font-size:.6rem;color:var(--ink-faint);}
+table.t{width:100%;border-collapse:collapse;font-size:.82rem;}
+table.t th{text-align:left;font-weight:500;color:var(--ink-faint);font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;padding:6px 6px;border-bottom:1px solid var(--line-soft);}
+table.t td{padding:9px 6px;border-bottom:1px solid var(--line-soft);vertical-align:top;}
+table.t td.num{text-align:right;font-family:"IBM Plex Mono",monospace;font-size:.76rem;white-space:nowrap;}
+.scroll-x{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+
+/* ===== grow ===== */
+.idea{display:flex;gap:12px;align-items:flex-start;}
+.idea .ic{width:34px;height:34px;border-radius:10px;flex-shrink:0;display:grid;place-items:center;font-family:"IBM Plex Mono",monospace;font-size:.72rem;font-weight:600;}
+.idea .ic.g{background:rgba(63,122,224,.15);color:#9cc0ff;}
+.idea .ic.s{background:rgba(63,191,138,.14);color:var(--ok);}
+.idea .ic.r{background:rgba(232,49,63,.14);color:#ffb3b9;}
+.idea strong{display:block;font-size:.92rem;}
+.idea p{margin:3px 0 0;font-size:.8rem;color:var(--ink-dim);}
+.evidence{margin-top:6px;font-size:.74rem;color:#9cc0ff;font-family:"IBM Plex Mono",monospace;}
+
+/* ===== form ===== */
+.form{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.form .full{grid-column:1/-1;}
+.field label{display:block;font-size:.72rem;color:var(--ink-faint);margin-bottom:5px;}
+.field input,.field select,.field textarea{
+  width:100%;background:var(--bg-2);border:1px solid var(--line);border-radius:10px;color:var(--ink);
+  padding:10px 11px;font-size:.9rem;
+}
+.field input:focus,.field select:focus,.field textarea:focus{outline:2px solid rgba(63,122,224,.5);border-color:var(--blue);}
+.items-table{width:100%;border-collapse:collapse;}
+.items-table td{padding:4px 3px;vertical-align:top;}
+.items-table input{width:100%;background:var(--bg-2);border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:8px;font-size:.84rem;}
+.items-table .qty{width:64px;}
+.items-table .price{width:104px;}
+.items-table .del{background:none;border:none;color:var(--ink-faint);cursor:pointer;padding:8px 4px;font-size:1rem;}
+.totals{display:grid;grid-template-columns:1fr auto;gap:6px 14px;margin-top:12px;font-size:.88rem;}
+.totals .v{font-family:"IBM Plex Mono",monospace;text-align:right;}
+.totals .grand{font-weight:700;font-size:1rem;color:#fff;}
+pre.doc{white-space:pre-wrap;background:var(--bg-2);border:1px solid var(--line-soft);border-radius:12px;padding:14px;font-family:"IBM Plex Mono",monospace;font-size:.78rem;color:var(--ink-dim);margin:0;max-height:340px;overflow:auto;}
+
+/* ===== sheet (rubro picker) ===== */
+.sheet-back{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40;display:none;}
+.sheet-back.on{display:block;}
+.sheet{
+  position:fixed;left:0;right:0;bottom:0;z-index:41;max-height:88vh;overflow:auto;
+  background:var(--bg-2);border-top:1px solid var(--line);border-radius:20px 20px 0 0;
+  padding:18px 16px calc(20px + env(safe-area-inset-bottom,0px));transform:translateY(105%);transition:transform .22s ease,visibility 0s linear .22s;visibility:hidden;
+}
+.sheet.on{transform:none;visibility:visible;transition:transform .22s ease;}
+.sheet-in{max-width:620px;margin:0 auto;}
+.toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--panel-2);border:1px solid var(--line);padding:10px 16px;border-radius:12px;font-size:.84rem;z-index:50;opacity:0;pointer-events:none;transition:opacity .2s;}
+.toast.on{opacity:1;}
+
+@media (max-width:420px){
+  h1{font-size:2rem;}
+  .grid3{grid-template-columns:1fr 1fr;}
+  .grid3 .metric:last-child{grid-column:1/-1;}
+  .form{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <a class="brand" href="#inicio" aria-label="Socios de Crecimiento, inicio">
+      <span class="brand-mark" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18 L10 12 L14 15 L20 7"/><path d="M15 7h5v5"/></svg>
+      </span>
+      <span class="brand-name">Socios de Crecimiento</span>
+    </a>
+    <button class="rubro-pill" id="rubroPill" type="button">Elegir rubro</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ================= INICIO ================= -->
+<section class="view" id="v-inicio">
+  <div class="hero">
+    <div class="waves" aria-hidden="true">
+      <svg class="wave-a" viewBox="0 0 1600 300" preserveAspectRatio="none"><path d="M0,190 C200,130 400,250 600,190 C800,130 1000,250 1200,190 C1400,130 1500,190 1600,175 L1600,300 L0,300 Z" fill="#0039a6"/></svg>
+      <svg class="wave-b" viewBox="0 0 1600 300" preserveAspectRatio="none"><path d="M0,220 C250,160 450,260 700,220 C950,180 1150,260 1400,220 C1500,205 1550,212 1600,220 L1600,300 L0,300 Z" fill="#e8313f"/></svg>
+      <svg class="wave-c" viewBox="0 0 1600 300" preserveAspectRatio="none"><path d="M0,250 C300,220 500,280 800,250 C1100,220 1300,280 1600,250 L1600,300 L0,300 Z" fill="#ffffff"/></svg>
+    </div>
+    <div class="hero-in">
+      <div class="eyebrow"><span class="dot"></span>SOCIOS DE CRECIMIENTO · HECHO EN CHILE</div>
+      <h1>Tus ventas,<br>en <span class="grow">despegue.</span></h1>
+      <p class="lead">Revisamos un año de compras del Estado en tu rubro, te mostramos dónde está la demanda y qué más puedes vender. Tú decides y envías la oferta en el portal oficial.</p>
+    </div>
+  </div>
+
+  <div class="grid3" id="homeMetrics">
+    <div class="metric"><b>—</b><span>compras al año en tu rubro</span></div>
+    <div class="metric"><b>—</b><span>monto anual estimado</span></div>
+    <div class="metric"><b>—</b><span>licitaciones abiertas hoy</span></div>
+  </div>
+
+  <div class="label">Oportunidades de hoy</div>
+  <div class="demo" id="dealBox">
+    <div class="demo-head">
+      <span class="t" id="dealTag">CARGANDO OPORTUNIDADES…</span>
+      <span class="t muted" id="dealCount"></span>
+    </div>
+    <div class="deal-card" id="dealCard">
+      <div><span class="spinner"></span></div>
+    </div>
+    <div class="deal-actions">
+      <button class="btn danger" id="btnNo" type="button">✕ Descartar</button>
+      <button class="btn primary" id="btnYes" type="button">✓ Vamos al negocio</button>
+    </div>
+    <div class="feedback" id="dealFeedback">Tú decides; la app prepara el trabajo.</div>
+  </div>
+
+  <div class="label">Atajos</div>
+  <div class="grid2">
+    <a class="card" href="#mercado" style="text-decoration:none">
+      <h3>Estudio de mercado</h3>
+      <div class="muted">Qué se compró en 12 meses, a quién y a qué precio.</div>
+    </a>
+    <a class="card" href="#crecer" style="text-decoration:none">
+      <h3>Crecer</h3>
+      <div class="muted">Gamas, servicios y giros que puedes sumar.</div>
+    </a>
+  </div>
+
+  <div class="label">Tus portales oficiales</div>
+  <div class="grid2">
+    <a class="card" href="https://www.mercadopublico.cl" target="_blank" rel="noopener noreferrer" style="text-decoration:none">
+      <h3>Mercado Público ↗</h3>
+      <div class="muted">Compra Ágil y licitaciones. Aquí envías tu oferta.</div>
+    </a>
+    <a class="card" href="https://www.sii.cl" target="_blank" rel="noopener noreferrer" style="text-decoration:none">
+      <h3>SII ↗</h3>
+      <div class="muted">Giro, actividades económicas y facturación.</div>
+    </a>
+  </div>
+  <p class="note"><strong>Nada de esto reemplaza tu clave.</strong> La app no inicia sesión ni envía ofertas por ti: cada envío final lo haces tú en el portal oficial.</p>
+</section>
+
+<!-- ================= OPORTUNIDADES ================= -->
+<section class="view" id="v-oportunidades">
+  <h2>Oportunidades abiertas</h2>
+  <p class="lead">Licitaciones vigentes en Mercado Público que calzan con tus rubros, ordenadas por fecha de cierre.</p>
+  <div class="chips" id="oppChips"></div>
+  <div class="row" style="margin-top:12px">
+    <div class="field" style="flex:1;min-width:180px"><input id="oppSearch" type="search" placeholder="Filtrar por palabra, organismo o región" aria-label="Filtrar oportunidades"></div>
+    <button class="btn small" id="oppReload" type="button">Actualizar</button>
+  </div>
+  <div class="muted" id="oppStatus" style="margin:12px 0 4px"></div>
+  <div id="oppList"></div>
+  <p class="note">Las <strong>Compras Ágiles abiertas</strong> no están disponibles en la API pública de ChileCompra; se revisan directamente en Mercado Público. Lo que sí sabemos de ellas (qué se compra, a quién y a qué precio) está en el estudio de mercado.</p>
+</section>
+
+<!-- ================= MERCADO ================= -->
+<section class="view" id="v-mercado">
+  <h2>Estudio de mercado</h2>
+  <p class="lead" id="mkLead">Lo que el Estado compró en los últimos 12 meses en este rubro.</p>
+  <div class="chips" id="mkChips"></div>
+  <div id="mkBody" style="margin-top:6px"></div>
+</section>
+
+<!-- ================= CRECER ================= -->
+<section class="view" id="v-crecer">
+  <h2>Crecer</h2>
+  <p class="lead">Si ya vendes esto, estas son las gamas, servicios y giros con más sentido para sumar.</p>
+  <div class="chips" id="grChips"></div>
+  <div id="grBody" style="margin-top:6px"></div>
+</section>
+
+<!-- ================= COTIZAR ================= -->
+<section class="view" id="v-cotizar">
+  <h2>Cotizador</h2>
+  <p class="lead">Completa los datos, copia los textos y pégalos en Mercado Público. El envío final lo haces tú.</p>
+
+  <div class="card">
+    <h3>Solicitud</h3>
+    <div class="form">
+      <div class="field full">
+        <label for="q_id">ID de la compra</label>
+        <div class="row" style="flex-wrap:nowrap">
+          <input id="q_id" placeholder="Ej: 1002588-102-LP26" autocomplete="off">
+          <button class="btn small" id="q_fetch" type="button">Traer datos</button>
+        </div>
+      </div>
+      <div class="field full"><label for="q_org">Organismo comprador</label><input id="q_org"></div>
+      <div class="field full"><label for="q_name">Nombre de la compra</label><input id="q_name"></div>
+      <div class="field"><label for="q_plazo">Plazo de entrega (días)</label><input id="q_plazo" type="number" min="0" inputmode="numeric"></div>
+      <div class="field"><label for="q_valid">Validez de la oferta (días)</label><input id="q_valid" type="number" min="0" inputmode="numeric" value="30"></div>
+      <div class="field full"><label for="q_lugar">Lugar de entrega</label><input id="q_lugar"></div>
+      <div class="field full"><label for="q_pago">Forma de pago</label><input id="q_pago" placeholder="Ej: 30 días contra factura"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Tu empresa</h3>
+    <div class="form">
+      <div class="field full"><label for="e_razon">Razón social</label><input id="e_razon" autocomplete="organization"></div>
+      <div class="field"><label for="e_rut">RUT</label><input id="e_rut" placeholder="76.123.456-7"></div>
+      <div class="field"><label for="e_contacto">Contacto</label><input id="e_contacto" autocomplete="name"></div>
+      <div class="field full"><label for="e_mail">Correo</label><input id="e_mail" type="email" autocomplete="email"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between"><h3 style="margin:0">Ítems</h3><button class="btn small" id="addItem" type="button">+ Agregar ítem</button></div>
+    <div class="scroll-x" style="margin-top:10px">
+      <table class="items-table">
+        <tbody id="itemsBody"></tbody>
+      </table>
+    </div>
+    <div class="totals">
+      <span>Neto</span><span class="v" id="tNeto">$0</span>
+      <span>IVA 19%</span><span class="v" id="tIva">$0</span>
+      <span class="grand">Total</span><span class="v grand" id="tTotal">$0</span>
+    </div>
+    <div id="priceHints"></div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between"><h3 style="margin:0">Documentos listos</h3><button class="btn small primary" id="copyDoc" type="button">Copiar</button></div>
+    <pre class="doc" id="docOut" style="margin-top:10px"></pre>
+  </div>
+
+  <div class="card">
+    <h3>Registrar resultado</h3>
+    <p class="muted" style="margin:0 0 10px">Anota si enviaste la oferta y cómo te fue. Con esto la app aprende tu tasa de adjudicación y tus precios ganadores.</p>
+    <div class="row">
+      <button class="btn small" data-res="enviada" type="button">Enviada</button>
+      <button class="btn small" data-res="ganada" type="button">Ganada</button>
+      <button class="btn small" data-res="perdida" type="button">Perdida</button>
+    </div>
+    <div id="histBox" style="margin-top:14px"></div>
+  </div>
+  <p class="note">Revisa precios, plazos y requisitos del comprador antes de enviar. Tus datos se guardan solo en este navegador.</p>
+</section>
+
+</main>
+
+<nav class="tabs" aria-label="Secciones">
+  <div class="tabs-in">
+    <a href="#inicio" data-v="inicio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>Inicio</a>
+    <a href="#oportunidades" data-v="oportunidades"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Oportunidades</a>
+    <a href="#mercado" data-v="mercado"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg>Mercado</a>
+    <a href="#crecer" data-v="crecer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18 L10 12 L14 15 L20 7"/><path d="M15 7h5v5"/></svg>Crecer</a>
+    <a href="#cotizar" data-v="cotizar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>Cotizar</a>
+  </div>
+</nav>
+
+<div class="sheet-back" id="sheetBack"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="sheet-in">
+    <h2 id="sheetTitle">¿Qué vende tu empresa?</h2>
+    <p class="lead" style="margin-bottom:14px">Elige uno o más rubros. Con esto filtramos oportunidades y armamos tu plan de crecimiento.</p>
+    <div class="chips" id="sheetChips"></div>
+    <div class="row" style="margin-top:18px">
+      <button class="btn primary" id="sheetOk" type="button" style="flex:1">Listo</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+"use strict";
+
+/* ---------- utilidades ---------- */
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const clp = (n) => (n == null || isNaN(n)) ? "—" : "$" + Math.round(n).toLocaleString("es-CL");
+const short = (n) => {
+  if (n == null || isNaN(n)) return "—";
+  if (n >= 1e12) return "$" + (n / 1e12).toLocaleString("es-CL", { maximumFractionDigits: 1 }) + " B";
+  if (n >= 1e9) return "$" + (n / 1e9).toLocaleString("es-CL", { maximumFractionDigits: 1 }) + " mil M";
+  if (n >= 1e6) return "$" + (n / 1e6).toLocaleString("es-CL", { maximumFractionDigits: 1 }) + " M";
+  if (n >= 1e3) return "$" + Math.round(n / 1e3).toLocaleString("es-CL") + " mil";
+  return "$" + Math.round(n);
+};
+const num = (n) => (n == null || isNaN(n)) ? "—" : Math.round(n).toLocaleString("es-CL");
+const pct = (x) => (x == null || isNaN(x)) ? "—" : Math.round(x * 100) + "%";
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("sdc:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("sdc:" + k, JSON.stringify(v)); } catch { /* sin almacenamiento */ } },
+};
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.classList.add("on");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("on"), 1800);
+}
+function cierreTxt(iso) {
+  if (!iso) return { txt: "sin fecha", soon: false };
+  const ms = new Date(iso).getTime() - Date.now();
+  const h = ms / 36e5;
+  if (h < 0) return { txt: "cerrada", soon: true };
+  if (h < 48) return { txt: "cierra en " + Math.max(1, Math.round(h)) + " h", soon: true };
+  return { txt: "cierra en " + Math.round(h / 24) + " días", soon: false };
+}
+async function api(path) {
+  const r = await fetch(path, { headers: { accept: "application/json" } });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || "No se pudo conectar.");
+  return j;
+}
+
+/* ---------- estado ---------- */
+let RUBROS = {};
+let ESTUDIO = null;
+let sel = store.get("rubros", []);
+let focus = store.get("focus", null); // rubro mostrado en Mercado/Crecer
+const S = { opps: null, oppErr: null, deals: [], dealIdx: 0 };
+
+/* ---------- rubro picker ---------- */
+function renderPill() {
+  const p = $("#rubroPill");
+  p.textContent = sel.length ? sel.map((k) => RUBROS[k]?.corto || k).join(" · ") : "Elegir rubro";
+}
+function openSheet() {
+  const c = $("#sheetChips");
+  c.innerHTML = Object.entries(RUBROS).map(([k, r]) =>
+    `<button type="button" class="chip ${sel.includes(k) ? "on" : ""}" data-k="${k}">${esc(r.nombre)}</button>`).join("");
+  $("#sheet").classList.add("on"); $("#sheetBack").classList.add("on");
+}
+function closeSheet() { $("#sheet").classList.remove("on"); $("#sheetBack").classList.remove("on"); }
+$("#sheetChips").addEventListener("click", (e) => {
+  const b = e.target.closest(".chip"); if (!b) return;
+  b.classList.toggle("on");
+});
+$("#sheetOk").addEventListener("click", () => {
+  const nuevos = $$("#sheetChips .chip.on").map((b) => b.dataset.k);
+  if (!nuevos.length) { toast("Elige al menos un rubro"); return; }
+  sel = nuevos; store.set("rubros", sel);
+  if (!sel.includes(focus)) { focus = sel[0]; store.set("focus", focus); }
+  closeSheet(); renderPill(); S.opps = null; loadOpps(); route();
+});
+$("#sheetBack").addEventListener("click", closeSheet);
+$("#rubroPill").addEventListener("click", openSheet);
+
+function focusChips(container, onPick) {
+  const keys = Object.keys(RUBROS);
+  const ordered = [...sel, ...keys.filter((k) => !sel.includes(k))];
+  container.innerHTML = ordered.map((k) =>
+    `<button type="button" class="chip ${k === focus ? "on" : ""} ${sel.includes(k) ? "" : "dim"}" data-k="${k}">${esc(RUBROS[k].corto)}</button>`).join("");
+  container.onclick = (e) => {
+    const b = e.target.closest(".chip"); if (!b) return;
+    focus = b.dataset.k; store.set("focus", focus); onPick();
+  };
+}
+
+/* ---------- inicio ---------- */
+function renderHome() {
+  const m = $("#homeMetrics");
+  const est = ESTUDIO && sel.map((k) => ESTUDIO.rubros[k]).filter(Boolean);
+  const oc = est && est.length ? est.reduce((a, r) => a + (r.ocAnual || 0), 0) : null;
+  const monto = est && est.length ? est.reduce((a, r) => a + (r.montoAnual || 0), 0) : null;
+  const abiertas = S.opps ? S.opps.cantidad : null;
+  m.innerHTML = `
+    <div class="metric"><b>${oc == null ? "—" : num(oc)}</b><span>compras al año en tu rubro</span></div>
+    <div class="metric"><b>${monto == null ? "—" : short(monto)}</b><span>monto anual estimado</span></div>
+    <div class="metric"><b>${abiertas == null ? (S.oppErr ? "—" : '<span class="spinner"></span>') : num(abiertas)}</b><span>licitaciones abiertas hoy</span></div>`;
+  renderDeal();
+}
+function buildDeals() {
+  const dismissed = new Set(store.get("descartadas", []));
+  S.deals = (S.opps?.oportunidades || []).filter((o) => !dismissed.has(o.codigo)).slice(0, 15);
+  S.dealIdx = 0;
+}
+function renderDeal() {
+  const card = $("#dealCard");
+  const tag = $("#dealTag");
+  const yes = $("#btnYes"), no = $("#btnNo");
+  if (!sel.length) {
+    tag.textContent = "ELIGE TU RUBRO";
+    $("#dealCount").textContent = "";
+    card.innerHTML = `<div><h3>Cuéntanos qué vendes</h3><div class="muted">Con tu rubro te mostramos oportunidades reales abiertas hoy.</div></div><div><button class="btn primary small" type="button" id="pickNow">Elegir rubro</button></div>`;
+    $("#pickNow").onclick = openSheet; yes.disabled = no.disabled = true; return;
+  }
+  if (S.oppErr) {
+    tag.textContent = "SIN CONEXIÓN CON MERCADO PÚBLICO";
+    card.innerHTML = `<div class="muted">${esc(S.oppErr)}</div>`; yes.disabled = no.disabled = true; return;
+  }
+  if (!S.opps) { tag.textContent = "CARGANDO OPORTUNIDADES…"; card.innerHTML = `<div><span class="spinner"></span></div>`; yes.disabled = no.disabled = true; return; }
+  if (!S.deals.length || S.dealIdx >= S.deals.length) {
+    tag.textContent = "AL DÍA";
+    $("#dealCount").textContent = "";
+    card.innerHTML = `<div><h3>Revisaste todo lo de hoy</h3><div class="muted">Mira la lista completa en Oportunidades o vuelve mañana.</div></div><div><a class="btn small" href="#oportunidades">Ver todas</a></div>`;
+    yes.disabled = no.disabled = true; return;
+  }
+  yes.disabled = no.disabled = false;
+  const d = S.deals[S.dealIdx];
+  const c = cierreTxt(d.cierre);
+  tag.textContent = "ASÍ TE LLEGAN LAS OPORTUNIDADES";
+  $("#dealCount").textContent = `${S.dealIdx + 1} / ${S.deals.length}`;
+  card.innerHTML = `
+    <div>
+      <div class="id">${esc(d.codigo)} · ${esc((d.rubros || []).map((k) => RUBROS[k]?.corto).join(", "))}</div>
+      <h3>${esc(d.nombre)}</h3>
+      <div class="muted">${esc(d.organismo || "")}${d.region ? " · " + esc(d.region) : ""}</div>
+    </div>
+    <div class="deal-figs">
+      <div><b>${d.monto ? short(d.monto) : "No informado"}</b>monto estimado</div>
+      <div><b class="${c.soon ? "" : ""}">${esc(c.txt)}</b>plazo</div>
+      ${d.totalItems ? `<div><b>${d.totalItems}</b>líneas</div>` : ""}
+    </div>`;
+}
+function nextDeal(msg) {
+  $("#dealFeedback").textContent = msg;
+  const card = $("#dealCard");
+  card.style.opacity = "0";
+  setTimeout(() => { S.dealIdx++; renderDeal(); card.style.opacity = "1"; }, 160);
+  setTimeout(() => { $("#dealFeedback").textContent = "Tú decides; la app prepara el trabajo."; }, 1600);
+}
+$("#btnNo").addEventListener("click", () => {
+  const d = S.deals[S.dealIdx]; if (!d) return;
+  const ds = store.get("descartadas", []); ds.push(d.codigo); store.set("descartadas", ds.slice(-400));
+  logDecision(d, "descartada");
+  nextDeal("✕ Descartada");
+});
+$("#btnYes").addEventListener("click", () => {
+  const d = S.deals[S.dealIdx]; if (!d) return;
+  logDecision(d, "cotizar");
+  startQuote(d.codigo);
+});
+
+/* ---------- oportunidades ---------- */
+async function loadOpps(force) {
+  if (!sel.length) { S.opps = null; renderOpps(); renderHome(); return; }
+  if (S.opps && !force) return;
+  S.oppErr = null; S.opps = null; renderOpps(); renderHome();
+  try {
+    S.opps = await api("/api/oportunidades?rubros=" + encodeURIComponent(sel.join(",")));
+    buildDeals();
+  } catch (e) {
+    S.oppErr = e.message;
+  }
+  renderOpps(); renderHome();
+}
+let oppFilter = store.get("oppFilter", null);
+function renderOpps() {
+  const chips = $("#oppChips");
+  chips.innerHTML = sel.length
+    ? [`<button type="button" class="chip ${!oppFilter ? "on" : ""}" data-k="">Todos</button>`, ...sel.map((k) =>
+        `<button type="button" class="chip ${oppFilter === k ? "on" : ""}" data-k="${k}">${esc(RUBROS[k]?.corto || k)}</button>`)].join("")
+    : `<button type="button" class="chip on" id="oppPick">Elegir rubro</button>`;
+  const st = $("#oppStatus"), list = $("#oppList");
+  if (!sel.length) { st.textContent = ""; list.innerHTML = `<div class="empty">Elige tu rubro para ver oportunidades.</div>`; const p = $("#oppPick"); if (p) p.onclick = openSheet; return; }
+  if (S.oppErr) { st.textContent = ""; list.innerHTML = `<div class="empty">${esc(S.oppErr)}</div>`; return; }
+  if (!S.opps) { st.innerHTML = `<span class="spinner"></span> Consultando Mercado Público…`; list.innerHTML = ""; return; }
+  const q = ($("#oppSearch").value || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const items = S.opps.oportunidades.filter((o) => (!oppFilter || (o.rubros || []).includes(oppFilter)) &&
+    (!q || [o.nombre, o.organismo, o.region, o.comuna, o.codigo].join(" ").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").includes(q)));
+  st.textContent = `${num(items.length)} de ${num(S.opps.cantidad)} oportunidades en tus rubros · ${num(S.opps.totalActivas)} licitaciones activas en total`;
+  if (!items.length) { list.innerHTML = `<div class="empty">No hay oportunidades con ese filtro.</div>`; return; }
+  list.innerHTML = items.map((o) => {
+    const c = cierreTxt(o.cierre);
+    return `<article class="card opp">
+      <div class="top-line"><span class="tag">${esc(o.codigo)}</span><span class="closing ${c.soon ? "soon" : ""}">${esc(c.txt)}</span></div>
+      <h3>${esc(o.nombre)}</h3>
+      <div class="meta">
+        ${o.organismo ? `<span>${esc(o.organismo)}</span>` : ""}
+        ${o.region ? `<span>${esc(o.region)}</span>` : ""}
+        <span>${o.monto ? short(o.monto) : "Monto no informado"}</span>
+        <span>${esc((o.rubros || []).map((k) => RUBROS[k]?.corto).join(", "))}</span>
+      </div>
+      <div class="acts">
+        <button class="btn small primary" type="button" data-quote="${esc(o.codigo)}">Cotizar</button>
+        <a class="btn small" href="${esc(o.url || ("https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion=" + encodeURIComponent(o.codigo)))}" target="_blank" rel="noopener noreferrer">Ver en Mercado Público ↗</a>
+      </div>
+    </article>`;
+  }).join("");
+}
+$("#oppChips").addEventListener("click", (e) => {
+  const b = e.target.closest(".chip"); if (!b || b.id === "oppPick") return;
+  oppFilter = b.dataset.k || null; store.set("oppFilter", oppFilter); renderOpps();
+});
+$("#oppSearch").addEventListener("input", renderOpps);
+$("#oppReload").addEventListener("click", () => loadOpps(true));
+$("#oppList").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-quote]"); if (!b) return;
+  const o = S.opps?.oportunidades.find((x) => x.codigo === b.dataset.quote);
+  if (o) logDecision(o, "cotizar");
+  startQuote(b.dataset.quote);
+});
+
+/* ---------- mercado ---------- */
+function barList(rows, valKey, labelKey, fmt, alt) {
+  const max = Math.max(...rows.map((r) => r[valKey] || 0), 1);
+  return `<div class="bars">${rows.map((r) => `
+    <div class="bar-row ${alt ? "alt" : ""}">
+      <span class="name" title="${esc(r[labelKey])}">${esc(r[labelKey])}</span>
+      <span class="val">${fmt(r)}</span>
+      <div class="track"><div class="fill" style="width:${Math.max(2, (r[valKey] || 0) / max * 100)}%"></div></div>
+    </div>`).join("")}</div>`;
+}
+const MES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+function renderMarket() {
+  focusChips($("#mkChips"), renderMarket);
+  const body = $("#mkBody");
+  if (!ESTUDIO) { body.innerHTML = `<div class="empty"><span class="spinner"></span></div>`; return; }
+  const r = ESTUDIO.rubros[focus];
+  const R = RUBROS[focus];
+  if (!r || !R) { body.innerHTML = `<div class="empty">Aún no hay estudio para este rubro.</div>`; return; }
+  if ((r.muestraNucleo || 0) < 5) {
+    $("#mkLead").textContent = `Lo que el Estado compró en ${R.nombre.toLowerCase()} entre ${ESTUDIO.periodo.texto}.`;
+    body.innerHTML = `<div class="card" style="margin-top:12px"><h3>Muestra insuficiente</h3>
+      <div class="muted">En la muestra de este estudio aparecieron muy pocas órdenes de compra confirmadas de este rubro (${num(r.muestraNucleo || 0)}), así que no mostramos cifras para no inducirte a error. Las oportunidades abiertas y las ideas de crecimiento sí están disponibles.</div>
+      <div class="row" style="margin-top:12px"><a class="btn small" href="#oportunidades">Ver oportunidades</a><a class="btn small" href="#crecer">Ver cómo crecer</a></div></div>`;
+    return;
+  }
+  $("#mkLead").textContent = `Lo que el Estado compró en ${R.nombre.toLowerCase()} entre ${ESTUDIO.periodo.texto}.`;
+  const maxM = Math.max(...r.mensual.map((m) => m.oc), 1);
+  const peak = r.mensual.reduce((a, m) => m.oc > a.oc ? m : a, r.mensual[0]);
+  body.innerHTML = `
+    <div class="grid2" style="margin-top:12px">
+      <div class="metric"><b>${num(r.ocAnual)}</b><span>órdenes de compra al año (estimado)</span></div>
+      <div class="metric"><b>${short(r.montoAnual)}</b><span>monto anual estimado</span></div>
+      <div class="metric"><b>${pct(r.shareAG)}</b><span>salen por Compra Ágil</span></div>
+      <div class="metric"><b>${clp(r.ticketMediano)}</b><span>ticket mediano por compra</span></div>
+    </div>
+
+    <div class="label">Estacionalidad</div>
+    <div class="card">
+      <div class="months">${r.mensual.map((m) => `
+        <div class="m" title="${esc(m.mes)}: ${num(m.oc)} OC">
+          <div class="col ${m === peak ? "peak" : ""}" style="height:${Math.max(3, m.oc / maxM * 100)}%"></div>
+          <span class="lbl">${MES[+m.mes.slice(5) - 1]}</span>
+        </div>`).join("")}</div>
+      <div class="muted" style="margin-top:8px">Mes más fuerte: <strong>${MES[+peak.mes.slice(5) - 1]}</strong>. Prepara stock y precios antes de ese peak.</div>
+    </div>
+
+    <div class="label">Sub-rubros (qué se compra)</div>
+    <div class="card">${barList(r.subrubros.slice(0, 8), "monto", "nombre", (x) => `${pct(x.share)} · ${short(x.monto)}`)}</div>
+
+    <div class="label">Productos y precios de referencia</div>
+    <div class="card scroll-x">
+      <table class="t">
+        <thead><tr><th>Producto</th><th style="text-align:right">Compras</th><th style="text-align:right">Precio unit. mediano</th></tr></thead>
+        <tbody>${r.productos.slice(0, 12).map((p) => `<tr><td>${esc(p.producto)}</td><td class="num">${num(p.n)}</td><td class="num">${clp(p.precioMediano)}</td></tr>`).join("")}</tbody>
+      </table>
+      <div class="muted" style="margin-top:8px">Precio neto unitario de órdenes reales de la muestra. Úsalo como referencia, no como precio final.</div>
+    </div>
+
+    <div class="label">Quién compra</div>
+    <div class="card">${barList(r.compradores.slice(0, 8), "n", "org", (x) => `${num(x.n)} OC · ${short(x.monto)}`)}</div>
+
+    <div class="label">Dónde</div>
+    <div class="card">${barList(r.regiones.slice(0, 8), "share", "region", (x) => pct(x.share), true)}</div>
+
+    <div class="label">Con quién compites</div>
+    <div class="card">${barList(r.proveedores.slice(0, 8), "monto", "nombre", (x) => `${num(x.n)} OC · ${short(x.monto)}`)}
+      <div class="muted" style="margin-top:10px">Hay ${num(r.proveedoresDistintos)} proveedores distintos en la muestra; los 5 primeros concentran el ${pct(r.concentracionTop5)} del monto.</div>
+    </div>
+
+    <div class="label">Órdenes de ejemplo</div>
+    ${r.ejemplos.slice(0, 5).map((x) => `<div class="card opp">
+      <div class="top-line"><span class="tag ${x.tipo === "AG" ? "ag" : ""}">${esc(x.codigo)}</span><span class="muted mono">${esc(x.fecha || "")}</span></div>
+      <h3>${esc(x.nombre)}</h3>
+      <div class="meta"><span>${esc(x.org || "")}</span><span>${clp(x.monto)}</span>${x.tipo === "AG" ? "<span>Compra Ágil</span>" : ""}</div>
+    </div>`).join("")}
+
+    <p class="note">${esc(ESTUDIO.metodo.nota)}</p>`;
+}
+
+/* ---------- crecer ---------- */
+function renderGrow() {
+  focusChips($("#grChips"), renderGrow);
+  const body = $("#grBody");
+  const R = RUBROS[focus];
+  if (!R) { body.innerHTML = `<div class="empty">Elige un rubro.</div>`; return; }
+  const ex = R.expansion;
+  const est = ESTUDIO?.rubros[focus];
+  const comp = (est?.complementarios || []).slice(0, 8);
+  const vecinos = (est?.rubrosVecinos || []).filter((v) => RUBROS[v.rubro] && v.rubro !== focus).slice(0, 4);
+
+  const idea = (cls, letter, x) => `<div class="card idea"><span class="ic ${cls}">${letter}</span><div><strong>${esc(x.titulo)}</strong><p>${esc(x.porque)}</p></div></div>`;
+
+  body.innerHTML = `
+    ${comp.length ? `
+    <div class="label">Lo que piden junto a ${esc(R.corto.toLowerCase())} (datos reales)</div>
+    <div class="card">
+      ${barList(comp, "veces", "nombre", (x) => `${num(x.veces)} veces`)}
+      <div class="muted" style="margin-top:10px">Categorías que aparecen en las mismas órdenes de compra que tu rubro. Son productos que el comprador ya está pidiendo en el mismo pedido.</div>
+    </div>` : ""}
+
+    <div class="label">Gamas de producto para sumar</div>
+    ${ex.gamas.map((g) => idea("g", "G", g)).join("")}
+
+    <div class="label">Servicios complementarios</div>
+    ${ex.servicios.map((s) => idea("s", "S", s)).join("")}
+
+    <div class="label">Giros que podrías abrir</div>
+    ${ex.giros.map((g) => idea("r", "+", g)).join("")}
+    <p class="note">Antes de ofertar algo nuevo, revisa que tu inicio de actividades en el SII incluya ese giro. Agregar una actividad económica se hace en sii.cl y suele tardar poco; los nombres de arriba son orientativos, verifica el código exacto en el SII.</p>
+
+    ${vecinos.length ? `
+    <div class="label">Rubros vecinos con más demanda</div>
+    ${vecinos.map((v) => {
+      const e2 = ESTUDIO.rubros[v.rubro];
+      const cifras = e2 && (e2.muestraNucleo || 0) >= 5 ? `${num(e2.ocAnual)} compras al año · ${short(e2.montoAnual)} estimados` : "Rubro de nicho: revisa sus oportunidades abiertas";
+      return `<a class="card idea" href="#mercado" data-go="${v.rubro}" style="text-decoration:none"><span class="ic g">→</span><div><strong>${esc(RUBROS[v.rubro].nombre)}</strong><p>${cifras}</p><div class="evidence">${esc(v.porque)}</div></div></a>`;
+    }).join("")}` : ""}`;
+  $$("[data-go]", body).forEach((a) => a.addEventListener("click", () => { focus = a.dataset.go; store.set("focus", focus); }));
+}
+
+/* ---------- cotizador ---------- */
+const Q_FIELDS = ["q_id", "q_org", "q_name", "q_plazo", "q_valid", "q_lugar", "q_pago"];
+const E_FIELDS = ["e_razon", "e_rut", "e_contacto", "e_mail"];
+let items = store.get("q_items", [{ d: "", q: 1, p: 0 }]);
+function saveQuote() {
+  const q = {}; Q_FIELDS.forEach((k) => q[k] = $("#" + k).value); store.set("quote", q);
+  const e = {}; E_FIELDS.forEach((k) => e[k] = $("#" + k).value); store.set("empresa", e);
+  store.set("q_items", items);
+}
+function loadQuote() {
+  const q = store.get("quote", {}); Q_FIELDS.forEach((k) => { if (q[k] != null) $("#" + k).value = q[k]; });
+  const e = store.get("empresa", {}); E_FIELDS.forEach((k) => { if (e[k] != null) $("#" + k).value = e[k]; });
+}
+function renderItems() {
+  $("#itemsBody").innerHTML = items.map((it, i) => `
+    <tr data-i="${i}">
+      <td><input data-f="d" value="${esc(it.d)}" placeholder="Descripción del producto o servicio" aria-label="Descripción ítem ${i + 1}"></td>
+      <td class="qty"><input data-f="q" type="number" min="0" step="any" inputmode="decimal" value="${esc(it.q)}" aria-label="Cantidad ítem ${i + 1}"></td>
+      <td class="price"><input data-f="p" type="number" min="0" step="any" inputmode="numeric" value="${esc(it.p)}" placeholder="Precio unit." aria-label="Precio unitario neto ítem ${i + 1}"></td>
+      <td><button class="del" type="button" data-del="${i}" aria-label="Quitar ítem ${i + 1}">✕</button></td>
+    </tr>`).join("");
+  calc();
+}
+function calc() {
+  const neto = items.reduce((a, it) => a + (+it.q || 0) * (+it.p || 0), 0);
+  const iva = Math.round(neto * 0.19);
+  $("#tNeto").textContent = clp(neto); $("#tIva").textContent = clp(iva); $("#tTotal").textContent = clp(neto + iva);
+  renderDoc(neto, iva);
+  renderHints();
+}
+function renderDoc(neto, iva) {
+  const v = (k) => $("#" + k).value.trim();
+  const lines = items.filter((it) => it.d || +it.p).map((it, i) =>
+    `${i + 1}. ${it.d || "(sin descripción)"} — ${it.q} x ${clp(+it.p)} = ${clp((+it.q || 0) * (+it.p || 0))}`);
+  const txt =
+`COTIZACIÓN${v("q_id") ? " · " + v("q_id") : ""}
+${v("q_name") ? "Compra: " + v("q_name") + "\n" : ""}${v("q_org") ? "Organismo: " + v("q_org") + "\n" : ""}
+Proveedor: ${v("e_razon") || "—"}
+RUT: ${v("e_rut") || "—"}
+Contacto: ${v("e_contacto") || "—"}${v("e_mail") ? " · " + v("e_mail") : ""}
+
+DETALLE
+${lines.length ? lines.join("\n") : "—"}
+
+Neto: ${clp(neto)}
+IVA 19%: ${clp(iva)}
+TOTAL: ${clp(neto + iva)}
+
+Plazo de entrega: ${v("q_plazo") ? v("q_plazo") + " días" : "—"}
+Lugar de entrega: ${v("q_lugar") || "—"}
+Validez de la oferta: ${v("q_valid") ? v("q_valid") + " días" : "—"}
+Forma de pago: ${v("q_pago") || "—"}
+
+Los productos cumplen con las especificaciones solicitadas por el comprador.`;
+  $("#docOut").textContent = txt;
+}
+function renderHints() {
+  // Precio de referencia: busca productos del estudio que calcen con las descripciones.
+  const box = $("#priceHints");
+  if (!ESTUDIO) { box.innerHTML = ""; return; }
+  const all = Object.values(ESTUDIO.rubros).flatMap((r) => r.productos);
+  const norm = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const hints = [];
+  items.forEach((it) => {
+    const words = norm(it.d).split(/\W+/).filter((w) => w.length > 3);
+    if (!words.length) return;
+    let best = null, score = 0;
+    all.forEach((p) => {
+      const pn = norm(p.producto);
+      const s = words.filter((w) => pn.includes(w)).length;
+      if (s > score && p.precioMediano) { score = s; best = p; }
+    });
+    if (best && !hints.find((h) => h.producto === best.producto)) hints.push(best);
+  });
+  box.innerHTML = hints.length ? `<div class="note" style="margin-top:12px">Precio de referencia en el Estado: ${hints.slice(0, 3).map((h) => `<strong>${esc(h.producto)}</strong> ${clp(h.precioMediano)} neto unitario (mediana de ${num(h.n)} compras)`).join(" · ")}</div>` : "";
+}
+$("#itemsBody").addEventListener("input", (e) => {
+  const tr = e.target.closest("tr"); if (!tr) return;
+  items[+tr.dataset.i][e.target.dataset.f] = e.target.value; saveQuote(); calc();
+});
+$("#itemsBody").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-del]"); if (!b) return;
+  items.splice(+b.dataset.del, 1); if (!items.length) items.push({ d: "", q: 1, p: 0 });
+  saveQuote(); renderItems();
+});
+$("#addItem").addEventListener("click", () => { items.push({ d: "", q: 1, p: 0 }); saveQuote(); renderItems(); });
+[...Q_FIELDS, ...E_FIELDS].forEach((k) => $("#" + k).addEventListener("input", () => { saveQuote(); calc(); }));
+$("#copyDoc").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("#docOut").textContent); toast("Texto copiado"); }
+  catch { const r = document.createRange(); r.selectNodeContents($("#docOut")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast("Selecciona y copia"); }
+});
+async function fetchQuote(codigo) {
+  codigo = (codigo || "").trim().toUpperCase();
+  if (!codigo) { toast("Escribe el ID de la compra"); return; }
+  if (/-COT\d+$/.test(codigo)) { toast("Las Compras Ágiles no están en la API: copia sus datos desde el portal"); return; }
+  const b = $("#q_fetch"); b.disabled = true; b.innerHTML = '<span class="spinner"></span>';
+  try {
+    const d = await api("/api/licitacion?codigo=" + encodeURIComponent(codigo));
+    $("#q_id").value = d.codigo; $("#q_org").value = d.organismo || ""; $("#q_name").value = d.nombre || "";
+    if (d.direccionEntrega) $("#q_lugar").value = d.direccionEntrega;
+    else if (d.comuna) $("#q_lugar").value = [d.unidad, d.comuna].filter(Boolean).join(", ");
+    if (d.items?.length) items = d.items.map((i) => ({ d: [i.producto, i.descripcion].filter(Boolean).join(" — ").slice(0, 160), q: i.cantidad || 1, p: 0 }));
+    saveQuote(); renderItems();
+    toast(d.totalItems > (d.items?.length || 0) ? `Datos cargados (primeras ${d.items.length} de ${d.totalItems} líneas)` : "Datos cargados");
+  } catch (e) { toast(e.message); }
+  finally { b.disabled = false; b.textContent = "Traer datos"; }
+}
+$("#q_fetch").addEventListener("click", () => fetchQuote($("#q_id").value));
+function startQuote(codigo) {
+  $("#q_id").value = codigo; saveQuote();
+  location.hash = "#cotizar";
+  fetchQuote(codigo);
+}
+
+/* ---------- aprendizaje: registro de decisiones ---------- */
+function logDecision(o, accion) {
+  const h = store.get("historial", []);
+  h.push({ t: Date.now(), codigo: o.codigo, nombre: o.nombre, rubros: o.rubros, monto: o.monto || null, accion });
+  store.set("historial", h.slice(-500));
+}
+$$("[data-res]").forEach((b) => b.addEventListener("click", () => {
+  const codigo = $("#q_id").value.trim();
+  if (!codigo) { toast("Primero indica el ID de la compra"); return; }
+  const neto = items.reduce((a, it) => a + (+it.q || 0) * (+it.p || 0), 0);
+  const h = store.get("historial", []);
+  h.push({ t: Date.now(), codigo, nombre: $("#q_name").value, accion: b.dataset.res, neto });
+  store.set("historial", h.slice(-500));
+  toast("Resultado registrado"); renderHist();
+}));
+function renderHist() {
+  const h = store.get("historial", []);
+  const last = {};
+  h.forEach((x) => { if (["enviada", "ganada", "perdida"].includes(x.accion)) last[x.codigo] = x; });
+  const res = Object.values(last);
+  const env = res.length, gan = res.filter((x) => x.accion === "ganada").length, per = res.filter((x) => x.accion === "perdida").length;
+  const vistas = h.filter((x) => x.accion === "descartada" || x.accion === "cotizar").length;
+  $("#histBox").innerHTML = (env || vistas) ? `
+    <div class="grid3">
+      <div class="metric"><b>${num(vistas)}</b><span>oportunidades revisadas</span></div>
+      <div class="metric"><b>${num(env)}</b><span>ofertas registradas</span></div>
+      <div class="metric"><b>${gan + per ? pct(gan / (gan + per)) : "—"}</b><span>tasa de adjudicación</span></div>
+    </div>` : `<div class="muted">Aún no hay registros.</div>`;
+}
+
+/* ---------- rutas ---------- */
+const VIEWS = ["inicio", "oportunidades", "mercado", "crecer", "cotizar"];
+function route() {
+  let v = location.hash.replace("#", "");
+  if (!VIEWS.includes(v)) {
+    // compatibilidad con direcciones antiguas como /app o /panel
+    v = /oportunidades|panel/.test(location.pathname) ? "oportunidades" : "inicio";
+  }
+  $$("section.view").forEach((s) => s.classList.toggle("on", s.id === "v-" + v));
+  $$(".tabs a").forEach((a) => a.classList.toggle("on", a.dataset.v === v));
+  if (v === "inicio") renderHome();
+  if (v === "oportunidades") renderOpps();
+  if (v === "mercado") renderMarket();
+  if (v === "crecer") renderGrow();
+  if (v === "cotizar") renderHist();
+  window.scrollTo(0, 0);
+}
+window.addEventListener("hashchange", route);
+
+/* ---------- arranque ---------- */
+(async function init() {
+  loadQuote(); renderItems();
+  try {
+    const [rub, est] = await Promise.all([
+      fetch("/data/rubros.json").then((r) => r.json()),
+      fetch("/data/estudio.json").then((r) => r.ok ? r.json() : null).catch(() => null),
+    ]);
+    RUBROS = rub.rubros; ESTUDIO = est;
+  } catch { toast("No se pudieron cargar los datos base"); }
+  sel = sel.filter((k) => RUBROS[k]);
+  if (!focus || !RUBROS[focus]) focus = sel[0] || Object.keys(RUBROS)[0];
+  renderPill(); route(); renderItems();
+  if (!sel.length) openSheet(); else loadOpps();
+})();
+
+})();
+</script>
+</body>
+</html>

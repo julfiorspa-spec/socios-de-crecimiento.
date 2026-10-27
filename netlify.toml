@@ -1,0 +1,13 @@
+[build]
+  publish = "public"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# La app es de una sola página: cualquier ruta (/app, /panel, /oportunidades/...) abre index.html.
+# Esto evita el "Not Found" al entrar directo a una dirección interna.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

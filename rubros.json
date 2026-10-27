@@ -1,0 +1,353 @@
+{
+  "version": 1,
+  "nota": "Catálogo de rubros. 'kw' son expresiones para detectar oportunidades por nombre; 'expansion' es la lógica curada de crecimiento (gamas, servicios y giros). El estudio de mercado (estudio.json) agrega la evidencia con datos reales.",
+  "rubros": {
+    "aridos": {
+      "nombre": "Áridos y materiales de construcción",
+      "corto": "Áridos",
+      "kw": "\\b(arido|aridos|ripio|gravilla|grava|maicillo|chancado|base estabilizada|estabilizado|arena gruesa|arena fina|arena lavada|arena de rio|piedra laja|bolon|bolones|material granular|hormigon premezclado|cemento|bloques de hormigon|adocretos?|soleras?)\\b",
+      "expansion": {
+        "gamas": [
+          {
+            "titulo": "Cemento, mortero y hormigón",
+            "porque": "Quien pide ripio y arena casi siempre necesita con qué ligarlos."
+          },
+          {
+            "titulo": "Bloques, adocretos y soleras",
+            "porque": "Mismas obras de veredas y estacionamientos; mismo camión."
+          },
+          {
+            "titulo": "Mallas, fierro y ferretería de obra",
+            "porque": "Se compran en el mismo pedido de obras menores municipales."
+          },
+          {
+            "titulo": "Maicillo y polvo de ladrillo para áreas deportivas",
+            "porque": "Puente directo al rubro canchas con la misma logística."
+          }
+        ],
+        "servicios": [
+          {
+            "titulo": "Flete y despacho de áridos",
+            "porque": "Muchas compras piden 'puesto en obra'; cobrar el traslado es margen extra."
+          },
+          {
+            "titulo": "Arriendo de maquinaria (retroexcavadora, rodillo, camión tolva)",
+            "porque": "Municipios contratan esparcido y compactación junto al material."
+          },
+          {
+            "titulo": "Mejoramiento de caminos y veredas",
+            "porque": "Pasar de vender material a vender la obra terminada."
+          }
+        ],
+        "giros": [
+          {
+            "titulo": "Transporte de carga por carretera",
+            "porque": "Habilita facturar fletes por separado."
+          },
+          {
+            "titulo": "Alquiler de maquinaria y equipo de construcción",
+            "porque": "Permite ofertar arriendo con operador."
+          },
+          {
+            "titulo": "Obras menores de construcción",
+            "porque": "Abre licitaciones de mejoramiento de espacios públicos."
+          }
+        ]
+      }
+    },
+    "canchas": {
+      "nombre": "Canchas y superficies deportivas",
+      "corto": "Canchas",
+      "kw": "(polvo de ladrillo|arcilla para cancha|cancha de tenis|canchas de tenis|carpeta de cancha|demarcacion de cancha|pasto sintetico|cesped sintetico|arcilla roja|arcos de futbol|redes de tenis|mallas? de cancha)",
+      "expansion": {
+        "gamas": [
+          {
+            "titulo": "Pasto sintético y caucho de relleno",
+            "porque": "Colegios y municipios lo compran en rollos por Compra Ágil."
+          },
+          {
+            "titulo": "Arcos, redes, mallas y tableros",
+            "porque": "El equipamiento se renueva junto con la superficie."
+          },
+          {
+            "titulo": "Pintura de demarcación y cal",
+            "porque": "Insumo recurrente de mantención; compras pequeñas y frecuentes."
+          },
+          {
+            "titulo": "Implementación deportiva (balones, conos, petos)",
+            "porque": "Mismo comprador: departamentos de deporte y colegios."
+          }
+        ],
+        "servicios": [
+          {
+            "titulo": "Instalación y mantención de canchas",
+            "porque": "Se paga más la mano de obra que el material."
+          },
+          {
+            "titulo": "Riego y mantención de pasto natural",
+            "porque": "Puente al rubro jardín y áreas verdes."
+          },
+          {
+            "titulo": "Iluminación deportiva",
+            "porque": "Proyectos de recuperación de canchas suelen incluir luminarias."
+          }
+        ],
+        "giros": [
+          {
+            "titulo": "Construcción de instalaciones deportivas",
+            "porque": "Habilita obras de canchas completas."
+          },
+          {
+            "titulo": "Venta al por menor de artículos deportivos",
+            "porque": "Permite ofertar implementación."
+          }
+        ]
+      }
+    },
+    "jardin": {
+      "nombre": "Semillas, plantas y áreas verdes",
+      "corto": "Jardín",
+      "kw": "\\b(semilla|semillas|cesped|pasto|tierra de hoja|compost|turba|sustrato|plantas ornamentales|plantas nativas|arboles|arbustos|vivero|flores|paisajismo|riego|jardineria|areas verdes|especies vegetales|mulch|poda|corta cesped|cortadora de pasto|desmalezado)\\b",
+      "expansion": {
+        "gamas": [
+          {
+            "titulo": "Tierra de hoja, compost y sustratos",
+            "porque": "Acompañan cada compra de semillas o plantas."
+          },
+          {
+            "titulo": "Plantas nativas, árboles y arbustos",
+            "porque": "Programas de arborización y plazas compran por temporada."
+          },
+          {
+            "titulo": "Herramientas y maquinaria de jardín",
+            "porque": "Cortadoras, desbrozadoras y tijeras se piden por Compra Ágil."
+          },
+          {
+            "titulo": "Insumos de riego (mangueras, aspersores, goteo)",
+            "porque": "Misma unidad compradora: aseo y ornato."
+          }
+        ],
+        "servicios": [
+          {
+            "titulo": "Mantención de áreas verdes",
+            "porque": "Contratos recurrentes mensuales; ingreso estable."
+          },
+          {
+            "titulo": "Poda y extracción de árboles",
+            "porque": "Servicio de alta demanda municipal en otoño e invierno."
+          },
+          {
+            "titulo": "Paisajismo y arreglos florales",
+            "porque": "Ceremonias y oficinas compran flores todo el año."
+          }
+        ],
+        "giros": [
+          {
+            "titulo": "Servicios de paisajismo y mantención de jardines",
+            "porque": "Habilita contratos de áreas verdes."
+          },
+          {
+            "titulo": "Venta al por mayor de plantas y flores",
+            "porque": "Formaliza la venta de vivero a organismos."
+          }
+        ]
+      }
+    },
+    "fertilizantes": {
+      "nombre": "Fertilizantes y agroquímicos",
+      "corto": "Fertilizantes",
+      "kw": "\\b(fertilizante|fertilizantes|abono|abonos|foliar|foliares|urea agricola|salitre|guano|enmienda|herbicida|herbicidas|fungicida|fungicidas|plaguicida|insecticida|insecticidas|cal agricola|humus|matamaleza|agroquimicos?)\\b",
+      "expansion": {
+        "gamas": [
+          {
+            "titulo": "Herbicidas y control de malezas",
+            "porque": "Municipios y recintos deportivos los compran en bidones."
+          },
+          {
+            "titulo": "Insecticidas y control de plagas",
+            "porque": "Salud, educación y programas sanitarios (por ejemplo vectores)."
+          },
+          {
+            "titulo": "Semillas y enmiendas de suelo",
+            "porque": "Mismo cliente agrícola: programas PRODESAL, INDAP y escuelas agrícolas."
+          },
+          {
+            "titulo": "Equipos de aplicación (bombas de espalda, pulverizadores)",
+            "porque": "Se compran junto al producto."
+          }
+        ],
+        "servicios": [
+          {
+            "titulo": "Control de plagas y desratización",
+            "porque": "Servicio recurrente en colegios, hospitales y edificios públicos."
+          },
+          {
+            "titulo": "Aplicación de herbicidas en áreas públicas",
+            "porque": "Se licita como servicio, no como producto."
+          },
+          {
+            "titulo": "Análisis de suelo y asesoría agronómica",
+            "porque": "Agrega valor y diferencia la oferta."
+          }
+        ],
+        "giros": [
+          {
+            "titulo": "Servicios de control de plagas",
+            "porque": "Requiere autorización sanitaria, pero abre un mercado grande."
+          },
+          {
+            "titulo": "Venta al por mayor de productos agrícolas",
+            "porque": "Formaliza la reventa de insumos."
+          }
+        ]
+      }
+    },
+    "alimentos": {
+      "nombre": "Alimentos y colaciones",
+      "corto": "Alimentos",
+      "kw": "\\b(pan|panaderia|pasteleria|huevos?|jamon|queso|quesos|aceitunas?|abarrotes|cecinas|fiambres|colaciones?|coffee break|cafeteria|frutas|verduras|carnes?|lacteos|desayunos?|almuerzos?|alimentos|viveres)\\b",
+      "expansion": {
+        "gamas": [
+          {
+            "titulo": "Huevos, jamón, queso y aceitunas",
+            "porque": "Si vendes pan, el organismo arma el desayuno con lo que va adentro."
+          },
+          {
+            "titulo": "Abarrotes y cafetería (café, té, azúcar)",
+            "porque": "Mismas unidades: oficinas, internados y hospitales."
+          },
+          {
+            "titulo": "Frutas y verduras",
+            "porque": "Programas de alimentación y casinos compran semanalmente."
+          },
+          {
+            "titulo": "Desechables (vasos, servilletas, platos)",
+            "porque": "Se piden en la misma Compra Ágil del coffee break."
+          }
+        ],
+        "servicios": [
+          {
+            "titulo": "Coffee break y colaciones para eventos",
+            "porque": "Convertir el producto en servicio sube el ticket."
+          },
+          {
+            "titulo": "Banquetería y catering",
+            "porque": "Ceremonias, aniversarios y capacitaciones todo el año."
+          },
+          {
+            "titulo": "Canastas y cajas de regalo",
+            "porque": "Fiestas patrias y Navidad concentran compras."
+          }
+        ],
+        "giros": [
+          {
+            "titulo": "Elaboración y venta de comidas preparadas",
+            "porque": "Requiere resolución sanitaria; habilita colaciones."
+          },
+          {
+            "titulo": "Venta al por mayor de alimentos",
+            "porque": "Habilita abarrotes y frescos."
+          }
+        ]
+      }
+    },
+    "imprenta": {
+      "nombre": "Imprenta, publicidad y textil corporativo",
+      "corto": "Imprenta",
+      "kw": "\\b(imprenta|impresion|impresiones|impreso|impresos|pendones?|lienzos?|afiches|folleteria|dipticos?|tripticos?|tazones?|tazas|manteles?|ropa corporativa|poleras?|polerones?|gorros?|jockeys?|chaquetas? corporativas|uniformes?|bordados?|serigrafia|merchandising|articulos promocionales|credenciales|talonarios|timbres|tarjetas de presentacion|letreros?|senaletica|gigantografias?)\\b",
+      "expansion": {
+        "gamas": [
+          {
+            "titulo": "Tazones, botellas y artículos promocionales impresos",
+            "porque": "Misma imagen corporativa, otro soporte."
+          },
+          {
+            "titulo": "Manteles, pendones y lienzos para eventos",
+            "porque": "Cada ceremonia pública lleva gráfica institucional."
+          },
+          {
+            "titulo": "Ropa corporativa (poleras, polerones, chaquetas, jockeys)",
+            "porque": "Estampado y bordado usan el mismo diseño del cliente."
+          },
+          {
+            "titulo": "Señalética y letreros",
+            "porque": "Unidades de obras y servicios piden señalización con frecuencia."
+          }
+        ],
+        "servicios": [
+          {
+            "titulo": "Diseño gráfico",
+            "porque": "Muchos organismos no tienen el arte listo; cobrarlo es margen."
+          },
+          {
+            "titulo": "Instalación de gráfica y señalética",
+            "porque": "Se valora el producto instalado."
+          },
+          {
+            "titulo": "Producción de material para eventos",
+            "porque": "Puente al rubro eventos."
+          }
+        ],
+        "giros": [
+          {
+            "titulo": "Fabricación de prendas de vestir",
+            "porque": "Habilita confección de uniformes."
+          },
+          {
+            "titulo": "Agencias de publicidad",
+            "porque": "Permite ofertar campañas completas."
+          }
+        ]
+      }
+    },
+    "eventos": {
+      "nombre": "Mobiliario, eventos y producción",
+      "corto": "Eventos",
+      "kw": "\\b(mesas?|sillas?|toldos?|carpas?|escenarios?|amplificacion|sonido|iluminacion|banqueteria|catering|eventos?|ceremonias?|arriendo de mobiliario|mobiliario|vajilla|cubrepisos|tarimas?|graderias?|animacion)\\b",
+      "expansion": {
+        "gamas": [
+          {
+            "titulo": "Toldos, carpas y cubrepisos",
+            "porque": "Si vendes mesas y sillas, el evento al aire libre necesita techo."
+          },
+          {
+            "titulo": "Mantelería y vajilla",
+            "porque": "Se arrienda junto con el mobiliario."
+          },
+          {
+            "titulo": "Escenarios, tarimas y graderías",
+            "porque": "Actos cívicos y fiestas comunales."
+          },
+          {
+            "titulo": "Mobiliario escolar y de oficina",
+            "porque": "Venta (no arriendo) a colegios y servicios públicos."
+          }
+        ],
+        "servicios": [
+          {
+            "titulo": "Producción integral de eventos",
+            "porque": "De arrendar sillas a vender el evento completo."
+          },
+          {
+            "titulo": "Sonido, iluminación y animación",
+            "porque": "Se contratan en la misma Compra Ágil."
+          },
+          {
+            "titulo": "Banquetería y coffee break",
+            "porque": "Puente al rubro alimentos."
+          }
+        ],
+        "giros": [
+          {
+            "titulo": "Organización de convenciones y eventos",
+            "porque": "Habilita ofertar producción completa."
+          },
+          {
+            "titulo": "Alquiler de otros efectos personales y enseres",
+            "porque": "Formaliza el arriendo de mobiliario."
+          }
+        ]
+      }
+    }
+  }
+}
