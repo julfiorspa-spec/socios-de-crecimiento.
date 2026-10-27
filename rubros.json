@@ -53,7 +53,17 @@
             "porque": "Abre licitaciones de mejoramiento de espacios públicos."
           }
         ]
-      }
+      },
+      "qca": [
+        "áridos",
+        "arena",
+        "gravilla",
+        "ripio",
+        "maicillo",
+        "cemento",
+        "estabilizado",
+        "hormigón"
+      ]
     },
     "canchas": {
       "nombre": "Canchas y superficies deportivas",
@@ -102,7 +112,13 @@
             "porque": "Permite ofertar implementación."
           }
         ]
-      }
+      },
+      "qca": [
+        "cancha",
+        "pasto sintético",
+        "polvo de ladrillo",
+        "arcos de fútbol"
+      ]
     },
     "jardin": {
       "nombre": "Semillas, plantas y áreas verdes",
@@ -151,7 +167,17 @@
             "porque": "Formaliza la venta de vivero a organismos."
           }
         ]
-      }
+      },
+      "qca": [
+        "semillas",
+        "almácigos",
+        "plantas",
+        "áreas verdes",
+        "jardinería",
+        "poda",
+        "tierra de hoja",
+        "riego"
+      ]
     },
     "fertilizantes": {
       "nombre": "Fertilizantes y agroquímicos",
@@ -200,7 +226,15 @@
             "porque": "Formaliza la reventa de insumos."
           }
         ]
-      }
+      },
+      "qca": [
+        "fertilizante",
+        "abono",
+        "herbicida",
+        "insecticida",
+        "fungicida",
+        "plaguicida"
+      ]
     },
     "alimentos": {
       "nombre": "Alimentos y colaciones",
@@ -249,7 +283,17 @@
             "porque": "Habilita abarrotes y frescos."
           }
         ]
-      }
+      },
+      "qca": [
+        "colación",
+        "coffee break",
+        "alimentos",
+        "abarrotes",
+        "frutas",
+        "verduras",
+        "catering",
+        "pan"
+      ]
     },
     "imprenta": {
       "nombre": "Imprenta, publicidad y textil corporativo",
@@ -298,7 +342,17 @@
             "porque": "Permite ofertar campañas completas."
           }
         ]
-      }
+      },
+      "qca": [
+        "impresión",
+        "pendón",
+        "tazones",
+        "ropa corporativa",
+        "poleras",
+        "uniformes",
+        "letrero",
+        "gigantografía"
+      ]
     },
     "eventos": {
       "nombre": "Mobiliario, eventos y producción",
@@ -347,7 +401,16 @@
             "porque": "Formaliza el arriendo de mobiliario."
           }
         ]
-      }
+      },
+      "qca": [
+        "mesas",
+        "sillas",
+        "toldo",
+        "amplificación",
+        "producción de eventos",
+        "escenario",
+        "mobiliario"
+      ]
     }
   }
 }

@@ -266,7 +266,7 @@ pre.doc{white-space:pre-wrap;background:var(--bg-2);border:1px solid var(--line-
   <div class="grid3" id="homeMetrics">
     <div class="metric"><b>—</b><span>compras al año en tu rubro</span></div>
     <div class="metric"><b>—</b><span>monto anual estimado</span></div>
-    <div class="metric"><b>—</b><span>licitaciones abiertas hoy</span></div>
+    <div class="metric"><b>—</b><span>oportunidades abiertas hoy</span></div>
   </div>
 
   <div class="label">Oportunidades de hoy</div>
@@ -314,7 +314,7 @@ pre.doc{white-space:pre-wrap;background:var(--bg-2);border:1px solid var(--line-
 <!-- ================= OPORTUNIDADES ================= -->
 <section class="view" id="v-oportunidades">
   <h2>Oportunidades abiertas</h2>
-  <p class="lead">Licitaciones vigentes en Mercado Público que calzan con tus rubros, ordenadas por fecha de cierre.</p>
+  <p class="lead">Compras Ágiles y licitaciones abiertas en Mercado Público que calzan con tus rubros, ordenadas por fecha de cierre.</p>
   <div class="chips" id="oppChips"></div>
   <div class="row" style="margin-top:12px">
     <div class="field" style="flex:1;min-width:180px"><input id="oppSearch" type="search" placeholder="Filtrar por palabra, organismo o región" aria-label="Filtrar oportunidades"></div>
@@ -322,7 +322,7 @@ pre.doc{white-space:pre-wrap;background:var(--bg-2);border:1px solid var(--line-
   </div>
   <div class="muted" id="oppStatus" style="margin:12px 0 4px"></div>
   <div id="oppList"></div>
-  <p class="note">Las <strong>Compras Ágiles abiertas</strong> no están disponibles en la API pública de ChileCompra; se revisan directamente en Mercado Público. Lo que sí sabemos de ellas (qué se compra, a quién y a qué precio) está en el estudio de mercado.</p>
+  <p class="note">Las Compras Ágiles suelen cerrar en 1 a 3 días: revísalas primero. La búsqueda usa palabras clave de cada rubro, así que puede traer alguna que no sea de tu giro; descártala y la app no te la vuelve a mostrar.</p>
 </section>
 
 <!-- ================= MERCADO ================= -->
@@ -352,7 +352,7 @@ pre.doc{white-space:pre-wrap;background:var(--bg-2);border:1px solid var(--line-
       <div class="field full">
         <label for="q_id">ID de la compra</label>
         <div class="row" style="flex-wrap:nowrap">
-          <input id="q_id" placeholder="Ej: 1002588-102-LP26" autocomplete="off">
+          <input id="q_id" placeholder="Ej: 2905-570-COT26 o 1002588-102-LP26" autocomplete="off">
           <button class="btn small" id="q_fetch" type="button">Traer datos</button>
         </div>
       </div>
@@ -480,7 +480,7 @@ let RUBROS = {};
 let ESTUDIO = null;
 let sel = store.get("rubros", []);
 let focus = store.get("focus", null); // rubro mostrado en Mercado/Crecer
-const S = { opps: null, oppErr: null, deals: [], dealIdx: 0 };
+const S = { opps: null, oppErr: null, deals: [], dealIdx: 0, detalle: store.get("detalle", null) };
 
 /* ---------- rubro picker ---------- */
 function renderPill() {
@@ -529,7 +529,7 @@ function renderHome() {
   m.innerHTML = `
     <div class="metric"><b>${oc == null ? "—" : num(oc)}</b><span>compras al año en tu rubro</span></div>
     <div class="metric"><b>${monto == null ? "—" : short(monto)}</b><span>monto anual estimado</span></div>
-    <div class="metric"><b>${abiertas == null ? (S.oppErr ? "—" : '<span class="spinner"></span>') : num(abiertas)}</b><span>licitaciones abiertas hoy</span></div>`;
+    <div class="metric"><b>${abiertas == null ? (S.oppErr ? "—" : '<span class="spinner"></span>') : num(abiertas)}</b><span>oportunidades abiertas hoy</span></div>`;
   renderDeal();
 }
 function buildDeals() {
@@ -565,14 +565,14 @@ function renderDeal() {
   $("#dealCount").textContent = `${S.dealIdx + 1} / ${S.deals.length}`;
   card.innerHTML = `
     <div>
-      <div class="id">${esc(d.codigo)} · ${esc((d.rubros || []).map((k) => RUBROS[k]?.corto).join(", "))}</div>
+      <div class="id">${d.fuente === "CA" ? '<span class="tag ag">Compra Ágil</span> ' : '<span class="tag">Licitación</span> '}${esc(d.codigo)} · ${esc((d.rubros || []).map((k) => RUBROS[k]?.corto).join(", "))}</div>
       <h3>${esc(d.nombre)}</h3>
       <div class="muted">${esc(d.organismo || "")}${d.region ? " · " + esc(d.region) : ""}</div>
     </div>
     <div class="deal-figs">
-      <div><b>${d.monto ? short(d.monto) : "No informado"}</b>monto estimado</div>
-      <div><b class="${c.soon ? "" : ""}">${esc(c.txt)}</b>plazo</div>
-      ${d.totalItems ? `<div><b>${d.totalItems}</b>líneas</div>` : ""}
+      <div><b>${d.monto ? short(d.monto) : "No informado"}</b>${d.fuente === "CA" ? "presupuesto" : "monto estimado"}</div>
+      <div><b>${esc(c.txt)}</b>plazo</div>
+      ${d.fuente === "CA" ? `<div><b>${num(d.ofertas || 0)}</b>ofertas recibidas</div>` : (d.totalItems ? `<div><b>${d.totalItems}</b>líneas</div>` : "")}
     </div>`;
 }
 function nextDeal(msg) {
@@ -621,17 +621,18 @@ function renderOpps() {
   const q = ($("#oppSearch").value || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
   const items = S.opps.oportunidades.filter((o) => (!oppFilter || (o.rubros || []).includes(oppFilter)) &&
     (!q || [o.nombre, o.organismo, o.region, o.comuna, o.codigo].join(" ").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").includes(q)));
-  st.textContent = `${num(items.length)} de ${num(S.opps.cantidad)} oportunidades en tus rubros · ${num(S.opps.totalActivas)} licitaciones activas en total`;
+  st.textContent = `${num(items.length)} oportunidades · ${num(S.opps.cantidadCompraAgil || 0)} Compras Ágiles y ${num(S.opps.cantidadLicitaciones || 0)} licitaciones abiertas en tus rubros` + ((S.opps.avisos || []).length ? " · " + S.opps.avisos.join(" ") : "");
   if (!items.length) { list.innerHTML = `<div class="empty">No hay oportunidades con ese filtro.</div>`; return; }
   list.innerHTML = items.map((o) => {
     const c = cierreTxt(o.cierre);
     return `<article class="card opp">
-      <div class="top-line"><span class="tag">${esc(o.codigo)}</span><span class="closing ${c.soon ? "soon" : ""}">${esc(c.txt)}</span></div>
+      <div class="top-line"><span>${o.fuente === "CA" ? '<span class="tag ag">Compra Ágil</span>' : '<span class="tag">Licitación</span>'} <span class="tag">${esc(o.codigo)}</span></span><span class="closing ${c.soon ? "soon" : ""}">${esc(c.txt)}</span></div>
       <h3>${esc(o.nombre)}</h3>
       <div class="meta">
         ${o.organismo ? `<span>${esc(o.organismo)}</span>` : ""}
         ${o.region ? `<span>${esc(o.region)}</span>` : ""}
         <span>${o.monto ? short(o.monto) : "Monto no informado"}</span>
+        ${o.fuente === "CA" ? `<span>${num(o.ofertas || 0)} ofertas recibidas</span>` : ""}
         <span>${esc((o.rubros || []).map((k) => RUBROS[k]?.corto).join(", "))}</span>
       </div>
       <div class="acts">
@@ -831,9 +832,17 @@ Los productos cumplen con las especificaciones solicitadas por el comprador.`;
   $("#docOut").textContent = txt;
 }
 function renderHints() {
-  // Precio de referencia: busca productos del estudio que calcen con las descripciones.
+  // Presupuesto del comprador y precio de referencia del estudio.
   const box = $("#priceHints");
-  if (!ESTUDIO) { box.innerHTML = ""; return; }
+  const det = S.detalle && S.detalle.codigo === $("#q_id").value.trim().toUpperCase() ? S.detalle : null;
+  const neto = items.reduce((a, it) => a + (+it.q || 0) * (+it.p || 0), 0);
+  let pres = "";
+  if (det && det.monto) {
+    const total = Math.round(neto * 1.19);
+    const sobre = neto > 0 && total > det.monto;
+    pres = `<div class="note" style="margin-top:12px;${sobre ? "border-left-color:var(--red)" : ""}">Presupuesto del comprador: <strong>${clp(det.monto)}</strong>${neto > 0 ? ` · tu total con IVA: <strong>${clp(total)}</strong> (${sobre ? "se pasa del presupuesto" : pct(total / det.monto) + " del presupuesto"})` : ""}${det.fuente === "CA" ? ` · ${num(det.ofertas || 0)} ofertas recibidas hasta ahora` : ""}. <a href="${esc(det.url)}" target="_blank" rel="noopener noreferrer">Abrir en Mercado Público ↗</a></div>`;
+  }
+  if (!ESTUDIO) { box.innerHTML = pres; return; }
   const all = Object.values(ESTUDIO.rubros).flatMap((r) => r.productos);
   const norm = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
   const hints = [];
@@ -848,7 +857,7 @@ function renderHints() {
     });
     if (best && !hints.find((h) => h.producto === best.producto)) hints.push(best);
   });
-  box.innerHTML = hints.length ? `<div class="note" style="margin-top:12px">Precio de referencia en el Estado: ${hints.slice(0, 3).map((h) => `<strong>${esc(h.producto)}</strong> ${clp(h.precioMediano)} neto unitario (mediana de ${num(h.n)} compras)`).join(" · ")}</div>` : "";
+  box.innerHTML = pres + (hints.length ? `<div class="note" style="margin-top:12px">Precio de referencia en el Estado: ${hints.slice(0, 3).map((h) => `<strong>${esc(h.producto)}</strong> ${clp(h.precioMediano)} neto unitario (mediana de ${num(h.n)} compras)`).join(" · ")}</div>` : "");
 }
 $("#itemsBody").addEventListener("input", (e) => {
   const tr = e.target.closest("tr"); if (!tr) return;
@@ -868,14 +877,16 @@ $("#copyDoc").addEventListener("click", async () => {
 async function fetchQuote(codigo) {
   codigo = (codigo || "").trim().toUpperCase();
   if (!codigo) { toast("Escribe el ID de la compra"); return; }
-  if (/-COT\d+$/.test(codigo)) { toast("Las Compras Ágiles no están en la API: copia sus datos desde el portal"); return; }
   const b = $("#q_fetch"); b.disabled = true; b.innerHTML = '<span class="spinner"></span>';
   try {
     const d = await api("/api/licitacion?codigo=" + encodeURIComponent(codigo));
     $("#q_id").value = d.codigo; $("#q_org").value = d.organismo || ""; $("#q_name").value = d.nombre || "";
     if (d.direccionEntrega) $("#q_lugar").value = d.direccionEntrega;
     else if (d.comuna) $("#q_lugar").value = [d.unidad, d.comuna].filter(Boolean).join(", ");
-    if (d.items?.length) items = d.items.map((i) => ({ d: [i.producto, i.descripcion].filter(Boolean).join(" — ").slice(0, 160), q: i.cantidad || 1, p: 0 }));
+    if (d.plazoEntregaDias) $("#q_plazo").value = d.plazoEntregaDias;
+    S.detalle = { codigo: d.codigo, monto: d.monto, fuente: d.fuente, ofertas: d.ofertas, cierre: d.cierre, url: d.url };
+    store.set("detalle", S.detalle);
+    if (d.items?.length) items = d.items.map((i) => ({ d: [i.producto, i.descripcion].filter(Boolean).join(" — ").replace(/\s+/g, " ").slice(0, 160) + (i.unidad ? ` (${i.unidad})` : ""), q: i.cantidad || 1, p: 0 }));
     saveQuote(); renderItems();
     toast(d.totalItems > (d.items?.length || 0) ? `Datos cargados (primeras ${d.items.length} de ${d.totalItems} líneas)` : "Datos cargados");
   } catch (e) { toast(e.message); }
