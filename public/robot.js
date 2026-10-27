@@ -9,7 +9,7 @@
   "use strict";
   const KEY = "sdc:robot";
   const POLL_RAPIDO = 5000, POLL_LENTO = 20000;
-  const COD_CA = /^\d{3,6}-\d{1,6}-COT\d{2}$/i;
+  const COD_CA = /^\d{1,8}-\d{1,8}-COT\d{2}$/i;
 
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -439,7 +439,7 @@
   function decorarInicio() {
     const acts = $("#dealBox .deal-actions"); if (!acts) return;
     const id = $("#dealCard .id")?.textContent || "";
-    const m = id.match(/\d{3,6}-\d{1,6}-COT\d{2}/i);
+    const m = id.match(/\d{1,8}-\d{1,8}-COT\d{2}/i);
     let slot = $("#rbDeal");
     if (!slot) { slot = document.createElement("div"); slot.id = "rbDeal"; slot.style.marginTop = "10px"; acts.after(slot); }
     const html = m ? botonPara(m[0].toUpperCase(), 'style="width:100%"') : "";

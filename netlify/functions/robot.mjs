@@ -79,7 +79,7 @@ export default async (req) => {
     const b = await cuerpo(req);
     const codigo = limpiaCodigo(b.codigo);
     const accion = ACCIONES.has(b.accion) ? b.accion : "ofertar";
-    if (!/^\d{3,6}-\d{1,6}-COT\d{2}$/.test(codigo)) {
+    if (!/^\d{1,8}-\d{1,8}-COT\d{2}$/.test(codigo)) {
       return json({ error: "El robot solo trabaja Compras Ágiles (códigos como 1234-56-COT26)." }, 400);
     }
     const previo = await leer(store, codigo);
