@@ -3,8 +3,8 @@
 // nunca llega al navegador.
 //
 // Rutas:
-//   GET /api/oportunidades?rubros=aridos,jardin   licitaciones activas filtradas por rubro
-//   GET /api/licitacion?codigo=1234-5-LE26          detalle resumido de una licitación
+//   GET /api/oportunidades?rubros=aridos,jardin   Compras Ágiles y licitaciones abiertas, por rubro
+//   GET /api/licitacion?codigo=1234-5-LE26          detalle resumido (también acepta códigos COT de Compra Ágil)
 //   GET /api/oc?codigo=1234-56-AG26                 detalle resumido de una orden de compra
 //   GET /api/proveedor?rut=76.123.456-7             código de proveedor a partir del RUT
 //   GET /api/estado                                 verifica que la clave esté configurada
@@ -53,6 +53,30 @@ async function mp(path, params, intentos = 4) {
     throw new HttpError(502, (j && j.Mensaje) || "Mercado Público no respondió.");
   }
 }
+
+// API de Compra Ágil (ChileCompra, mayo 2026): mismo ticket, pero va en el encabezado "ticket".
+const BASE_CA = "https://api2.mercadopublico.cl/v2";
+async function ca(path, params = {}) {
+  const ticket = process.env.MP_TICKET;
+  if (!ticket) throw new HttpError(500, "Falta configurar MP_TICKET en Netlify.");
+  const qs = new URLSearchParams(params);
+  const r = await fetch(`${BASE_CA}/${path}${qs.toString() ? "?" + qs : ""}`, {
+    headers: { accept: "application/json", ticket },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (r.status === 429) throw new HttpError(429, "Se agotó la cuota diaria de la API de Compra Ágil; vuelve a intentar mañana.");
+  if (r.status === 404) throw new HttpError(404, "No se encontró esa Compra Ágil.");
+  const j = await r.json().catch(() => null);
+  if (!j || j.success !== "OK") {
+    const e = j && j.errors && j.errors[0];
+    throw new HttpError(r.status >= 400 ? r.status : 502, (e && (e.detalle || e.mensaje)) || "La API de Compra Ágil no respondió.");
+  }
+  return j.payload;
+}
+
+// "2026-10-27 15:00" (hora de Chile) -> "2026-10-27T15:00:00"
+const fechaCA = (s) => (s ? String(s).replace(" ", "T") + (String(s).length === 16 ? ":00" : "") : null);
+const urlCA = (codigo) => `https://buscador.mercadopublico.cl/ficha?code=${encodeURIComponent(codigo)}`;
 
 class HttpError extends Error {
   constructor(status, msg) {
@@ -127,8 +151,7 @@ function resumenOC(o) {
   };
 }
 
-async function oportunidades(rubros) {
-  const inicio = Date.now();
+async function licitacionesAbiertas(rubros, inicio) {
   const activas = await cached("activas", 30 * 60 * 1000, () =>
     mp("licitaciones.json", { estado: "activas" }, 2)
   );
@@ -157,6 +180,7 @@ async function oportunidades(rubros) {
           return resumenLicitacion(j.Listado[0]);
         });
         Object.assign(x, {
+          fuente: "LIC",
           monto: d.monto,
           organismo: d.organismo,
           region: d.region,
@@ -171,11 +195,111 @@ async function oportunidades(rubros) {
     }
   }
   await Promise.all([worker(), worker(), worker()]);
+  lista.forEach((x) => { x.fuente = "LIC"; });
+  return { totalActivas: activas.Cantidad, lista };
+}
+
+async function compraAgilAbiertas(rubros, inicio) {
+  // Una búsqueda por término de cada rubro (estado publicada), en paralelo y con tope de tiempo.
+  const tareas = [];
+  for (const r of rubros) for (const q of RUBROS[r].qca || []) tareas.push({ r, q });
+  const porCodigo = new Map();
+  let idx = 0;
+  async function worker() {
+    while (idx < tareas.length && Date.now() - inicio < 8000) {
+      const { r, q } = tareas[idx++];
+      try {
+        const p = await cached("ca:" + q, 10 * 60 * 1000, () =>
+          ca("compra-agil", { estado: "publicada", q, tamano_pagina: 50, ordenar_por: "FechaPublicacion" })
+        );
+        for (const i of p.items || []) {
+          const n = norm(i.nombre);
+          if (EXCL.test(n)) continue;
+          let x = porCodigo.get(i.codigo);
+          if (!x) {
+            x = {
+              fuente: "CA",
+              codigo: i.codigo,
+              nombre: (i.nombre || "").trim(),
+              cierre: fechaCA(i.fechas && i.fechas.fecha_cierre),
+              monto: (i.montos && i.montos.monto_disponible_clp) || null,
+              organismo: i.institucion && i.institucion.organismo_comprador,
+              unidad: i.institucion && i.institucion.unidad_compra,
+              region: ((i.institucion && i.institucion.nombre_region) || "").trim(),
+              ofertas: (i.resumen && i.resumen.total_ofertas_recibidas) || 0,
+              rubros: [],
+              url: urlCA(i.codigo),
+            };
+            porCodigo.set(i.codigo, x);
+          }
+          for (const k of new Set([r, ...clasificar(i.nombre).filter((k) => rubros.includes(k))])) {
+            if (!x.rubros.includes(k)) x.rubros.push(k);
+          }
+        }
+      } catch (e) {
+        if (e.status === 429) throw e;
+      }
+    }
+  }
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  const ahora = Date.now();
+  return [...porCodigo.values()].filter((x) => !x.cierre || new Date(x.cierre).getTime() > ahora);
+}
+
+async function oportunidades(rubros) {
+  const inicio = Date.now();
+  const [lic, cag] = await Promise.allSettled([licitacionesAbiertas(rubros, inicio), compraAgilAbiertas(rubros, inicio)]);
+  if (lic.status === "rejected" && cag.status === "rejected") throw lic.reason;
+  const L = lic.status === "fulfilled" ? lic.value.lista : [];
+  const C = cag.status === "fulfilled" ? cag.value : [];
+  const todas = [...C, ...L].sort((a, b) => new Date(a.cierre || "2999-01-01") - new Date(b.cierre || "2999-01-01"));
   return {
-    actualizado: activas.FechaCreacion,
-    totalActivas: activas.Cantidad,
-    cantidad: lista.length,
-    oportunidades: lista.slice(0, 80),
+    actualizado: new Date().toISOString(),
+    totalActivas: lic.status === "fulfilled" ? lic.value.totalActivas : null,
+    cantidad: todas.length,
+    cantidadCompraAgil: C.length,
+    cantidadLicitaciones: L.length,
+    avisos: [
+      lic.status === "rejected" ? "Las licitaciones no respondieron; se muestran solo Compras Ágiles." : null,
+      cag.status === "rejected" ? (cag.reason && cag.reason.message) || "Compra Ágil no respondió; se muestran solo licitaciones." : null,
+    ].filter(Boolean),
+    oportunidades: todas.slice(0, 150),
+  };
+}
+
+function resumenCompraAgil(p) {
+  const inst = p.institucion || {};
+  const f = p.fechas || {};
+  const conv = p.convocatoria || {};
+  const pres = p.presupuesto || {};
+  return {
+    fuente: "CA",
+    codigo: p.codigo,
+    nombre: (p.nombre || "").trim(),
+    descripcion: (p.descripcion || "").trim().slice(0, 800),
+    estado: p.estado && p.estado.glosa,
+    cierre: fechaCA(f.fecha_cierre),
+    cierreSegundoLlamado: fechaCA(conv.fecha_cierre_segundo_llamado),
+    publicacion: fechaCA(f.fecha_publicacion),
+    monto: pres.monto_disponible_clp || pres.presupuesto_estimado || null,
+    tipoPresupuesto: pres.tipo_presupuesto,
+    organismo: inst.organismo_comprador,
+    unidad: inst.unidad_compra,
+    region: (inst.nombre_region || "").trim(),
+    direccionEntrega: p.entrega && (p.entrega.direccion_entrega || "").trim(),
+    plazoEntregaDias: p.entrega && p.entrega.plazo_entrega_dias,
+    ofertas: (p.proveedores_cotizando || []).length,
+    adjuntos: (p.documentos || []).map((d) => d.nombre).filter(Boolean),
+    items: (p.productos_solicitados || []).map((i, k) => ({
+      linea: k + 1,
+      producto: i.nombre,
+      codigoCategoria: String(i.codigo_producto || ""),
+      descripcion: (i.descripcion || "").trim(),
+      cantidad: i.cantidad,
+      unidad: i.unidad_medida,
+    })),
+    totalItems: (p.productos_solicitados || []).length,
+    url: urlCA(p.codigo),
   };
 }
 
@@ -198,6 +322,11 @@ export default async (req) => {
       if (!pedidos.length) throw new HttpError(400, "Indica al menos un rubro válido.");
       data = await oportunidades(pedidos);
       ttl = 900;
+    } else if (ruta === "licitacion" && /-COT\d+$/i.test((url.searchParams.get("codigo") || "").trim())) {
+      const codigo = url.searchParams.get("codigo").trim().toUpperCase();
+      if (!CODIGO.test(codigo)) throw new HttpError(400, "Código de Compra Ágil no válido.");
+      data = resumenCompraAgil(await ca(`compra-agil/${encodeURIComponent(codigo)}`));
+      ttl = 600;
     } else if (ruta === "licitacion") {
       const codigo = (url.searchParams.get("codigo") || "").trim();
       if (!CODIGO.test(codigo)) throw new HttpError(400, "Código de licitación no válido.");
