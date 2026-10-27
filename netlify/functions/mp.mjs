@@ -62,7 +62,7 @@ async function ca(path, params = {}) {
   const qs = new URLSearchParams(params);
   const r = await fetch(`${BASE_CA}/${path}${qs.toString() ? "?" + qs : ""}`, {
     headers: { accept: "application/json", ticket },
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(6000),
   });
   if (r.status === 429) throw new HttpError(429, "Se agotó la cuota diaria de la API de Compra Ágil; vuelve a intentar mañana.");
   if (r.status === 404) throw new HttpError(404, "No se encontró esa Compra Ágil.");
@@ -201,12 +201,15 @@ async function licitacionesAbiertas(rubros, inicio) {
 
 async function compraAgilAbiertas(rubros, inicio) {
   // Una búsqueda por término de cada rubro (estado publicada), en paralelo y con tope de tiempo.
+  // Se intercalan los términos de cada rubro (1° de cada uno, luego 2° de cada uno...) para que
+  // todos los rubros alcancen a buscarse dentro del tope de tiempo.
   const tareas = [];
-  for (const r of rubros) for (const q of RUBROS[r].qca || []) tareas.push({ r, q });
+  const maxTerm = Math.max(...rubros.map((r) => (RUBROS[r].qca || []).length), 0);
+  for (let k = 0; k < maxTerm; k++) for (const r of rubros) { const q = (RUBROS[r].qca || [])[k]; if (q) tareas.push({ r, q }); }
   const porCodigo = new Map();
   let idx = 0;
   async function worker() {
-    while (idx < tareas.length && Date.now() - inicio < 8000) {
+    while (idx < tareas.length && Date.now() - inicio < 7000) {
       const { r, q } = tareas[idx++];
       try {
         const p = await cached("ca:" + q, 10 * 60 * 1000, () =>
@@ -232,18 +235,20 @@ async function compraAgilAbiertas(rubros, inicio) {
             };
             porCodigo.set(i.codigo, x);
           }
-          for (const k of new Set([r, ...clasificar(i.nombre).filter((k) => rubros.includes(k))])) {
-            if (!x.rubros.includes(k)) x.rubros.push(k);
-          }
+          // El buscador de ChileCompra es aproximado: solo se acepta si el nombre calza con el rubro
+          // (palabras clave del rubro o el término buscado tal cual).
+          const calzan = clasificar(i.nombre).filter((k) => rubros.includes(k));
+          if (n.includes(norm(q)) && !calzan.includes(r)) calzan.push(r);
+          for (const k of calzan) if (!x.rubros.includes(k)) x.rubros.push(k);
         }
       } catch (e) {
         if (e.status === 429) throw e;
       }
     }
   }
-  await Promise.all([worker(), worker(), worker(), worker()]);
+  await Promise.all(Array.from({ length: 6 }, worker));
   const ahora = Date.now();
-  return [...porCodigo.values()].filter((x) => !x.cierre || new Date(x.cierre).getTime() > ahora);
+  return [...porCodigo.values()].filter((x) => x.rubros.length && (!x.cierre || new Date(x.cierre).getTime() > ahora));
 }
 
 async function oportunidades(rubros) {
