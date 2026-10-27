@@ -9,7 +9,7 @@
 //   GET /api/proveedor?rut=76.123.456-7             código de proveedor a partir del RUT
 //   GET /api/estado                                 verifica que la clave esté configurada
 
-import rubrosData from "./rubros.json";
+import rubrosData from "../../rubros.json";
 
 const BASE = "https://api.mercadopublico.cl/servicios/v1/publico";
 const RUBROS = rubrosData.rubros;
