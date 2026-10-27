@@ -14,7 +14,7 @@ import {
 export const config = { path: ["/bot", "/bot/*"] };
 
 const ESTADOS_ACTIVOS = new Set(["en_cola", "tomado", "preparando", "lista"]);
-const ACCIONES = new Set(["ofertar", "editar", "probar"]);
+const ACCIONES = new Set(["ofertar", "editar", "probar", "firmar", "verificar"]);
 const MAX_PDF = 4_500_000;                 // bytes del PDF (en base64 crece ~33%; Netlify acepta ~6 MB)
 const ROBOT_INACTIVO_MS = 90_000;          // si el PC no da señales en 90 s se considera desconectado
 const TOMADO_VENCE_MS = 10 * 60_000;       // un pedido tomado que no avanza vuelve a la cola
@@ -127,6 +127,7 @@ const AVISO = {
   requiere:   (t) => ["Necesita tu atención · " + t.codigo, t.mensaje || "", true],
   error:      (t) => ["No se pudo · " + t.codigo, t.mensaje || "", true],
   probada:    (t) => ["Prueba lista · " + t.codigo, clpTxt(t.total), false],
+  firmar:     (t) => ["Lista para firmar · " + t.codigo, `${clpTxt(t.total)} · abre la app, toca «Ir a firmar» y usa Rellenar.`, true],
 };
 function clpTxt(n) {
   return n ? "$" + Math.round(n).toLocaleString("es-CL") : "Oferta";
@@ -178,6 +179,12 @@ export default async (req) => {
     }
     const previo = await leer(store, codigo);
     if (previo && ESTADOS_ACTIVOS.has(previo.estado)) return json({ trabajo: previo, aviso: "Ya está en manos del robot." }, 409);
+    if (accion === "verificar") {          // revisar en el portal si ya quedó enviada: conserva la oferta preparada
+      if (!previo) return json({ error: "No hay oferta preparada para verificar." }, 404);
+      previo.accion = "verificar";
+      anotar(previo, "en_cola", "El robot revisará en Mercado Público si ya quedó enviada.");
+      return json({ trabajo: await escribir(store, previo) });
+    }
     const descuento = Math.min(0.5, Math.max(0, Number(b.descuento) || 0.08));
     const t = {
       codigo, accion, descuento,
@@ -274,6 +281,16 @@ export default async (req) => {
       d: texto(i.d, 200), q: Number(i.q) || 0, p: Number(i.p) || 0,
     }));
     if (b.fecha_envio) t.fecha_envio = texto(b.fecha_envio, 40);
+    if (b.firma && Array.isArray(b.firma.precios)) {   // datos para el botón Rellenar
+      t.firma = {
+        precios: b.firma.precios.slice(0, 60).map((x) => Math.max(0, Math.round(Number(x) || 0))),
+        despacho: Math.max(0, Math.round(Number(b.firma.despacho) || 0)),
+        detalle: texto(b.firma.detalle, 255) || "",
+        total: Math.round(Number(b.firma.total) || 0),
+        adjunto: texto(b.firma.adjunto, 120),
+        aviso: texto(b.firma.aviso, 300),
+      };
+    }
     const enviado = (e) => e === "enviada" || e === "confirmada";
     if (enviado(b.estado) && !enviado(t.estado)) t.envios = (t.envios || 0) + 1;
     if (b.pdf_b64) {
