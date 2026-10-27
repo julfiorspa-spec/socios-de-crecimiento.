@@ -15,11 +15,27 @@
   const COLUMNAS = [
     ["Por hacer", ["en_cola", "probada", "cancelada"]],
     ["Preparando", ["tomado", "preparando"]],
-    ["Falta tu clic", ["lista"]],
+    ["Para firmar", ["firmar", "lista"]],
     ["Atención", ["requiere", "error"]],
     ["Enviadas", ["enviada", "confirmada"]],
   ];
   const COD_CA = /^\d{1,8}-\d{1,8}-COT\d{2}$/i;
+  const COD_CA_G = /\d{1,8}-\d{1,8}-COT\d{2}/gi;
+  // botón «Rellenar» (marcador): se usa en TU navegador, en la página de la cotización de Mercado Público.
+  // Pone precios, despacho y detalle; NO adjunta, NO envía y NO declara (eso lo haces tú).
+  const RELLENAR = "(async()=>{const d=(prompt(\"CotizÁgil · Pega aquí el código de la oferta (lo copiaste en la app con «Copiar código Rellenar»):\")||\"\").trim();if(!d)return;const n=d.split(\"|\");if(n[0]!==\"CA1\"||n.length<6){alert(\"Ese no es un código de CotizÁgil. Cópialo de nuevo en la app.\");return}const c=n[1],S=n[2],a=n[3].split(\",\"),f=+n[5];let i=\"\";try{i=decodeURIComponent(escape(atob(n[4])))}catch{i=\"\"}if(!location.href.includes(c)&&!confirm(\"Esta página no parece ser la compra \"+c+\". ¿Rellenar de todos modos?\"))return;const g=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,\"value\").set,x=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,\"value\").set,m=e=>new Promise(t=>setTimeout(t,e)),s=async(e,t,l)=>{e.scrollIntoView({block:\"center\"}),e.focus(),l.call(e,\"\"),e.dispatchEvent(new Event(\"input\",{bubbles:!0})),l.call(e,String(t)),e.dispatchEvent(new Event(\"input\",{bubbles:!0})),e.dispatchEvent(new Event(\"change\",{bubbles:!0})),e.blur(),e.dispatchEvent(new Event(\"focusout\",{bubbles:!0})),await m(250)},b=e=>{for(let t=e,l=0;l<9&&t;l++,t=t.parentElement){const T=t.innerText||\"\",p=/Valor unitario/.test(T),u=/Despacho/i.test(T);if(p&&!u)return\"i\";if(u&&!p)return\"d\";if(p&&u)return\"?\"}return\"\"},v=document.querySelector(\"main\")||document.body,h=[...v.querySelectorAll(\"input[type=text]:not([disabled]), input:not([type]):not([disabled])\")],o=h.filter(e=>b(e)===\"i\"),y=h.filter(e=>b(e)===\"d\");if(!o.length){alert(\"No encontré los campos «Valor unitario». Abre el formulario de la cotización (botón Participar o Enviar nueva cotización) y vuelve a tocar Rellenar.\");return}if(o.length!==a.length){alert(\"El formulario tiene \"+o.length+\" ítems y la oferta \"+a.length+\". Revisa la oferta en la app; no se rellenó nada.\");return}for(let e=0;e<o.length;e++)await s(o[e],a[e],g);y[0]&&await s(y[0],S,g);const E=v.querySelector(\"textarea\");E&&i&&await s(E,i.slice(0,255),x),await m(700);const w=e=>String(e||\"\").replace(/\\D/g,\"\"),C=o.map((e,t)=>w(e.value)===w(a[t])?null:\"ítem \"+(t+1)+\" debe ser $\"+(+a[t]).toLocaleString(\"es-CL\")).filter(Boolean),L=[...document.body.innerText.matchAll(/Monto total\\s*\\n*\\s*\\$\\s*([\\d.]+)/g)].pop(),r=L?+L[1].replace(/\\./g,\"\"):null,z=r!=null&&Math.abs(r-f)<=50;alert((C.length?\"⚠ Corrige a mano: \"+C.join(\"; \")+`\n\n`:\"\")+(z?\"✓ Total del portal $\"+r.toLocaleString(\"es-CL\")+\" = oferta.\":\"⚠ Total del portal \"+(r==null?\"no encontrado\":\"$\"+r.toLocaleString(\"es-CL\"))+\" · oferta $\"+f.toLocaleString(\"es-CL\")+\". Revisa antes de enviar.\")+`\n\nAhora tú: adjunta Oferta_`+c+\".pdf, presiona «Enviar cotización», marca la declaración y firma.\")})();";
+  const MARCADOR = "javascript:" + encodeURIComponent(RELLENAR);
+  const b64utf8 = (t) => btoa(unescape(encodeURIComponent(t)));
+  const codigoRellenar = (t) => ["CA1", t.codigo, t.firma.despacho || 0, t.firma.precios.join(","), b64utf8(t.firma.detalle || ""),
+    t.firma.total || t.total || 0].join("|");
+  const portalDe = (cod) => `https://compra-agil.mercadopublico.cl/resumen-cotizacion/${encodeURIComponent(cod)}`;
+  async function copiar(texto) {
+    try { await navigator.clipboard.writeText(texto); return true; } catch {}
+    try {
+      const ta = document.createElement("textarea"); ta.value = texto; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.append(ta); ta.select(); const ok = document.execCommand("copy"); ta.remove(); return ok;
+    } catch { return false; }
+  }
 
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -41,6 +57,7 @@
     tomado:     { txt: "Preparando",         cls: "azul",  activo: true },
     preparando: { txt: "Preparando",         cls: "azul",  activo: true },
     lista:      { txt: "Falta tu clic",      cls: "ambar", activo: true },
+    firmar:     { txt: "Lista para firmar",  cls: "violeta" },
     probada:    { txt: "Prueba lista",       cls: "azul" },
     enviada:    { txt: "Enviada",            cls: "verde" },
     confirmada: { txt: "Enviada · confirmada", cls: "oro" },
@@ -118,6 +135,17 @@
   .rb-ajustes{margin-top:16px;border-top:1px solid var(--line-soft);padding-top:12px}
   .rb-ajustes summary{cursor:pointer;font-size:.8rem;color:var(--ink-faint)}
   .btn.rb-remoto{border-color:rgba(240,180,60,.7);color:#ffd88a}
+  .rb-badge.violeta{background:rgba(160,120,255,.18);color:#d9c9ff;border:1px solid rgba(160,120,255,.6)}
+  .rb-card.violeta{border-color:rgba(160,120,255,.7)}
+  .rb-caja.violeta::before{background:#a078ff}.rb-caja.violeta{border-color:rgba(160,120,255,.55)}
+  .rb-kpi.violeta{border-color:rgba(160,120,255,.6)} .rb-kpi.violeta b{color:#d9c9ff}
+  .btn.rb-firmar{background:linear-gradient(100deg,#7c4dff,#5a2fd6);border-color:transparent;color:#fff}
+  .rb-pasos{margin:10px 0 0;padding-left:18px;font-size:.8rem;color:var(--ink-dim);line-height:1.55}
+  .rb-copias{width:100%;border-collapse:collapse;margin-top:8px;font-size:.78rem}
+  .rb-copias td{padding:5px 4px;border-top:1px solid var(--line-soft);vertical-align:middle}
+  .rb-copias td.n{font-family:"IBM Plex Mono",monospace;color:#fff;white-space:nowrap}
+  .rb-cp{border:1px solid var(--line);background:var(--bg-2);color:var(--ink-dim);border-radius:8px;padding:3px 8px;font-size:.7rem;cursor:pointer}
+  .rb-cp.ok{color:#9ff0c8;border-color:var(--ok)}
   @media (min-width:560px){.rb-col{flex-basis:220px}}
   `;
   document.head.appendChild(css);
@@ -184,6 +212,7 @@
       else if (t.estado === "confirmada") notificar(`Oferta confirmada · ${t.codigo}`, `${clp(t.total)}${n}`, true, tag);
       else if (t.estado === "enviada") notificar(`Oferta enviada · ${t.codigo}`, `${clp(t.total)}${n}`, true, tag);
       else if (t.estado === "requiere" || t.estado === "error") notificar(`Necesita tu atención · ${t.codigo}`, t.mensaje || "", true, tag);
+      else if (t.estado === "firmar") notificar(`Lista para firmar · ${t.codigo}`, `${clp(t.total)}${n}. Toca «Ir a firmar» y usa Rellenar.`, true, tag);
       else if (t.estado === "probada") notificar(`Prueba lista · ${t.codigo}`, `${clp(t.total)}${n}`, false, tag);
     }
   }
@@ -303,8 +332,13 @@
     const portal = `https://compra-agil.mercadopublico.cl/resumen-cotizacion/${encodeURIComponent(t.codigo)}`;
     const acts = [];
     if (t.estado === "en_cola" || t.estado === "tomado") acts.push(`<button class="btn small danger" data-rb="cancelar" data-c="${esc(t.codigo)}" type="button">Cancelar</button>`);
+    const firmable = t.estado === "firmar" && t.firma?.precios?.length;
+    if (firmable) {
+      acts.push(`<button class="btn small rb-firmar" data-rb="ir-firmar" data-c="${esc(t.codigo)}" type="button">✍ Ir a firmar</button>`);
+      acts.push(`<button class="btn small" data-rb="verificar" data-c="${esc(t.codigo)}" type="button">Ya la firmé</button>`);
+    }
     if (t.estado === "confirmada") acts.push(`<button class="btn small" data-rb="editar" data-c="${esc(t.codigo)}" type="button" style="border-color:#c8900f;color:#ffd88a">Editar oferta</button>`);
-    if (t.estado === "probada") acts.push(`<button class="btn small rb-go" data-rb="ofertar" data-c="${esc(t.codigo)}" type="button">Hacer oferta</button>`);
+    if (t.estado === "probada") acts.push(`<button class="btn small rb-go" data-rb="ofertar" data-c="${esc(t.codigo)}" type="button">Preparar para firmar</button>`);
     if (["requiere", "error", "cancelada"].includes(t.estado)) acts.push(`<button class="btn small" data-rb="ofertar" data-c="${esc(t.codigo)}" type="button">Reintentar</button>`);
     if (t.estado === "lista") acts.unshift(`<a class="btn small rb-remoto" href="${esc(leer().remoto || REMOTO_DEF)}" target="_blank" rel="noopener noreferrer">Dar el clic desde aquí ↗</a>`);
     if (t.pdf) acts.push(`<button class="btn small" data-rb="pdf" data-c="${esc(t.codigo)}" type="button">Ver PDF</button>`);
@@ -312,7 +346,17 @@
     if (!e.activo) acts.push(`<button class="btn small" data-rb="olvidar" data-c="${esc(t.codigo)}" type="button" aria-label="Quitar de la lista">Quitar</button>`);
     const msg = t.estado === "lista"
       ? "Todo cargado en el PC. Presiona «Enviar cotización», marca la declaración y «Aceptar y enviar» (en el PC o desde aquí con escritorio remoto). El robot confirma solo."
-      : t.mensaje;
+      : firmable ? (t.firma.aviso || null) : t.mensaje;
+    const pasos = firmable ? `<ol class="rb-pasos">
+        <li><b>Ir a firmar</b> copia el código y abre la compra en este navegador${t.pdf ? "; baja antes el <b>PDF</b>" : ""}.</li>
+        <li>En Mercado Público presiona <b>Participar</b> (o <b>Enviar nueva cotización</b>) y toca tu marcador <b>Rellenar</b>; pega el código.</li>
+        <li>Adjunta <b>${esc(t.firma.adjunto || "el PDF")}</b>, presiona <b>Enviar cotización</b>, marca la <b>declaración</b> y <b>firma</b>.</li>
+        <li>Vuelve y toca <b>Ya la firmé</b>: el robot lo confirma en el portal.</li></ol>
+      <details class="rb-det"><summary>Copiar datos a mano</summary><table class="rb-copias">
+        ${t.firma.precios.map((v, k) => `<tr><td>Ítem ${k + 1}${t.items?.[k]?.d && t.items.length === t.firma.precios.length ? " · " + esc(t.items[k].d.slice(0, 40)) : ""}</td><td class="n">${clp(v)}</td><td><button type="button" class="rb-cp" data-rb="cp" data-v="${v}">Copiar</button></td></tr>`).join("")}
+        <tr><td>Despacho</td><td class="n">${clp(t.firma.despacho || 0)}</td><td><button type="button" class="rb-cp" data-rb="cp" data-v="${t.firma.despacho || 0}">Copiar</button></td></tr>
+        <tr><td colspan="2">Detalle (${(t.firma.detalle || "").length} car.)</td><td><button type="button" class="rb-cp" data-rb="cp" data-v="${esc(t.firma.detalle || "")}">Copiar</button></td></tr>
+        <tr><td>Total esperado</td><td class="n">${clp(t.firma.total)}</td><td></td></tr></table></details>` : "";
     return `<div class="rb-card ${e.cls}" id="rb-${esc(t.codigo)}">
       <div class="rb-top"><span class="tag ag">${esc(t.codigo)}</span>${badge(t)}</div>
       <h3>${esc(t.nombre || "Compra Ágil")}</h3>
@@ -325,6 +369,7 @@
         ${enviada && t.fecha_envio ? `<span>Enviada ${esc(t.fecha_envio)}</span>` : ""}
       </div>
       ${msg ? `<div class="rb-msg">${esc(msg)}</div>` : ""}
+      ${pasos}
       ${t.detalle || (t.items && t.items.length) ? `<details class="rb-det"><summary>Detalle de la oferta</summary><pre>${esc(
         (t.items || []).map((i, k) => `${k + 1}. ${i.d} — ${i.q} x ${clp(i.p)}`).join("\n") + (t.detalle ? "\n\n" + t.detalle : ""))}</pre></details>` : ""}
       <div class="rb-acts">${acts.join("")}</div>
@@ -353,7 +398,7 @@
     const t = trabajo(c.codigo);
     const d = c.descuento;
     const oferta = c.monto ? Math.round(c.monto * (1 - d)) : null;
-    const editar = c.accion === "editar";
+    const editar = c.editar || c.accion === "editar";
     return `
       <div class="rb-sheet-head"><h2 style="margin:0">${editar ? "Editar oferta" : "Hacer oferta"}</h2><button class="rb-x" type="button" data-rb="volver" aria-label="Volver">✕</button></div>
       <div class="rb-conf" style="margin-top:12px">
@@ -365,30 +410,31 @@
         ${oferta ? `<div style="margin-top:10px"><div class="muted">Oferta aproximada</div><div class="rb-big">${clp(oferta)}</div><div class="muted">Presupuesto ${clp(c.monto)} · el robot calcula el valor exacto con la ficha (IVA incluido o no) y se ajusta al número del portal</div></div>` : `<div class="muted" style="margin-top:8px">El robot lee el presupuesto en la ficha y aplica el descuento.</div>`}
       </div>
       <div class="card" style="margin-top:10px">
-        <div class="muted">El robot del PC: lee la ficha y los adjuntos → arma la cotización, ficha técnica y render → carga precios, detalle y PDF (una sola vez) en Mercado Público.</div>
-        <div class="muted" style="margin-top:8px"><strong style="color:#ffd88a">Tú das el clic final</strong> en «Enviar cotización» y aceptas la declaración jurada. Te avisamos aquí cuando esté lista.</div>
+        <div class="muted">El robot del PC lee la ficha y los adjuntos, calcula el precio y arma cotización, ficha técnica y PDF. La oferta queda <b>lista para firmar</b> aquí.</div>
+        <div class="muted" style="margin-top:8px"><strong style="color:#d9c9ff">Tú la envías y firmas</strong> desde tu navegador normal con el botón <b>Rellenar</b>: así Mercado Público no ve un navegador automatizado. Te avisamos cuando esté lista.</div>
       </div>
       ${!R.data?.robot?.conectado ? `<div class="note" style="border-left-color:var(--warn)">El robot del PC está desconectado. El pedido queda en cola y parte apenas se encienda el panel en el PC.</div>` : ""}
       ${t && est(t.estado).activo ? `<div class="note" style="border-left-color:var(--warn)">Esta compra ya está en manos del robot (${esc(est(t.estado).txt)}).</div>` : ""}
       <div class="row" style="margin-top:14px">
         <button class="btn" type="button" data-rb="volver">Volver</button>
-        <button class="btn rb-go" type="button" data-rb="confirmar" style="flex:1" ${t && est(t.estado).activo ? "disabled" : ""}>${editar ? "Preparar edición" : "Preparar oferta"}</button>
+        <button class="btn rb-firmar" type="button" data-rb="confirmar" style="flex:1" ${t && est(t.estado).activo ? "disabled" : ""}>✍ ${editar ? "Preparar edición para firmar" : "Preparar para firmar"}</button>
       </div>
-      <button class="btn small" type="button" data-rb="probar" style="margin-top:10px;width:100%" ${t && est(t.estado).activo ? "disabled" : ""}>Solo probar (carga todo sin pedir envío)</button>`;
+      <details class="rb-det" style="margin-top:12px"><summary>Modo antiguo (ventana del robot)</summary>
+        <button class="btn small" type="button" data-rb="antiguo" style="margin-top:8px;width:100%" ${t && est(t.estado).activo ? "disabled" : ""}>Cargar en la ventana del robot del PC</button></details>`;
   }
 
   const enviadaEst = (e) => e === "enviada" || e === "confirmada";
   const esHoy = (iso) => iso && new Date(iso).toDateString() === new Date().toDateString();
   function kpis(lista) {
     const curso = lista.filter((t) => ["en_cola", "tomado", "preparando"].includes(t.estado)).length;
-    const clic = lista.filter((t) => t.estado === "lista").length;
+    const clic = lista.filter((t) => t.estado === "lista" || t.estado === "firmar").length;
     const env = lista.filter((t) => enviadaEst(t.estado));
     const hoy = env.filter((t) => esHoy(t.actualizado)).length;
     const monto = env.reduce((s, t) => s + (Number(t.total) || 0), 0);
     const corto = (n) => n >= 1e6 ? "$" + (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace(".", ",") + "M" : clp(n);
     return `<div class="rb-kpis">
       <div class="rb-kpi"><b>${curso}</b><span>En curso</span></div>
-      <div class="rb-kpi ${clic ? "ambar" : ""}"><b>${clic}</b><span>Falta tu clic</span></div>
+      <div class="rb-kpi ${clic ? "violeta" : ""}"><b>${clic}</b><span>Para firmar</span></div>
       <div class="rb-kpi"><b>${hoy}</b><span>Enviadas hoy</span></div>
       <div class="rb-kpi"><b>${corto(monto)}</b><span>Ofertado (${env.length})</span></div>
     </div>`;
@@ -403,7 +449,7 @@
     </button>`;
   }
   function vistaLista(lista) {
-    const atn = lista.filter((t) => t.estado === "lista" || t.estado === "requiere");
+    const atn = lista.filter((t) => ["lista", "firmar", "requiere"].includes(t.estado));
     const enCurso = lista.filter((t) => est(t.estado).activo && !atn.includes(t));
     const resto = lista.filter((t) => !atn.includes(t) && !enCurso.includes(t));
     return `${atn.length ? `<div class="label">Necesitan tu acción</div>${atn.map(tarjeta).join("")}` : ""}
@@ -411,7 +457,7 @@
       ${resto.length ? `<div class="label">Ofertas</div>${resto.map(tarjeta).join("")}` : ""}`;
   }
   function vistaCajas(lista) {
-    const orden = (t) => t.estado === "lista" ? 0 : t.estado === "requiere" || t.estado === "error" ? 1 : est(t.estado).activo ? 2 : 3;
+    const orden = (t) => t.estado === "lista" || t.estado === "firmar" ? 0 : t.estado === "requiere" || t.estado === "error" ? 1 : est(t.estado).activo ? 2 : 3;
     return `<div class="rb-cajas">${[...lista].sort((a, b) => orden(a) - orden(b)).map(caja).join("")}</div>`;
   }
   function vistaTablero(lista) {
@@ -445,8 +491,8 @@
           ? `PC conectado${r.equipo ? " · " + esc(r.equipo) : ""}${r.ocupado && r.tarea ? " · " + esc(r.tarea) : " · libre"}`
           : `PC desconectado${r?.visto ? " · visto " + esc(hace(r.visto)) : ""}. Abre el panel del robot en el PC.`}</span></div>
       <div class="row" style="margin:6px 0 4px">
-        <div class="field" style="flex:1;min-width:150px"><input id="rbCod" placeholder="Código Compra Ágil (ej. 3704-203-COT26)" autocomplete="off" autocapitalize="characters"></div>
-        <button class="btn small rb-go" type="button" data-rb="nuevo">Hacer oferta</button>
+        <div class="field" style="flex:1;min-width:150px"><input id="rbCod" placeholder="Uno o varios códigos (ej. 3704-203-COT26, 1261-12-COT26)" autocomplete="off" autocapitalize="characters"></div>
+        <button class="btn small rb-firmar" type="button" data-rb="nuevo">✍ Preparar</button>
       </div>
       ${(!R.push && pushPosible) || R.instalar || (esIOS && !instalada()) ? `<div class="row" style="margin-top:6px;gap:8px">
         ${!R.push && pushPosible && !(esIOS && !instalada()) ? `<button class="btn small" type="button" data-rb="avisos">🔔 Activar avisos (aunque la app esté cerrada)</button>` : ""}
@@ -460,6 +506,9 @@
         <div class="field" style="margin-top:10px"><label class="muted" for="rbRemoto">Enlace de escritorio remoto (para dar el clic final desde el celular)</label>
           <input id="rbRemoto" value="${esc(leer().remoto || REMOTO_DEF)}" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
         <div class="muted" style="margin-top:6px">Instala <b>Chrome Remote Desktop</b> en el PC y en el celular (gratis). Con «Dar el clic desde aquí» ves la ventana del robot y presionas Enviar tú mismo.</div>
+        <div class="label" style="margin-top:14px">Botón «Rellenar» (una vez por navegador)</div>
+        <div class="muted"><b>PC:</b> muestra la barra de favoritos (Ctrl+Shift+B) y arrastra este botón: <a class="btn small rb-firmar" href="${esc(MARCADOR)}" data-rb="marcador-arrastrar">Rellenar</a></div>
+        <div class="muted" style="margin-top:6px"><b>Celular:</b> toca <button class="btn small" type="button" data-rb="copiar-marcador">Copiar marcador</button>, guarda cualquier página como favorito, edítalo con nombre <b>Rellenar</b> y pega el código como dirección. En Mercado Público escribe «Rellenar» en la barra y toca el favorito.</div>
         <div class="row" style="margin-top:10px;gap:8px">
           <button class="btn small" type="button" data-rb="remoto">Guardar enlace</button>
           ${R.push ? `<button class="btn small" type="button" data-rb="push-probar">Probar aviso</button>` : ""}
@@ -495,9 +544,27 @@
     const codigo = String(datos.codigo || "").trim().toUpperCase();
     if (!COD_CA.test(codigo)) { toast("El robot trabaja Compras Ágiles (código …-COT26)"); return; }
     if (!R.token) { abrir(); return; }
-    R.conf = { ...datos, codigo, accion, descuento: leer().descuento ?? 0.08 };
+    R.conf = { ...datos, codigo, accion, editar: accion === "editar", descuento: leer().descuento ?? 0.08 };
     if (!sheet.classList.contains("on")) { sheet.classList.add("on"); back.classList.add("on"); }
     pintarHoja();
+  }
+
+  // uno o varios códigos: con uno se muestra la confirmación; con varios se preparan todos para firmar
+  async function nuevos(texto) {
+    const cods = [...new Set((String(texto || "").toUpperCase().match(COD_CA_G) || []))];
+    if (cods.length <= 1) return pedirOferta({ codigo: cods[0] || texto });
+    if (!R.token) { abrir(); return; }
+    const descuento = leer().descuento ?? 0.08;
+    if (!confirm(`¿Preparar ${cods.length} compras para firmar con ${Math.round(descuento * 100)}% bajo el presupuesto?`)) return;
+    let ok = 0;
+    for (const codigo of cods) {
+      try { const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo, accion: "firmar", descuento }) }); if (r._status !== 409) ok++; }
+      catch (e) { toast(codigo + ": " + e.message); }
+    }
+    toast(`${ok} de ${cods.length} en cola: el robot las deja listas para firmar`);
+    const inp = $("#rbCod"); if (inp) inp.value = "";
+    if (!R.push) suscribirPush(true);
+    await refrescar();
   }
 
   async function confirmar(accion) {
@@ -507,11 +574,11 @@
     $$('[data-rb="confirmar"],[data-rb="probar"]', sheet).forEach((b) => { b.disabled = true; });
     try {
       const r = await api("pedir", { method: "POST", body: JSON.stringify({
-        codigo: c.codigo, accion: accion || c.accion, descuento: c.descuento,
+        codigo: c.codigo, accion: accion || "firmar", descuento: c.descuento,
         nombre: c.nombre, organismo: c.organismo, monto: c.monto,
       }) });
       if (r._status === 409) toast(r.aviso || "Ya está en manos del robot");
-      else toast(accion === "probar" ? "Prueba enviada al robot" : "Pedido enviado al robot del PC");
+      else toast(accion === "ofertar" ? "Pedido enviado al robot (modo antiguo)" : "El robot la deja lista para firmar");
       R.conf = null; R.foco = c.codigo; if (R.vista !== "lista") R.detalle = c.codigo;
       if (!R.push) suscribirPush(true);
       await refrescar();
@@ -539,8 +606,25 @@
     }
     if (a === "desc") { R.conf.descuento = +b.dataset.d; guardar({ descuento: +b.dataset.d }); return pintarHoja(); }
     if (a === "confirmar") return confirmar();
+    if (a === "antiguo") return confirmar("ofertar");
     if (a === "probar") return confirmar("probar");
-    if (a === "nuevo") return pedirOferta({ codigo: $("#rbCod")?.value });
+    if (a === "nuevo") return nuevos($("#rbCod")?.value);
+    if (a === "cp") { const ok = await copiar(b.dataset.v); b.textContent = ok ? "Copiado ✓" : "No se pudo"; b.classList.toggle("ok", ok); setTimeout(() => { b.textContent = "Copiar"; b.classList.remove("ok"); }, 1500); return; }
+    if (a === "copiar-marcador") { toast(await copiar(MARCADOR) ? "Marcador copiado: créalo como favorito «Rellenar»" : "No se pudo copiar"); return; }
+    if (a === "marcador-arrastrar") { ev.preventDefault(); toast("Arrástralo a la barra de favoritos; se usa en Mercado Público"); return; }
+    if (a === "ir-firmar") {
+      const t = trabajo(cod); if (!t?.firma) return;
+      const ok = await copiar(codigoRellenar(t));          // copiar mientras esta pestaña tiene el foco
+      toast(ok ? "Código copiado. En Mercado Público toca tu marcador «Rellenar» y pégalo." : "No se pudo copiar: usa «Copiar datos a mano».");
+      const w = window.open(portalDe(cod), "_blank");
+      if (w) { try { w.opener = null; } catch {} } else location.href = portalDe(cod);
+      return;
+    }
+    if (a === "verificar") {
+      try { await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "verificar" }) }); toast("El robot revisará el portal"); await refrescar(); }
+      catch (e) { toast(e.message); }
+      return;
+    }
     if (a === "ofertar" || a === "editar") {
       const t = trabajo(cod) || {};
       return pedirOferta({ codigo: cod, nombre: t.nombre, organismo: t.organismo, monto: t.monto }, a);
@@ -562,7 +646,7 @@
   sheet.addEventListener("keydown", (ev) => {
     if (ev.key !== "Enter") return;
     if (ev.target.id === "rbTok") { if (enlazar(ev.target.value)) pintarHoja(); }
-    if (ev.target.id === "rbCod") pedirOferta({ codigo: ev.target.value });
+    if (ev.target.id === "rbCod") nuevos(ev.target.value);
   });
 
   /* ---------------- botones dentro de la app ---------------- */
@@ -579,7 +663,7 @@
     if (t && t.estado !== "cancelada") {
       return `<button class="btn small" type="button" data-rb-ver="${esc(codigo)}" style="padding:6px 10px">${badge(t)}</button>`;
     }
-    return `<button class="btn small rb-go" type="button" data-rb-ofertar="${esc(codigo)}" ${extra || ""}>Hacer oferta</button>`;
+    return `<button class="btn small rb-firmar" type="button" data-rb-ofertar="${esc(codigo)}" ${extra || ""}>✍ Preparar oferta</button>`;
   }
   function decorarLista() {
     $$("#oppList article.opp").forEach((card) => {
@@ -618,7 +702,7 @@
   }
   function pintar() {
     const lista = R.data?.trabajos || [];
-    const atn = lista.filter((t) => t.estado === "lista" || t.estado === "requiere").length;
+    const atn = lista.filter((t) => ["lista", "firmar", "requiere"].includes(t.estado)).length;
     chip.classList.toggle("on", !!R.data?.robot?.conectado);
     chip.classList.toggle("atn", atn > 0);
     chip.innerHTML = `<span class="rb-dot"></span><span>Robot</span>${atn ? `<span class="rb-n">${atn}</span>` : ""}`;
