@@ -8,7 +8,17 @@
 (function () {
   "use strict";
   const KEY = "sdc:robot";
-  const POLL_RAPIDO = 5000, POLL_LENTO = 20000;
+  const POLL_RAPIDO = 5000, POLL_LENTO = 30000;
+  const REMOTO_DEF = "https://remotedesktop.google.com/access";
+  const VISTAS = [["lista", "Lista"], ["cajas", "Cajas"], ["tablero", "Tablero"]];
+  // columnas del tablero (etapas del trabajo)
+  const COLUMNAS = [
+    ["Por hacer", ["en_cola", "probada", "cancelada"]],
+    ["Preparando", ["tomado", "preparando"]],
+    ["Falta tu clic", ["lista"]],
+    ["Atención", ["requiere", "error"]],
+    ["Enviadas", ["enviada", "confirmada"]],
+  ];
   const COD_CA = /^\d{1,8}-\d{1,8}-COT\d{2}$/i;
 
   const $ = (s, r = document) => r.querySelector(s);
@@ -82,11 +92,39 @@
   .rb-sheet-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
   .rb-x{background:none;border:none;color:var(--ink-faint);font-size:1.3rem;cursor:pointer;padding:4px 8px}
   #rbSheet{z-index:43} #rbBack{z-index:42}
+  .rb-vistas{display:flex;background:var(--bg-2);border:1px solid var(--line-soft);border-radius:12px;padding:3px;gap:3px;margin:10px 0 4px}
+  .rb-vistas button{flex:1;border:0;background:none;border-radius:9px;padding:7px 0;font-size:.8rem;font-weight:600;color:var(--ink-faint);cursor:pointer}
+  .rb-vistas button.on{background:var(--panel-2);color:#fff;box-shadow:0 1px 0 rgba(255,255,255,.06) inset}
+  .rb-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:10px 0 4px}
+  .rb-kpi{background:var(--bg-2);border:1px solid var(--line-soft);border-radius:12px;padding:8px 8px 7px;min-width:0}
+  .rb-kpi b{display:block;font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:1.02rem;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rb-kpi span{display:block;font-size:.66rem;color:var(--ink-faint);line-height:1.2;margin-top:2px}
+  .rb-kpi.ambar{border-color:rgba(240,180,60,.6)} .rb-kpi.ambar b{color:#ffd88a}
+  .rb-cajas{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:8px}
+  .rb-caja{position:relative;text-align:left;background:var(--panel);border:1px solid var(--line-soft);border-radius:14px;padding:11px 11px 10px;cursor:pointer;display:flex;flex-direction:column;gap:6px;min-width:0;color:inherit}
+  .rb-caja::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;background:var(--line)}
+  .rb-caja.verde::before{background:#16a34a}.rb-caja.oro::before{background:#d69e16}.rb-caja.ambar::before{background:var(--warn)}
+  .rb-caja.azul::before{background:var(--blue)}.rb-caja.rojo::before{background:var(--red)}
+  .rb-caja.ambar{border-color:rgba(240,180,60,.55)}
+  .rb-caja .rb-cod{font-family:"IBM Plex Mono",monospace;font-size:.68rem;color:var(--ink-faint)}
+  .rb-caja .rb-nom{font-size:.8rem;line-height:1.3;color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.1em}
+  .rb-caja .rb-tot{font-family:"IBM Plex Mono",monospace;font-size:.95rem;color:#fff}
+  .rb-caja .rb-badge{align-self:flex-start;font-size:.64rem;padding:3px 8px}
+  .rb-tablero{display:flex;align-items:flex-start;gap:8px;overflow-x:auto;margin:8px -4px 0;padding:0 4px 8px;scroll-snap-type:x mandatory}
+  .rb-col{flex:0 0 74%;max-width:240px;background:var(--bg-2);border:1px solid var(--line-soft);border-radius:14px;padding:8px;scroll-snap-align:start;display:flex;flex-direction:column;gap:7px}
+  .rb-col h4{margin:2px 4px 2px;font-size:.74rem;font-weight:700;color:var(--ink-dim);display:flex;justify-content:space-between;letter-spacing:.02em}
+  .rb-col h4 i{font-style:normal;color:var(--ink-faint);font-family:"IBM Plex Mono",monospace}
+  .rb-col .rb-vacio{font-size:.72rem;color:var(--ink-faint);padding:6px 4px}
+  .rb-ajustes{margin-top:16px;border-top:1px solid var(--line-soft);padding-top:12px}
+  .rb-ajustes summary{cursor:pointer;font-size:.8rem;color:var(--ink-faint)}
+  .btn.rb-remoto{border-color:rgba(240,180,60,.7);color:#ffd88a}
+  @media (min-width:560px){.rb-col{flex-basis:220px}}
   `;
   document.head.appendChild(css);
 
   /* ---------------- estado ---------------- */
-  const R = { token: leer().token || null, data: null, err: null, previos: {}, timer: null, enCurso: false, foco: null };
+  const R = { token: leer().token || null, data: null, err: null, previos: {}, timer: null, enCurso: false, foco: null,
+              vista: leer().vista || "cajas", detalle: null, push: false, instalar: null };
 
   async function api(ruta, opt = {}) {
     if (!R.token) throw new Error("Robot sin enlazar");
@@ -122,14 +160,16 @@
       });
     } catch {}
   }
-  async function notificar(titulo, cuerpo, urgente) {
+  async function notificar(titulo, cuerpo, urgente, tag) {
     toast(titulo);
     if (urgente) { sonar(); try { navigator.vibrate?.([180, 90, 180]); } catch {} }
     if (!("Notification" in window) || Notification.permission !== "granted") return;
+    // mismo «tag» que el aviso push del servidor: si llegan los dos, el teléfono muestra uno solo
+    const op = { body: cuerpo, icon: "/icon-512.png", badge: "/icon-180.png", tag: tag || "robot-" + titulo, renotify: true };
     try {
       const reg = await navigator.serviceWorker?.getRegistration?.();
-      if (reg) return reg.showNotification(titulo, { body: cuerpo, icon: "/icon-512.png", tag: "robot-" + titulo });
-      new Notification(titulo, { body: cuerpo, icon: "/icon-512.png" });
+      if (reg) return reg.showNotification(titulo, op);
+      new Notification(titulo, op);
     } catch {}
   }
   function revisarCambios(lista) {
@@ -139,13 +179,55 @@
       R.previos[t.codigo] = t.estado;
       if (primera || antes === t.estado) continue;
       const n = t.nombre ? ` · ${t.nombre.slice(0, 60)}` : "";
-      if (t.estado === "lista") notificar(`Oferta lista ${t.codigo}: falta tu clic`, `${clp(t.total)}${n}. En el PC presiona «Enviar cotización» y acepta la declaración.`, true);
-      else if (t.estado === "confirmada") notificar(`Oferta confirmada ${t.codigo}`, `${clp(t.total)}${n}`, true);
-      else if (t.estado === "enviada") notificar(`Oferta enviada ${t.codigo}`, `${clp(t.total)}${n}`, true);
-      else if (t.estado === "requiere" || t.estado === "error") notificar(`${t.codigo}: necesita tu atención`, t.mensaje || "", true);
-      else if (t.estado === "probada") notificar(`Prueba lista ${t.codigo}`, `${clp(t.total)}${n}`, false);
+      const tag = `rb-${t.codigo}-${t.estado}`;
+      if (t.estado === "lista") notificar(`Falta tu clic · ${t.codigo}`, `${clp(t.total)}${n}. Presiona «Enviar cotización» y acepta la declaración.`, true, tag);
+      else if (t.estado === "confirmada") notificar(`Oferta confirmada · ${t.codigo}`, `${clp(t.total)}${n}`, true, tag);
+      else if (t.estado === "enviada") notificar(`Oferta enviada · ${t.codigo}`, `${clp(t.total)}${n}`, true, tag);
+      else if (t.estado === "requiere" || t.estado === "error") notificar(`Necesita tu atención · ${t.codigo}`, t.mensaje || "", true, tag);
+      else if (t.estado === "probada") notificar(`Prueba lista · ${t.codigo}`, `${clp(t.total)}${n}`, false, tag);
     }
   }
+
+  /* ---------------- app instalable + avisos push ---------------- */
+  const esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const instalada = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  async function registrarSW() {
+    if (!("serviceWorker" in navigator)) return null;
+    try { return await navigator.serviceWorker.register("/sw.js", { scope: "/" }); } catch { return null; }
+  }
+  const swListo = registrarSW();
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); R.instalar = e; pintarHojaSiAbierta(); });
+  window.addEventListener("appinstalled", () => { R.instalar = null; toast("App instalada"); pintarHojaSiAbierta(); });
+  navigator.serviceWorker?.addEventListener?.("message", (e) => {
+    if (e.data?.tipo === "abrir") { location.hash = new URL(e.data.url).hash; desdeHash(); }
+  });
+
+  const b64aBytes = (s) => {
+    const p = "=".repeat((4 - (s.length % 4)) % 4);
+    const raw = atob((s + p).replace(/-/g, "+").replace(/_/g, "/"));
+    return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+  };
+  async function suscribirPush(preguntar) {
+    if (!R.token || !("PushManager" in window) || !("Notification" in window)) return false;
+    if (Notification.permission === "default" && preguntar) { try { await Notification.requestPermission(); } catch {} }
+    if (Notification.permission !== "granted") return false;
+    const reg = await swListo; if (!reg) return false;
+    try {
+      await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        const { publicKey } = await api("push-clave");
+        sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64aBytes(publicKey) });
+      }
+      await api("push-suscribir", { method: "POST", body: JSON.stringify({ sub: sub.toJSON() }) });
+      R.push = true;
+      return true;
+    } catch (e) { R.push = false; if (preguntar) toast("No se pudieron activar los avisos: " + e.message); return false; }
+  }
+  async function estadoPush() {
+    try { const reg = await swListo; R.push = !!(reg && await reg.pushManager?.getSubscription()); } catch { R.push = false; }
+  }
+  function pintarHojaSiAbierta() { if (sheet?.classList.contains("on")) pintarHoja(); }
 
   /* ---------------- ciclo de consulta ---------------- */
   async function refrescar() {
@@ -171,15 +253,20 @@
     if (tok.length < 16) { toast("Código de enlace incompleto"); return false; }
     R.token = tok; guardar({ token: tok }); R.previos = {};
     refrescar(); toast("Robot enlazado");
+    suscribirPush(false);
     return true;
   }
-  (function desdeEnlace() {
+  // enlaces que abren el robot: #enlazar=<código> (QR del PC) y #robot=<compra> (avisos)
+  function desdeHash() {
     const m = location.hash.match(/enlazar=([A-Za-z0-9_-]{16,})/);
-    if (!m) return;
-    enlazar(m[1]);
+    const r = location.hash.match(/^#robot(?:=([A-Za-z0-9-]+))?$/);
+    if (!m && !r) return;
+    if (m) enlazar(m[1]);
     history.replaceState(null, "", location.pathname + "#inicio");
-    setTimeout(() => abrir(), 400);
-  })();
+    const cod = r?.[1] ? decodeURIComponent(r[1]).toUpperCase() : null;
+    setTimeout(() => abrir(null, cod && cod !== "PRUEBA" ? cod : null), 400);
+  }
+  window.addEventListener("hashchange", desdeHash);
 
   /* ---------------- UI: botón en la cabecera ---------------- */
   const chip = document.createElement("button");
@@ -198,12 +285,12 @@
   document.body.append(back, sheet);
   back.addEventListener("click", cerrar);
 
-  function abrir(foco) {
-    R.foco = foco || null; R.conf = null;
+  function abrir(foco, detalle) {
+    R.foco = foco || null; R.conf = null; R.detalle = detalle || (foco && R.vista !== "lista" ? foco : null);
     sheet.classList.add("on"); back.classList.add("on");
-    pintarHoja(); refrescar();
+    pintarHoja(); refrescar(); estadoPush().then(pintarHojaSiAbierta);
   }
-  function cerrar() { sheet.classList.remove("on"); back.classList.remove("on"); R.conf = null; }
+  function cerrar() { sheet.classList.remove("on"); back.classList.remove("on"); R.conf = null; R.detalle = null; }
 
   function badge(t) {
     const e = est(t.estado);
@@ -219,11 +306,12 @@
     if (t.estado === "confirmada") acts.push(`<button class="btn small" data-rb="editar" data-c="${esc(t.codigo)}" type="button" style="border-color:#c8900f;color:#ffd88a">Editar oferta</button>`);
     if (t.estado === "probada") acts.push(`<button class="btn small rb-go" data-rb="ofertar" data-c="${esc(t.codigo)}" type="button">Hacer oferta</button>`);
     if (["requiere", "error", "cancelada"].includes(t.estado)) acts.push(`<button class="btn small" data-rb="ofertar" data-c="${esc(t.codigo)}" type="button">Reintentar</button>`);
+    if (t.estado === "lista") acts.unshift(`<a class="btn small rb-remoto" href="${esc(leer().remoto || REMOTO_DEF)}" target="_blank" rel="noopener noreferrer">Dar el clic desde aquí ↗</a>`);
     if (t.pdf) acts.push(`<button class="btn small" data-rb="pdf" data-c="${esc(t.codigo)}" type="button">Ver PDF</button>`);
     acts.push(`<a class="btn small" href="${portal}" target="_blank" rel="noopener noreferrer">Mercado Público ↗</a>`);
     if (!e.activo) acts.push(`<button class="btn small" data-rb="olvidar" data-c="${esc(t.codigo)}" type="button" aria-label="Quitar de la lista">Quitar</button>`);
     const msg = t.estado === "lista"
-      ? "Todo cargado en el PC. Presiona «Enviar cotización», marca la declaración y «Aceptar y enviar». El robot confirma solo."
+      ? "Todo cargado en el PC. Presiona «Enviar cotización», marca la declaración y «Aceptar y enviar» (en el PC o desde aquí con escritorio remoto). El robot confirma solo."
       : t.mensaje;
     return `<div class="rb-card ${e.cls}" id="rb-${esc(t.codigo)}">
       <div class="rb-top"><span class="tag ag">${esc(t.codigo)}</span>${badge(t)}</div>
@@ -289,14 +377,67 @@
       <button class="btn small" type="button" data-rb="probar" style="margin-top:10px;width:100%" ${t && est(t.estado).activo ? "disabled" : ""}>Solo probar (carga todo sin pedir envío)</button>`;
   }
 
+  const enviadaEst = (e) => e === "enviada" || e === "confirmada";
+  const esHoy = (iso) => iso && new Date(iso).toDateString() === new Date().toDateString();
+  function kpis(lista) {
+    const curso = lista.filter((t) => ["en_cola", "tomado", "preparando"].includes(t.estado)).length;
+    const clic = lista.filter((t) => t.estado === "lista").length;
+    const env = lista.filter((t) => enviadaEst(t.estado));
+    const hoy = env.filter((t) => esHoy(t.actualizado)).length;
+    const monto = env.reduce((s, t) => s + (Number(t.total) || 0), 0);
+    const corto = (n) => n >= 1e6 ? "$" + (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace(".", ",") + "M" : clp(n);
+    return `<div class="rb-kpis">
+      <div class="rb-kpi"><b>${curso}</b><span>En curso</span></div>
+      <div class="rb-kpi ${clic ? "ambar" : ""}"><b>${clic}</b><span>Falta tu clic</span></div>
+      <div class="rb-kpi"><b>${hoy}</b><span>Enviadas hoy</span></div>
+      <div class="rb-kpi"><b>${corto(monto)}</b><span>Ofertado (${env.length})</span></div>
+    </div>`;
+  }
+  function caja(t) {
+    const e = est(t.estado);
+    return `<button type="button" class="rb-caja ${e.cls}" data-rb="det" data-c="${esc(t.codigo)}">
+      <span class="rb-cod">${esc(t.codigo)}</span>
+      <span class="rb-nom">${esc(t.nombre || "Compra Ágil")}</span>
+      <span class="rb-tot">${t.total ? clp(t.total) : t.monto ? `<span class="muted" style="font-size:.72rem">Ppto.</span> ${clp(t.monto)}` : "—"}</span>
+      ${badge(t)}
+    </button>`;
+  }
+  function vistaLista(lista) {
+    const atn = lista.filter((t) => t.estado === "lista" || t.estado === "requiere");
+    const enCurso = lista.filter((t) => est(t.estado).activo && !atn.includes(t));
+    const resto = lista.filter((t) => !atn.includes(t) && !enCurso.includes(t));
+    return `${atn.length ? `<div class="label">Necesitan tu acción</div>${atn.map(tarjeta).join("")}` : ""}
+      ${enCurso.length ? `<div class="label">En curso</div>${enCurso.map(tarjeta).join("")}` : ""}
+      ${resto.length ? `<div class="label">Ofertas</div>${resto.map(tarjeta).join("")}` : ""}`;
+  }
+  function vistaCajas(lista) {
+    const orden = (t) => t.estado === "lista" ? 0 : t.estado === "requiere" || t.estado === "error" ? 1 : est(t.estado).activo ? 2 : 3;
+    return `<div class="rb-cajas">${[...lista].sort((a, b) => orden(a) - orden(b)).map(caja).join("")}</div>`;
+  }
+  function vistaTablero(lista) {
+    return `<div class="rb-tablero">${COLUMNAS.map(([titulo, estados]) => {
+      const cs = lista.filter((t) => estados.includes(t.estado));
+      return `<div class="rb-col"><h4>${titulo}<i>${cs.length}</i></h4>${cs.map(caja).join("") || '<div class="rb-vacio">Nada aquí</div>'}</div>`;
+    }).join("")}</div>`;
+  }
+
+  function pantallaDetalle(cod) {
+    const t = trabajo(cod);
+    if (!t) { R.detalle = null; return pantallaLista(); }
+    return `
+      <div class="rb-sheet-head"><button class="btn small" type="button" data-rb="cerrar-det">← Volver</button><button class="rb-x" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
+      ${tarjeta(t)}
+      ${t.historial?.length ? `<details class="rb-det" open><summary>Recorrido</summary><pre>${esc(t.historial.map((h) =>
+        `${new Date(h.t).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}  ${est(h.estado).txt}${h.mensaje ? " · " + h.mensaje : ""}`).join("\n"))}</pre></details>` : ""}`;
+  }
+
   function pantallaLista() {
     const r = R.data?.robot;
     const lista = R.data?.trabajos || [];
     const conectado = r?.conectado;
-    const atn = lista.filter((t) => t.estado === "lista" || t.estado === "requiere");
-    const enCurso = lista.filter((t) => est(t.estado).activo && !atn.includes(t));
-    const resto = lista.filter((t) => !atn.includes(t) && !enCurso.includes(t));
     const permiso = "Notification" in window ? Notification.permission : "unsupported";
+    const pushPosible = "PushManager" in window && permiso !== "denied";
+    const vista = { lista: vistaLista, cajas: vistaCajas, tablero: vistaTablero }[R.vista] || vistaCajas;
     return `
       <div class="rb-sheet-head"><h2 style="margin:0">Robot de ofertas</h2><button class="rb-x" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
       <div class="rb-status ${conectado ? "on" : ""}"><span class="rb-dot"></span>
@@ -307,21 +448,41 @@
         <div class="field" style="flex:1;min-width:150px"><input id="rbCod" placeholder="Código Compra Ágil (ej. 3704-203-COT26)" autocomplete="off" autocapitalize="characters"></div>
         <button class="btn small rb-go" type="button" data-rb="nuevo">Hacer oferta</button>
       </div>
-      ${permiso === "default" ? `<button class="btn small" type="button" data-rb="avisos" style="margin-top:6px">Activar avisos en este teléfono</button>` : ""}
-      ${atn.length ? `<div class="label">Necesitan tu acción</div>${atn.map(tarjeta).join("")}` : ""}
-      ${enCurso.length ? `<div class="label">En curso</div>${enCurso.map(tarjeta).join("")}` : ""}
-      ${resto.length ? `<div class="label">Ofertas</div>${resto.map(tarjeta).join("")}` : ""}
+      ${(!R.push && pushPosible) || R.instalar || (esIOS && !instalada()) ? `<div class="row" style="margin-top:6px;gap:8px">
+        ${!R.push && pushPosible && !(esIOS && !instalada()) ? `<button class="btn small" type="button" data-rb="avisos">🔔 Activar avisos (aunque la app esté cerrada)</button>` : ""}
+        ${R.instalar ? `<button class="btn small" type="button" data-rb="instalar">📲 Instalar app</button>` : ""}
+        ${esIOS && !instalada() ? `<div class="note" style="margin:0">En iPhone: toca <b>Compartir</b> → <b>Agregar a pantalla de inicio</b>. Desde ahí la app recibe avisos.</div>` : ""}
+      </div>` : ""}
+      ${lista.length ? kpis(lista) + `<div class="rb-vistas" role="tablist">${VISTAS.map(([k, n]) =>
+        `<button type="button" role="tab" aria-selected="${R.vista === k}" class="${R.vista === k ? "on" : ""}" data-rb="vista" data-v="${k}">${n}</button>`).join("")}</div>` + vista(lista) : ""}
       ${R.data && !lista.length ? `<div class="empty">Aún no hay ofertas. Toca «Hacer oferta» en una Compra Ágil.</div>` : ""}
-      <div class="row" style="margin-top:18px;justify-content:space-between">
-        <span class="muted">Los avisos llegan mientras la app está abierta.</span>
-        <button class="btn small" type="button" data-rb="desenlazar">Desenlazar</button>
-      </div>`;
+      <details class="rb-ajustes"><summary>Ajustes</summary>
+        <div class="field" style="margin-top:10px"><label class="muted" for="rbRemoto">Enlace de escritorio remoto (para dar el clic final desde el celular)</label>
+          <input id="rbRemoto" value="${esc(leer().remoto || REMOTO_DEF)}" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+        <div class="muted" style="margin-top:6px">Instala <b>Chrome Remote Desktop</b> en el PC y en el celular (gratis). Con «Dar el clic desde aquí» ves la ventana del robot y presionas Enviar tú mismo.</div>
+        <div class="row" style="margin-top:10px;gap:8px">
+          <button class="btn small" type="button" data-rb="remoto">Guardar enlace</button>
+          ${R.push ? `<button class="btn small" type="button" data-rb="push-probar">Probar aviso</button>` : ""}
+          <button class="btn small" type="button" data-rb="desenlazar">Desenlazar</button>
+        </div>
+      </details>`;
   }
 
   function pintarHoja() {
     const box = $("#rbIn"); if (!box) return;
     const y = sheet.scrollTop;
-    box.innerHTML = !R.token ? pantallaEnlace() : R.conf ? pantallaConfirmar(R.conf) : pantallaLista();
+    // el repintado cada pocos segundos no debe cerrar lo que la persona abrió
+    const abiertos = new Set($$("details", box).map((d, i) => d.open && (d.closest("[id]")?.id || "") + d.className + i).filter(Boolean));
+    const tabX = $(".rb-tablero", box)?.scrollLeft || 0;
+    box.innerHTML = !R.token ? pantallaEnlace() : R.conf ? pantallaConfirmar(R.conf)
+      : R.detalle ? pantallaDetalle(R.detalle) : pantallaLista();
+    $$("details", box).forEach((d, i) => { if (abiertos.has((d.closest("[id]")?.id || "") + d.className + i)) d.open = true; });
+    const tab = $(".rb-tablero", box);
+    if (tab && !R.tabInit) {            // la primera vez, el tablero se abre en lo que necesita tu clic
+      R.tabInit = true;
+      const col = $$(".rb-col", tab).find((c, i) => i >= 2 && i <= 3 && $(".rb-caja", c));
+      if (col) tab.scrollLeft = col.offsetLeft - tab.offsetLeft - 4;
+    } else if (tab) tab.scrollLeft = tabX;
     sheet.scrollTop = y;
     if (R.foco && !R.conf) {
       const el = document.getElementById("rb-" + R.foco);
@@ -351,8 +512,8 @@
       }) });
       if (r._status === 409) toast(r.aviso || "Ya está en manos del robot");
       else toast(accion === "probar" ? "Prueba enviada al robot" : "Pedido enviado al robot del PC");
-      R.conf = null; R.foco = c.codigo;
-      if ("Notification" in window && Notification.permission === "default") Notification.requestPermission().catch(() => {});
+      R.conf = null; R.foco = c.codigo; if (R.vista !== "lista") R.detalle = c.codigo;
+      if (!R.push) suscribirPush(true);
       await refrescar();
     } catch (e) { toast(e.message); }
     finally { R.enCurso = false; pintarHoja(); }
@@ -365,7 +526,17 @@
     if (a === "volver") { R.conf = null; return pintarHoja(); }
     if (a === "enlazar") { if (enlazar($("#rbTok")?.value)) pintarHoja(); return; }
     if (a === "desenlazar") { R.token = null; R.data = null; guardar({ token: null }); return pintarHoja(); }
-    if (a === "avisos") { try { await Notification.requestPermission(); } catch {} return pintarHoja(); }
+    if (a === "avisos") { if (await suscribirPush(true)) toast("Avisos activados en este teléfono"); return pintarHoja(); }
+    if (a === "push-probar") { try { await api("push-probar", { method: "POST", body: "{}" }); toast("Aviso de prueba enviado"); } catch (e) { toast(e.message); } return; }
+    if (a === "instalar") { const p = R.instalar; R.instalar = null; try { await p?.prompt(); } catch {} return pintarHoja(); }
+    if (a === "vista") { R.vista = b.dataset.v; guardar({ vista: R.vista }); return pintarHoja(); }
+    if (a === "det") { R.detalle = cod; sheet.scrollTop = 0; return pintarHoja(); }
+    if (a === "cerrar-det") { R.detalle = null; return pintarHoja(); }
+    if (a === "remoto") {
+      const v = ($("#rbRemoto")?.value || "").trim();
+      if (v && !/^https:\/\//i.test(v)) { toast("El enlace debe empezar con https://"); return; }
+      guardar({ remoto: v || REMOTO_DEF }); toast("Enlace guardado"); return pintarHoja();
+    }
     if (a === "desc") { R.conf.descuento = +b.dataset.d; guardar({ descuento: +b.dataset.d }); return pintarHoja(); }
     if (a === "confirmar") return confirmar();
     if (a === "probar") return confirmar("probar");
@@ -483,4 +654,7 @@
 
   pintar();
   refrescar();
+  desdeHash();
+  // si ya dio permiso antes, renueva la suscripción en silencio (por si el teléfono la cambió)
+  if (R.token && "Notification" in window && Notification.permission === "granted") suscribirPush(false);
 })();
