@@ -14,6 +14,7 @@ import {
 export const config = { path: ["/bot", "/bot/*"] };
 
 const ESTADOS_ACTIVOS = new Set(["en_cola", "tomado", "preparando", "lista"]);
+const MP_INACTIVO_MS = 45000;          // la pestaña de Mercado Público late cada ~10 s mientras está abierta
 const ACCIONES = new Set(["ofertar", "editar", "probar", "firmar", "verificar"]);
 const MAX_PDF = 4_500_000;                 // bytes del PDF (en base64 crece ~33%; Netlify acepta ~6 MB)
 const ROBOT_INACTIVO_MS = 90_000;          // si el PC no da señales en 90 s se considera desconectado
@@ -156,9 +157,11 @@ async function avisar(store, t) {
 
 // La página de la cotización en Mercado Público puede pedir tus datos de firma y el PDF (con tu código de enlace)
 const ORIGEN_MP = "https://compra-agil.mercadopublico.cl";
+const ORIGENES_MP = new Set([ORIGEN_MP, "https://www.mercadopublico.cl"]);
 export default async (req) => {
-  const mp = req.headers.get("origin") === ORIGEN_MP;
-  const cors = { "access-control-allow-origin": ORIGEN_MP, "access-control-allow-headers": "x-robot-token, content-type",
+  const origen = req.headers.get("origin") || "";
+  const mp = ORIGENES_MP.has(origen);
+  const cors = { "access-control-allow-origin": origen, "access-control-allow-headers": "x-robot-token, content-type",
                  "access-control-allow-methods": "GET, POST", "access-control-max-age": "600", vary: "origin" };
   if (req.method === "OPTIONS") return new Response(null, { status: mp ? 204 : 403, headers: mp ? cors : {} });
   const res = await atender(req);
@@ -176,10 +179,32 @@ async function atender(req) {
   if (ruta === "estado" && req.method === "GET") {
     const robot = (await store.get("robot/latido", { type: "json" })) || null;
     const lista = await todos(store);
+    const mpl = (await store.get("mp/latido", { type: "json" })) || null;
     return json({
       robot: robot && { ...robot, conectado: Date.now() - Date.parse(robot.visto) < ROBOT_INACTIVO_MS },
+      mp: mpl && { ...mpl, conectado: !!mpl.logueado && Date.now() - Date.parse(mpl.visto) < MP_INACTIVO_MS },
       trabajos: lista.slice(0, 60).map(({ historial, ...t }) => ({ ...t, historial: (historial || []).slice(-6) })),
     });
+  }
+
+  // ---------- tu Mercado Público (pestaña de Safari con Firma rápida) ----------
+  // La pestaña conectada avisa que está viva y recibe la compra que tocaste en la app («Ir a firmar»).
+  if (ruta === "mp-latido" && req.method === "POST") {
+    const b = await cuerpo(req);
+    await store.setJSON("mp/latido", { visto: ahora(), logueado: !!b.logueado, pagina: texto(b.pagina, 120), usuario: texto(b.usuario, 60) });
+    const orden = await store.get("mp/orden", { type: "json" });
+    if (orden && !orden.entregada && Date.now() - orden.t < 15 * 60000) {
+      await store.setJSON("mp/orden", { ...orden, entregada: true });
+      return json({ orden: orden.codigo });
+    }
+    return json({ orden: null });
+  }
+  if (ruta === "mp-orden" && req.method === "POST") {
+    const b = await cuerpo(req);
+    const codigo = limpiaCodigo(b.codigo);
+    if (!/^\d{1,8}-\d{1,8}-COT\d{2}$/.test(codigo)) return json({ error: "Código inválido" }, 400);
+    await store.setJSON("mp/orden", { codigo, t: Date.now(), entregada: false });
+    return json({ ok: true });
   }
 
   if (ruta === "pedir" && req.method === "POST") {
