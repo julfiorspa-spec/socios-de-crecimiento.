@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      1.6
+// @version      1.7
 // @description  Al abrir una Compra Ágil desde «Ir a firmar», carga sola los precios, el detalle y el PDF de tu oferta. NO envía, NO declara y NO firma: eso lo haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -28,6 +28,8 @@
     try {
       const tok = JSON.parse(localStorage.getItem("sdc:robot") || "{}").token;
       if (tok) gmSet("token", tok);
+      const disp = localStorage.getItem("sdc:dispositivo");
+      if (disp) gmSet("dispositivo", disp);
     } catch (e) {}
     document.documentElement.dataset.firmaRapida = "1";
     // puente «Abrir compra»: /firmar.html#CODIGO → recuerda la compra y te lleva a ella (aunque pida iniciar sesión)
@@ -162,12 +164,18 @@
     const ruta = location.pathname + location.search;
     const publicada = (ruta.match(/cotizacion-publicada\?quote=([\w-]+)/) || [])[1];
     const cod = (location.pathname.match(/resumen-cotizacion\/([\w-]+)/) || [])[1];
-    if (publicada && !hechas.has("v" + publicada)) {        // terminaste de firmar: el robot lo confirma solo
-      hechas.add("v" + publicada);
+    // terminaste de firmar («Cotización enviada correctamente»): el robot lo confirma, queda en «Enviados» y se cierra esta pestaña
+    const okTexto = cod && /cotizaci[oó]n (fue )?enviada correctamente|tu cotizaci[oó]n fue enviada/i.test(document.body.innerText || "");
+    const lista = publicada || (okTexto ? cod : null);
+    if (lista && !hechas.has("v" + lista)) {
+      hechas.add("v" + lista);
       gmSet("pendiente", "null");
       if (!token) return;
-      try { await pedir("pedir", "json", { codigo: publicada.toUpperCase(), accion: "verificar" }); decir("✓ Enviada. El robot la está confirmando; la verás en dorado en la app."); }
-      catch (e) { decir("Enviada. Abre la app y toca «Ya la firmé» para confirmarla."); }
+      const ua = navigator.userAgent;
+      const disp = (await gmGet("dispositivo")) || (/iphone/i.test(ua) ? "iPhone" : /android/i.test(ua) ? "Android" : "Celular");
+      try { await pedir("pedir", "json", { codigo: lista.toUpperCase(), accion: "verificar", dispositivo: disp }); decir("✓ Cotización enviada correctamente. El robot la confirma y queda en «Enviados». Cerrando esta pestaña…"); }
+      catch (e) { decir("Enviada. Abre la app y toca «Ya la firmé» para confirmarla."); return; }
+      setTimeout(() => { try { window.close(); } catch (e) {} setTimeout(() => { if (!document.hidden) location.replace(APP + "/#robot"); }, 600); }, 2500);
       return;
     }
     if (!cod && !publicada && !hechas.has("ir")) {          // en otra página de Compra Ágil (p. ej. después del login)
