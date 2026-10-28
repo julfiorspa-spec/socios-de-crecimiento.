@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      1.2
+// @version      1.3
 // @description  Al abrir una Compra Ágil desde «Ir a firmar», carga sola los precios, el detalle y el PDF de tu oferta. NO envía, NO declara y NO firma: eso lo haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -117,6 +117,7 @@
     }
     if (!cod || hechas.has(cod)) return;
     hechas.add(cod);
+    gmSet("pendiente", JSON.stringify({ cod: cod.toUpperCase(), t: Date.now() }));   // por si el portal te manda a iniciar sesión: al volver, regresa aquí
     if (!token) { decir("Abre una vez la app <b>cotizagil.netlify.app</b> en este navegador (ya enlazada con el robot) y vuelve a esta página."); return; }
     await rellenar(cod);
   }
