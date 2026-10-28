@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      1.1
+// @version      1.2
 // @description  Al abrir una Compra Ágil desde «Ir a firmar», carga sola los precios, el detalle y el PDF de tu oferta. NO envía, NO declara y NO firma: eso lo haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
+// @match        https://www.mercadopublico.cl/*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM.setValue
@@ -29,6 +30,28 @@
       if (tok) gmSet("token", tok);
     } catch (e) {}
     document.documentElement.dataset.firmaRapida = "1";
+    // recuerda qué compra vas a firmar: si Mercado Público te pide iniciar sesión, después te lleva a ella
+    document.addEventListener("click", (e) => {
+      const b = e.target.closest && e.target.closest('[data-rb="ir-firmar"]');
+      if (b && b.dataset.c) gmSet("pendiente", JSON.stringify({ cod: b.dataset.c, t: Date.now() }));
+    }, true);
+    return;
+  }
+
+  // 1b) Tras iniciar sesión el portal te deja en su inicio: volver a la compra pendiente
+  const pendiente = async () => {
+    try { const p = JSON.parse((await gmGet("pendiente")) || "null"); return p && Date.now() - p.t < 45 * 60000 ? p.cod : null; } catch (e) { return null; }
+  };
+  const urlCompra = (c) => "https://compra-agil.mercadopublico.cl/resumen-cotizacion/" + encodeURIComponent(c);
+  if (location.hostname === "www.mercadopublico.cl") {
+    pendiente().then((c) => {
+      if (!c) return;
+      const a = document.createElement("a");
+      a.href = urlCompra(c); a.textContent = "✍ Ir a firmar " + c;
+      a.style.cssText = "position:fixed;left:12px;right:12px;bottom:14px;z-index:2147483647;display:block;text-align:center;background:#7c4dff;color:#fff;" +
+        "padding:14px;border-radius:14px;font:600 16px system-ui,sans-serif;text-decoration:none;box-shadow:0 8px 24px rgba(0,0,0,.35)";
+      document.body.append(a);
+    });
     return;
   }
 
@@ -80,9 +103,16 @@
     const cod = (location.pathname.match(/resumen-cotizacion\/([\w-]+)/) || [])[1];
     if (publicada && !hechas.has("v" + publicada)) {        // terminaste de firmar: el robot lo confirma solo
       hechas.add("v" + publicada);
+      gmSet("pendiente", "null");
       if (!token) return;
       try { await pedir("pedir", "json", { codigo: publicada.toUpperCase(), accion: "verificar" }); decir("✓ Enviada. El robot la está confirmando; la verás en dorado en la app."); }
       catch (e) { decir("Enviada. Abre la app y toca «Ya la firmé» para confirmarla."); }
+      return;
+    }
+    if (!cod && !publicada && !hechas.has("ir")) {          // en otra página de Compra Ágil (p. ej. después del login)
+      hechas.add("ir");
+      const p = await pendiente();
+      if (p && sessionStorage.getItem("cotizagil-ir") !== p) { sessionStorage.setItem("cotizagil-ir", p); location.href = urlCompra(p); }
       return;
     }
     if (!cod || hechas.has(cod)) return;
