@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      1.4
+// @version      1.5
 // @description  Al abrir una Compra Ágil desde «Ir a firmar», carga sola los precios, el detalle y el PDF de tu oferta. NO envía, NO declara y NO firma: eso lo haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -30,6 +30,15 @@
       if (tok) gmSet("token", tok);
     } catch (e) {}
     document.documentElement.dataset.firmaRapida = "1";
+    // puente «Abrir compra»: /firmar.html#CODIGO → recuerda la compra y te lleva a ella (aunque pida iniciar sesión)
+    const puente = location.pathname.startsWith("/firmar") && decodeURIComponent(location.hash.slice(1)).toUpperCase();
+    if (puente && /-COT\d+$/.test(puente)) {
+      gmSet("pendiente", JSON.stringify({ cod: puente, t: Date.now() })).then(() => {
+        sessionStorage.removeItem("cotizagil-ir");
+        location.replace("https://compra-agil.mercadopublico.cl/resumen-cotizacion/" + encodeURIComponent(puente));
+      });
+      return;
+    }
     // recuerda qué compra vas a firmar: si Mercado Público te pide iniciar sesión, después te lleva a ella
     document.addEventListener("click", (e) => {
       const b = e.target.closest && e.target.closest('[data-rb="ir-firmar"]');
@@ -46,10 +55,11 @@
   if (location.hostname === "www.mercadopublico.cl") {
     pendiente().then((c) => {
       if (!c) return;
+      if (sessionStorage.getItem("cotizagil-ir-www") !== c) { sessionStorage.setItem("cotizagil-ir-www", c); location.href = urlCompra(c); return; }
       const a = document.createElement("a");
-      a.href = urlCompra(c); a.textContent = "✍ Ir a firmar " + c;
-      a.style.cssText = "position:fixed;left:12px;right:12px;bottom:14px;z-index:2147483647;display:block;text-align:center;background:#7c4dff;color:#fff;" +
-        "padding:14px;border-radius:14px;font:600 16px system-ui,sans-serif;text-decoration:none;box-shadow:0 8px 24px rgba(0,0,0,.35)";
+      a.href = urlCompra(c); a.textContent = "✍ Ir a la compra " + c;
+      a.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);top:6px;z-index:2147483647;background:#7c4dff;color:#fff;" +
+        "padding:7px 14px;border-radius:10px;font:600 13px system-ui,sans-serif;text-decoration:none;box-shadow:0 4px 14px rgba(0,0,0,.3)";
       document.body.append(a);
     });
     return;
@@ -66,10 +76,14 @@
   const pintar = () => {
     caja.innerHTML = mini
       ? "<div data-cz='abrir' style='cursor:pointer;text-align:center'>✍ CotizÁgil <span style='opacity:.7'>(ver)</span></div>"
-      : "<div style='display:flex;justify-content:space-between;gap:8px'><b>CotizÁgil</b><span data-cz='mini' style='cursor:pointer;padding:0 6px;font-size:15px;line-height:1'>–</span></div><div style='margin-top:3px'>" + ultimo + "</div>";
+      : "<div style='display:flex;justify-content:space-between;gap:8px'><b>CotizÁgil <span style='opacity:.6;font-weight:400'>v1.5</span></b><span data-cz='mini' style='cursor:pointer;padding:0 6px;font-size:15px;line-height:1'>–</span></div><div style='margin-top:3px'>" + ultimo + "</div>";
     caja.style.width = mini ? "auto" : "min(92vw,340px)";
     if (!caja.isConnected) document.body.append(caja);
   };
+  // si Mercado Público abre una ventana (declaración jurada, confirmación), el recuadro desaparece para no tapar nada
+  const hayVentana = () => /perjurio|art[ií]culo 210/i.test(document.body.innerText || "") ||
+    [...document.querySelectorAll('[role="dialog"],[aria-modal="true"]')].some((e) => !caja.contains(e) && e.getBoundingClientRect().height > 0);
+  setInterval(() => { if (caja.isConnected) caja.style.display = hayVentana() ? "none" : ""; }, 500);
   caja.addEventListener("click", (e) => { const a = e.target.closest("[data-cz]")?.dataset.cz; if (a === "mini") { mini = true; pintar(); } if (a === "abrir") { mini = false; pintar(); } });
   const decir = (html) => { ultimo = html; pintar(); };
 
@@ -184,6 +198,6 @@
     decir((ok ? "✓ Precios y detalle cargados. Total " + clp(tp) + " = oferta." :
       "⚠ Revisa: " + (malos.length ? "corrige " + malos.join(", ") + ". " : "") + "Total portal " + (tp == null ? "?" : clp(tp)) + " · oferta " + clp(t.firma.total) + ".") +
       "<br>" + adj + "<br><b>Ahora tú:</b> Enviar cotización → declaración → firma.");
-    if (ok) setTimeout(() => { mini = true; pintar(); }, 8000);   // todo bien: se achica solo para dejarte firmar
+    if (ok) setTimeout(() => { mini = true; pintar(); }, 4000);   // todo bien: se achica solo para dejarte firmar
   }
 })();
