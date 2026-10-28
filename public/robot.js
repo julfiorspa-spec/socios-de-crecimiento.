@@ -94,6 +94,14 @@
   .rb-badge.rojo{background:rgba(232,49,63,.15);color:#ffb3b9;border:1px solid rgba(232,49,63,.5)}
   .rb-badge .spinner{width:11px;height:11px;border-width:2px}
   .btn.rb-go{background:linear-gradient(100deg,var(--red),var(--red-deep));border-color:transparent;color:#fff}
+  .rb-swipe{position:relative;touch-action:pan-y;user-select:none;-webkit-user-select:none;will-change:transform}
+  .rb-sello{position:absolute;top:10px;padding:2px 10px;border:3px solid;border-radius:8px;font-weight:900;font-size:1.1rem;letter-spacing:.06em;opacity:0;pointer-events:none;z-index:2}
+  .rb-sello.si{left:12px;color:#22c55e;border-color:#22c55e;transform:rotate(-12deg)}
+  .rb-sello.no{right:12px;color:#ff5a5a;border-color:#ff5a5a;transform:rotate(12deg)}
+  .rb-otabs{display:flex;gap:4px;overflow-x:auto;margin:8px 0 4px;padding-bottom:2px}
+  .rb-otabs button{flex:1 0 auto;background:transparent;border:1px solid var(--line-soft);color:inherit;border-radius:999px;padding:7px 12px;font:inherit;font-size:.8rem;white-space:nowrap;cursor:pointer}
+  .rb-otabs button.on{background:#7c4dff;border-color:#7c4dff;color:#fff;font-weight:700}
+  .rb-otabs i{font-style:normal;margin-left:6px;opacity:.75;font-size:.72rem}
   .rb-card{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--radius);padding:14px;margin-top:10px}
   .rb-card.ambar{border-color:rgba(240,180,60,.6)}
   .rb-card.oro{border-color:#c8900f}
@@ -557,44 +565,129 @@
     const orden = (t) => ["lista", "firmar", "lic_captcha", "lic_revisar", "lic_lista"].includes(t.estado) ? 0 : t.estado === "requiere" || t.estado === "error" ? 1 : est(t.estado).activo ? 2 : 3;
     return `<div class="rb-cajas">${[...lista].sort((a, b) => orden(a) - orden(b)).map(caja).join("")}</div>`;
   }
+  /* ---------- oportunidades: Por preparar · Por firmar · Hechas · No deseadas (desliza tipo Tinder) ---------- */
+  const EN_FIRMA = ["en_cola", "tomado", "preparando", "lista", "firmar", "probada", "requiere", "error",
+    "lic_bajando", "lic_captcha", "lic_analizando", "lic_revisar", "lic_lista", "lic_ingresando"];
+  const HECHA = ["enviada", "confirmada"];
+  const descartada = (cod) => { const d = { ...(R.oport?.descartes || {}), ...(R.desc || {}) }; return !!d[cod]; };
   function vistaOport() {
     if (!R.oport) { cargarOport(); return `<div class="empty"><span class="spinner"></span> Cargando oportunidades…</div>`; }
     const o = R.oport, ahora = Date.now();
-    const filtro = R.oportFiltro || "exp";
+    const tab = R.oportTab || "nuevas", filtro = R.oportFiltro || "exp";
     const lic = (x) => x.fuente === "licitacion";
-    const ver = (o.lista || []).filter((x) => (filtro === "lic" ? lic(x) : !lic(x) && (filtro === "exp" ? x.tipo === "exp" : x.tipo !== "esp")) &&
-      Date.parse(x.cierre) - ahora > 30 * 60000);
+    const trabajos = R.data?.trabajos || [];
+    const vigente = (x) => Date.parse(x.cierre) - ahora > 30 * 60000;
+    const lista = o.lista || [];
+    const nuevas = lista.filter((x) => vigente(x) && !descartada(x.codigo) && !trabajo(x.codigo) && !x.ya_ofertada && !x.trabajada);
+    const enFirma = trabajos.filter((t) => EN_FIRMA.includes(t.estado));
+    const hechas = [...trabajos.filter((t) => HECHA.includes(t.estado)),
+      ...lista.filter((x) => (x.ya_ofertada || x.trabajada) && !trabajo(x.codigo)).map((x) => ({ ...x, _oport: true }))];
+    const papelera = lista.filter((x) => descartada(x.codigo));
+    const verN = nuevas.filter((x) => filtro === "lic" ? lic(x) : !lic(x) && (filtro === "exp" ? x.tipo === "exp" : x.tipo !== "esp"));
+    const n = R.oportN || 40;
     const color = { exp: "#ffd88a", rev: "#9cc3ff", srv: "#d9c9ff", esp: "#999" };
-    const fila = (x) => {
+    const fila = (x, modo) => {
       const h = Math.round((Date.parse(x.cierre) - ahora) / 3600000);
-      const ya = trabajo(x.codigo);
-      return `<div class="rb-card" style="padding:10px 12px;margin:6px 0">
+      return `<div class="rb-card rb-swipe" data-c="${esc(x.codigo)}" data-lic="${lic(x) ? 1 : ""}" data-modo="${modo}" style="padding:10px 12px;margin:6px 0">
+        <span class="rb-sello si">${modo === "papelera" ? "RECUPERAR" : "SÍ"}</span><span class="rb-sello no">NO</span>
         <div style="display:flex;gap:10px;align-items:flex-start">
-          <div style="min-width:42px;text-align:center"><b style="font-size:1.25rem">${x.puntaje}</b><div class="muted" style="font-size:.65rem">nota</div></div>
+          <div style="min-width:42px;text-align:center"><b style="font-size:1.25rem">${x.puntaje ?? "—"}</b><div class="muted" style="font-size:.65rem">nota</div></div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:.78rem"><b>${esc(x.codigo)}</b> · <span style="color:${color[x.tipo]}">${esc(x.etiqueta)}</span> · ${esc(x.rubro)}</div>
+            <div style="font-size:.78rem"><b>${esc(x.codigo)}</b> · ${lic(x) ? "📑 " : ""}<span style="color:${color[x.tipo] || "#999"}">${esc(x.etiqueta || "")}</span> · ${esc(x.rubro || "")}</div>
             <div style="margin:2px 0">${esc(x.nombre)}</div>
-            <div class="muted" style="font-size:.75rem">${esc(x.organismo)} · ${(x.llamado || "").slice(0, 7)} llamado</div>
-            <div style="font-size:.8rem;margin-top:3px">Gana ≈ <b>${clp(x.ganancia)}</b> · Ppto. ${clp(x.monto)} · <span style="${h < 12 ? "color:#ff8a80;font-weight:700" : ""}">cierra en ${h} h</span></div>
+            <div class="muted" style="font-size:.75rem">${esc(x.organismo)}${x.llamado ? " · " + esc((x.llamado || "").slice(0, 7)) + " llamado" : ""}</div>
+            <div style="font-size:.8rem;margin-top:3px">Gana ≈ <b>${clp(x.ganancia)}</b> · Ppto. ${clp(x.monto)}${x.monto_estimado ? " (estimado)" : ""} · <span style="${h < 12 ? "color:#ff8a80;font-weight:700" : ""}">cierra en ${h} h</span></div>
           </div></div>
-        <div class="row" style="margin-top:6px;gap:6px">${lic(x)
-          ? `${ya ? `<span class="muted" style="font-size:.78rem">Ya está en tus ofertas (${esc(est(ya.estado).txt)})</span>` : `<button class="btn small rb-firmar" type="button" data-rb="licitar" data-c="${esc(x.codigo)}">📑 Participar</button>`}
-             <a class="btn small" href="https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion=${encodeURIComponent(x.codigo)}" target="_blank" rel="noopener noreferrer">Ficha ↗</a>${x.monto_estimado ? '<span class="muted" style="font-size:.72rem">monto estimado</span>' : ""}`
-          : `${ya ? `<span class="muted" style="font-size:.78rem">Ya está en tus ofertas (${esc(est(ya.estado).txt)})</span>`
-          : `<button class="btn small rb-firmar" type="button" data-rb="oport-preparar" data-c="${esc(x.codigo)}">✍ Preparar</button>`}
-          <a class="btn small" href="${portalDe(x.codigo)}" target="_blank" rel="noopener noreferrer">Mercado Público ↗</a>`}</div></div>`;
+        <div class="row" style="margin-top:6px;gap:6px">${modo === "papelera"
+          ? `<button class="btn small rb-firmar" type="button" data-rb="oport-restaurar" data-c="${esc(x.codigo)}">↩ Recuperar</button>`
+          : `<button class="btn small" type="button" data-rb="oport-no" data-c="${esc(x.codigo)}">✕ No</button>
+             <button class="btn small rb-firmar" type="button" data-rb="oport-si" data-c="${esc(x.codigo)}">${lic(x) ? "📑 Participar" : "✍ Preparar"}</button>`}
+          <a class="btn small" href="${lic(x) ? `https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion=${encodeURIComponent(x.codigo)}` : portalDe(x.codigo)}" target="_blank" rel="noopener noreferrer">Ver ↗</a></div></div>`;
     };
-    return `<div class="muted" style="font-size:.78rem;margin:6px 0">Ordenadas por ganancia estimada · ${o.fecha ? "actualizado " + esc(hace(o.fecha)) : "sin datos aún"}${o.resumen ? ` · ${o.resumen.total} vigentes` : ""}</div>
-      <div class="row" style="gap:6px;margin-bottom:4px">
+    const hecha = (x) => x._oport
+      ? `<div class="rb-card" style="padding:8px 12px;margin:6px 0;opacity:.8"><div style="font-size:.78rem"><b>${esc(x.codigo)}</b> · ${x.ya_ofertada ? "ya ofertada en el portal" : "trabajada por el robot"}</div><div>${esc(x.nombre)}</div></div>`
+      : caja(x);
+    const ordenF = (t) => ["firmar", "lic_revisar", "lic_lista", "lista"].includes(t.estado) ? 0 : ["requiere", "error"].includes(t.estado) ? 1 : 2;
+    const tabs = [["nuevas", "Por preparar", nuevas.length], ["firmar", "✍ Por firmar", enFirma.length], ["hechas", "✓ Hechas", hechas.length], ["papelera", "🗑 No deseadas", papelera.length]];
+    let cuerpo;
+    if (tab === "nuevas") cuerpo = `<div class="row" style="gap:6px;margin:6px 0">
         <button class="btn small ${filtro === "exp" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="exp">★ Lo que ya vendemos</button>
         <button class="btn small ${filtro === "todas" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="todas">Compras Ágiles</button>
         <button class="btn small ${filtro === "lic" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="lic">📑 Licitaciones</button>
-        <button class="btn small" type="button" data-rb="oport-actualizar">↻ Actualizar</button></div>
-      ${ver.slice(0, 60).map(fila).join("") || `<div class="empty">No hay oportunidades vigentes en esta vista. Toca «↻ Actualizar».</div>`}`;
+        <button class="btn small" type="button" data-rb="oport-actualizar">↻ Buscar más</button></div>
+      <div class="muted" style="font-size:.74rem;margin-bottom:4px">Desliza → <b>sí</b> (el robot la prepara) · ← <b>no</b> (va a No deseadas)</div>
+      ${verN.slice(0, n).map((x) => fila(x, "nuevas")).join("") || `<div class="empty">No quedan oportunidades en esta vista. Toca «↻ Buscar más».</div>`}
+      ${verN.length > n ? `<button class="btn" style="width:100%;margin-top:8px" type="button" data-rb="oport-mas">Ver más (${verN.length - n} restantes)</button>` : ""}`;
+    else if (tab === "firmar") cuerpo = enFirma.length ? `<div class="rb-cajas">${[...enFirma].sort((a, b) => ordenF(a) - ordenF(b)).map(caja).join("")}</div>`
+      : `<div class="empty">Nada por firmar. Desliza a la derecha en «Por preparar».</div>`;
+    else if (tab === "hechas") cuerpo = hechas.length ? hechas.map(hecha).join("") : `<div class="empty">Aún no hay ofertas enviadas.</div>`;
+    else cuerpo = papelera.length ? `<div class="muted" style="font-size:.74rem;margin:6px 0">Desliza → o toca «Recuperar» para devolverla a Por preparar.</div>${papelera.map((x) => fila(x, "papelera")).join("")}`
+      : `<div class="empty">La papelera está vacía.</div>`;
+    return `<div class="muted" style="font-size:.78rem;margin:6px 0">Ordenadas por ganancia estimada · ${o.fecha ? "actualizado " + esc(hace(o.fecha)) : "sin datos aún"}${o.resumen ? ` · ${o.resumen.total} vigentes en el portal` : ""}</div>
+      <div class="rb-otabs">${tabs.map(([k, t, c]) => `<button type="button" class="${tab === k ? "on" : ""}" data-rb="oport-tab" data-t="${k}">${t}<i>${c}</i></button>`).join("")}</div>
+      ${cuerpo}`;
   }
+  async function oportDecidir(cod, si, el) {
+    const x = (R.oport?.lista || []).find((y) => y.codigo === cod);
+    const esLic = x?.fuente === "licitacion";
+    if (el) { el.style.transition = "transform .25s ease, opacity .25s"; el.style.transform = `translateX(${si ? 130 : -130}%) rotate(${si ? 12 : -12}deg)`; el.style.opacity = "0"; }
+    if (si) {
+      try {
+        const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: esLic ? "licitar" : "firmar", ...(esLic ? {} : { descuento: leer().descuento ?? 0.08 }) }) });
+        toast(r._status === 409 ? "Ya estaba en manos del robot" : esLic ? "📑 El robot prepara la licitación" : "✍ El robot la deja lista para firmar");
+        await refrescar();
+      } catch (e) { toast(e.message); }
+    } else {
+      R.desc = { ...(R.desc || {}), [cod]: new Date().toISOString() };
+      R.deshacer = cod;
+      toast("🗑 A No deseadas");
+      api("oport-descartar", { method: "POST", body: JSON.stringify({ codigo: cod, descartar: true }) }).catch((e) => toast(e.message));
+    }
+    setTimeout(pintarHoja, el ? 260 : 0);
+  }
+  async function oportRestaurar(cod, el) {
+    if (el) { el.style.transition = "transform .25s ease, opacity .25s"; el.style.transform = "translateX(130%)"; el.style.opacity = "0"; }
+    if (R.desc) delete R.desc[cod];
+    if (R.oport?.descartes) delete R.oport.descartes[cod];
+    toast("↩ De vuelta en Por preparar");
+    api("oport-descartar", { method: "POST", body: JSON.stringify({ codigo: cod, descartar: false }) }).catch((e) => toast(e.message));
+    setTimeout(pintarHoja, el ? 260 : 0);
+  }
+  // deslizar con el dedo (como Tinder): → sí, ← no
+  (function swipe() {
+    let el = null, x0 = 0, y0 = 0, dx = 0, horiz = null;
+    const fin = () => { R.arrastrando = false; el = null; horiz = null; };
+    document.addEventListener("pointerdown", (ev) => {
+      const c = ev.target.closest?.(".rb-swipe");
+      if (!c || ev.target.closest("button,a,input")) return;
+      el = c; x0 = ev.clientX; y0 = ev.clientY; dx = 0; horiz = null;
+    }, { passive: true });
+    document.addEventListener("pointermove", (ev) => {
+      if (!el) return;
+      dx = ev.clientX - x0; const dy = ev.clientY - y0;
+      if (horiz === null && Math.abs(dx) + Math.abs(dy) > 12) horiz = Math.abs(dx) > Math.abs(dy) * 1.2;
+      if (!horiz) return;
+      R.arrastrando = true;
+      el.style.transition = "none";
+      el.style.transform = `translateX(${dx}px) rotate(${dx / 25}deg)`;
+      const papel = el.dataset.modo === "papelera";
+      el.querySelector(".rb-sello.si").style.opacity = Math.max(0, Math.min(1, dx / 100));
+      el.querySelector(".rb-sello.no").style.opacity = papel ? 0 : Math.max(0, Math.min(1, -dx / 100));
+    }, { passive: true });
+    const soltar = () => {
+      if (!el) return;
+      const c = el, papel = c.dataset.modo === "papelera";
+      if (horiz && dx > 100) { papel ? oportRestaurar(c.dataset.c, c) : oportDecidir(c.dataset.c, true, c); }
+      else if (horiz && dx < -100 && !papel) oportDecidir(c.dataset.c, false, c);
+      else { c.style.transition = "transform .2s"; c.style.transform = ""; c.querySelectorAll(".rb-sello").forEach((s) => (s.style.opacity = 0)); }
+      fin();
+    };
+    document.addEventListener("pointerup", soltar, { passive: true });
+    document.addEventListener("pointercancel", soltar, { passive: true });
+  })();
   async function cargarOport() {
     if (R._cargandoOport) return; R._cargandoOport = true;
-    try { R.oport = await api("oportunidades"); } catch (e) { R.oport = { lista: [], error: e.message }; toast(e.message); }
+    try { R.oport = await api("oportunidades"); R.oport.descartes = R.oport.descartes || {}; } catch (e) { R.oport = { lista: [], error: e.message }; toast(e.message); }
     R._cargandoOport = false; pintarHoja();
   }
   function vistaTablero(lista) {
@@ -662,7 +755,7 @@
   }
 
   function pintarHoja() {
-    const box = $("#rbIn"); if (!box) return;
+    const box = $("#rbIn"); if (!box || R.arrastrando) return;
     const y = sheet.scrollTop;
     // el repintado cada pocos segundos no debe cerrar lo que la persona abrió
     const abiertos = new Set($$("details", box).map((d, i) => d.open && (d.closest("[id]")?.id || "") + d.className + i).filter(Boolean));
@@ -741,7 +834,12 @@
     if (a === "push-probar") { try { await api("push-probar", { method: "POST", body: "{}" }); toast("Aviso de prueba enviado"); } catch (e) { toast(e.message); } return; }
     if (a === "instalar") { const p = R.instalar; R.instalar = null; try { await p?.prompt(); } catch {} return pintarHoja(); }
     if (a === "vista") { R.vista = b.dataset.v; guardar({ vista: R.vista }); if (R.vista === "oport") R.oport = null; return pintarHoja(); }
-    if (a === "oport-filtro") { R.oportFiltro = b.dataset.f; return pintarHoja(); }
+    if (a === "oport-filtro") { R.oportFiltro = b.dataset.f; R.oportN = 40; return pintarHoja(); }
+    if (a === "oport-tab") { R.oportTab = b.dataset.t; R.oportN = 40; sheet.scrollTop = 0; return pintarHoja(); }
+    if (a === "oport-mas") { R.oportN = (R.oportN || 40) + 40; return pintarHoja(); }
+    if (a === "oport-si") return oportDecidir(cod, true, b.closest(".rb-swipe"));
+    if (a === "oport-no") return oportDecidir(cod, false, b.closest(".rb-swipe"));
+    if (a === "oport-restaurar") return oportRestaurar(cod, b.closest(".rb-swipe"));
     if (a === "oport-actualizar") {
       try { await api("oportunidades-actualizar", { method: "POST", body: "{}" }); toast("El robot está bajando las oportunidades nuevas (1–2 min)"); }
       catch (e) { toast(e.message); }
