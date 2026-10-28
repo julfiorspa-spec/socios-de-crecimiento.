@@ -67,6 +67,12 @@
     requiere:   { txt: "Necesita tu atención", cls: "rojo" },
     error:      { txt: "No se pudo",         cls: "rojo" },
     cancelada:  { txt: "Cancelada",          cls: "gris" },
+    lic_bajando:    { txt: "Bajando bases",        cls: "azul", activo: true },
+    lic_captcha:    { txt: "Escribe el código",    cls: "ambar", activo: true },
+    lic_analizando: { txt: "Analizando bases",     cls: "azul", activo: true },
+    lic_revisar:    { txt: "¿Te parece el precio?", cls: "violeta" },
+    lic_lista:      { txt: "Lista para ofertar",   cls: "violeta" },
+    lic_ingresando: { txt: "Ingresando al portal", cls: "azul", activo: true },
   };
   const est = (e) => ESTADO[e] || { txt: e || "—", cls: "gris" };
 
@@ -362,7 +368,54 @@
     return `<span class="rb-badge ${e.cls}">${e.cls === "azul" && e.activo ? '<span class="spinner"></span>' : ""}${esc(e.txt)}</span>`;
   }
 
+  /* ---------- licitaciones ---------- */
+  function tarjetaLic(t) {
+    const e = est(t.estado), L = t.lic || {}, c = esc(t.codigo);
+    const fichaUrl = `https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion=${encodeURIComponent(t.codigo)}`;
+    const acts = [];
+    if (t.estado === "en_cola" || t.estado === "tomado") acts.push(`<button class="btn small danger" data-rb="cancelar" data-c="${c}" type="button">Cancelar</button>`);
+    if (t.zip) acts.push(`<button class="btn small" data-rb="lic-zip" data-c="${c}" type="button">⬇ Documentos</button>`);
+    if (t.estado === "lic_lista") acts.unshift(`<button class="btn small rb-firmar" data-rb="lic-ingresar" data-c="${c}" type="button">🚀 Ingresar al portal</button>`);
+    if (["requiere", "error", "cancelada"].includes(t.estado)) acts.push(`<button class="btn small" data-rb="licitar" data-c="${c}" type="button">Reintentar</button>`);
+    acts.push(`<a class="btn small" href="${fichaUrl}" target="_blank" rel="noopener noreferrer">Ficha ↗</a>`);
+    if (!e.activo) acts.push(`<button class="btn small" data-rb="olvidar" data-c="${c}" type="button">Quitar</button>`);
+    const captcha = t.estado === "lic_captcha" && t.captcha ? `<div class="rb-alertas" style="border-color:#c8900f">
+        <b>Escribe el código de la imagen</b> (Mercado Público lo pide para bajar los anexos)
+        <img src="data:image/png;base64,${esc(t.captcha)}" alt="Código" style="display:block;margin:8px 0;max-width:100%;background:#fff;border-radius:6px">
+        <div class="row" style="gap:6px"><input id="rbCap-${c}" autocomplete="off" autocapitalize="characters" style="flex:1;min-width:120px" placeholder="Código">
+        <button class="btn small rb-firmar" data-rb="lic-captcha" data-c="${c}" type="button">Enviar</button></div></div>` : "";
+    const precio = L.precio_unit ? `<div class="rb-figs">
+        <span>Precio <b>${clp(L.precio_unit)}</b> neto${L.unidad ? " / " + esc(L.unidad) : ""}</span>
+        <span>Total <b>${clp(L.total)}</b> con IVA</span>
+        ${L.presupuesto ? `<span>Presupuesto <b>${clp(L.presupuesto)}</b>${L.con_iva ? " c/IVA" : " neto"}</span>` : ""}
+        <span>${Math.round((L.descuento || 0) * 100)}% bajo presupuesto</span>${L.cierre ? `<span>Cierra ${esc(L.cierre)}</span>` : ""}</div>` : "";
+    const lista = (arr, f) => arr && arr.length ? `<ul style="margin:4px 0 0;padding-left:18px">${arr.map(f).join("")}</ul>` : "";
+    const alertas = (L.alertas || []).length ? `<div class="rb-alertas"><b>Revisa antes de aprobar</b><ul style="margin:0;padding:0">${L.alertas.map((a) =>
+      `<li class="${a.nivel === "rojo" ? "rojo" : ""}">${a.nivel === "rojo" ? "⛔" : "⚠"} ${esc(a.texto)}</li>`).join("")}</ul></div>` : "";
+    const aprobar = t.estado === "lic_revisar" ? `<div class="rb-alertas" style="border-color:#7c4dff">
+        <b>¿Te parece este precio?</b> Ajusta el descuento si quieres y aprueba: el robot firma los anexos y la deja lista para ofertar.
+        <div class="row" style="gap:6px;margin-top:6px;align-items:center"><label class="muted" for="rbDesc-${c}">Descuento</label>
+        <input id="rbDesc-${c}" type="number" min="0" max="60" step="0.5" value="${Math.round((L.descuento || 0.17) * 1000) / 10}" style="width:80px"> %
+        <button class="btn small rb-firmar" data-rb="lic-firmar" data-c="${c}" type="button">✅ Aprobar y firmar</button></div></div>` : "";
+    return `<div class="rb-card ${e.cls}" id="rb-${c}">
+      <div class="rb-top"><span class="tag ag">${c}</span><span class="tag" style="background:#2a2350;color:#d9c9ff">📑 Licitación</span>${badge(t)}</div>
+      <h3>${esc(L.producto || t.nombre || "Licitación")}</h3>
+      ${t.organismo ? `<div class="muted">${esc(t.organismo)}</div>` : ""}
+      ${precio}
+      ${t.mensaje ? `<div class="rb-msg">${esc(t.mensaje)}</div>` : ""}
+      ${captcha}${aprobar}${alertas}
+      ${L.resumen ? `<details class="rb-det" open><summary>Análisis de las bases</summary><div style="font-size:.85rem">${esc(L.resumen)}
+        ${(L.criterios || []).length ? `<div style="margin-top:6px"><b>Criterios · cómo ganamos</b>${lista(L.criterios, (k) => `<li>${esc(k.nombre)}${k.peso ? " (" + esc(k.peso) + ")" : ""}: ${esc(k.propuesta)}${k.confirmar ? " <b style='color:#ffd88a'>· confirmar</b>" : ""}</li>`)}</div>` : ""}
+        ${(L.comparables || []).length ? `<div style="margin-top:6px"><b>Compras anteriores</b>${lista(L.comparables, (k) => `<li>${esc(k)}</li>`)}</div>` : ""}
+        ${(L.documentos || []).length ? `<div style="margin-top:6px"><b>Documentos</b>${lista(L.documentos, (d) => `<li>${esc(d.nombre)} · ${esc(d.estado)}${d.seccion ? " · " + esc(d.seccion) : ""}</li>`)}</div>` : ""}
+      </div></details>` : ""}
+      <div class="rb-acts">${acts.join("")}</div>
+      <div class="rb-line" style="margin-top:8px">${esc(hace(t.actualizado))}</div>
+    </div>`;
+  }
+
   function tarjeta(t) {
+    if (t.tipo === "licitacion") return tarjetaLic(t);
     const e = est(t.estado);
     const enviada = t.estado === "enviada" || t.estado === "confirmada";
     const portal = `https://compra-agil.mercadopublico.cl/resumen-cotizacion/${encodeURIComponent(t.codigo)}`;
@@ -493,7 +546,7 @@
     </button>`;
   }
   function vistaLista(lista) {
-    const atn = lista.filter((t) => ["lista", "firmar", "requiere"].includes(t.estado));
+    const atn = lista.filter((t) => ["lista", "firmar", "requiere", "lic_captcha", "lic_revisar", "lic_lista"].includes(t.estado));
     const enCurso = lista.filter((t) => est(t.estado).activo && !atn.includes(t));
     const resto = lista.filter((t) => !atn.includes(t) && !enCurso.includes(t));
     return `${atn.length ? `<div class="label">Necesitan tu acción</div>${atn.map(tarjeta).join("")}` : ""}
@@ -501,7 +554,7 @@
       ${resto.length ? `<div class="label">Ofertas</div>${resto.map(tarjeta).join("")}` : ""}`;
   }
   function vistaCajas(lista) {
-    const orden = (t) => t.estado === "lista" || t.estado === "firmar" ? 0 : t.estado === "requiere" || t.estado === "error" ? 1 : est(t.estado).activo ? 2 : 3;
+    const orden = (t) => ["lista", "firmar", "lic_captcha", "lic_revisar", "lic_lista"].includes(t.estado) ? 0 : t.estado === "requiere" || t.estado === "error" ? 1 : est(t.estado).activo ? 2 : 3;
     return `<div class="rb-cajas">${[...lista].sort((a, b) => orden(a) - orden(b)).map(caja).join("")}</div>`;
   }
   function vistaOport() {
@@ -525,7 +578,8 @@
             <div style="font-size:.8rem;margin-top:3px">Gana ≈ <b>${clp(x.ganancia)}</b> · Ppto. ${clp(x.monto)} · <span style="${h < 12 ? "color:#ff8a80;font-weight:700" : ""}">cierra en ${h} h</span></div>
           </div></div>
         <div class="row" style="margin-top:6px;gap:6px">${lic(x)
-          ? `<a class="btn small" href="https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion=${encodeURIComponent(x.codigo)}" target="_blank" rel="noopener noreferrer">Ver licitación ↗</a>${x.monto_estimado ? '<span class="muted" style="font-size:.72rem">monto estimado</span>' : ""}`
+          ? `${ya ? `<span class="muted" style="font-size:.78rem">Ya está en tus ofertas (${esc(est(ya.estado).txt)})</span>` : `<button class="btn small rb-firmar" type="button" data-rb="licitar" data-c="${esc(x.codigo)}">📑 Participar</button>`}
+             <a class="btn small" href="https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion=${encodeURIComponent(x.codigo)}" target="_blank" rel="noopener noreferrer">Ficha ↗</a>${x.monto_estimado ? '<span class="muted" style="font-size:.72rem">monto estimado</span>' : ""}`
           : `${ya ? `<span class="muted" style="font-size:.78rem">Ya está en tus ofertas (${esc(est(ya.estado).txt)})</span>`
           : `<button class="btn small rb-firmar" type="button" data-rb="oport-preparar" data-c="${esc(x.codigo)}">✍ Preparar</button>`}
           <a class="btn small" href="${portalDe(x.codigo)}" target="_blank" rel="noopener noreferrer">Mercado Público ↗</a>`}</div></div>`;
@@ -692,6 +746,42 @@
       try { await api("oportunidades-actualizar", { method: "POST", body: "{}" }); toast("El robot está bajando las oportunidades nuevas (1–2 min)"); }
       catch (e) { toast(e.message); }
       setTimeout(() => { R.oport = null; if (R.vista === "oport") pintarHoja(); }, 90000);
+      return;
+    }
+    if (a === "licitar") {
+      if (!confirm(`¿Participar en la licitación ${cod}?\n\nEl robot baja la ficha y los anexos (te pedirá el código de la imagen), analiza las bases, fija el precio (presupuesto −17%) y llena los papeles. Después te pregunta si te parece el precio.`)) return;
+      try { const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "licitar" }) });
+        toast(r._status === 409 ? "Ya está en manos del robot" : "El robot empezó con la licitación"); R.vista = "lista"; await refrescar(); }
+      catch (e) { toast(e.message); }
+      return;
+    }
+    if (a === "lic-captcha") {
+      const v = ($(`#rbCap-${CSS.escape(cod)}`)?.value || "").trim();
+      if (!v) { toast("Escribe el código de la imagen"); return; }
+      try { await api("captcha", { method: "POST", body: JSON.stringify({ codigo: cod, texto: v }) }); toast("Código enviado: el robot sigue"); await refrescar(); }
+      catch (e) { toast(e.message); }
+      return;
+    }
+    if (a === "lic-firmar") {
+      const d = parseFloat(($(`#rbDesc-${CSS.escape(cod)}`)?.value || "17").replace(",", ".")) / 100;
+      if (!confirm(`¿Apruebas el precio (${Math.round(d * 1000) / 10}% bajo el presupuesto)?\n\nEl robot firmará los anexos y el programa de integridad con la firma del representante legal.`)) return;
+      try { await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "lic_firmar", descuento: d }) }); toast("Aprobada: el robot está firmando"); await refrescar(); }
+      catch (e) { toast(e.message); }
+      return;
+    }
+    if (a === "lic-ingresar") {
+      if (!confirm("¿Ya iniciaste sesión en Mercado Público en el PC?\n\nEl robot cargará la oferta; la declaración jurada y el envío los haces tú.")) return;
+      try { await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "lic_ingresar" }) }); toast("El robot ingresará la oferta"); await refrescar(); }
+      catch (e) { toast(e.message); }
+      return;
+    }
+    if (a === "lic-zip") {
+      try {
+        const r = await api("lic-zip?codigo=" + encodeURIComponent(cod));
+        const url = URL.createObjectURL(await r.blob());
+        const el = document.createElement("a"); el.href = url; el.download = `PJANIC_${cod}.zip`; document.body.append(el); el.click(); el.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
+      } catch (e) { toast(e.message); }
       return;
     }
     if (a === "oport-preparar") {
