@@ -68,7 +68,7 @@
     error:      { txt: "No se pudo",         cls: "rojo" },
     cancelada:  { txt: "Cancelada",          cls: "gris" },
     lic_bajando:    { txt: "Bajando bases",        cls: "azul", activo: true },
-    lic_captcha:    { txt: "Escribe el código",    cls: "ambar", activo: true },
+    lic_captcha:    { txt: "📋 Pega el código",    cls: "ambar", activo: true },
     lic_analizando: { txt: "Analizando bases",     cls: "azul", activo: true },
     lic_revisar:    { txt: "¿Te parece el precio?", cls: "violeta" },
     lic_lista:      { txt: "Lista para ofertar",   cls: "violeta" },
@@ -388,9 +388,9 @@
     acts.push(`<a class="btn small" href="${fichaUrl}" target="_blank" rel="noopener noreferrer">Ficha ↗</a>`);
     if (!e.activo) acts.push(`<button class="btn small" data-rb="olvidar" data-c="${c}" type="button">Quitar</button>`);
     const captcha = t.estado === "lic_captcha" && t.captcha ? `<div class="rb-alertas" style="border-color:#c8900f">
-        <b>Escribe el código de la imagen</b> (Mercado Público lo pide para bajar los anexos)
+        <b>📋 Pega el código aquí</b> · el robot no avanza hasta que lo ingreses (Mercado Público lo pide para bajar los anexos)
         <img src="data:image/png;base64,${esc(t.captcha)}" alt="Código" style="display:block;margin:8px 0;max-width:100%;background:#fff;border-radius:6px">
-        <div class="row" style="gap:6px"><input id="rbCap-${c}" autocomplete="off" autocapitalize="characters" style="flex:1;min-width:120px" placeholder="Código">
+        <div class="row" style="gap:6px"><input id="rbCap-${c}" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="send" style="flex:1;min-width:120px;font-size:1.1rem;letter-spacing:.08em" placeholder="Pega el código aquí">
         <button class="btn small rb-firmar" data-rb="lic-captcha" data-c="${c}" type="button">Enviar</button></div></div>` : "";
     const precio = L.precio_unit ? `<div class="rb-figs">
         <span>Precio <b>${clp(L.precio_unit)}</b> neto${L.unidad ? " / " + esc(L.unidad) : ""}</span>
@@ -945,6 +945,11 @@
     }
   });
   sheet.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && ev.target.id?.startsWith("rbCap-")) {
+      ev.preventDefault();
+      ev.target.closest(".rb-alertas")?.querySelector('[data-rb="lic-captcha"]')?.click();
+      return;
+    }
     if (ev.key !== "Enter") return;
     if (ev.target.id === "rbTok") { if (enlazar(ev.target.value)) pintarHoja(); }
     if (ev.target.id === "rbCod") nuevos(ev.target.value);
@@ -1003,7 +1008,7 @@
   }
   function pintar() {
     const lista = R.data?.trabajos || [];
-    const atn = lista.filter((t) => ["lista", "firmar", "requiere"].includes(t.estado)).length;
+    const atn = lista.filter((t) => ["lista", "firmar", "requiere", "lic_captcha", "lic_revisar"].includes(t.estado)).length;
     chip.classList.toggle("on", !!R.data?.robot?.conectado);
     chip.classList.toggle("atn", atn > 0);
     chip.innerHTML = `<span class="rb-dot"></span><span>Robot</span>${atn ? `<span class="rb-n">${atn}</span>` : ""}`;
