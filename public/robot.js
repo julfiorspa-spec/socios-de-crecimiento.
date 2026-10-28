@@ -190,6 +190,39 @@
   }
   const trabajo = (cod) => R.data?.trabajos?.find((t) => t.codigo === String(cod).toUpperCase());
 
+  /* ---------- quién envía + cerrar la pestaña de Mercado Público cuando queda enviada ---------- */
+  const DISP = "sdc:dispositivo";
+  function dispositivo(preguntar) {
+    let d = (localStorage.getItem(DISP) || "").trim();
+    const ua = navigator.userAgent;
+    const def = /iphone/i.test(ua) ? "iPhone" : /ipad/i.test(ua) ? "iPad" : /android/i.test(ua) ? "Android" : "Celular";
+    if (!d && preguntar) {
+      d = (prompt("¿Nombre de este celular? Queda en el registro «Enviados» del PC (ej. iPhone Felipe).", def) || def).trim().slice(0, 40);
+      localStorage.setItem(DISP, d);
+    }
+    return d || def;
+  }
+  const ABIERTAS = {};          // compras abiertas con «Ir a firmar»: {codigo: {w, t}}
+  let ocultaDesde = 0;
+  async function verificarAbiertas() {
+    if (Date.now() - ocultaDesde < 40_000) return;   // volvió muy rápido: aún no alcanzó a firmar
+    for (const [cod, x] of Object.entries(ABIERTAS)) {
+      if (Date.now() - x.t > 45 * 60_000) { delete ABIERTAS[cod]; continue; }
+      if (x.pedido && Date.now() - x.pedido < 90_000) continue;
+      x.pedido = Date.now();
+      try { await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "verificar", dispositivo: dispositivo(false) }) }); } catch {}
+    }
+  }
+  function cerrarEnviadas(lista) {
+    for (const t of lista) {
+      const x = ABIERTAS[t.codigo];
+      if (!x || !["enviada", "confirmada"].includes(t.estado)) continue;
+      try { if (x.w && !x.w.closed) x.w.close(); } catch {}
+      delete ABIERTAS[t.codigo];
+      toast("✓ Cotización enviada correctamente · " + t.codigo);
+    }
+  }
+
   /* ---------------- avisos ---------------- */
   function toast(msg) {
     const t = $("#toast"); if (!t) return;
@@ -315,6 +348,7 @@
     try {
       R.data = await api("estado"); R.err = null;
       revisarCambios(R.data.trabajos || []);
+      cerrarEnviadas(R.data.trabajos || []);
     } catch (e) {
       R.err = e.message;
       if (e.auth) { R.token = null; guardar({ token: null }); }
@@ -324,7 +358,10 @@
     const abierto = $("#rbSheet")?.classList.contains("on");
     if (!document.hidden) R.timer = setTimeout(refrescar, activos || abierto ? POLL_RAPIDO : POLL_LENTO);
   }
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) refrescar(); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) { ocultaDesde = Date.now(); return; }
+    verificarAbiertas().finally(refrescar);           // al volver de Mercado Público el robot revisa solo si quedó enviada
+  });
 
   /* ---------------- enlazar ---------------- */
   function enlazar(tok) {
@@ -917,14 +954,15 @@
       // iPhone con la app en la pantalla de inicio: la ventana interna NO tiene la extensión ni tu sesión.
       // Nunca se abre ahí: se ofrece abrir en Safari (toque directo del usuario) o copiar el enlace.
       api("mp-orden", { method: "POST", body: JSON.stringify({ codigo: cod }) }).catch(() => {});   // tu pestaña conectada salta sola a la compra
+      ABIERTAS[String(cod).toUpperCase()] = { w: null, t: Date.now() };
       if (esIOS && instalada()) { abrirEnSafari(cod); return; }
       toast(firmaRapida() ? "Abriendo la compra: Firma rápida carga precios, detalle y PDF" : "Abriendo la compra: ahí toca tu marcador «Rellenar»");
       const w = window.open(portalDe(cod), "_blank");
-      if (w) { try { w.opener = null; } catch {} } else location.href = portalDe(cod);
+      if (w) { try { w.opener = null; } catch {} ABIERTAS[String(cod).toUpperCase()].w = w; } else location.href = portalDe(cod);
       return;
     }
     if (a === "verificar") {
-      try { await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "verificar" }) }); toast("El robot revisará el portal"); await refrescar(); }
+      try { await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "verificar", dispositivo: dispositivo(true) }) }); toast("El robot revisará el portal"); await refrescar(); }
       catch (e) { toast(e.message); }
       return;
     }
