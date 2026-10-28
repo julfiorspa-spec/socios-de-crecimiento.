@@ -187,6 +187,21 @@ async function atender(req) {
     });
   }
 
+  // ---------- oportunidades (el robot sube el ranking; la app lo muestra) ----------
+  if (ruta === "oportunidades" && req.method === "POST") {
+    const b = await cuerpo(req);
+    const lista = Array.isArray(b.lista) ? b.lista.slice(0, 150) : [];
+    await store.setJSON("oportunidades/lista", { fecha: texto(b.fecha, 40) || ahora(), excel: texto(b.excel, 80), resumen: b.resumen || null, lista });
+    return json({ ok: true, n: lista.length });
+  }
+  if (ruta === "oportunidades" && req.method === "GET") {
+    return json((await store.get("oportunidades/lista", { type: "json" })) || { lista: [] });
+  }
+  if (ruta === "oportunidades-actualizar" && req.method === "POST") {
+    await store.setJSON("oportunidades/pedido", { t: Date.now() });
+    return json({ ok: true });
+  }
+
   // ---------- tu Mercado Público (pestaña de Safari con Firma rápida) ----------
   // La pestaña conectada avisa que está viva y recibe la compra que tocaste en la app («Ir a firmar»).
   if (ruta === "mp-latido" && req.method === "POST") {
@@ -292,7 +307,10 @@ async function atender(req) {
     await store.setJSON("robot/latido", {
       visto: ahora(), ocupado: !!b.ocupado, tarea: texto(b.tarea, 200), equipo: texto(b.equipo, 60), version: texto(b.version, 20),
     });
-    if (b.ocupado) return json({ siguiente: null });
+    const pidio = await store.get("oportunidades/pedido", { type: "json" });   // la app pidió actualizar oportunidades
+    if (pidio) await store.delete("oportunidades/pedido");
+    const op = pidio ? { oportunidades: true } : {};
+    if (b.ocupado) return json({ siguiente: null, ...op });
     const lista = await todos(store);
     // un pedido tomado que quedó colgado (PC apagado a mitad de camino) vuelve a la cola
     for (const t of lista) {
@@ -302,9 +320,9 @@ async function atender(req) {
       }
     }
     const siguiente = lista.filter((t) => t.estado === "en_cola").sort((a, b) => a.creado.localeCompare(b.creado))[0];
-    if (!siguiente) return json({ siguiente: null });
+    if (!siguiente) return json({ siguiente: null, ...op });
     anotar(siguiente, "tomado", "El robot del PC la tomó.");
-    return json({ siguiente: await escribir(store, siguiente) });
+    return json({ siguiente: await escribir(store, siguiente), ...op });
   }
 
   if (ruta === "reportar" && req.method === "POST") {
