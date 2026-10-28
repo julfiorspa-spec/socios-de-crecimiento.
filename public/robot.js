@@ -508,7 +508,8 @@
     if (!R.oport) { cargarOport(); return `<div class="empty"><span class="spinner"></span> Cargando oportunidades…</div>`; }
     const o = R.oport, ahora = Date.now();
     const filtro = R.oportFiltro || "exp";
-    const ver = (o.lista || []).filter((x) => (filtro === "exp" ? x.tipo === "exp" : x.tipo !== "esp") &&
+    const lic = (x) => x.fuente === "licitacion";
+    const ver = (o.lista || []).filter((x) => (filtro === "lic" ? lic(x) : !lic(x) && (filtro === "exp" ? x.tipo === "exp" : x.tipo !== "esp")) &&
       Date.parse(x.cierre) - ahora > 30 * 60000);
     const color = { exp: "#ffd88a", rev: "#9cc3ff", srv: "#d9c9ff", esp: "#999" };
     const fila = (x) => {
@@ -523,14 +524,17 @@
             <div class="muted" style="font-size:.75rem">${esc(x.organismo)} · ${(x.llamado || "").slice(0, 7)} llamado</div>
             <div style="font-size:.8rem;margin-top:3px">Gana ≈ <b>${clp(x.ganancia)}</b> · Ppto. ${clp(x.monto)} · <span style="${h < 12 ? "color:#ff8a80;font-weight:700" : ""}">cierra en ${h} h</span></div>
           </div></div>
-        <div class="row" style="margin-top:6px;gap:6px">${ya ? `<span class="muted" style="font-size:.78rem">Ya está en tus ofertas (${esc(est(ya.estado).txt)})</span>`
+        <div class="row" style="margin-top:6px;gap:6px">${lic(x)
+          ? `<a class="btn small" href="https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion=${encodeURIComponent(x.codigo)}" target="_blank" rel="noopener noreferrer">Ver licitación ↗</a>${x.monto_estimado ? '<span class="muted" style="font-size:.72rem">monto estimado</span>' : ""}`
+          : `${ya ? `<span class="muted" style="font-size:.78rem">Ya está en tus ofertas (${esc(est(ya.estado).txt)})</span>`
           : `<button class="btn small rb-firmar" type="button" data-rb="oport-preparar" data-c="${esc(x.codigo)}">✍ Preparar</button>`}
-          <a class="btn small" href="${portalDe(x.codigo)}" target="_blank" rel="noopener noreferrer">Mercado Público ↗</a></div></div>`;
+          <a class="btn small" href="${portalDe(x.codigo)}" target="_blank" rel="noopener noreferrer">Mercado Público ↗</a>`}</div></div>`;
     };
     return `<div class="muted" style="font-size:.78rem;margin:6px 0">Ordenadas por ganancia estimada · ${o.fecha ? "actualizado " + esc(hace(o.fecha)) : "sin datos aún"}${o.resumen ? ` · ${o.resumen.total} vigentes` : ""}</div>
       <div class="row" style="gap:6px;margin-bottom:4px">
         <button class="btn small ${filtro === "exp" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="exp">★ Lo que ya vendemos</button>
-        <button class="btn small ${filtro === "todas" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="todas">Todas las convenientes</button>
+        <button class="btn small ${filtro === "todas" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="todas">Compras Ágiles</button>
+        <button class="btn small ${filtro === "lic" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="lic">📑 Licitaciones</button>
         <button class="btn small" type="button" data-rb="oport-actualizar">↻ Actualizar</button></div>
       ${ver.slice(0, 60).map(fila).join("") || `<div class="empty">No hay oportunidades vigentes en esta vista. Toca «↻ Actualizar».</div>`}`;
   }
