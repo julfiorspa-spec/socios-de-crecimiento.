@@ -185,7 +185,9 @@ async function atender(req) {
     return json({
       robot: robot && { ...robot, conectado: Date.now() - Date.parse(robot.visto) < ROBOT_INACTIVO_MS },
       mp: mpl && { ...mpl, conectado: !!mpl.logueado && Date.now() - Date.parse(mpl.visto) < MP_INACTIVO_MS },
-      trabajos: lista.slice(0, 60).map(({ historial, ...t }) => ({ ...t, historial: (historial || []).slice(-6) })),
+      // las 60 más recientes + todas las enviadas (para las cajas «Enviadas» y «Ganadas»)
+      trabajos: [...lista.slice(0, 60), ...lista.slice(60).filter((t) => t.estado === "enviada" || t.estado === "confirmada").slice(0, 300)]
+        .map(({ historial, ...t }) => ({ ...t, historial: (historial || []).slice(-6) })),
     });
   }
 
@@ -250,11 +252,10 @@ async function atender(req) {
     const cache = (await store.get("seguimiento/cache", { type: "json" })) || {};
     const forzar = url.searchParams.get("forzar") === "1";
     const res = {};
-    await Promise.all(lista.slice(0, 80).map(async (t) => {
+    // de a 4 consultas a la vez: RadarPúblico corta (429) si recibe muchas juntas; lo que no alcance queda para la próxima
+    const fila = lista.slice(0, 300), inicio = Date.now();
+    const uno = async (t) => {
       const c = cache[t.codigo];
-      const final = c && (c.ganada || ["cancelada", "desierta"].includes(c.estado) || (c.estado === "proveedor_seleccionado" && c.ganador));
-      const vence = final ? 6 * 3600_000 : 10 * 60_000;
-      if (c && !forzar && Date.now() - Date.parse(c.visto) < vence) { res[t.codigo] = c; return; }
       try {
         const r = await fetch(RADAR_CA + "/" + encodeURIComponent(t.codigo), { headers: { "user-agent": "CotizAgil/1.0", accept: "application/json" } });
         if (!r.ok) throw new Error("HTTP " + r.status);
@@ -278,7 +279,23 @@ async function atender(req) {
       } catch (err) {
         res[t.codigo] = { ...(c || {}), error: String(err.message || err).slice(0, 120), visto: c?.visto || ahora() };
       }
+    };
+    const pendientes = [];
+    for (const t of fila) {            // primero lo que ya está en caché (instantáneo), luego consultas reales
+      const c = cache[t.codigo];
+      const final = c && (c.ganada || ["cancelada", "desierta"].includes(c.estado) || (c.estado === "proveedor_seleccionado" && c.ganador));
+      if (c && !c.error && !forzar && Date.now() - Date.parse(c.visto) < (final ? 6 * 3600_000 : 10 * 60_000)) res[t.codigo] = c; else pendientes.push(t);
+    }
+    pendientes.sort((a, b) => (cache[a.codigo]?.visto || "").localeCompare(cache[b.codigo]?.visto || ""));   // lo más viejo primero
+    let i = 0, limitado = false;
+    await Promise.all(Array.from({ length: 4 }, async () => {
+      while (i < pendientes.length && !limitado && Date.now() - inicio < 8000) {
+        const t = pendientes[i++];
+        await uno(t);
+        if (String(res[t.codigo]?.error || "").includes("429")) limitado = true;
+      }
     }));
+    for (const t of pendientes) if (!res[t.codigo]) res[t.codigo] = cache[t.codigo] || { pendiente: true };
     await store.setJSON("seguimiento/cache", cache);
     return json({ seguimiento: res, rut: miRut || null });
   }
