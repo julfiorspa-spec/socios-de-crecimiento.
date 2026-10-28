@@ -17,7 +17,8 @@ const ESTADOS_ACTIVOS = new Set(["en_cola", "tomado", "preparando", "lista", "li
 const COD_LIC = /^\d{1,8}-\d{1,8}-[A-Z][A-Z0-9]\d{2}$/;      // licitaciones: 2736-46-LE26, 1234-5-LP26, 99-1-L126…
 const MP_INACTIVO_MS = 45000;          // la pestaña de Mercado Público late cada ~10 s mientras está abierta
 const ACCIONES = new Set(["ofertar", "editar", "probar", "firmar", "verificar", "licitar", "lic_firmar", "lic_ingresar"]);
-const MAX_PDF = 4_500_000;                 // bytes del PDF (en base64 crece ~33%; Netlify acepta ~6 MB)
+const MAX_PDF = 4_500_000;
+const RADAR_CA = "https://radar-publico-blond.vercel.app/mp2/v2/compra-agil";   // API oficial de Compra Ágil (v2) vía RadarPúblico                 // bytes del PDF (en base64 crece ~33%; Netlify acepta ~6 MB)
 const ROBOT_INACTIVO_MS = 90_000;          // si el PC no da señales en 90 s se considera desconectado
 const TOMADO_VENCE_MS = 10 * 60_000;       // un pedido tomado que no avanza vuelve a la cola
 
@@ -220,6 +221,78 @@ async function atender(req) {
     return json({ ok: true });
   }
 
+  // ---------- ⭐ Seleccionadas (compartidas entre tus celulares) ----------
+  if (ruta === "seleccionadas" && req.method === "GET") {
+    return json({ sel: (await store.get("oportunidades/seleccionadas", { type: "json" })) || {} });
+  }
+  if (ruta === "seleccionar" && req.method === "POST") {
+    const b = await cuerpo(req);
+    const codigo = limpiaCodigo(b.codigo);
+    if (!/^\d{1,8}-\d{1,8}-COT\d{2}$/.test(codigo)) return json({ error: "Código inválido" }, 400);
+    const s = (await store.get("oportunidades/seleccionadas", { type: "json" })) || {};
+    if (b.quitar) delete s[codigo];
+    else {
+      const prev = s[codigo] || { desde: ahora() };
+      const num = (v) => (v == null || v === "" ? undefined : Math.max(0, Math.round(Number(v) || 0)));
+      s[codigo] = { ...prev, nombre: texto(b.nombre, 200) ?? prev.nombre, organismo: texto(b.organismo, 120) ?? prev.organismo,
+        monto: num(b.monto) ?? prev.monto, cierre: texto(b.cierre, 40) ?? prev.cierre, margen: b.margen != null ? Number(b.margen) || 0 : prev.margen,
+        precio: num(b.precio) ?? prev.precio, costo: b.costo === null ? undefined : num(b.costo) ?? prev.costo, actualizado: ahora() };
+    }
+    await store.setJSON("oportunidades/seleccionadas", s);
+    return json({ ok: true, sel: s });
+  }
+
+  // ---------- 📨 seguimiento en vivo de las enviadas (estado en Mercado Público, ganador y orden de compra) ----------
+  if (ruta === "seguimiento" && req.method === "GET") {
+    const robot = (await store.get("robot/latido", { type: "json" })) || {};
+    const miRut = String(robot.rut || process.env.PROVEEDOR_RUT || "").replace(/[.\s]/g, "").toUpperCase();
+    const lista = (await todos(store)).filter((t) => t.estado === "enviada" || t.estado === "confirmada");
+    const cache = (await store.get("seguimiento/cache", { type: "json" })) || {};
+    const forzar = url.searchParams.get("forzar") === "1";
+    const res = {};
+    await Promise.all(lista.slice(0, 80).map(async (t) => {
+      const c = cache[t.codigo];
+      const final = c && (c.ganada || ["cancelada", "desierta"].includes(c.estado) || (c.estado === "proveedor_seleccionado" && c.ganador));
+      const vence = final ? 6 * 3600_000 : 10 * 60_000;
+      if (c && !forzar && Date.now() - Date.parse(c.visto) < vence) { res[t.codigo] = c; return; }
+      try {
+        const r = await fetch(RADAR_CA + "/" + encodeURIComponent(t.codigo), { headers: { "user-agent": "CotizAgil/1.0", accept: "application/json" } });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const p = (await r.json()).payload || {};
+        const pc = Array.isArray(p.proveedores_cotizando) ? p.proveedores_cotizando : [];
+        const rut = (x) => String(x.rut_proveedor || "").replace(/[.\s]/g, "").toUpperCase();
+        const yo = pc.find((x) => miRut && rut(x) === miRut) || pc.find((x) => t.total && Math.abs((x.monto_total || 0) - t.total) <= 50);
+        const sel = pc.find((x) => x.proveedor_seleccionado);
+        const orden = pc.filter((x) => x.activo !== 0).map((x) => x.monto_total || 0).sort((a, b) => a - b);
+        const e = p.estado || {};
+        res[t.codigo] = cache[t.codigo] = {
+          visto: ahora(), estado: e.codigo || null, glosa: e.glosa || null,
+          ofertas: (p.resumen || {}).total_ofertas_recibidas ?? pc.length, competidores: pc.length,
+          mi_total: yo?.monto_total ?? null, mi_lugar: yo ? orden.indexOf(yo.monto_total) + 1 : null,
+          mas_baja: orden[0] ?? null, ganada: !!(yo && yo.proveedor_seleccionado),
+          ganador: sel ? texto(sel.razon_social, 120) : null, ganador_total: sel?.monto_total ?? null,
+          oc: (yo && yo.proveedor_seleccionado ? yo.id_oc : null) || (yo && yo.proveedor_seleccionado ? p.id_orden_compra : null) || null,
+          oc_compra: p.id_orden_compra || null, inadmisible: texto(yo?.justificacion_inadmisibilidad, 200),
+          cierre: (p.fechas || {}).fecha_cierre || null, motivo: texto((p.motivos || {}).motivo_cancelacion || (p.motivos || {}).motivo_desierta, 200),
+        };
+      } catch (err) {
+        res[t.codigo] = { ...(c || {}), error: String(err.message || err).slice(0, 120), visto: c?.visto || ahora() };
+      }
+    }));
+    await store.setJSON("seguimiento/cache", cache);
+    return json({ seguimiento: res, rut: miRut || null });
+  }
+
+  // ---------- comprobante PDF del envío (lo sube el PC al confirmar) ----------
+  if (ruta === "comprobante" && req.method === "GET") {
+    const codigo = limpiaCodigo(url.searchParams.get("codigo"));
+    const data = await store.get("comp/" + codigo, { type: "arrayBuffer" });
+    if (!data) return json({ error: "Aún no hay comprobante de esta oferta." }, 404);
+    return new Response(data, {
+      headers: { "content-type": "application/pdf", "content-disposition": `inline; filename="Comprobante_${codigo}.pdf"`, "cache-control": "no-store" },
+    });
+  }
+
   // ---------- tu Mercado Público (pestaña de Safari con Firma rápida) ----------
   // La pestaña conectada avisa que está viva y recibe la compra que tocaste en la app («Ir a firmar»).
   if (ruta === "mp-latido" && req.method === "POST") {
@@ -350,6 +423,7 @@ async function atender(req) {
     const b = await cuerpo(req);
     await store.setJSON("robot/latido", {
       visto: ahora(), ocupado: !!b.ocupado, tarea: texto(b.tarea, 200), equipo: texto(b.equipo, 60), version: texto(b.version, 20),
+      rut: texto(b.rut, 20),
     });
     const pidio = await store.get("oportunidades/pedido", { type: "json" });   // la app pidió actualizar oportunidades
     if (pidio) await store.delete("oportunidades/pedido");
@@ -420,6 +494,11 @@ async function atender(req) {
     }
     const enviado = (e) => e === "enviada" || e === "confirmada";
     if (enviado(b.estado) && !enviado(t.estado)) t.envios = (t.envios || 0) + 1;
+    if (b.comp_b64) {                                   // comprobante / registro del envío
+      const c = Buffer.from(String(b.comp_b64), "base64");
+      if (c.length <= MAX_PDF && c.subarray(0, 4).toString() === "%PDF") { await store.set("comp/" + t.codigo, c); t.comprobante = true; }
+    }
+    if (b.enviado_por) t.dispositivo = texto(b.enviado_por, 60);
     if (b.pdf_b64) {
       const bytes = Buffer.from(String(b.pdf_b64), "base64");
       if (bytes.length <= MAX_PDF && bytes.subarray(0, 4).toString() === "%PDF") {
