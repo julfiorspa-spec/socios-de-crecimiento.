@@ -573,7 +573,7 @@
   function vistaOport() {
     if (!R.oport) { cargarOport(); return `<div class="empty"><span class="spinner"></span> Cargando oportunidades…</div>`; }
     const o = R.oport, ahora = Date.now();
-    const tab = R.oportTab || "nuevas", filtro = R.oportFiltro || "exp";
+    const tab = R.oportTab || "nuevas", filtro = R.oportFiltro || "todas";
     const lic = (x) => x.fuente === "licitacion";
     const trabajos = R.data?.trabajos || [];
     const vigente = (x) => Date.parse(x.cierre) - ahora > 30 * 60000;
@@ -583,7 +583,8 @@
     const hechas = [...trabajos.filter((t) => HECHA.includes(t.estado)),
       ...lista.filter((x) => (x.ya_ofertada || x.trabajada) && !trabajo(x.codigo)).map((x) => ({ ...x, _oport: true }))];
     const papelera = lista.filter((x) => descartada(x.codigo));
-    const verN = nuevas.filter((x) => filtro === "lic" ? lic(x) : !lic(x) && (filtro === "exp" ? x.tipo === "exp" : x.tipo !== "esp"));
+    const verN = nuevas.filter((x) => filtro === "lic" ? lic(x) : !lic(x) && (filtro === "seg" ? /^segundo/i.test(x.llamado || "") && x.tipo !== "esp"
+      : filtro === "exp" ? x.tipo === "exp" : x.tipo !== "esp"));
     const n = R.oportN || 40;
     const color = { exp: "#ffd88a", rev: "#9cc3ff", srv: "#d9c9ff", esp: "#999" };
     const fila = (x, modo) => {
@@ -595,7 +596,7 @@
           <div style="flex:1;min-width:0">
             <div style="font-size:.78rem"><b>${esc(x.codigo)}</b> · ${lic(x) ? "📑 " : ""}<span style="color:${color[x.tipo] || "#999"}">${esc(x.etiqueta || "")}</span> · ${esc(x.rubro || "")}</div>
             <div style="margin:2px 0">${esc(x.nombre)}</div>
-            <div class="muted" style="font-size:.75rem">${esc(x.organismo)}${x.llamado ? " · " + esc((x.llamado || "").slice(0, 7)) + " llamado" : ""}</div>
+            <div class="muted" style="font-size:.75rem">${/^segundo/i.test(x.llamado || "") ? '<b style="color:#ffb347">🔥 2° llamado</b> · ' : ""}${esc(x.organismo)}${x.region ? " · " + esc(x.region.replace(/^Región (de |del |de la )?/i, "")) : ""}${x.ofertas != null && !lic(x) ? ` · ${x.ofertas ? x.ofertas + " cotizaciones" : "sin cotizaciones aún"}` : ""}</div>
             <div style="font-size:.8rem;margin-top:3px">Gana ≈ <b>${clp(x.ganancia)}</b> · Ppto. ${clp(x.monto)}${x.monto_estimado ? " (estimado)" : ""} · <span style="${h < 12 ? "color:#ff8a80;font-weight:700" : ""}">cierra en ${h} h</span></div>
           </div></div>
         <div class="row" style="margin-top:6px;gap:6px">${modo === "papelera"
@@ -611,6 +612,7 @@
     const tabs = [["nuevas", "Por preparar", nuevas.length], ["firmar", "✍ Por firmar", enFirma.length], ["hechas", "✓ Hechas", hechas.length], ["papelera", "🗑 No deseadas", papelera.length]];
     let cuerpo;
     if (tab === "nuevas") cuerpo = `<div class="row" style="gap:6px;margin:6px 0">
+        <button class="btn small ${filtro === "seg" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="seg">🔥 2° llamado</button>
         <button class="btn small ${filtro === "exp" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="exp">★ Lo que ya vendemos</button>
         <button class="btn small ${filtro === "todas" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="todas">Compras Ágiles</button>
         <button class="btn small ${filtro === "lic" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="lic">📑 Licitaciones</button>
