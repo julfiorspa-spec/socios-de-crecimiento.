@@ -10,7 +10,7 @@
   const KEY = "sdc:robot";
   const POLL_RAPIDO = 5000, POLL_LENTO = 30000;
   const REMOTO_DEF = "https://remotedesktop.google.com/access";
-  const VISTAS = [["lista", "Lista"], ["cajas", "Cajas"], ["tablero", "Tablero"]];
+  const VISTAS = [["lista", "Lista"], ["cajas", "Cajas"], ["tablero", "Tablero"], ["oport", "💰 Oportunidades"]];
   // columnas del tablero (etapas del trabajo)
   const COLUMNAS = [
     ["Por hacer", ["en_cola", "probada", "cancelada"]],
@@ -504,6 +504,41 @@
     const orden = (t) => t.estado === "lista" || t.estado === "firmar" ? 0 : t.estado === "requiere" || t.estado === "error" ? 1 : est(t.estado).activo ? 2 : 3;
     return `<div class="rb-cajas">${[...lista].sort((a, b) => orden(a) - orden(b)).map(caja).join("")}</div>`;
   }
+  function vistaOport() {
+    if (!R.oport) { cargarOport(); return `<div class="empty"><span class="spinner"></span> Cargando oportunidades…</div>`; }
+    const o = R.oport, ahora = Date.now();
+    const filtro = R.oportFiltro || "exp";
+    const ver = (o.lista || []).filter((x) => (filtro === "exp" ? x.tipo === "exp" : x.tipo !== "esp") &&
+      Date.parse(x.cierre) - ahora > 30 * 60000);
+    const color = { exp: "#ffd88a", rev: "#9cc3ff", srv: "#d9c9ff", esp: "#999" };
+    const fila = (x) => {
+      const h = Math.round((Date.parse(x.cierre) - ahora) / 3600000);
+      const ya = trabajo(x.codigo);
+      return `<div class="rb-card" style="padding:10px 12px;margin:6px 0">
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <div style="min-width:42px;text-align:center"><b style="font-size:1.25rem">${x.puntaje}</b><div class="muted" style="font-size:.65rem">nota</div></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:.78rem"><b>${esc(x.codigo)}</b> · <span style="color:${color[x.tipo]}">${esc(x.etiqueta)}</span> · ${esc(x.rubro)}</div>
+            <div style="margin:2px 0">${esc(x.nombre)}</div>
+            <div class="muted" style="font-size:.75rem">${esc(x.organismo)} · ${(x.llamado || "").slice(0, 7)} llamado</div>
+            <div style="font-size:.8rem;margin-top:3px">Gana ≈ <b>${clp(x.ganancia)}</b> · Ppto. ${clp(x.monto)} · <span style="${h < 12 ? "color:#ff8a80;font-weight:700" : ""}">cierra en ${h} h</span></div>
+          </div></div>
+        <div class="row" style="margin-top:6px;gap:6px">${ya ? `<span class="muted" style="font-size:.78rem">Ya está en tus ofertas (${esc(est(ya.estado).txt)})</span>`
+          : `<button class="btn small rb-firmar" type="button" data-rb="oport-preparar" data-c="${esc(x.codigo)}">✍ Preparar</button>`}
+          <a class="btn small" href="${portalDe(x.codigo)}" target="_blank" rel="noopener noreferrer">Mercado Público ↗</a></div></div>`;
+    };
+    return `<div class="muted" style="font-size:.78rem;margin:6px 0">Ordenadas por ganancia estimada · ${o.fecha ? "actualizado " + esc(hace(o.fecha)) : "sin datos aún"}${o.resumen ? ` · ${o.resumen.total} vigentes` : ""}</div>
+      <div class="row" style="gap:6px;margin-bottom:4px">
+        <button class="btn small ${filtro === "exp" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="exp">★ Lo que ya vendemos</button>
+        <button class="btn small ${filtro === "todas" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="todas">Todas las convenientes</button>
+        <button class="btn small" type="button" data-rb="oport-actualizar">↻ Actualizar</button></div>
+      ${ver.slice(0, 60).map(fila).join("") || `<div class="empty">No hay oportunidades vigentes en esta vista. Toca «↻ Actualizar».</div>`}`;
+  }
+  async function cargarOport() {
+    if (R._cargandoOport) return; R._cargandoOport = true;
+    try { R.oport = await api("oportunidades"); } catch (e) { R.oport = { lista: [], error: e.message }; toast(e.message); }
+    R._cargandoOport = false; pintarHoja();
+  }
   function vistaTablero(lista) {
     return `<div class="rb-tablero">${COLUMNAS.map(([titulo, estados]) => {
       const cs = lista.filter((t) => estados.includes(t.estado));
@@ -527,7 +562,7 @@
     const conectado = r?.conectado;
     const permiso = "Notification" in window ? Notification.permission : "unsupported";
     const pushPosible = "PushManager" in window && permiso !== "denied";
-    const vista = { lista: vistaLista, cajas: vistaCajas, tablero: vistaTablero }[R.vista] || vistaCajas;
+    const vista = { lista: vistaLista, cajas: vistaCajas, tablero: vistaTablero, oport: vistaOport }[R.vista] || vistaCajas;
     return `
       <div class="rb-sheet-head"><h2 style="margin:0">Robot de ofertas</h2><button class="rb-x" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
       <div class="rb-status ${conectado ? "on" : ""}"><span class="rb-dot"></span>
@@ -547,7 +582,7 @@
         ${R.instalar ? `<button class="btn small" type="button" data-rb="instalar">📲 Instalar app</button>` : ""}
         ${esIOS && !instalada() ? `<div class="note" style="margin:0">En iPhone: toca <b>Compartir</b> → <b>Agregar a pantalla de inicio</b>. Desde ahí la app recibe avisos.</div>` : ""}
       </div>` : ""}
-      ${lista.length ? kpis(lista) + `<div class="rb-vistas" role="tablist">${VISTAS.map(([k, n]) =>
+      ${lista.length || R.vista === "oport" ? (lista.length ? kpis(lista) : "") + `<div class="rb-vistas" role="tablist">${VISTAS.map(([k, n]) =>
         `<button type="button" role="tab" aria-selected="${R.vista === k}" class="${R.vista === k ? "on" : ""}" data-rb="vista" data-v="${k}">${n}</button>`).join("")}</div>` + vista(lista) : ""}
       ${R.data && !lista.length ? `<div class="empty">Aún no hay ofertas. Toca «Hacer oferta» en una Compra Ágil.</div>` : ""}
       <details class="rb-ajustes"><summary>Ajustes</summary>
@@ -647,7 +682,18 @@
     if (a === "avisos") { if (await suscribirPush(true)) toast("Avisos activados en este teléfono"); return pintarHoja(); }
     if (a === "push-probar") { try { await api("push-probar", { method: "POST", body: "{}" }); toast("Aviso de prueba enviado"); } catch (e) { toast(e.message); } return; }
     if (a === "instalar") { const p = R.instalar; R.instalar = null; try { await p?.prompt(); } catch {} return pintarHoja(); }
-    if (a === "vista") { R.vista = b.dataset.v; guardar({ vista: R.vista }); return pintarHoja(); }
+    if (a === "vista") { R.vista = b.dataset.v; guardar({ vista: R.vista }); if (R.vista === "oport") R.oport = null; return pintarHoja(); }
+    if (a === "oport-filtro") { R.oportFiltro = b.dataset.f; return pintarHoja(); }
+    if (a === "oport-actualizar") {
+      try { await api("oportunidades-actualizar", { method: "POST", body: "{}" }); toast("El robot está bajando las oportunidades nuevas (1–2 min)"); }
+      catch (e) { toast(e.message); }
+      setTimeout(() => { R.oport = null; if (R.vista === "oport") pintarHoja(); }, 90000);
+      return;
+    }
+    if (a === "oport-preparar") {
+      const x = (R.oport?.lista || []).find((y) => y.codigo === cod);
+      return pedirOferta({ codigo: cod, nombre: x?.nombre, organismo: x?.organismo, monto: x?.monto });
+    }
     if (a === "det") { R.detalle = cod; sheet.scrollTop = 0; return pintarHoja(); }
     if (a === "cerrar-det") { R.detalle = null; return pintarHoja(); }
     if (a === "remoto") {
