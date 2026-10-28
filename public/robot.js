@@ -232,21 +232,24 @@
     document.getElementById("rbSafari")?.remove();
     const d = document.createElement("div");
     d.id = "rbSafari";
-    d.style.cssText = "position:fixed;inset:0;z-index:2147483646;background:rgba(5,12,28,.82);display:flex;align-items:flex-end;justify-content:center;padding:16px";
-    d.innerHTML = `<div style="width:100%;max-width:440px;background:#0b1c3c;color:#f6f8fc;border:2px solid #7c4dff;border-radius:18px;padding:18px;font:15px/1.45 system-ui,sans-serif">
-      <b style="font-size:17px">✍ Firmar ${esc(cod)}</b>
-      <div style="margin:8px 0 14px;opacity:.85">La compra se llena sola <b>en Safari</b> (ahí está Firma rápida y tu sesión de Mercado Público).</div>
-      <a href="x-safari-${url}" style="display:block;text-align:center;background:#7c4dff;color:#fff;border-radius:12px;padding:14px;font-weight:700;text-decoration:none">Abrir en Safari</a>
-      <button type="button" data-x="copiar" style="display:block;width:100%;margin-top:10px;background:transparent;color:#d9c9ff;border:1px solid #7c4dff;border-radius:12px;padding:12px;font:inherit">Copiar enlace (pégalo en Safari)</button>
-      <button type="button" data-x="cerrar" style="display:block;width:100%;margin-top:8px;background:transparent;color:#9fb0cc;border:0;padding:8px;font:inherit">Cerrar</button>
-      <div style="margin-top:6px;font-size:12px;opacity:.6">Si «Abrir en Safari» no hace nada, usa «Copiar enlace»: abre Safari, mantén presionada la barra de direcciones → Pegar e ir.</div></div>`;
-    d.addEventListener("click", async (ev) => {
+    d.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 8px);z-index:2147483646;width:min(92vw,360px);" +
+      "background:#0b1c3c;color:#f6f8fc;border:1.5px solid #7c4dff;border-radius:12px;padding:10px 12px;font:13px/1.4 system-ui,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.4)";
+    d.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <b data-x="estado">Copiando enlace de ${esc(cod)}…</b><span data-x="cerrar" style="cursor:pointer;font-size:18px;padding:0 4px;line-height:1">×</span></div>
+      <div style="margin-top:4px;opacity:.9">Abre <b>Safari</b>, mantén presionada la barra de direcciones → <b>Pegar e ir</b>. Se llena sola.</div>
+      <div style="margin-top:6px;display:flex;gap:12px;font-size:12px">
+        <span data-x="copiar" style="color:#d9c9ff;text-decoration:underline;cursor:pointer">Copiar de nuevo</span>
+        <a href="x-safari-${url}" style="color:#9fb0cc">Intentar abrir Safari</a></div>`;
+    const estado = (txt) => { const b = d.querySelector("[data-x=estado]"); if (b) b.textContent = txt; };
+    const copiarYa = async () => estado((await copiar(url)) ? `✓ Enlace de ${cod} copiado` : "No se pudo copiar: toca «Copiar de nuevo»");
+    d.addEventListener("click", (ev) => {
       const x = ev.target.closest("[data-x]")?.dataset.x;
-      if (ev.target === d || x === "cerrar") d.remove();
-      if (x === "copiar") { const ok = await copiar(url); ev.target.textContent = ok ? "Copiado ✓ — ahora ábrelo en Safari" : "No se pudo copiar"; }
-      if (ev.target.closest("a")) setTimeout(() => d.remove(), 800);
+      if (x === "cerrar") d.remove();
+      if (x === "copiar") copiarYa();
     });
     document.body.append(d);
+    copiarYa();
+    setTimeout(() => d.remove(), 30000);
   }
   async function registrarSW() {
     if (!("serviceWorker" in navigator)) return null;
