@@ -191,12 +191,29 @@ async function atender(req) {
   // ---------- oportunidades (el robot sube el ranking; la app lo muestra) ----------
   if (ruta === "oportunidades" && req.method === "POST") {
     const b = await cuerpo(req);
-    const lista = Array.isArray(b.lista) ? b.lista.slice(0, 150) : [];
+    const lista = Array.isArray(b.lista) ? b.lista.slice(0, 1200) : [];
     await store.setJSON("oportunidades/lista", { fecha: texto(b.fecha, 40) || ahora(), excel: texto(b.excel, 80), resumen: b.resumen || null, lista });
     return json({ ok: true, n: lista.length });
   }
   if (ruta === "oportunidades" && req.method === "GET") {
-    return json((await store.get("oportunidades/lista", { type: "json" })) || { lista: [] });
+    const o = (await store.get("oportunidades/lista", { type: "json" })) || { lista: [] };
+    o.descartes = (await store.get("oportunidades/descartes", { type: "json" })) || {};
+    return json(o);
+  }
+  // «No deseadas» (deslizar a la izquierda): se guardan para todos tus dispositivos y el robot no las prepara
+  if (ruta === "oport-descartes" && req.method === "GET") {
+    return json({ descartes: (await store.get("oportunidades/descartes", { type: "json" })) || {} });
+  }
+  if (ruta === "oport-descartar" && req.method === "POST") {
+    const b = await cuerpo(req);
+    const codigo = limpiaCodigo(b.codigo);
+    if (!/^\d{1,8}-\d{1,8}-[A-Z0-9]{3,6}$/.test(codigo)) return json({ error: "Código inválido" }, 400);
+    const d = (await store.get("oportunidades/descartes", { type: "json" })) || {};
+    if (b.descartar === false) delete d[codigo]; else d[codigo] = ahora();
+    const claves = Object.keys(d);
+    if (claves.length > 3000) for (const k of claves.sort((a, b) => d[a].localeCompare(d[b])).slice(0, claves.length - 3000)) delete d[k];
+    await store.setJSON("oportunidades/descartes", d);
+    return json({ ok: true, n: Object.keys(d).length });
   }
   if (ruta === "oportunidades-actualizar" && req.method === "POST") {
     await store.setJSON("oportunidades/pedido", { t: Date.now() });
