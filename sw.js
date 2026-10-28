@@ -2,7 +2,7 @@
    - Hace la app instalable en el celular (Android e iPhone) y que abra aunque no haya señal.
    - Recibe los avisos push del robot aunque la app esté cerrada.
    Nunca guarda en caché las llamadas al robot (/bot/...). */
-const CACHE = "cotizagil-v3";
+const CACHE = "cotizagil-v4";
 const BASICOS = ["/", "/public/robot.js", "/manifest.webmanifest", "/icon-180.png", "/icon-512.png"];
 
 self.addEventListener("install", (e) => {
@@ -25,7 +25,7 @@ self.addEventListener("fetch", (e) => {
       || url.pathname.startsWith("/.netlify")) return;
   e.respondWith((async () => {
     try {
-      const r = await fetch(req);
+      const r = await fetch(req, { cache: "no-cache" });   // siempre revisa si hay versión nueva
       if (r.ok && (req.mode === "navigate" || BASICOS.includes(url.pathname))) {
         const copia = r.clone();
         caches.open(CACHE).then((c) => c.put(req.mode === "navigate" ? "/" : req, copia)).catch(() => {});
