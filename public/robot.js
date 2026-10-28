@@ -228,20 +228,25 @@
   const esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
   const instalada = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
   function abrirEnSafari(cod) {
+    const conectar = cod === "conectar";
     const url = location.origin + "/firmar.html#" + encodeURIComponent(cod);   // puente: recuerda la compra y vuelve a ella tras iniciar sesión
+    const enVivo = !conectar && R.data?.mp?.conectado;
     document.getElementById("rbSafari")?.remove();
     const d = document.createElement("div");
     d.id = "rbSafari";
     d.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 8px);z-index:2147483646;width:min(92vw,360px);" +
       "background:#0b1c3c;color:#f6f8fc;border:1.5px solid #7c4dff;border-radius:12px;padding:10px 12px;font:13px/1.4 system-ui,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.4)";
     d.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <b data-x="estado">Copiando enlace de ${esc(cod)}…</b><span data-x="cerrar" style="cursor:pointer;font-size:18px;padding:0 4px;line-height:1">×</span></div>
-      <div style="margin-top:4px;opacity:.9">Abre <b>Safari</b>, mantén presionada la barra de direcciones → <b>Pegar e ir</b>. Se llena sola.</div>
+        <b data-x="estado">${conectar ? "Conectar tu Mercado Público" : enVivo ? `🟢 Tu Mercado Público va a la ${esc(cod)}` : `Copiando enlace de ${esc(cod)}…`}</b><span data-x="cerrar" style="cursor:pointer;font-size:18px;padding:0 4px;line-height:1">×</span></div>
+      <div style="margin-top:4px;opacity:.9">${conectar
+        ? "Abre <b>Safari</b> → mantén presionada la barra → <b>Pegar e ir</b>, e inicia sesión. Deja esa pestaña abierta: aquí verás «🟢 conectado»."
+        : enVivo ? "Cambia a <b>Safari</b>: la pestaña de Mercado Público salta sola a la compra y la llena."
+        : "Abre <b>Safari</b>, mantén presionada la barra de direcciones → <b>Pegar e ir</b>. Se llena sola."}</div>
       <div style="margin-top:6px;display:flex;gap:12px;font-size:12px">
         <span data-x="copiar" style="color:#d9c9ff;text-decoration:underline;cursor:pointer">Copiar de nuevo</span></div>
-      <a href="x-safari-${url}" style="display:block;margin-top:8px;text-align:center;background:#7c4dff;color:#fff;border-radius:9px;padding:9px;font-weight:700;text-decoration:none">Abrir compra en Safari</a>`;
+      <a href="x-safari-${url}" style="display:block;margin-top:8px;text-align:center;background:#7c4dff;color:#fff;border-radius:9px;padding:9px;font-weight:700;text-decoration:none">${conectar ? "Abrir Mercado Público en Safari" : "Abrir compra en Safari"}</a>`;
     const estado = (txt) => { const b = d.querySelector("[data-x=estado]"); if (b) b.textContent = txt; };
-    const copiarYa = async () => estado((await copiar(url)) ? `✓ Enlace de ${cod} copiado` : "No se pudo copiar: toca «Copiar de nuevo»");
+    const copiarYa = async () => { const ok = await copiar(url); if (!enVivo) estado(ok ? (conectar ? "✓ Enlace para conectar copiado" : `✓ Enlace de ${cod} copiado`) : "No se pudo copiar: toca «Copiar de nuevo»"); };
     d.addEventListener("click", (ev) => {
       const x = ev.target.closest("[data-x]")?.dataset.x;
       if (x === "cerrar") d.remove();
@@ -529,6 +534,10 @@
         <span>${!R.data ? (R.err ? esc(R.err) : '<span class="spinner"></span>') : conectado
           ? `PC conectado${r.equipo ? " · " + esc(r.equipo) : ""}${r.ocupado && r.tarea ? " · " + esc(r.tarea) : " · libre"}`
           : `PC desconectado${r?.visto ? " · visto " + esc(hace(r.visto)) : ""}. Abre el panel del robot en el PC.`}</span></div>
+      ${R.data ? (() => { const mp = R.data.mp; return `<div class="rb-status ${mp?.conectado ? "on" : ""}" style="align-items:center"><span class="rb-dot"></span>
+        <span style="flex:1">${mp?.conectado ? `Mercado Público conectado en Safari · ${esc(hace(mp.visto))}`
+          : `Mercado Público desconectado${mp?.visto ? " · visto " + esc(hace(mp.visto)) : ""}`}</span>
+        ${mp?.conectado ? "" : `<button class="btn small rb-firmar" data-rb="conectar-mp" type="button">Conéctate a tu Mercado Público</button>`}</div>`; })() : ""}
       <div class="row" style="margin:6px 0 4px">
         <div class="field" style="flex:1;min-width:150px"><input id="rbCod" placeholder="Uno o varios códigos (ej. 3704-203-COT26, 1261-12-COT26)" autocomplete="off" autocapitalize="characters"></div>
         <button class="btn small rb-firmar" type="button" data-rb="nuevo">✍ Preparar</button>
@@ -659,10 +668,15 @@
       return;
     }
     if (a === "marcador-arrastrar") { ev.preventDefault(); toast("Arrástralo a la barra de favoritos; se usa en Mercado Público"); return; }
+    if (a === "conectar-mp") {
+      if (esIOS && instalada()) { abrirEnSafari("conectar"); return; }
+      window.open(location.origin + "/firmar.html#conectar", "_blank"); return;
+    }
     if (a === "ir-firmar") {
       const t = trabajo(cod); if (!t?.firma) return;
       // iPhone con la app en la pantalla de inicio: la ventana interna NO tiene la extensión ni tu sesión.
       // Nunca se abre ahí: se ofrece abrir en Safari (toque directo del usuario) o copiar el enlace.
+      api("mp-orden", { method: "POST", body: JSON.stringify({ codigo: cod }) }).catch(() => {});   // tu pestaña conectada salta sola a la compra
       if (esIOS && instalada()) { abrirEnSafari(cod); return; }
       toast(firmaRapida() ? "Abriendo la compra: Firma rápida carga precios, detalle y PDF" : "Abriendo la compra: ahí toca tu marcador «Rellenar»");
       const w = window.open(portalDe(cod), "_blank");
