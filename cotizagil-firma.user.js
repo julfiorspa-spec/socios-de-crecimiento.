@@ -1,12 +1,14 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      1.0
+// @version      1.1
 // @description  Al abrir una Compra Ágil desde «Ir a firmar», carga sola los precios, el detalle y el PDF de tu oferta. NO envía, NO declara y NO firma: eso lo haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        GM.setValue
+// @grant        GM.getValue
 // @grant        GM_xmlhttpRequest
 // @connect      cotizagil.netlify.app
 // @run-at       document-idle
@@ -16,26 +18,40 @@
 (function () {
   "use strict";
   const APP = "https://cotizagil.netlify.app";
+  // compatible con Tampermonkey (PC, Firefox Android) y con la app Userscripts de Safari (iPhone)
+  const gmSet = async (k, v) => { try { if (typeof GM !== "undefined" && GM.setValue) return await GM.setValue(k, v); } catch (e) {} return GM_setValue(k, v); };
+  const gmGet = async (k) => { try { if (typeof GM !== "undefined" && GM.getValue) return await GM.getValue(k); } catch (e) {} try { return GM_getValue(k); } catch (e) { return undefined; } };
 
   // 1) En la app: guarda el código de enlace para poder leer tus ofertas desde Mercado Público.
   if (location.hostname === "cotizagil.netlify.app") {
     try {
       const tok = JSON.parse(localStorage.getItem("sdc:robot") || "{}").token;
-      if (tok) GM_setValue("token", tok);
+      if (tok) gmSet("token", tok);
     } catch (e) {}
     document.documentElement.dataset.firmaRapida = "1";
     return;
   }
 
   // 2) En Mercado Público (aplicación de una sola página: se vigila la dirección)
-  const token = GM_getValue("token");
+  let token = null;
 
   const caja = document.createElement("div");
   caja.style.cssText = "position:fixed;right:14px;bottom:14px;z-index:2147483647;max-width:380px;background:#0b1c3c;color:#f6f8fc;" +
     "border:2px solid #7c4dff;border-radius:14px;padding:12px 14px;font:14px/1.45 system-ui,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.35)";
   const decir = (html) => { caja.innerHTML = "<b>CotizÁgil · Firma rápida</b><div style='margin-top:6px'>" + html + "</div>"; if (!caja.isConnected) document.body.append(caja); };
 
-  const pedir = (ruta, tipo, cuerpo) => new Promise((ok, mal) => GM_xmlhttpRequest({
+  const pedir = async (ruta, tipo, cuerpo) => {
+    try {
+      const r = await fetch(APP + "/bot/" + ruta, { method: cuerpo ? "POST" : "GET", body: cuerpo ? JSON.stringify(cuerpo) : undefined,
+        headers: { "x-robot-token": token, "content-type": "application/json" } });
+      if (r.status !== 200) throw new Error("La app respondió " + r.status);
+      return tipo === "blob" ? await r.blob() : await r.json();
+    } catch (e) {
+      if (typeof GM_xmlhttpRequest === "undefined") throw e;
+      return pedirGM(ruta, tipo, cuerpo);
+    }
+  };
+  const pedirGM = (ruta, tipo, cuerpo) => new Promise((ok, mal) => GM_xmlhttpRequest({
     method: cuerpo ? "POST" : "GET", url: APP + "/bot/" + ruta, data: cuerpo ? JSON.stringify(cuerpo) : undefined,
     headers: { "x-robot-token": token, "content-type": "application/json" }, responseType: tipo || "json",
     onload: (r) => r.status === 200 ? ok(r.response) : mal(new Error("La app respondió " + r.status)), onerror: () => mal(new Error("Sin conexión con la app")),
@@ -74,8 +90,7 @@
     if (!token) { decir("Abre una vez la app <b>cotizagil.netlify.app</b> en este navegador (ya enlazada con el robot) y vuelve a esta página."); return; }
     await rellenar(cod);
   }
-  setInterval(revisar, 1000);
-  revisar();
+  gmGet("token").then((t) => { token = t || null; setInterval(revisar, 1000); revisar(); });
 
   async function rellenar(cod) {
     let t;
