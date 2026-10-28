@@ -13,9 +13,10 @@ import {
 
 export const config = { path: ["/bot", "/bot/*"] };
 
-const ESTADOS_ACTIVOS = new Set(["en_cola", "tomado", "preparando", "lista"]);
+const ESTADOS_ACTIVOS = new Set(["en_cola", "tomado", "preparando", "lista", "lic_bajando", "lic_captcha", "lic_analizando", "lic_ingresando"]);
+const COD_LIC = /^\d{1,8}-\d{1,8}-[A-Z][A-Z0-9]\d{2}$/;      // licitaciones: 2736-46-LE26, 1234-5-LP26, 99-1-L126…
 const MP_INACTIVO_MS = 45000;          // la pestaña de Mercado Público late cada ~10 s mientras está abierta
-const ACCIONES = new Set(["ofertar", "editar", "probar", "firmar", "verificar"]);
+const ACCIONES = new Set(["ofertar", "editar", "probar", "firmar", "verificar", "licitar", "lic_firmar", "lic_ingresar"]);
 const MAX_PDF = 4_500_000;                 // bytes del PDF (en base64 crece ~33%; Netlify acepta ~6 MB)
 const ROBOT_INACTIVO_MS = 90_000;          // si el PC no da señales en 90 s se considera desconectado
 const TOMADO_VENCE_MS = 10 * 60_000;       // un pedido tomado que no avanza vuelve a la cola
@@ -226,18 +227,27 @@ async function atender(req) {
     const b = await cuerpo(req);
     const codigo = limpiaCodigo(b.codigo);
     const accion = ACCIONES.has(b.accion) ? b.accion : "ofertar";
-    if (!/^\d{1,8}-\d{1,8}-COT\d{2}$/.test(codigo)) {
-      return json({ error: "El robot solo trabaja Compras Ágiles (códigos como 1234-56-COT26)." }, 400);
+    const esLic = accion.startsWith("lic");
+    if (esLic ? !COD_LIC.test(codigo) || /COT\d{2}$/.test(codigo) : !/^\d{1,8}-\d{1,8}-COT\d{2}$/.test(codigo)) {
+      return json({ error: esLic ? "Código de licitación inválido (ej. 2736-46-LE26)." : "El robot solo trabaja Compras Ágiles (códigos como 1234-56-COT26)." }, 400);
     }
     const previo = await leer(store, codigo);
     if (previo && ESTADOS_ACTIVOS.has(previo.estado)) return json({ trabajo: previo, aviso: "Ya está en manos del robot." }, 409);
+    if (accion === "lic_firmar" || accion === "lic_ingresar") {   // pasos siguientes: conservan el análisis y los papeles
+      if (!previo?.lic) return json({ error: "Primero el robot debe preparar la licitación." }, 404);
+      previo.accion = accion;
+      if (b.descuento != null) previo.descuento = Math.min(0.6, Math.max(0, Number(b.descuento) || 0));
+      anotar(previo, "en_cola", accion === "lic_firmar" ? "Aprobada: el robot firma los anexos y la deja lista para ofertar."
+        : "El robot ingresará la oferta en Mercado Público (tú declaras y envías).");
+      return json({ trabajo: await escribir(store, previo) });
+    }
     if (accion === "verificar") {          // revisar en el portal si ya quedó enviada: conserva la oferta preparada
       if (!previo) return json({ error: "No hay oferta preparada para verificar." }, 404);
       previo.accion = "verificar";
       anotar(previo, "en_cola", "El robot revisará en Mercado Público si ya quedó enviada.");
       return json({ trabajo: await escribir(store, previo) });
     }
-    const descuento = Math.min(0.5, Math.max(0, Number(b.descuento) || 0.08));
+    const descuento = Math.min(0.6, Math.max(0, b.descuento != null ? Number(b.descuento) || 0 : esLic ? 0.17 : 0.08));
     const t = {
       codigo, accion, descuento,
       nombre: texto(b.nombre, 200), organismo: texto(b.organismo, 200), monto: Number(b.monto) || null,
@@ -245,7 +255,8 @@ async function atender(req) {
       total: null, neto: null, plazo: null, detalle: null, items: null, pdf: false,
       envios: previo?.envios || 0, // cuántas veces quedó enviada antes (para editar)
     };
-    anotar(t, "en_cola", accion === "probar" ? "Prueba sin enviar: el robot la tomará en segundos." : "Esperando que el robot del PC la tome.");
+    if (esLic) t.tipo = "licitacion";
+    anotar(t, "en_cola", accion === "probar" ? "Prueba sin enviar: el robot la tomará en segundos." : esLic ? "Licitación: el robot bajará la ficha, las bases y los anexos." : "Esperando que el robot del PC la tome.");
     return json({ trabajo: await escribir(store, t) });
   }
 
@@ -301,6 +312,21 @@ async function atender(req) {
     });
   }
 
+  if (ruta === "captcha" && req.method === "POST") {      // tú escribes el código de la imagen; el robot lo ingresa
+    const b = await cuerpo(req);
+    const t = await leer(store, limpiaCodigo(b.codigo));
+    if (!t?.captcha) return json({ error: "No hay código pendiente." }, 404);
+    t.captcha_resp = texto(b.texto, 20);
+    anotar(t, t.estado, "Código enviado al robot.");
+    return json({ trabajo: await escribir(store, t) });
+  }
+  if (ruta === "lic-zip" && req.method === "GET") {
+    const codigo = limpiaCodigo(url.searchParams.get("codigo"));
+    const data = await store.get("lic/" + codigo, { type: "arrayBuffer" });
+    if (!data) return json({ error: "Sin documentos." }, 404);
+    return new Response(data, { headers: { "content-type": "application/zip", "content-disposition": `attachment; filename="PJANIC_${codigo}.zip"`, "cache-control": "no-store" } });
+  }
+
   // ---------- robot del PC ----------
   if (ruta === "latido" && req.method === "POST") {
     const b = await cuerpo(req);
@@ -348,6 +374,31 @@ async function atender(req) {
           nivel: a?.nivel === "rojo" ? "rojo" : "amarillo", texto: texto(a?.texto, 240) || "",
         })).filter((a) => a.texto),
       };
+    }
+    if (b.lic && typeof b.lic === "object") {       // análisis de licitación para aprobar en la app
+      const L = b.lic, num = (x) => (x == null || x === "" ? null : Math.round(Number(x) || 0));
+      t.lic = {
+        presupuesto: num(L.presupuesto), con_iva: !!L.con_iva, descuento: Number(L.descuento) || 0,
+        precio_unit: num(L.precio_unit), cantidad: Number(L.cantidad) || null, unidad: texto(L.unidad, 30),
+        neto: num(L.neto), iva: num(L.iva), total: num(L.total), cierre: texto(L.cierre, 40),
+        resumen: texto(L.resumen, 1200), producto: texto(L.producto, 300),
+        criterios: (Array.isArray(L.criterios) ? L.criterios : []).slice(0, 12).map((c) => ({
+          nombre: texto(c?.nombre, 120), peso: texto(c?.peso, 20), propuesta: texto(c?.propuesta, 240), confirmar: !!c?.confirmar })),
+        comparables: (Array.isArray(L.comparables) ? L.comparables : []).slice(0, 8).map((c) => texto(c, 240)),
+        alertas: (Array.isArray(L.alertas) ? L.alertas : []).slice(0, 15).map((a) => ({
+          nivel: a?.nivel === "rojo" ? "rojo" : "amarillo", texto: texto(a?.texto, 260) || "" })).filter((a) => a.texto),
+        documentos: (Array.isArray(L.documentos) ? L.documentos : []).slice(0, 20).map((d) => ({
+          nombre: texto(d?.nombre, 120), estado: texto(d?.estado, 120), seccion: texto(d?.seccion, 40) })),
+        firmados: !!L.firmados,
+      };
+    }
+    if (b.captcha_b64 != null) {                    // código de imagen que el robot necesita que escribas
+      t.captcha = String(b.captcha_b64).slice(0, 90000) || null;
+      t.captcha_resp = null;
+    }
+    if (b.zip_b64) {
+      const z = Buffer.from(String(b.zip_b64), "base64");
+      if (z.length <= MAX_PDF && z.subarray(0, 2).toString() === "PK") { await store.set("lic/" + t.codigo, z); t.zip = true; }
     }
     const enviado = (e) => e === "enviada" || e === "confirmada";
     if (enviado(b.estado) && !enviado(t.estado)) t.envios = (t.envios || 0) + 1;
