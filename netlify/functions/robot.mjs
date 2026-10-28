@@ -301,6 +301,9 @@ async function atender(req) {
         total: Math.round(Number(b.firma.total) || 0),
         adjunto: texto(b.firma.adjunto, 120),
         aviso: texto(b.firma.aviso, 300),
+        alertas: (Array.isArray(b.firma.alertas) ? b.firma.alertas : []).slice(0, 12).map((a) => ({
+          nivel: a?.nivel === "rojo" ? "rojo" : "amarillo", texto: texto(a?.texto, 240) || "",
+        })).filter((a) => a.texto),
       };
     }
     const enviado = (e) => e === "enviada" || e === "confirmada";
