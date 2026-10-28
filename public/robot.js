@@ -102,6 +102,19 @@
   .rb-otabs button{flex:1 0 auto;background:transparent;border:1px solid var(--line-soft);color:inherit;border-radius:999px;padding:7px 12px;font:inherit;font-size:.8rem;white-space:nowrap;cursor:pointer}
   .rb-otabs button.on{background:#7c4dff;border-color:#7c4dff;color:#fff;font-weight:700}
   .rb-otabs i{font-style:normal;margin-left:6px;opacity:.75;font-size:.72rem}
+  .rb-estrella{background:none;border:0;font-size:1.5rem;line-height:1;color:#6b7891;cursor:pointer;padding:0 2px}
+  .rb-estrella.on{color:#ffc93c}
+  .rb-sel .rb-precio{font-size:1.7rem;font-weight:800;letter-spacing:-.01em}
+  .rb-sel .rb-pct{font-size:.78rem;font-weight:700;padding:2px 8px;border-radius:999px;margin-left:6px;vertical-align:middle}
+  .rb-sel .rb-pct.baja{background:rgba(34,197,94,.18);color:#7ee2a0}.rb-sel .rb-pct.sube{background:rgba(255,90,90,.18);color:#ff9a9a}
+  .rb-range{-webkit-appearance:none;appearance:none;width:100%;height:10px;border-radius:99px;background:#2a3550;margin:14px 0 4px;outline:none;touch-action:none}
+  .rb-range::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;border-radius:50%;background:#fff;border:4px solid #7c4dff;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+  .rb-range::-moz-range-thumb{width:26px;height:26px;border-radius:50%;background:#fff;border:4px solid #7c4dff}
+  .rb-escala{display:flex;justify-content:space-between;font-size:.7rem;opacity:.7}
+  .rb-pasos2{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}.rb-pasos2 button{flex:1 0 auto;min-width:54px}
+  .rb-mini{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}.rb-mini div{background:rgba(255,255,255,.04);border:1px solid var(--line-soft);border-radius:10px;padding:7px 9px}
+  .rb-mini small{display:block;opacity:.7;font-size:.7rem}.rb-mini b{font-size:.95rem}
+  .rb-env{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
   .rb-card{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--radius);padding:14px;margin-top:10px}
   .rb-card.ambar{border-color:rgba(240,180,60,.6)}
   .rb-card.oro{border-color:#c8900f}
@@ -606,6 +619,21 @@
   const EN_FIRMA = ["en_cola", "tomado", "preparando", "lista", "firmar", "probada", "requiere", "error",
     "lic_bajando", "lic_captcha", "lic_analizando", "lic_revisar", "lic_lista", "lic_ingresando"];
   const HECHA = ["enviada", "confirmada"];
+  /* ---------- ⭐ Seleccionadas (en este teléfono) ---------- */
+  const SELK = "sdc:seleccionadas";
+  const leerSel = () => { try { return JSON.parse(localStorage.getItem(SELK)) || {}; } catch { return {}; } };
+  const guardarSel = (o) => { try { localStorage.setItem(SELK, JSON.stringify(o)); } catch {} };
+  const esSel = (cod) => !!leerSel()[cod];
+  function alternarSel(cod) {
+    const s = leerSel();
+    if (s[cod]) { delete s[cod]; toast("Quitada de Seleccionadas"); }
+    else {
+      const x = (R.oport?.lista || []).find((y) => y.codigo === cod) || trabajo(cod) || {};
+      s[cod] = { desde: new Date().toISOString(), nombre: x.nombre, organismo: x.organismo, monto: x.monto, cierre: x.cierre };
+      toast("⭐ En Seleccionadas: ahí ajustas el precio");
+    }
+    guardarSel(s);
+  }
   const descartada = (cod) => { const d = { ...(R.oport?.descartes || {}), ...(R.desc || {}) }; return !!d[cod]; };
   function vistaOport() {
     if (!R.oport) { cargarOport(); return `<div class="empty"><span class="spinner"></span> Cargando oportunidades…</div>`; }
@@ -629,7 +657,8 @@
       return `<div class="rb-card rb-swipe" data-c="${esc(x.codigo)}" data-lic="${lic(x) ? 1 : ""}" data-modo="${modo}" style="padding:10px 12px;margin:6px 0">
         <span class="rb-sello si">${modo === "papelera" ? "RECUPERAR" : "SÍ"}</span><span class="rb-sello no">NO</span>
         <div style="display:flex;gap:10px;align-items:flex-start">
-          <div style="min-width:42px;text-align:center"><b style="font-size:1.25rem">${x.puntaje ?? "—"}</b><div class="muted" style="font-size:.65rem">nota</div></div>
+          <div style="min-width:42px;text-align:center"><b style="font-size:1.25rem">${x.puntaje ?? "—"}</b><div class="muted" style="font-size:.65rem">nota</div>
+            ${lic(x) || modo === "papelera" ? "" : `<button type="button" class="rb-estrella ${esSel(x.codigo) ? "on" : ""}" data-rb="oport-sel" data-c="${esc(x.codigo)}" title="Seleccionar">${esSel(x.codigo) ? "★" : "☆"}</button>`}</div>
           <div style="flex:1;min-width:0">
             <div style="font-size:.78rem"><b>${esc(x.codigo)}</b> · ${lic(x) ? "📑 " : ""}<span style="color:${color[x.tipo] || "#999"}">${esc(x.etiqueta || "")}</span> · ${esc(x.rubro || "")}</div>
             <div style="margin:2px 0">${esc(x.nombre)}</div>
@@ -646,7 +675,43 @@
       ? `<div class="rb-card" style="padding:8px 12px;margin:6px 0;opacity:.8"><div style="font-size:.78rem"><b>${esc(x.codigo)}</b> · ${x.ya_ofertada ? "ya ofertada en el portal" : "trabajada por el robot"}</div><div>${esc(x.nombre)}</div></div>`
       : caja(x);
     const ordenF = (t) => ["firmar", "lic_revisar", "lic_lista", "lista"].includes(t.estado) ? 0 : ["requiere", "error"].includes(t.estado) ? 1 : 2;
-    const tabs = [["nuevas", "Por preparar", nuevas.length], ["firmar", "✍ Por firmar", enFirma.length], ["hechas", "✓ Hechas", hechas.length], ["papelera", "🗑 No deseadas", papelera.length]];
+    const selObj = leerSel();
+    const enviadasCods = new Set(trabajos.filter((t) => HECHA.includes(t.estado)).map((t) => t.codigo));
+    const sel = Object.keys(selObj).filter((c) => !enviadasCods.has(c) && !lista.find((x) => x.codigo === c && x.ya_ofertada))
+      .map((c) => ({ ...selObj[c], ...(lista.find((x) => x.codigo === c) || {}), codigo: c, _sel: selObj[c] }));
+    const enviadosT = trabajos.filter((t) => HECHA.includes(t.estado))
+      .sort((a, b) => (b.actualizado || "").localeCompare(a.actualizado || ""));
+    const tabs = [["nuevas", "Por preparar", nuevas.length], ["sel", "⭐ Seleccionadas", sel.length], ["firmar", "✍ Por firmar", enFirma.length],
+      ["hechas", "📨 Enviados", enviadosT.length], ["papelera", "🗑 No deseadas", papelera.length]];
+    const tarjetaSel = (x) => {
+      const pres = Number(x.monto) || 0;
+      const t = trabajo(x.codigo);
+      const ref = pres;
+      const precio0 = Math.round(x._sel.precio || pres * (1 - (leer().descuento ?? 0.08)));
+      const h = x.cierre ? Math.round((Date.parse(x.cierre) - ahora) / 3600000) : null;
+      return `<div class="rb-card rb-sel" data-c="${esc(x.codigo)}" data-pres="${pres}" data-ref="${ref}" style="padding:12px;margin:8px 0">
+        <div class="rb-env"><div style="min-width:0"><div style="font-size:.78rem"><b>${esc(x.codigo)}</b>${h != null ? ` · <span style="${h < 12 ? "color:#ff8a80;font-weight:700" : ""}">cierra en ${h} h</span>` : ""}</div>
+          <div style="margin:2px 0">${esc(x.nombre || "Compra Ágil")}</div><div class="muted" style="font-size:.74rem">${esc(x.organismo || "")} · Ppto. <b>${clp(pres)}</b></div></div>
+          <button type="button" class="rb-estrella on" data-rb="oport-sel" data-c="${esc(x.codigo)}" title="Quitar">★</button></div>
+        ${t ? `<div style="margin-top:6px">${badge(t)}</div>` : ""}
+        ${pres ? `<div style="margin-top:10px"><span class="muted" style="font-size:.74rem">Tu precio con IVA</span><br><span class="rb-precio">${clp(precio0)}</span><span class="rb-pct"></span></div>
+        <input type="range" class="rb-range" min="${Math.round(ref * 0.5)}" max="${Math.round(ref * 1.5)}" step="${Math.max(10, Math.round(ref / 2000 / 10) * 10)}" value="${precio0}">
+        <div class="rb-escala"><span>−50%</span><span>Presupuesto</span><span>+50%</span></div>
+        <div class="rb-pasos2"><button class="btn small" type="button" data-paso="-10">−10%</button><button class="btn small" type="button" data-paso="-5">−5%</button><button class="btn small" type="button" data-paso="-1">−1%</button>
+          <button class="btn small" type="button" data-paso="1">+1%</button><button class="btn small" type="button" data-paso="5">+5%</button><button class="btn small" type="button" data-paso="10">+10%</button></div>
+        <div class="rb-mini"><div><small>Neto (sin IVA)</small><b class="rb-neto">—</b></div><div><small>Bajo el presupuesto</small><b class="rb-bajo">—</b></div></div>
+        <div class="rb-sobre muted" style="display:none;color:#ff9a9a;font-size:.78rem">⚠ Supera el presupuesto: se ofertará el presupuesto (${clp(pres)}).</div>
+        <button class="btn rb-firmar" type="button" style="width:100%;margin-top:6px" data-rb="sel-preparar" data-c="${esc(x.codigo)}">✍ Preparar con <span class="rb-p2">${clp(Math.min(precio0, pres))}</span></button>`
+        : `<div class="muted" style="margin-top:8px">Sin presupuesto conocido: abre la compra para ver el monto.</div>`}
+      </div>`;
+    };
+    const enviado = (t) => `<div class="rb-card verde" style="padding:10px 12px;margin:6px 0">
+      <div class="rb-env"><div style="min-width:0"><div style="font-size:.78rem"><b>${esc(t.codigo)}</b> · ${t.estado === "confirmada" ? "★ Confirmada" : "✓ Enviada"}</div>
+        <div style="margin:2px 0">${esc(t.nombre || "Compra Ágil")}</div>
+        <div class="muted" style="font-size:.74rem">${t.fecha_envio ? "📅 " + esc(t.fecha_envio) + " · " : ""}${t.dispositivo ? "📱 " + esc(t.dispositivo) : "equipo no registrado"}</div></div>
+        <b style="white-space:nowrap">${t.total ? clp(t.total) : ""}</b></div>
+      <div class="row" style="gap:6px;margin-top:6px">${t.pdf ? `<button class="btn small" data-rb="pdf" data-c="${esc(t.codigo)}" type="button">Ver oferta PDF</button>` : ""}
+        <a class="btn small" href="${portalDe(t.codigo)}" target="_blank" rel="noopener noreferrer">Ver en Mercado Público ↗</a></div></div>`;
     let cuerpo;
     if (tab === "nuevas") cuerpo = `<div class="row" style="gap:6px;margin:6px 0">
         <button class="btn small ${filtro === "seg" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="seg">🔥 2° llamado</button>
@@ -659,7 +724,10 @@
       ${verN.length > n ? `<button class="btn" style="width:100%;margin-top:8px" type="button" data-rb="oport-mas">Ver más (${verN.length - n} restantes)</button>` : ""}`;
     else if (tab === "firmar") cuerpo = enFirma.length ? `<div class="rb-cajas">${[...enFirma].sort((a, b) => ordenF(a) - ordenF(b)).map(caja).join("")}</div>`
       : `<div class="empty">Nada por firmar. Desliza a la derecha en «Por preparar».</div>`;
-    else if (tab === "hechas") cuerpo = hechas.length ? hechas.map(hecha).join("") : `<div class="empty">Aún no hay ofertas enviadas.</div>`;
+    else if (tab === "sel") cuerpo = sel.length ? `<div class="muted" style="font-size:.74rem;margin:6px 0">Mueve la barra para subir o bajar tu precio hasta 50% (referencia: presupuesto). «Preparar» deja la oferta con ese total en ✍ Por firmar.</div>${sel.map(tarjetaSel).join("")}`
+      : `<div class="empty">Toca la ☆ de una compra en «Por preparar» para traerla aquí y jugar con el precio.</div>`;
+    else if (tab === "hechas") cuerpo = enviadosT.length ? `<div class="muted" style="font-size:.74rem;margin:6px 0">${enviadosT.length} enviadas · ${clp(enviadosT.reduce((s, t) => s + (Number(t.total) || 0), 0))} ofertado. El registro PDF para imprimir está en el PC (📨 Enviados).</div>${enviadosT.map(enviado).join("")}`
+      : `<div class="empty">Aún no hay ofertas enviadas.</div>`;
     else cuerpo = papelera.length ? `<div class="muted" style="font-size:.74rem;margin:6px 0">Desliza → o toca «Recuperar» para devolverla a Por preparar.</div>${papelera.map((x) => fila(x, "papelera")).join("")}`
       : `<div class="empty">La papelera está vacía.</div>`;
     return `<div class="muted" style="font-size:.78rem;margin:6px 0">Ordenadas por ganancia estimada · ${o.fecha ? "actualizado " + esc(hace(o.fecha)) : "sin datos aún"}${o.resumen ? ` · ${o.resumen.total} vigentes en el portal` : ""}</div>
@@ -794,7 +862,7 @@
   }
 
   function pintarHoja() {
-    const box = $("#rbIn"); if (!box || R.arrastrando) return;
+    const box = $("#rbIn"); if (!box || R.arrastrando || R.barra) return;
     const y = sheet.scrollTop;
     // el repintado cada pocos segundos no debe cerrar lo que la persona abrió
     const abiertos = new Set($$("details", box).map((d, i) => d.open && (d.closest("[id]")?.id || "") + d.className + i).filter(Boolean));
@@ -876,6 +944,19 @@
     if (a === "oport-filtro") { R.oportFiltro = b.dataset.f; R.oportN = 40; return pintarHoja(); }
     if (a === "oport-tab") { R.oportTab = b.dataset.t; R.oportN = 40; sheet.scrollTop = 0; return pintarHoja(); }
     if (a === "oport-mas") { R.oportN = (R.oportN || 40) + 40; return pintarHoja(); }
+    if (a === "oport-sel") { alternarSel(cod); return pintarHoja(); }
+    if (a === "sel-preparar") {
+      const c = b.closest(".rb-sel"); const pres = +c.dataset.pres; const v = Math.min(+c.querySelector(".rb-range").value, pres);
+      const descuento = Math.max(0, Math.min(0.6, 1 - v / pres));
+      const s = leerSel(); if (s[cod]) { s[cod].precio = v; guardarSel(s); }
+      b.disabled = true;
+      try {
+        const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "firmar", descuento }) });
+        toast(r._status === 409 ? "Ya estaba en manos del robot" : `✍ El robot la prepara por ${clp(v)}`);
+        await refrescar();
+      } catch (e) { toast(e.message); b.disabled = false; }
+      return;
+    }
     if (a === "oport-si") return oportDecidir(cod, true, b.closest(".rb-swipe"));
     if (a === "oport-no") return oportDecidir(cod, false, b.closest(".rb-swipe"));
     if (a === "oport-restaurar") return oportRestaurar(cod, b.closest(".rb-swipe"));
@@ -984,6 +1065,30 @@
       } catch (e) { w?.close(); toast(e.message); }
     }
   });
+  function pintarSel(c, guardarAhora) {
+    const r = c.querySelector(".rb-range"); if (!r) return;
+    const pres = +c.dataset.pres, ref = +c.dataset.ref, v = +r.value;
+    c.querySelector(".rb-precio").textContent = clp(v);
+    const p = c.querySelector(".rb-pct"), d = v / ref - 1;
+    p.textContent = (d > 0 ? "+" : "") + (d * 100).toFixed(1).replace(".", ",") + "%"; p.className = "rb-pct " + (d < 0 ? "baja" : "sube");
+    c.querySelector(".rb-neto").textContent = clp(Math.min(v, pres) / 1.19);
+    c.querySelector(".rb-bajo").textContent = ((1 - Math.min(v, pres) / pres) * 100).toFixed(1).replace(".", ",") + "%";
+    c.querySelector(".rb-sobre").style.display = v > pres ? "block" : "none";
+    c.querySelector(".rb-p2").textContent = clp(Math.min(v, pres));
+    const pct = (v - r.min) / (r.max - r.min) * 100; r.style.background = `linear-gradient(90deg,#7c4dff ${pct}%,#2a3550 ${pct}%)`;
+    if (guardarAhora) { const s = leerSel(); if (s[c.dataset.c]) { s[c.dataset.c].precio = v; guardarSel(s); } }
+  }
+  // mientras mueves la barra no se repinta la pantalla (si no, la barra «salta»)
+  sheet.addEventListener("pointerdown", (ev) => { if (ev.target.classList?.contains("rb-range")) R.barra = true; });
+  ["pointerup", "pointercancel"].forEach((n) => document.addEventListener(n, () => { if (R.barra) setTimeout(() => { R.barra = false; }, 400); }));
+  sheet.addEventListener("input", (ev) => { const c = ev.target.closest?.(".rb-sel"); if (c && ev.target.classList.contains("rb-range")) pintarSel(c, true); });
+  sheet.addEventListener("click", (ev) => {
+    const b = ev.target.closest?.("[data-paso]"); if (!b) return;
+    const c = b.closest(".rb-sel"), r = c.querySelector(".rb-range");
+    r.value = Math.max(+r.min, Math.min(+r.max, Math.round(+r.value * (1 + b.dataset.paso / 100)))); pintarSel(c, true);
+  });
+  new MutationObserver(() => sheet.querySelectorAll(".rb-sel").forEach((c) => { if (!c.dataset.ok) { c.dataset.ok = 1; pintarSel(c, false); } }))
+    .observe(sheet, { childList: true, subtree: true });
   sheet.addEventListener("keydown", (ev) => {
     if (ev.key === "Enter" && ev.target.id?.startsWith("rbCap-")) {
       ev.preventDefault();
