@@ -9,8 +9,10 @@ a{color:#d9c9ff}</style></head>
 <script>
   // Firma rápida (extensión) guarda la compra y salta antes; si no está instalada, salta igual a los 2 s.
   const cod = decodeURIComponent(location.hash.slice(1)).toUpperCase();
-  const url = "https://compra-agil.mercadopublico.cl/resumen-cotizacion/" + encodeURIComponent(cod);
-  document.getElementById("t").textContent = "Abriendo la compra " + cod + "…";
+  const conectar = cod === "CONECTAR";
+  const url = conectar ? "https://compra-agil.mercadopublico.cl/" : "https://compra-agil.mercadopublico.cl/resumen-cotizacion/" + encodeURIComponent(cod);
+  document.getElementById("t").textContent = conectar ? "Conectando tu Mercado Público…" : "Abriendo la compra " + cod + "…";
+  if (conectar) document.querySelector("p").innerHTML = "Inicia sesión y <b>deja esta pestaña abierta</b>.<br>En la app verás «🟢 Mercado Público conectado».";
   document.getElementById("ir").href = url;
-  if (/-COT\d+$/.test(cod)) setTimeout(() => location.replace(url), 2000);
+  if (conectar || /-COT\d+$/.test(cod)) setTimeout(() => location.replace(url), 2000);
 </script></body></html>

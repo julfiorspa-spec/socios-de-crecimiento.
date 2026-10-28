@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      1.5
+// @version      1.6
 // @description  Al abrir una Compra Ágil desde «Ir a firmar», carga sola los precios, el detalle y el PDF de tu oferta. NO envía, NO declara y NO firma: eso lo haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -32,6 +32,7 @@
     document.documentElement.dataset.firmaRapida = "1";
     // puente «Abrir compra»: /firmar.html#CODIGO → recuerda la compra y te lleva a ella (aunque pida iniciar sesión)
     const puente = location.pathname.startsWith("/firmar") && decodeURIComponent(location.hash.slice(1)).toUpperCase();
+    if (puente === "CONECTAR") { location.replace("https://compra-agil.mercadopublico.cl/"); return; }
     if (puente && /-COT\d+$/.test(puente)) {
       gmSet("pendiente", JSON.stringify({ cod: puente, t: Date.now() })).then(() => {
         sessionStorage.removeItem("cotizagil-ir");
@@ -52,6 +53,41 @@
     try { const p = JSON.parse((await gmGet("pendiente")) || "null"); return p && Date.now() - p.t < 45 * 60000 ? p.cod : null; } catch (e) { return null; }
   };
   const urlCompra = (c) => "https://compra-agil.mercadopublico.cl/resumen-cotizacion/" + encodeURIComponent(c);
+
+  // 1c) CONEXIÓN EN VIVO con la app: esta pestaña avisa «conectado» y recibe la compra que tocas en «Ir a firmar»
+  const estaLogueado = () => {
+    const t = (document.body && document.body.innerText || "").slice(0, 6000);
+    if (/cerrar sesi[oó]n|mis cotizaciones|mi cuenta|mis compras/i.test(t)) return true;
+    if (/iniciar sesi[oó]n|ingresa con|clave[uú]nica/i.test(t)) return false;
+    return /resumen-cotizacion|cotizacion-publicada/.test(location.pathname);
+  };
+  let latiendo = false;
+  async function latir() {
+    if (latiendo || document.visibilityState !== "visible") return;
+    latiendo = true;
+    try {
+      const tok = await gmGet("token");
+      if (!tok) return;
+      const r = await fetch(APP + "/bot/mp-latido", { method: "POST", headers: { "x-robot-token": tok, "content-type": "application/json" },
+        body: JSON.stringify({ logueado: estaLogueado(), pagina: location.hostname + location.pathname }) });
+      const j = await r.json();
+      if (j.orden && !location.pathname.includes(j.orden)) {           // tocaste «Ir a firmar» en la app: vamos a esa compra
+        await gmSet("pendiente", JSON.stringify({ cod: j.orden, t: Date.now() }));
+        sessionStorage.removeItem("cotizagil-ir");
+        location.href = urlCompra(j.orden);
+      }
+    } catch (e) {} finally { latiendo = false; }
+  }
+  setInterval(latir, 8000);
+  document.addEventListener("visibilitychange", latir);
+  window.addEventListener("pageshow", latir);
+  setTimeout(latir, 1500);
+  // quita recuadros de versiones antiguas (si quedaron instaladas dos copias)
+  setInterval(() => {
+    for (const e of document.querySelectorAll("body > div")) {
+      if (e.dataset.cz15 !== "1" && /CotizÁgil · Firma rápida/.test(e.textContent || "") && e.style.bottom) e.remove();
+    }
+  }, 700);
   if (location.hostname === "www.mercadopublico.cl") {
     pendiente().then((c) => {
       if (!c) return;
@@ -70,13 +106,14 @@
 
   // recuadro pequeño ARRIBA (no tapa el botón verde «Enviar cotización»); se minimiza tocando «–»
   const caja = document.createElement("div");
+  caja.dataset.cz15 = "1";
   caja.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);top:6px;z-index:2147483647;width:min(92vw,340px);background:rgba(11,28,60,.95);color:#f6f8fc;" +
     "border:1.5px solid #7c4dff;border-radius:10px;padding:6px 10px;font:12px/1.35 system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.3)";
   let mini = false, ultimo = "";
   const pintar = () => {
     caja.innerHTML = mini
       ? "<div data-cz='abrir' style='cursor:pointer;text-align:center'>✍ CotizÁgil <span style='opacity:.7'>(ver)</span></div>"
-      : "<div style='display:flex;justify-content:space-between;gap:8px'><b>CotizÁgil <span style='opacity:.6;font-weight:400'>v1.5</span></b><span data-cz='mini' style='cursor:pointer;padding:0 6px;font-size:15px;line-height:1'>–</span></div><div style='margin-top:3px'>" + ultimo + "</div>";
+      : "<div style='display:flex;justify-content:space-between;gap:8px'><b>CotizÁgil <span style='opacity:.6;font-weight:400'>v1.6</span></b><span data-cz='mini' style='cursor:pointer;padding:0 6px;font-size:15px;line-height:1'>–</span></div><div style='margin-top:3px'>" + ultimo + "</div>";
     caja.style.width = mini ? "auto" : "min(92vw,340px)";
     if (!caja.isConnected) document.body.append(caja);
   };
