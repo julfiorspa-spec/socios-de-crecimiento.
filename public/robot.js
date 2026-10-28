@@ -186,7 +186,7 @@
 
   /* ---------------- estado ---------------- */
   const R = { token: leer().token || null, data: null, err: null, previos: {}, timer: null, enCurso: false, foco: null,
-              vista: leer().vista || "cajas", detalle: null, push: false, instalar: null };
+              vista: (leer().v_cajas ? leer().vista : "oport") || "oport", detalle: null, push: false, instalar: null };
 
   async function api(ruta, opt = {}) {
     if (!R.token) throw new Error("Robot sin enlazar");
@@ -619,21 +619,42 @@
   const EN_FIRMA = ["en_cola", "tomado", "preparando", "lista", "firmar", "probada", "requiere", "error",
     "lic_bajando", "lic_captcha", "lic_analizando", "lic_revisar", "lic_lista", "lic_ingresando"];
   const HECHA = ["enviada", "confirmada"];
-  /* ---------- ⭐ Seleccionadas (en este teléfono) ---------- */
+  /* ---------- ⭐ Seleccionadas (compartidas entre tus celulares, guardadas en la nube) ---------- */
   const SELK = "sdc:seleccionadas";
-  const leerSel = () => { try { return JSON.parse(localStorage.getItem(SELK)) || {}; } catch { return {}; } };
-  const guardarSel = (o) => { try { localStorage.setItem(SELK, JSON.stringify(o)); } catch {} };
+  const leerSel = () => R.sel || (() => { try { return JSON.parse(localStorage.getItem(SELK)) || {}; } catch { return {}; } })();
+  const guardarSel = (o) => { R.sel = o; try { localStorage.setItem(SELK, JSON.stringify(o)); } catch {} };
   const esSel = (cod) => !!leerSel()[cod];
-  function alternarSel(cod) {
-    const s = leerSel();
-    if (s[cod]) { delete s[cod]; toast("Quitada de Seleccionadas"); }
-    else {
-      const x = (R.oport?.lista || []).find((y) => y.codigo === cod) || trabajo(cod) || {};
-      s[cod] = { desde: new Date().toISOString(), nombre: x.nombre, organismo: x.organismo, monto: x.monto, cierre: x.cierre };
-      toast("⭐ En Seleccionadas: ahí ajustas el precio");
-    }
-    guardarSel(s);
+  async function cargarSel() {
+    try { const r = await api("seleccionadas"); guardarSel(r.sel || {}); } catch {}
   }
+  function datosOport(cod) {
+    const x = (R.oport?.lista || []).find((y) => y.codigo === cod) || trabajo(cod) || {};
+    return { codigo: cod, nombre: x.nombre, organismo: x.organismo, monto: x.monto, cierre: x.cierre, margen: x.margen };
+  }
+  async function ponerSel(cod, extra) {
+    const s = { ...leerSel() }; s[cod] = { ...(s[cod] || { desde: new Date().toISOString() }), ...datosOport(cod), ...(extra || {}) };
+    guardarSel(s);
+    try { const r = await api("seleccionar", { method: "POST", body: JSON.stringify({ ...datosOport(cod), ...(extra || {}) }) }); if (r.sel) guardarSel(r.sel); } catch (e) { toast(e.message); }
+  }
+  async function quitarSel(cod) {
+    const s = { ...leerSel() }; delete s[cod]; guardarSel(s);
+    try { const r = await api("seleccionar", { method: "POST", body: JSON.stringify({ codigo: cod, quitar: true }) }); if (r.sel) guardarSel(r.sel); } catch (e) { toast(e.message); }
+  }
+  const selTimer = {}, selPend = {};
+  function guardarSelLuego(cod, extra) {          // la barra guarda precio y costo en la nube sin saturar la red
+    const s = { ...leerSel() }; if (!s[cod]) return; s[cod] = { ...s[cod], ...extra }; guardarSel(s);
+    selPend[cod] = { ...(selPend[cod] || {}), ...extra };
+    clearTimeout(selTimer[cod]);
+    selTimer[cod] = setTimeout(() => { const e = selPend[cod]; delete selPend[cod];
+      api("seleccionar", { method: "POST", body: JSON.stringify({ codigo: cod, ...e }) }).catch(() => {}); }, 900);
+  }
+  /* ---------- 📨 seguimiento en vivo (estado en Mercado Público) ---------- */
+  async function cargarSeg(forzar) {
+    if (R._cargandoSeg) return; R._cargandoSeg = true;
+    try { const r = await api("seguimiento" + (forzar ? "?forzar=1" : "")); R.seg = r.seguimiento || {}; R.segT = Date.now(); } catch (e) { R.segErr = e.message; }
+    R._cargandoSeg = false; pintarHoja();
+  }
+  const segDe = (cod) => (R.seg || {})[cod] || null;
   const descartada = (cod) => { const d = { ...(R.oport?.descartes || {}), ...(R.desc || {}) }; return !!d[cod]; };
   function vistaOport() {
     if (!R.oport) { cargarOport(); return `<div class="empty"><span class="spinner"></span> Cargando oportunidades…</div>`; }
@@ -643,7 +664,7 @@
     const trabajos = R.data?.trabajos || [];
     const vigente = (x) => Date.parse(x.cierre) - ahora > 30 * 60000;
     const lista = o.lista || [];
-    const nuevas = lista.filter((x) => vigente(x) && !descartada(x.codigo) && !trabajo(x.codigo) && !x.ya_ofertada && !x.trabajada);
+    const nuevas = lista.filter((x) => vigente(x) && !descartada(x.codigo) && !trabajo(x.codigo) && !x.ya_ofertada && !x.trabajada && !esSel(x.codigo));
     const enFirma = trabajos.filter((t) => EN_FIRMA.includes(t.estado));
     const hechas = [...trabajos.filter((t) => HECHA.includes(t.estado)),
       ...lista.filter((x) => (x.ya_ofertada || x.trabajada) && !trabajo(x.codigo)).map((x) => ({ ...x, _oport: true }))];
@@ -677,41 +698,68 @@
     const ordenF = (t) => ["firmar", "lic_revisar", "lic_lista", "lista"].includes(t.estado) ? 0 : ["requiere", "error"].includes(t.estado) ? 1 : 2;
     const selObj = leerSel();
     const enviadasCods = new Set(trabajos.filter((t) => HECHA.includes(t.estado)).map((t) => t.codigo));
-    const sel = Object.keys(selObj).filter((c) => !enviadasCods.has(c) && !lista.find((x) => x.codigo === c && x.ya_ofertada))
-      .map((c) => ({ ...selObj[c], ...(lista.find((x) => x.codigo === c) || {}), codigo: c, _sel: selObj[c] }));
-    const enviadosT = trabajos.filter((t) => HECHA.includes(t.estado))
-      .sort((a, b) => (b.actualizado || "").localeCompare(a.actualizado || ""));
-    const tabs = [["nuevas", "Por preparar", nuevas.length], ["sel", "⭐ Seleccionadas", sel.length], ["firmar", "✍ Por firmar", enFirma.length],
-      ["hechas", "📨 Enviados", enviadosT.length], ["papelera", "🗑 No deseadas", papelera.length]];
+    // Seleccionadas: las que elegiste y todavía no van al robot (cuando las mandas a firmar pasan a «Por firmar»)
+    const sel = Object.keys(selObj).filter((c) => !enviadasCods.has(c) && !trabajo(c) && !lista.find((x) => x.codigo === c && x.ya_ofertada))
+      .map((c) => ({ ...selObj[c], ...(lista.find((x) => x.codigo === c) || {}), codigo: c, _sel: selObj[c] }))
+      .sort((a, b) => (a.cierre || "9").localeCompare(b.cierre || "9"));
+    if (!R.sel && !R._selPedido) { R._selPedido = true; cargarSel().then(pintarHoja); }
+    const enviadosAll = trabajos.filter((t) => HECHA.includes(t.estado)).sort((a, b) => (b.actualizado || "").localeCompare(a.actualizado || ""));
+    if ((tab === "hechas" || tab === "ganadas" || !R.seg) && enviadosAll.length && (!R.segT || Date.now() - R.segT > 60_000)) cargarSeg(false);
+    const ganadasT = enviadosAll.filter((t) => segDe(t.codigo)?.ganada);
+    const enviadosT = enviadosAll.filter((t) => !segDe(t.codigo)?.ganada);
+    const tabs = [["nuevas", "👆 Por preparar", nuevas.length], ["sel", "⭐ Seleccionadas", sel.length], ["firmar", "✍ Por firmar", enFirma.length],
+      ["hechas", "📨 Enviadas", enviadosT.length], ["ganadas", "🏆 Ganadas", ganadasT.length], ["papelera", "🗑 No deseadas", papelera.length]];
     const tarjetaSel = (x) => {
       const pres = Number(x.monto) || 0;
-      const t = trabajo(x.codigo);
-      const ref = pres;
-      const precio0 = Math.round(x._sel.precio || pres * (1 - (leer().descuento ?? 0.08)));
+      const margenRubro = Number(x._sel.margen ?? x.margen) || 0.2;
+      const costoEst = Math.round(pres / 1.19 * (1 - margenRubro));
+      const costo = Number(x._sel.costo) || 0;
+      const precio0 = Math.round(Math.min(x._sel.precio || pres * (1 - (leer().descuento ?? 0.08)), pres * 1.5));
       const h = x.cierre ? Math.round((Date.parse(x.cierre) - ahora) / 3600000) : null;
-      return `<div class="rb-card rb-sel" data-c="${esc(x.codigo)}" data-pres="${pres}" data-ref="${ref}" style="padding:12px;margin:8px 0">
+      return `<div class="rb-card rb-sel" data-c="${esc(x.codigo)}" data-pres="${pres}" data-costo="${costo || costoEst}" data-est="${costo ? 0 : 1}" style="padding:12px;margin:8px 0">
         <div class="rb-env"><div style="min-width:0"><div style="font-size:.78rem"><b>${esc(x.codigo)}</b>${h != null ? ` · <span style="${h < 12 ? "color:#ff8a80;font-weight:700" : ""}">cierra en ${h} h</span>` : ""}</div>
           <div style="margin:2px 0">${esc(x.nombre || "Compra Ágil")}</div><div class="muted" style="font-size:.74rem">${esc(x.organismo || "")} · Ppto. <b>${clp(pres)}</b></div></div>
-          <button type="button" class="rb-estrella on" data-rb="oport-sel" data-c="${esc(x.codigo)}" title="Quitar">★</button></div>
-        ${t ? `<div style="margin-top:6px">${badge(t)}</div>` : ""}
+          <button type="button" class="rb-estrella on" data-rb="sel-quitar" data-c="${esc(x.codigo)}" title="Devolver a Por preparar">★</button></div>
         ${pres ? `<div style="margin-top:10px"><span class="muted" style="font-size:.74rem">Tu precio con IVA</span><br><span class="rb-precio">${clp(precio0)}</span><span class="rb-pct"></span></div>
-        <input type="range" class="rb-range" min="${Math.round(ref * 0.5)}" max="${Math.round(ref * 1.5)}" step="${Math.max(10, Math.round(ref / 2000 / 10) * 10)}" value="${precio0}">
-        <div class="rb-escala"><span>−50%</span><span>Presupuesto</span><span>+50%</span></div>
+        <input type="range" class="rb-range" min="${Math.round(pres * 0.5)}" max="${Math.round(pres * 1.5)}" step="${Math.max(10, Math.round(pres / 2000 / 10) * 10)}" value="${precio0}">
+        <div class="rb-escala"><span>−50%</span><span>Presupuesto ${clp(pres)}</span><span>+50%</span></div>
         <div class="rb-pasos2"><button class="btn small" type="button" data-paso="-10">−10%</button><button class="btn small" type="button" data-paso="-5">−5%</button><button class="btn small" type="button" data-paso="-1">−1%</button>
           <button class="btn small" type="button" data-paso="1">+1%</button><button class="btn small" type="button" data-paso="5">+5%</button><button class="btn small" type="button" data-paso="10">+10%</button></div>
-        <div class="rb-mini"><div><small>Neto (sin IVA)</small><b class="rb-neto">—</b></div><div><small>Bajo el presupuesto</small><b class="rb-bajo">—</b></div></div>
-        <div class="rb-sobre muted" style="display:none;color:#ff9a9a;font-size:.78rem">⚠ Supera el presupuesto: se ofertará el presupuesto (${clp(pres)}).</div>
-        <button class="btn rb-firmar" type="button" style="width:100%;margin-top:6px" data-rb="sel-preparar" data-c="${esc(x.codigo)}">✍ Preparar con <span class="rb-p2">${clp(Math.min(precio0, pres))}</span></button>`
+        <div class="rb-mini"><div><small>Ganancia</small><b class="rb-gan">—</b></div><div><small>Margen</small><b class="rb-mar">—</b></div>
+          <div><small>Neto (sin IVA)</small><b class="rb-neto">—</b></div><div><small>Bajo el presupuesto</small><b class="rb-bajo">—</b></div></div>
+        <label class="muted" style="font-size:.72rem;display:block">Mi costo neto total <span class="rb-cest">${costo ? "" : `(estimado ${Math.round(margenRubro * 100)}% margen del rubro)`}</span>
+          <input class="rb-costo" inputmode="numeric" value="${(costo || costoEst).toLocaleString("es-CL")}" style="width:100%;margin-top:3px;padding:8px;border-radius:10px;border:1px solid var(--line-soft);background:rgba(255,255,255,.05);color:inherit;font:inherit"></label>
+        <div class="rb-sobre muted" style="display:none;color:#ff9a9a;font-size:.78rem;margin-top:6px">⚠ Supera el presupuesto: se ofertará el presupuesto (${clp(pres)}).</div>
+        <button class="btn rb-firmar" type="button" style="width:100%;margin-top:8px" data-rb="sel-preparar" data-c="${esc(x.codigo)}">✍ Firmar con <span class="rb-p2">${clp(Math.min(precio0, pres))}</span></button>
+        <div class="muted" style="font-size:.7rem;margin-top:4px;text-align:center">el robot arma cotización y PDF y la deja en ✍ Por firmar</div>`
         : `<div class="muted" style="margin-top:8px">Sin presupuesto conocido: abre la compra para ver el monto.</div>`}
       </div>`;
     };
-    const enviado = (t) => `<div class="rb-card verde" style="padding:10px 12px;margin:6px 0">
-      <div class="rb-env"><div style="min-width:0"><div style="font-size:.78rem"><b>${esc(t.codigo)}</b> · ${t.estado === "confirmada" ? "★ Confirmada" : "✓ Enviada"}</div>
+    const chipSeg = (t) => {
+      const g = segDe(t.codigo);
+      if (!g) return `<span class="muted" style="font-size:.74rem">${R._cargandoSeg ? "consultando Mercado Público…" : ""}</span>`;
+      if (g.error && !g.estado) return `<span class="muted" style="font-size:.74rem">sin respuesta de Mercado Público</span>`;
+      const lugar = g.mi_lugar && g.competidores ? ` · tu precio es el ${g.mi_lugar}° más bajo de ${g.competidores}` : "";
+      if (g.ganada) return `<span class="rb-badge" style="background:#16a34a;color:#fff">🏆 ¡Ganada!${g.oc ? " · OC " + esc(g.oc) : ""}</span>`;
+      if (g.estado === "publicada") return `<span class="rb-badge">🟢 Abierta · recibiendo cotizaciones</span>`;
+      if (g.estado === "cerrada") return `<span class="rb-badge" style="background:#7a5b00;color:#fff">⏳ Cerrada · el organismo está evaluando</span><div class="muted" style="font-size:.72rem;margin-top:3px">${g.ofertas || g.competidores || 0} ofertas${lugar}</div>`;
+      if (g.estado === "proveedor_seleccionado") return `<span class="rb-badge" style="background:#5b6470;color:#fff">❌ Eligieron a otro</span><div class="muted" style="font-size:.72rem;margin-top:3px">${esc(g.ganador || "otro proveedor")}${g.ganador_total ? " por " + clp(g.ganador_total) : ""}${lugar}</div>`;
+      if (["cancelada", "desierta"].includes(g.estado)) return `<span class="rb-badge" style="background:#5b6470;color:#fff">${esc(g.glosa || g.estado)}</span>${g.motivo ? `<div class="muted" style="font-size:.72rem">${esc(g.motivo)}</div>` : ""}`;
+      return `<span class="rb-badge">${esc(g.glosa || g.estado || "—")}</span>`;
+    };
+    const enviado = (t) => {
+      const g = segDe(t.codigo);
+      return `<div class="rb-card ${g?.ganada ? "oro" : "verde"}" style="padding:10px 12px;margin:6px 0">
+      <div class="rb-env"><div style="min-width:0"><div style="font-size:.78rem"><b>${esc(t.codigo)}</b> · ${t.estado === "confirmada" ? "★ Enviada y confirmada" : "✓ Enviada"}</div>
         <div style="margin:2px 0">${esc(t.nombre || "Compra Ágil")}</div>
-        <div class="muted" style="font-size:.74rem">${t.fecha_envio ? "📅 " + esc(t.fecha_envio) + " · " : ""}${t.dispositivo ? "📱 " + esc(t.dispositivo) : "equipo no registrado"}</div></div>
+        <div class="muted" style="font-size:.72rem">${t.fecha_envio ? "📅 " + esc(t.fecha_envio) + " · " : ""}${t.dispositivo ? "📱 " + esc(t.dispositivo) : "equipo no registrado"}</div></div>
         <b style="white-space:nowrap">${t.total ? clp(t.total) : ""}</b></div>
-      <div class="row" style="gap:6px;margin-top:6px">${t.pdf ? `<button class="btn small" data-rb="pdf" data-c="${esc(t.codigo)}" type="button">Ver oferta PDF</button>` : ""}
-        <a class="btn small" href="${portalDe(t.codigo)}" target="_blank" rel="noopener noreferrer">Ver en Mercado Público ↗</a></div></div>`;
+      <div style="margin-top:6px">${chipSeg(t)}</div>
+      ${g?.ganada ? `<div style="margin-top:6px;font-size:.8rem">El organismo emitió la <b>orden de compra ${esc(g.oc || "")}</b>. Revísala y acéptala en Mercado Público.</div>` : ""}
+      <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">${t.comprobante ? `<button class="btn small rb-firmar" data-rb="comprobante" data-c="${esc(t.codigo)}" type="button">🧾 Comprobante PDF</button>` : ""}
+        ${t.pdf ? `<button class="btn small" data-rb="pdf" data-c="${esc(t.codigo)}" type="button">Oferta PDF</button>` : ""}
+        <a class="btn small" href="${portalDe(t.codigo)}" target="_blank" rel="noopener noreferrer">Mercado Público ↗</a></div></div>`;
+    };
     let cuerpo;
     if (tab === "nuevas") cuerpo = `<div class="row" style="gap:6px;margin:6px 0">
         <button class="btn small ${filtro === "seg" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="seg">🔥 2° llamado</button>
@@ -719,15 +767,18 @@
         <button class="btn small ${filtro === "todas" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="todas">Compras Ágiles</button>
         <button class="btn small ${filtro === "lic" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="lic">📑 Licitaciones</button>
         <button class="btn small" type="button" data-rb="oport-actualizar">↻ Buscar más</button></div>
-      <div class="muted" style="font-size:.74rem;margin-bottom:4px">Desliza → <b>sí</b> (el robot la prepara) · ← <b>no</b> (va a No deseadas)</div>
+      <div class="muted" style="font-size:.74rem;margin-bottom:4px">Desliza → <b>me gusta</b> (pasa a ⭐ Seleccionadas para elegir el precio) · ← <b>no</b> (va a No deseadas)</div>
       ${verN.slice(0, n).map((x) => fila(x, "nuevas")).join("") || `<div class="empty">No quedan oportunidades en esta vista. Toca «↻ Buscar más».</div>`}
       ${verN.length > n ? `<button class="btn" style="width:100%;margin-top:8px" type="button" data-rb="oport-mas">Ver más (${verN.length - n} restantes)</button>` : ""}`;
     else if (tab === "firmar") cuerpo = enFirma.length ? `<div class="rb-cajas">${[...enFirma].sort((a, b) => ordenF(a) - ordenF(b)).map(caja).join("")}</div>`
       : `<div class="empty">Nada por firmar. Desliza a la derecha en «Por preparar».</div>`;
-    else if (tab === "sel") cuerpo = sel.length ? `<div class="muted" style="font-size:.74rem;margin:6px 0">Mueve la barra para subir o bajar tu precio hasta 50% (referencia: presupuesto). «Preparar» deja la oferta con ese total en ✍ Por firmar.</div>${sel.map(tarjetaSel).join("")}`
-      : `<div class="empty">Toca la ☆ de una compra en «Por preparar» para traerla aquí y jugar con el precio.</div>`;
-    else if (tab === "hechas") cuerpo = enviadosT.length ? `<div class="muted" style="font-size:.74rem;margin:6px 0">${enviadosT.length} enviadas · ${clp(enviadosT.reduce((s, t) => s + (Number(t.total) || 0), 0))} ofertado. El registro PDF para imprimir está en el PC (📨 Enviados).</div>${enviadosT.map(enviado).join("")}`
+    else if (tab === "sel") cuerpo = sel.length ? `<div class="muted" style="font-size:.74rem;margin:6px 0">Ajusta el precio con la barra (hasta 50% bajo o sobre el presupuesto) mirando ganancia y margen. «Firmar» la manda al robot.</div>${sel.map(tarjetaSel).join("")}`
+      : `<div class="empty">Desliza a la derecha las que te gusten en «👆 Por preparar» y aparecen aquí.</div>`;
+    else if (tab === "hechas") cuerpo = enviadosT.length ? `<div class="row" style="justify-content:space-between;align-items:center;margin:6px 0"><span class="muted" style="font-size:.74rem">${enviadosT.length} enviadas · ${clp(enviadosT.reduce((s, t) => s + (Number(t.total) || 0), 0))} · estado en vivo de Mercado Público${R.segT ? " (" + esc(hace(new Date(R.segT).toISOString())) + ")" : ""}</span>
+        <button class="btn small" type="button" data-rb="seg-actualizar">↻</button></div>${enviadosT.map(enviado).join("")}`
       : `<div class="empty">Aún no hay ofertas enviadas.</div>`;
+    else if (tab === "ganadas") cuerpo = ganadasT.length ? `<div class="muted" style="font-size:.74rem;margin:6px 0">${ganadasT.length} ganadas · ${clp(ganadasT.reduce((s, t) => s + (Number(t.total) || 0), 0))} adjudicado</div>${ganadasT.map(enviado).join("")}`
+      : `<div class="empty">${R._cargandoSeg ? "Revisando en Mercado Público…" : "Todavía no hay ganadas. Cuando el organismo te elija aparecen aquí con su orden de compra."}</div>`;
     else cuerpo = papelera.length ? `<div class="muted" style="font-size:.74rem;margin:6px 0">Desliza → o toca «Recuperar» para devolverla a Por preparar.</div>${papelera.map((x) => fila(x, "papelera")).join("")}`
       : `<div class="empty">La papelera está vacía.</div>`;
     return `<div class="muted" style="font-size:.78rem;margin:6px 0">Ordenadas por ganancia estimada · ${o.fecha ? "actualizado " + esc(hace(o.fecha)) : "sin datos aún"}${o.resumen ? ` · ${o.resumen.total} vigentes en el portal` : ""}</div>
@@ -738,7 +789,10 @@
     const x = (R.oport?.lista || []).find((y) => y.codigo === cod);
     const esLic = x?.fuente === "licitacion";
     if (el) { el.style.transition = "transform .25s ease, opacity .25s"; el.style.transform = `translateX(${si ? 130 : -130}%) rotate(${si ? 12 : -12}deg)`; el.style.opacity = "0"; }
-    if (si) {
+    if (si && !esLic) {                               // Compra Ágil: pasa a ⭐ Seleccionadas para elegir el precio
+      toast("⭐ A Seleccionadas: ahí eliges el precio y firmas");
+      await ponerSel(cod);
+    } else if (si) {
       try {
         const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: esLic ? "licitar" : "firmar", ...(esLic ? {} : { descuento: leer().descuento ?? 0.08 }) }) });
         toast(r._status === 409 ? "Ya estaba en manos del robot" : esLic ? "📑 El robot prepara la licitación" : "✍ El robot la deja lista para firmar");
@@ -940,20 +994,29 @@
     if (a === "avisos") { if (await suscribirPush(true)) toast("Avisos activados en este teléfono"); return pintarHoja(); }
     if (a === "push-probar") { try { await api("push-probar", { method: "POST", body: "{}" }); toast("Aviso de prueba enviado"); } catch (e) { toast(e.message); } return; }
     if (a === "instalar") { const p = R.instalar; R.instalar = null; try { await p?.prompt(); } catch {} return pintarHoja(); }
-    if (a === "vista") { R.vista = b.dataset.v; guardar({ vista: R.vista }); if (R.vista === "oport") R.oport = null; return pintarHoja(); }
+    if (a === "vista") { R.vista = b.dataset.v; guardar({ vista: R.vista, v_cajas: 1 }); if (R.vista === "oport") R.oport = null; return pintarHoja(); }
     if (a === "oport-filtro") { R.oportFiltro = b.dataset.f; R.oportN = 40; return pintarHoja(); }
     if (a === "oport-tab") { R.oportTab = b.dataset.t; R.oportN = 40; sheet.scrollTop = 0; return pintarHoja(); }
     if (a === "oport-mas") { R.oportN = (R.oportN || 40) + 40; return pintarHoja(); }
-    if (a === "oport-sel") { alternarSel(cod); return pintarHoja(); }
+    if (a === "oport-sel") { if (esSel(cod)) await quitarSel(cod); else { toast("⭐ A Seleccionadas"); await ponerSel(cod); } return pintarHoja(); }
+    if (a === "sel-quitar") { await quitarSel(cod); toast("↩ De vuelta en Por preparar"); return pintarHoja(); }
+    if (a === "seg-actualizar") { toast("Consultando Mercado Público…"); return cargarSeg(true); }
+    if (a === "comprobante") {
+      const w = window.open("", "_blank");
+      try { const r = await api("comprobante?codigo=" + encodeURIComponent(cod)); const u = URL.createObjectURL(await r.blob()); if (w) w.location = u; else location.href = u; }
+      catch (e) { w?.close(); toast(e.message); }
+      return;
+    }
     if (a === "sel-preparar") {
       const c = b.closest(".rb-sel"); const pres = +c.dataset.pres; const v = Math.min(+c.querySelector(".rb-range").value, pres);
       const descuento = Math.max(0, Math.min(0.6, 1 - v / pres));
-      const s = leerSel(); if (s[cod]) { s[cod].precio = v; guardarSel(s); }
+      guardarSelLuego(cod, { precio: v });
       b.disabled = true;
       try {
         const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "firmar", descuento }) });
-        toast(r._status === 409 ? "Ya estaba en manos del robot" : `✍ El robot la prepara por ${clp(v)}`);
-        await refrescar();
+        toast(r._status === 409 ? "Ya estaba en manos del robot" : `✍ El robot la prepara por ${clp(v)} · la verás en Por firmar`);
+        R.oportTab = "firmar"; R.barra = false; sheet.scrollTop = 0;
+        await refrescar(); pintarHoja();
       } catch (e) { toast(e.message); b.disabled = false; }
       return;
     }
@@ -1067,17 +1130,29 @@
   });
   function pintarSel(c, guardarAhora) {
     const r = c.querySelector(".rb-range"); if (!r) return;
-    const pres = +c.dataset.pres, ref = +c.dataset.ref, v = +r.value;
+    const pres = +c.dataset.pres, v = +r.value, ve = Math.min(v, pres);
+    const costo = +(c.querySelector(".rb-costo")?.value || "").replace(/\D/g, "") || +c.dataset.costo || 0;
     c.querySelector(".rb-precio").textContent = clp(v);
-    const p = c.querySelector(".rb-pct"), d = v / ref - 1;
-    p.textContent = (d > 0 ? "+" : "") + (d * 100).toFixed(1).replace(".", ",") + "%"; p.className = "rb-pct " + (d < 0 ? "baja" : "sube");
-    c.querySelector(".rb-neto").textContent = clp(Math.min(v, pres) / 1.19);
-    c.querySelector(".rb-bajo").textContent = ((1 - Math.min(v, pres) / pres) * 100).toFixed(1).replace(".", ",") + "%";
+    const p = c.querySelector(".rb-pct"), d = v / pres - 1;
+    p.textContent = (d > 0 ? "+" : "") + (d * 100).toFixed(1).replace(".", ",") + "% vs presupuesto"; p.className = "rb-pct " + (d < 0 ? "baja" : "sube");
+    const neto = ve / 1.19, gan = neto - costo, mar = neto ? gan / neto : 0;
+    c.querySelector(".rb-neto").textContent = clp(neto);
+    const g = c.querySelector(".rb-gan"); g.textContent = clp(gan); g.style.color = gan < 0 ? "#ff8a80" : "#7ee2a0";
+    const m = c.querySelector(".rb-mar"); m.textContent = (mar * 100).toFixed(1).replace(".", ",") + "%"; m.style.color = mar < 0 ? "#ff8a80" : mar < 0.08 ? "#ffd88a" : "#7ee2a0";
+    c.querySelector(".rb-bajo").textContent = ((1 - ve / pres) * 100).toFixed(1).replace(".", ",") + "%";
     c.querySelector(".rb-sobre").style.display = v > pres ? "block" : "none";
-    c.querySelector(".rb-p2").textContent = clp(Math.min(v, pres));
+    c.querySelector(".rb-p2").textContent = clp(ve);
     const pct = (v - r.min) / (r.max - r.min) * 100; r.style.background = `linear-gradient(90deg,#7c4dff ${pct}%,#2a3550 ${pct}%)`;
-    if (guardarAhora) { const s = leerSel(); if (s[c.dataset.c]) { s[c.dataset.c].precio = v; guardarSel(s); } }
+    if (guardarAhora) guardarSelLuego(c.dataset.c, { precio: v });
   }
+  sheet.addEventListener("input", (ev) => {
+    const c = ev.target.closest?.(".rb-sel"); if (!c || !ev.target.classList.contains("rb-costo")) return;
+    const n = ev.target.value.replace(/\D/g, ""); ev.target.value = n ? (+n).toLocaleString("es-CL") : "";
+    const e = c.querySelector(".rb-cest"); if (e) e.textContent = "";
+    pintarSel(c, false); guardarSelLuego(c.dataset.c, { costo: +n || null });
+  });
+  sheet.addEventListener("focusin", (ev) => { if (ev.target.classList?.contains("rb-costo")) R.barra = true; });
+  sheet.addEventListener("focusout", (ev) => { if (ev.target.classList?.contains("rb-costo")) setTimeout(() => { R.barra = false; }, 300); });
   // mientras mueves la barra no se repinta la pantalla (si no, la barra «salta»)
   sheet.addEventListener("pointerdown", (ev) => { if (ev.target.classList?.contains("rb-range")) R.barra = true; });
   ["pointerup", "pointercancel"].forEach((n) => document.addEventListener(n, () => { if (R.barra) setTimeout(() => { R.barra = false; }, 400); }));
