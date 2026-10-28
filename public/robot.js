@@ -737,7 +737,7 @@
     };
     const chipSeg = (t) => {
       const g = segDe(t.codigo);
-      if (!g) return `<span class="muted" style="font-size:.74rem">${R._cargandoSeg ? "consultando Mercado Público…" : ""}</span>`;
+      if (!g || g.pendiente) return `<span class="muted" style="font-size:.74rem">⟳ consultando Mercado Público…</span>`;
       if (g.error && !g.estado) return `<span class="muted" style="font-size:.74rem">sin respuesta de Mercado Público</span>`;
       const lugar = g.mi_lugar && g.competidores ? ` · tu precio es el ${g.mi_lugar}° más bajo de ${g.competidores}` : "";
       if (g.ganada) return `<span class="rb-badge" style="background:#16a34a;color:#fff">🏆 ¡Ganada!${g.oc ? " · OC " + esc(g.oc) : ""}</span>`;
