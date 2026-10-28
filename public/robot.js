@@ -228,7 +228,7 @@
   const esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
   const instalada = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
   function abrirEnSafari(cod) {
-    const url = portalDe(cod);
+    const url = location.origin + "/firmar.html#" + encodeURIComponent(cod);   // puente: recuerda la compra y vuelve a ella tras iniciar sesión
     document.getElementById("rbSafari")?.remove();
     const d = document.createElement("div");
     d.id = "rbSafari";
@@ -238,8 +238,8 @@
         <b data-x="estado">Copiando enlace de ${esc(cod)}…</b><span data-x="cerrar" style="cursor:pointer;font-size:18px;padding:0 4px;line-height:1">×</span></div>
       <div style="margin-top:4px;opacity:.9">Abre <b>Safari</b>, mantén presionada la barra de direcciones → <b>Pegar e ir</b>. Se llena sola.</div>
       <div style="margin-top:6px;display:flex;gap:12px;font-size:12px">
-        <span data-x="copiar" style="color:#d9c9ff;text-decoration:underline;cursor:pointer">Copiar de nuevo</span>
-        <a href="x-safari-${url}" style="color:#9fb0cc">Intentar abrir Safari</a></div>`;
+        <span data-x="copiar" style="color:#d9c9ff;text-decoration:underline;cursor:pointer">Copiar de nuevo</span></div>
+      <a href="x-safari-${url}" style="display:block;margin-top:8px;text-align:center;background:#7c4dff;color:#fff;border-radius:9px;padding:9px;font-weight:700;text-decoration:none">Abrir compra en Safari</a>`;
     const estado = (txt) => { const b = d.querySelector("[data-x=estado]"); if (b) b.textContent = txt; };
     const copiarYa = async () => estado((await copiar(url)) ? `✓ Enlace de ${cod} copiado` : "No se pudo copiar: toca «Copiar de nuevo»");
     d.addEventListener("click", (ev) => {
