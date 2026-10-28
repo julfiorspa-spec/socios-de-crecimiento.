@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      1.3
+// @version      1.4
 // @description  Al abrir una Compra Ágil desde «Ir a firmar», carga sola los precios, el detalle y el PDF de tu oferta. NO envía, NO declara y NO firma: eso lo haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -58,10 +58,20 @@
   // 2) En Mercado Público (aplicación de una sola página: se vigila la dirección)
   let token = null;
 
+  // recuadro pequeño ARRIBA (no tapa el botón verde «Enviar cotización»); se minimiza tocando «–»
   const caja = document.createElement("div");
-  caja.style.cssText = "position:fixed;right:14px;bottom:14px;z-index:2147483647;max-width:380px;background:#0b1c3c;color:#f6f8fc;" +
-    "border:2px solid #7c4dff;border-radius:14px;padding:12px 14px;font:14px/1.45 system-ui,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.35)";
-  const decir = (html) => { caja.innerHTML = "<b>CotizÁgil · Firma rápida</b><div style='margin-top:6px'>" + html + "</div>"; if (!caja.isConnected) document.body.append(caja); };
+  caja.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);top:6px;z-index:2147483647;width:min(92vw,340px);background:rgba(11,28,60,.95);color:#f6f8fc;" +
+    "border:1.5px solid #7c4dff;border-radius:10px;padding:6px 10px;font:12px/1.35 system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.3)";
+  let mini = false, ultimo = "";
+  const pintar = () => {
+    caja.innerHTML = mini
+      ? "<div data-cz='abrir' style='cursor:pointer;text-align:center'>✍ CotizÁgil <span style='opacity:.7'>(ver)</span></div>"
+      : "<div style='display:flex;justify-content:space-between;gap:8px'><b>CotizÁgil</b><span data-cz='mini' style='cursor:pointer;padding:0 6px;font-size:15px;line-height:1'>–</span></div><div style='margin-top:3px'>" + ultimo + "</div>";
+    caja.style.width = mini ? "auto" : "min(92vw,340px)";
+    if (!caja.isConnected) document.body.append(caja);
+  };
+  caja.addEventListener("click", (e) => { const a = e.target.closest("[data-cz]")?.dataset.cz; if (a === "mini") { mini = true; pintar(); } if (a === "abrir") { mini = false; pintar(); } });
+  const decir = (html) => { ultimo = html; pintar(); };
 
   const pedir = async (ruta, tipo, cuerpo) => {
     try {
@@ -173,7 +183,7 @@
     const ok = tp != null && Math.abs(tp - t.firma.total) <= 50 && !malos.length;
     decir((ok ? "✓ Precios y detalle cargados. Total " + clp(tp) + " = oferta." :
       "⚠ Revisa: " + (malos.length ? "corrige " + malos.join(", ") + ". " : "") + "Total portal " + (tp == null ? "?" : clp(tp)) + " · oferta " + clp(t.firma.total) + ".") +
-      "<br>" + adj + "<br><br><b>Ahora tú:</b> presiona <b>Enviar cotización</b>, marca la <b>declaración</b> y <b>firma</b>." +
-      "<br><small style='opacity:.75'>Al terminar, el robot lo confirma solo.</small>");
+      "<br>" + adj + "<br><b>Ahora tú:</b> Enviar cotización → declaración → firma.");
+    if (ok) setTimeout(() => { mini = true; pintar(); }, 8000);   // todo bien: se achica solo para dejarte firmar
   }
 })();
