@@ -227,6 +227,27 @@
   /* ---------------- app instalable + avisos push ---------------- */
   const esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
   const instalada = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  function abrirEnSafari(cod) {
+    const url = portalDe(cod);
+    document.getElementById("rbSafari")?.remove();
+    const d = document.createElement("div");
+    d.id = "rbSafari";
+    d.style.cssText = "position:fixed;inset:0;z-index:2147483646;background:rgba(5,12,28,.82);display:flex;align-items:flex-end;justify-content:center;padding:16px";
+    d.innerHTML = `<div style="width:100%;max-width:440px;background:#0b1c3c;color:#f6f8fc;border:2px solid #7c4dff;border-radius:18px;padding:18px;font:15px/1.45 system-ui,sans-serif">
+      <b style="font-size:17px">✍ Firmar ${esc(cod)}</b>
+      <div style="margin:8px 0 14px;opacity:.85">La compra se llena sola <b>en Safari</b> (ahí está Firma rápida y tu sesión de Mercado Público).</div>
+      <a href="x-safari-${url}" style="display:block;text-align:center;background:#7c4dff;color:#fff;border-radius:12px;padding:14px;font-weight:700;text-decoration:none">Abrir en Safari</a>
+      <button type="button" data-x="copiar" style="display:block;width:100%;margin-top:10px;background:transparent;color:#d9c9ff;border:1px solid #7c4dff;border-radius:12px;padding:12px;font:inherit">Copiar enlace (pégalo en Safari)</button>
+      <button type="button" data-x="cerrar" style="display:block;width:100%;margin-top:8px;background:transparent;color:#9fb0cc;border:0;padding:8px;font:inherit">Cerrar</button>
+      <div style="margin-top:6px;font-size:12px;opacity:.6">Si «Abrir en Safari» no hace nada, usa «Copiar enlace»: abre Safari, mantén presionada la barra de direcciones → Pegar e ir.</div></div>`;
+    d.addEventListener("click", async (ev) => {
+      const x = ev.target.closest("[data-x]")?.dataset.x;
+      if (ev.target === d || x === "cerrar") d.remove();
+      if (x === "copiar") { const ok = await copiar(url); ev.target.textContent = ok ? "Copiado ✓ — ahora ábrelo en Safari" : "No se pudo copiar"; }
+      if (ev.target.closest("a")) setTimeout(() => d.remove(), 800);
+    });
+    document.body.append(d);
+  }
   async function registrarSW() {
     if (!("serviceWorker" in navigator)) return null;
     try { return await navigator.serviceWorker.register("/sw.js", { scope: "/" }); } catch { return null; }
@@ -637,16 +658,10 @@
     if (a === "marcador-arrastrar") { ev.preventDefault(); toast("Arrástralo a la barra de favoritos; se usa en Mercado Público"); return; }
     if (a === "ir-firmar") {
       const t = trabajo(cod); if (!t?.firma) return;
+      // iPhone con la app en la pantalla de inicio: la ventana interna NO tiene la extensión ni tu sesión.
+      // Nunca se abre ahí: se ofrece abrir en Safari (toque directo del usuario) o copiar el enlace.
+      if (esIOS && instalada()) { abrirEnSafari(cod); return; }
       toast(firmaRapida() ? "Abriendo la compra: Firma rápida carga precios, detalle y PDF" : "Abriendo la compra: ahí toca tu marcador «Rellenar»");
-      // iPhone con la app en la pantalla de inicio: abrir en Safari de verdad (ahí funciona Firma rápida y está tu sesión)
-      if (esIOS && instalada()) {
-        const t0 = Date.now();
-        location.href = "x-safari-" + portalDe(cod);
-        setTimeout(() => {                       // si este iPhone no acepta abrir Safari así, se abre como siempre
-          if (document.visibilityState === "visible" && Date.now() - t0 < 4000) window.open(portalDe(cod), "_blank");
-        }, 1800);
-        return;
-      }
       const w = window.open(portalDe(cod), "_blank");
       if (w) { try { w.opener = null; } catch {} } else location.href = portalDe(cod);
       return;
