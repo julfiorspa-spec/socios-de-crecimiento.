@@ -637,6 +637,15 @@
     if (a === "ir-firmar") {
       const t = trabajo(cod); if (!t?.firma) return;
       toast(firmaRapida() ? "Abriendo la compra: Firma rápida carga precios, detalle y PDF" : "Abriendo la compra: ahí toca tu marcador «Rellenar»");
+      // iPhone con la app en la pantalla de inicio: abrir en Safari de verdad (ahí funciona Firma rápida y está tu sesión)
+      if (esIOS && instalada()) {
+        const t0 = Date.now();
+        location.href = "x-safari-" + portalDe(cod);
+        setTimeout(() => {                       // si este iPhone no acepta abrir Safari así, se abre como siempre
+          if (document.visibilityState === "visible" && Date.now() - t0 < 4000) window.open(portalDe(cod), "_blank");
+        }, 1800);
+        return;
+      }
       const w = window.open(portalDe(cod), "_blank");
       if (w) { try { w.opener = null; } catch {} } else location.href = portalDe(cod);
       return;
