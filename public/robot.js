@@ -44,6 +44,16 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const clp = (n) => n == null || isNaN(n) ? "—" : "$" + Math.round(n).toLocaleString("es-CL");
+  // 💰 tope legal de la Compra Ágil: 100 UTM (valor SII del mes; ofertas sobre el presupuesto permitidas hasta ese tope)
+  const UTM = { "2026-09": 71721, "2026-10": 72151, "2026-11": 72440 };
+  const utmHoy = () => { const k = new Date().toISOString().slice(0, 7), ks = Object.keys(UTM).sort(); return UTM[k] || UTM[ks.filter((x) => x <= k).pop() || ks[0]]; };
+  const TOPE_CA = () => 100 * utmHoy();
+  // barra en 2 tramos: 75% del recorrido = −50%…+50% del presupuesto (precisión), 25% final = hasta las 100 UTM
+  const tramos = (r) => { const lo = +r.dataset.lo, mid = +r.dataset.mid, hi = +r.dataset.hi; return { lo, mid, hi, k: hi > mid ? 0.75 : 1 }; };
+  const precioDe = (r) => { const { lo, mid, hi, k } = tramos(r), p = +r.value / 1000;
+    const v = p <= k ? lo + (Math.min(mid, hi) - lo) * p / k : mid + (hi - mid) * (p - k) / (1 - k); return Math.round(v / 10) * 10; };
+  const posDe = (r, v) => { const { lo, mid, hi, k } = tramos(r); v = Math.max(lo, Math.min(hi, v));
+    return Math.round(1000 * (v <= Math.min(mid, hi) ? (v - lo) / ((Math.min(mid, hi) - lo) || 1) * k : k + (v - mid) / ((hi - mid) || 1) * (1 - k))); };
   const cortoG = (n) => Math.abs(n) >= 1e6 ? (n < 0 ? "−" : "") + "$" + (Math.abs(n) / 1e6).toFixed(Math.abs(n) >= 1e7 ? 0 : 1).replace(".", ",") + "M" : clp(n);
   // números que «suben» al aparecer (sensación de crecer); solo animan cuando el valor cambia
   function contar(box) {
@@ -1125,7 +1135,8 @@
       const margenRubro = Number(x._sel.margen ?? x.margen) || 0.2;
       const costoEst = Math.round(pres / 1.19 * (1 - margenRubro));
       const costo = Number(x._sel.costo) || 0;
-      const precio0 = Math.round(Math.min(x._sel.precio || pres * (1 - sugerido(x).d), pres * 1.5));
+      // 1er llamado: se puede ofertar sobre el presupuesto hasta 100 UTM · 2° llamado: tope = el presupuesto
+      const tope = esSeg(x) ? Math.min(pres, TOPE_CA()) : TOPE_CA(), precio0 = Math.round(Math.min(x._sel.precio || pres * (1 - sugerido(x).d), tope));
       const h = x.cierre ? Math.round((Date.parse(x.cierre) - ahora) / 3600000) : null;
       const of = x.ofertas ?? null, seg = esSeg(x);
       const rival = of === 0 ? `<span class="rb-rival solo">🎯 Vas solo</span>` : of != null && of <= 2 ? `<span class="rb-rival pocos">${of} rival${of === 1 ? "" : "es"}</span>`
@@ -1137,8 +1148,9 @@
           <div style="margin:3px 0;font-weight:600">${esc(x.nombre || "Compra Ágil")}</div><div class="muted" style="font-size:.74rem">${esc(x.organismo || "")} · Ppto. <b>${clp(pres)}</b> ${rival}</div></div>
           <button type="button" class="rb-estrella on" data-rb="sel-quitar" data-c="${esc(x.codigo)}" title="Devolver a Por preparar">★</button></div>
         ${pres ? `<div style="margin-top:12px;display:flex;justify-content:space-between;align-items:flex-end;gap:8px"><div><span class="muted" style="font-size:.72rem;letter-spacing:.06em;text-transform:uppercase">Tu apuesta (con IVA)</span><br><span class="rb-precio rb-oro-t">${clp(precio0)}</span></div><span class="rb-pct"></span></div>
-        <input type="range" class="rb-range" min="${Math.round(pres * 0.5)}" max="${Math.round(pres * 1.5)}" step="${Math.max(10, Math.round(pres / 4000 / 10) * 10)}" value="${precio0}">
-        <div class="rb-escala"><span>−50%</span><span>Presupuesto ${clp(pres)}</span><span>+50%</span></div>
+        <input type="range" class="rb-range" min="0" max="1000" step="1" data-lo="${Math.round(pres * 0.5)}" data-mid="${Math.round(Math.min(pres * 1.5, tope))}" data-hi="${tope}" value="0" data-v0="${precio0}">
+        ${tope > pres * 1.5 ? `<div class="rb-escala" style="position:relative;display:block;height:15px"><span style="position:absolute;left:0">−50%</span><span style="position:absolute;left:37.5%;transform:translateX(-50%)">Ppto. ${cortoG(pres)}</span><span style="position:absolute;left:75%;transform:translateX(-50%)">+50%</span><span style="position:absolute;right:0;color:#f5cf6b">100 UTM</span></div>`
+          : `<div class="rb-escala"><span>−50%</span><span>Ppto. ${cortoG(pres)}</span><span>${tope <= pres ? "tope 2° llamado" : tope < pres * 1.5 ? "100 UTM" : "+50%"}</span></div>`}
         <div class="rb-ticket">
           <div class="t"><span>🎰 Ticket de inversión</span><span class="rb-cuota">x—</span></div>
           <div class="g"><div><small>Inviertes</small><b class="rb-inv">—</b></div><div class="flecha">➜</div><div><small>Te pagan (neto)</small><b class="rb-neto">—</b></div></div>
@@ -1150,12 +1162,13 @@
         <div class="rb-chips2"><button class="btn small" type="button" data-paso="-1">−1%</button>
           <button class="btn small rb-sugb" type="button" data-fijo="${vSug}" title="${esc(sg.por)}">💡 ${cortoG(vSug)}</button>
           <button class="btn small rb-soltar ${of != null && of <= 1 ? "brilla" : ""}" type="button" data-fijo="${pres}">🔓 Todo ${cortoG(pres)}</button>
+          ${tope > pres ? `<button class="btn small rb-soltar" type="button" style="grid-column:1/-1;order:9" data-fijo="${tope}" title="Tope legal de la Compra Ágil">🚀 Soltar hasta 100 UTM · ${clp(tope)}</button>` : `<span class="muted" style="grid-column:1/-1;order:9;font-size:.68rem;text-align:center">🔒 2° llamado: el tope es el presupuesto</span>`}
           <button class="btn small" type="button" data-paso="1">+1%</button></div>
         <div class="muted" style="font-size:.7rem;margin-top:4px">💡 ${esc(sg.por)}</div>
         <details class="rb-det"><summary>✎ Mi costo: <b class="rb-cvis">${clp(costo || costoEst)}</b> <span class="rb-cest">${costo ? "" : `(estimado ${Math.round(margenRubro * 100)}% margen)`}</span></summary>
           <input class="rb-costo rb-in" inputmode="numeric" value="${(costo || costoEst).toLocaleString("es-CL")}" style="margin-top:6px"></details>
-        <div class="rb-sobre muted" style="display:none;color:#ff9a9a;font-size:.78rem;margin-top:6px">⚠ Supera el presupuesto: se ofertará el presupuesto (${clp(pres)}).</div>
-        <button class="btn rb-firmar" type="button" style="width:100%;margin-top:10px;padding:14px;font-size:1rem" data-rb="sel-preparar" data-c="${esc(x.codigo)}">✍ Apostar y firmar <span class="rb-p2">${clp(Math.min(precio0, pres))}</span></button>
+        <div class="rb-sobre muted" style="display:none;color:#ffd88a;font-size:.78rem;margin-top:6px">⚠ Sobre el presupuesto (${clp(pres)}): se oferta igual, hasta el tope de 100 UTM (${clp(tope)}). El organismo puede preferir una más barata.</div>
+        <button class="btn rb-firmar" type="button" style="width:100%;margin-top:10px;padding:14px;font-size:1rem" data-rb="sel-preparar" data-c="${esc(x.codigo)}">✍ Apostar y firmar <span class="rb-p2">${clp(precio0)}</span></button>
         <div class="muted" style="font-size:.68rem;margin-top:5px;text-align:center">el robot arma cotización y PDF y la deja en ✍ Firmar</div>`
         : `<div class="muted" style="margin-top:8px">Sin presupuesto conocido: abre la compra para ver el monto.</div>`}
       </div>`;
@@ -1378,8 +1391,8 @@
   // ⭐ Jugar: derecha = apuesto y firmo (va al robot), izquierda = paso (vuelve a Oportunidades)
   async function selFirmar(c, b) {
     if (!c) return; const cod = c.dataset.c;
-    const pres = +c.dataset.pres; const v = Math.min(c.dataset.v ? +c.dataset.v : +c.querySelector(".rb-range").value, pres);
-    const descuento = Math.max(0, Math.min(0.6, 1 - v / pres));
+    const pres = +c.dataset.pres, r = c.querySelector(".rb-range"); const v = Math.min(c.dataset.v ? +c.dataset.v : precioDe(r), +r.dataset.hi || TOPE_CA());
+    const descuento = Math.min(0.6, 1 - v / pres);          // negativo = sobre el presupuesto
     guardarSelLuego(cod, { precio: v });
     if (b) b.disabled = true;
     R.selFuera = { ...(R.selFuera || {}), [cod]: 1 }; R.barra = false;
@@ -2219,7 +2232,8 @@
   }
   function pintarSel(c, guardarAhora) {
     const r = c.querySelector(".rb-range"); if (!r) return;
-    const pres = +c.dataset.pres, v = c.dataset.v ? +c.dataset.v : +r.value, ve = Math.min(v, pres);
+    if (r.dataset.v0) { r.value = posDe(r, +r.dataset.v0); if (!c.dataset.v) c.dataset.v = r.dataset.v0; delete r.dataset.v0; }
+    const pres = +c.dataset.pres, v = c.dataset.v ? +c.dataset.v : precioDe(r), ve = Math.min(v, +r.dataset.hi || v);
     const costo = +(c.querySelector(".rb-costo")?.value || "").replace(/\D/g, "") || +c.dataset.costo || 0;
     const q = (k) => c.querySelector(k);
     q(".rb-precio").textContent = clp(v);
@@ -2235,7 +2249,7 @@
     q(".rb-ev").textContent = clp(Math.max(0, gan) * pg);
     q(".rb-sobre").style.display = v > pres ? "block" : "none";
     q(".rb-p2").textContent = clp(ve);
-    const pct = (v - r.min) / (r.max - r.min) * 100; r.style.background = `linear-gradient(90deg,#c48f17,#f5cf6b ${pct}%,rgba(255,255,255,.12) ${pct}%)`;
+    const pct = r.value / 10; r.style.background = `linear-gradient(90deg,#c48f17,#f5cf6b ${pct}%,rgba(255,255,255,.12) ${pct}%)`;
     if (guardarAhora) guardarSelLuego(c.dataset.c, { precio: v });
   }
   sheet.addEventListener("input", (ev) => {
@@ -2287,9 +2301,9 @@
   sheet.addEventListener("click", (ev) => {
     const b = ev.target.closest?.("[data-paso],[data-fijo]"); if (!b) return;
     const c = b.closest(".rb-sel"); if (!c) return; const r = c.querySelector(".rb-range");
-    const base = c.dataset.v ? +c.dataset.v : +r.value;
-    const nv = b.dataset.fijo ? Math.max(+r.min, Math.min(+r.max, +b.dataset.fijo)) : Math.max(+r.min, Math.min(+r.max, Math.round(base * (1 + b.dataset.paso / 100))));
-    r.value = nv; c.dataset.v = nv; pintarSel(c, true);
+    const base = c.dataset.v ? +c.dataset.v : precioDe(r), lo = +r.dataset.lo, hi = +r.dataset.hi;
+    const nv = b.dataset.fijo ? Math.max(lo, Math.min(hi, +b.dataset.fijo)) : Math.max(lo, Math.min(hi, Math.round(base * (1 + b.dataset.paso / 100) / 10) * 10));
+    r.value = posDe(r, nv); c.dataset.v = nv; pintarSel(c, true);
   });
   new MutationObserver(() => sheet.querySelectorAll(".rb-sel").forEach((c) => { if (!c.dataset.ok) { c.dataset.ok = 1; pintarSel(c, false); } }))
     .observe(sheet, { childList: true, subtree: true });
