@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      1.9
+// @version      2.0
 // @description  Al abrir una Compra Ágil desde «Ir a firmar», carga sola los precios, el detalle y el PDF de tu oferta. NO envía, NO declara y NO firma: eso lo haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -130,7 +130,7 @@
   const pintar = () => {
     caja.innerHTML = mini
       ? "<div data-cz='abrir' style='cursor:pointer;text-align:center'>✍ CotizÁgil <span style='opacity:.7'>(ver)</span></div>"
-      : "<div style='display:flex;justify-content:space-between;gap:8px'><b>CotizÁgil <span style='opacity:.6;font-weight:400'>v1.6</span></b><span data-cz='mini' style='cursor:pointer;padding:0 6px;font-size:15px;line-height:1'>–</span></div><div style='margin-top:3px'>" + ultimo + "</div>";
+      : "<div style='display:flex;justify-content:space-between;gap:8px'><b>CotizÁgil <span style='opacity:.6;font-weight:400'>v2.0</span></b><span data-cz='mini' style='cursor:pointer;padding:0 6px;font-size:15px;line-height:1'>–</span></div><div style='margin-top:3px'>" + ultimo + "</div>";
     caja.style.width = mini ? "auto" : "min(92vw,340px)";
     if (!caja.isConnected) document.body.append(caja);
   };
@@ -175,16 +175,39 @@
   const clp = (n) => "$" + Math.round(n).toLocaleString("es-CL");
 
   const hechas = new Set();
+  // 🟢 botón verde «Enviar cotización»: te lleva hasta él y lo marca; al tocarlo se recuerda qué compra estás enviando
+  const botonEnviar = () => [...document.querySelectorAll("button")].find((b) => /enviar cotizaci/i.test(b.innerText || "") && b.getBoundingClientRect().height > 0);
+  function irAlBoton() {
+    const b = botonEnviar(); if (!b) return false;
+    b.scrollIntoView({ behavior: "auto", block: "center" });
+    b.style.outline = "4px solid #f5cf6b"; b.style.outlineOffset = "3px"; b.style.boxShadow = "0 0 0 8px rgba(245,207,107,.35)";
+    return true;
+  }
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest("button"); if (!b) return;
+    const c = (location.pathname.match(/resumen-cotizacion\/([\w-]+)/) || [])[1];
+    if (c && /enviar cotizaci|firmar|confirmar|aceptar|declaro/i.test(b.innerText || "")) gmSet("enviando", JSON.stringify({ cod: c.toUpperCase(), t: Date.now() }));
+  }, true);
+  // el texto de la página SIN el recuadro de CotizÁgil (para no confundirse con nuestros propios mensajes)
+  const textoPagina = () => [...document.body.children].filter((e) => e !== caja).map((e) => e.innerText || "").join("\n");
+  // ojo: «Cotizaciones recibidas: 5» NO cuenta (es el contador de la compra); solo «tu cotización fue enviada», «enviada con éxito», etc.
+  const YA_ENVIADA = /\b(tu |su |la )?(cotizaci[oó]n|oferta) (fue |ha sido |se ha |se )?(enviada|ingresada|publicada|recibida)\b|enviad[ao] (correctamente|con [ée]xito|exitosamente)|\b(editar|retirar|modificar) (mi |tu |la )?cotizaci[oó]n\b|ya (enviaste|cotizaste|participaste)/i;
+  const hayFormulario = () => !!botonEnviar() || [...document.querySelectorAll("button")].some((b) => /^\s*participar\s*$/i.test(b.innerText || ""));
   async function revisar() {
     const ruta = location.pathname + location.search;
     const publicada = (ruta.match(/cotizacion-publicada\?quote=([\w-]+)/) || [])[1];
     const cod = (location.pathname.match(/resumen-cotizacion\/([\w-]+)/) || [])[1];
-    // terminaste de firmar («Cotización enviada correctamente»): el robot lo confirma, queda en «Enviados» y se cierra esta pestaña
-    const okTexto = cod && /cotizaci[oó]n (fue )?enviada correctamente|tu cotizaci[oó]n fue enviada/i.test(document.body.innerText || "");
-    const lista = publicada || (okTexto ? cod : null);
+    // terminaste de firmar: Mercado Público lo dice en la página (o te cambió de página justo después de tocar Enviar/Firmar)
+    const txt = textoPagina();
+    let lista = publicada || (cod && YA_ENVIADA.test(txt) && !hayFormulario() ? cod : null);
+    if (!lista) {
+      try { const en = JSON.parse((await gmGet("enviando")) || "null");
+        if (en && Date.now() - en.t < 15 * 60000 && (!cod || cod.toUpperCase() !== en.cod) && (YA_ENVIADA.test(txt) || /publicada|exito|confirmaci/i.test(location.pathname))) lista = en.cod;
+      } catch (e) {}
+    }
     if (lista && !hechas.has("v" + lista)) {
       hechas.add("v" + lista);
-      gmSet("pendiente", "null");
+      gmSet("pendiente", "null"); gmSet("enviando", "null");
       if (!token) return;
       const ua = navigator.userAgent;
       const disp = (await gmGet("dispositivo")) || (/iphone/i.test(ua) ? "iPhone" : /android/i.test(ua) ? "Android" : "Celular");
@@ -265,6 +288,8 @@
     decir((ok ? "✓ Precios y detalle cargados. Total " + clp(tp) + " = oferta." :
       "⚠ Revisa: " + (malos.length ? "corrige " + malos.join(", ") + ". " : "") + "Total portal " + (tp == null ? "?" : clp(tp)) + " · oferta " + clp(t.firma.total) + ".") +
       "<br>" + adj + "<br><b>Ahora tú:</b> Enviar cotización → declaración → firma.");
-    if (ok) setTimeout(() => { mini = true; pintar(); }, 4000);   // todo bien: se achica solo para dejarte firmar
+    // ⬇ te lleva al botón verde «Enviar cotización» (y otra vez por si la página se movió al cargar el PDF)
+    setTimeout(irAlBoton, 700); setTimeout(irAlBoton, 2500);
+    if (ok) setTimeout(() => { mini = true; pintar(); }, 2500);   // todo bien: se achica solo para dejarte firmar
   }
 })();
