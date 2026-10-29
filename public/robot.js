@@ -1386,6 +1386,11 @@
       const izquierda = horiz && (dx < -ancho * 0.28 || (dx < -30 && vel < -0.45));
       c.style.willChange = "";
       const modoSel = c.dataset.modo === "sel", modoOc = c.dataset.modo === "oc", modoFir = c.dataset.modo === "fir";
+      if (c.dataset.modo === "llam") {
+        c.classList.add("vuela"); c.style.transform = ""; c.querySelectorAll(".rb-sello").forEach((x) => (x.style.opacity = 0));
+        if (derecha) confirmarLlamada(c.dataset.c); else if (izquierda) { R.llamada.idx = (R.llamada.idx || 0) + 1; if (R.llamada.idx >= (R.llamada.cands || []).length) R.llamada.cands = []; pintarHoja(true); }
+        return fin();
+      }
       if (modoFir) {
         c.classList.add("vuela"); c.style.transform = ""; c.querySelectorAll(".rb-sello").forEach((x) => (x.style.opacity = 0));
         if (derecha) irFirmar(c.dataset.c); else if (izquierda) quitarFirma(c.dataset.c, c);
@@ -1468,51 +1473,103 @@
     return ts.map((t) => [ws.filter((w) => n((t.nombre || "") + " " + (t.organismo || "") + " " + t.codigo).includes(w.length > 5 ? w.slice(0, -1) : w)).length, t])
       .filter(([p]) => p).sort((a, b) => b[0] - a[0]).slice(0, 3).map(([, t]) => t);
   }
+  // las compras a las que pudo referirse quien llamó: primero las ENVIADAS (con comprobante) y ganadas
+  function candidatasLlamada(texto) {
+    const ts = (R.data?.trabajos || []).filter((t) => t.total || HECHA.includes(t.estado));
+    const cods = (String(texto).toUpperCase().match(COD_CA_G) || []);
+    if (cods.length) return ts.filter((t) => cods.includes(t.codigo)).map((t) => t.codigo);
+    const ws = norm(texto).split(/[^a-z0-9ñ]+/).filter((w) => w.length > 3 && !/^(llamaron|llamo|llamado|quiere|saber|sobre|oferta|compra|para|cliente|hola|como|tiene|dice|dijo|proveedor|desde|esta|este)$/.test(w));
+    const pts = (t) => { const h = norm(`${t.nombre || ""} ${t.organismo || ""} ${t.codigo} ${t.detalle || ""}`); return ws.reduce((s2, w) => s2 + (h.includes(w.length > 5 ? w.slice(0, -1) : w) ? (w.length > 6 ? 2 : 1) : 0), 0); };
+    const g = (t) => (segDe(t.codigo)?.ganada ? 3 : HECHA.includes(t.estado) ? 2 : 0);
+    return ts.map((t) => [pts(t), g(t), t]).filter(([p2]) => p2 > 0).sort((a, b) => b[0] - a[0] || b[1] - a[1] || (b[2].actualizado || "").localeCompare(a[2].actualizado || "")).slice(0, 6).map(([, , t]) => t.codigo);
+  }
+  function correoProveedores(t, F, W) {
+    const inf = t.op?.informe || {};
+    const prods = (F?.productos || []).length ? F.productos.map((x) => `- ${x.cantidad ?? ""} ${x.unidad || ""} ${x.nombre}${x.detalle ? " (" + String(x.detalle).slice(0, 110) + ")" : ""}`)
+      : (W?.items || []).map((i) => `- ${i.q} x ${i.d}`);
+    const emp = empresaActual() || {};
+    return { asunto: `Solicitud de cotización · ${t.nombre || t.codigo}`.slice(0, 120),
+      cuerpo: `Estimados,\n\nJunto con saludar, solicitamos cotización con factura de los siguientes productos:\n${prods.join("\n") || "- (ver detalle adjunto)"}\n\n` +
+        `Entrega en: ${F?.direccion || inf.direccion || "(por confirmar)"}${F?.plazo_dias ? " · plazo " + F.plazo_dias + " días" : ""}.\n` +
+        `Agradeceremos indicar precio unitario neto, descuento por volumen o pago contado, stock, plazo de entrega y costo de despacho.\n\n` +
+        `Saludos cordiales,\n${emp.contacto || ""}\n${emp.razon_social || ""}${emp.telefono ? "\n" + emp.telefono : ""}${emp.email ? "\n" + emp.email : ""}` };
+  }
   function pantallaLlamada() {
     const q = R.llamada || {}, r = q.respuesta;
-    const loc = q.texto ? buscarLocal(q.texto) : [];
     const verd = r ? ({ si: ["✅ SÍ DA", "si"], no: ["❌ NO DA", "no"] }[r.da] || ["🤔 DEPENDE", "dep"]) : null;
-    const g = (c) => segDe(c) || {};
-    const fichaLocal = (t) => { const inf = t.op?.informe || {}, s2 = g(t.codigo);
-      return `<div class="rb-card rb-mini2"><div class="rb-env"><b>${esc(t.codigo)}</b><span class="rb-pill">${esc(s2.ganada ? "🏆 ganada" : s2.glosa || est(t.estado).txt)}</span></div>
-        <div class="rb-fnom">${esc(t.nombre || "")}</div><div class="muted" style="font-size:.72rem">${esc(t.organismo || "")}</div>
-        <div class="rb-kv"><span>Ofertamos <b>${clp(t.total)}</b></span>${inf.final != null ? `<span>Utilidad <b class="${inf.final < 0 ? "rb-neg-t" : "rb-vivo-t"}">${inf.incompleto ? "por confirmar" : clp(inf.final)}</b></span>` : ""}${s2.mi_lugar ? `<span>Lugar <b>${s2.mi_lugar}° de ${s2.competidores}</b></span>` : ""}</div></div>`; };
+    const cab = `<div class="rb-env"><h2 class="rb-h" style="margin:0">📞 Me llamaron</h2><button class="btn small" type="button" data-rb="llamada-cerrar">← Volver</button></div>`;
+    const entrada = `<div class="rb-llamar"><textarea id="rbLlamada" rows="2" placeholder="Ej: me llamaron de fertilizantes de la municipalidad de Reinco">${esc(q.texto || "")}</textarea>
+        <div class="rb-row"><button class="btn rb-mic ${R.dictando || R.grabando ? "on" : ""}" type="button" data-rb="llamada-mic">${R.dictando || R.grabando ? "⏹ Listo" : "🎤 Dictar"}</button>
+          <button class="btn rb-oro" type="button" data-rb="llamada-buscar" style="flex:1">🔎 Buscar la compra</button></div></div>`;
+    // 1) ¿cuál compra es? (de tus enviadas con comprobante)
+    if (!q.confirmado) {
+      const C = q.cands || null, k = q.idx || 0, cod = C && C[k], t = cod && trabajo(cod), g = cod ? segDe(cod) || {} : {};
+      const recientes = (R.data?.trabajos || []).filter((x) => HECHA.includes(x.estado)).slice(0, 8);
+      return `<div class="rb-paso">${cab}
+        <div class="muted rb-sub">Escribe o dicta quién te llamó y de qué. Busco en tus <b>ofertas enviadas</b> y te pregunto si es esa.</div>${entrada}
+        ${C && t ? `<div class="rb-sec">¿Es esta compra? · ${k + 1} de ${C.length}</div>
+          <div class="rb-card rb-swipe rb-cand" data-modo="llam" data-c="${esc(cod)}"><span class="rb-sello si">SÍ ES</span><span class="rb-sello no">OTRA</span>
+            <div class="rb-env"><b style="font-size:.78rem">${esc(cod)}</b><span class="rb-pill">${g.ganada ? "🏆 ganada" : esc(g.glosa || est(t.estado).txt)}</span></div>
+            <div class="rb-fnom">${esc(t.nombre || "")}</div><div class="muted" style="font-size:.74rem">${esc(t.organismo || "")}</div>
+            <div class="rb-kv"><span>Ofertamos <b>${clp(t.total)}</b></span>${t.fecha_envio ? `<span>Enviada ${esc(t.fecha_envio)}</span>` : ""}${t.comprobante ? "<span>🧾 con comprobante</span>" : ""}</div>
+            <div class="rb-row"><button class="btn small" type="button" data-rb="llam-no">❌ No, otra</button><button class="btn rb-oro" type="button" style="flex:1" data-rb="llam-si" data-c="${esc(cod)}">✅ Sí, es esta</button></div></div>`
+        : C ? `<div class="rb-alertas"><b>No la encontré por esas palabras</b>Elige de tus enviadas recientes o escribe el ID que te dé el cliente.</div>
+          ${recientes.map((x) => `<button class="rb-hist" type="button" data-rb="llam-si" data-c="${esc(x.codigo)}"><b>${esc((x.nombre || x.codigo).slice(0, 60))}</b><span>${clp(x.total)}</span></button>`).join("")}` : ""}
+        ${leerHist().length && !C ? `<div class="rb-sec">Últimas consultas</div>${leerHist().slice(0, 5).map((h) => `<button class="rb-hist" type="button" data-rb="llamada-ver" data-id="${esc(h.id)}"><b>${esc((h.titular || h.texto || "").slice(0, 70))}</b><span>${esc(hace(h.t))}</span></button>`).join("")}` : ""}
+      </div>`;
+    }
+    // 2) compra confirmada: si da o no, a quién comprarle y el correo listo para 3–4 proveedores
+    const cod = q.confirmado, t = trabajo(cod) || { codigo: cod }, inf = t.op?.informe || {}, g = segDe(cod) || {};
+    const F = (R.fichas || {})[cod], W = (R.full || {})[cod];
+    if (!F && !(R._pidiendo || {})[cod]) setTimeout(() => cargarDocs(cod), 0);
+    const selc = (leerSel()[cod] || {}).costo;
+    const finalLocal = inf.final != null && !inf.incompleto ? inf.final : selc && t.total ? Math.round(t.total / 1.19 - selc) : null;
+    const provs = [...(inf.opciones || []).map((o) => ({ nombre: o.proveedor, email: o.email, telefono: o.telefono, web: o.web, precio_aprox: o.total_con_iva, nota: o.cubre })), ...((r || {}).proveedores || [])]
+      .filter((o, i, a) => o.nombre && a.findIndex((x) => norm(x.nombre) === norm(o.nombre)) === i).slice(0, 6);
+    const elegidos = q.provSel || Object.fromEntries(provs.slice(0, 4).map((o, i) => [i, !!o.email]));
+    const correo = correoProveedores(t, F, W);
+    const asunto = q.asunto ?? correo.asunto, cuerpo = q.cuerpo ?? correo.cuerpo;
+    const bcc = provs.filter((o, i) => elegidos[i] && o.email).map((o) => o.email).join(",");
+    const gmail = `googlegmail://co?bcc=${encodeURIComponent(bcc)}&subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+    const mailto = `mailto:?bcc=${encodeURIComponent(bcc)}&subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
     const wa = r?.whatsapp ? `https://wa.me/?text=${encodeURIComponent(r.whatsapp)}` : "";
-    return `<div class="rb-paso">
-      <div class="rb-env"><h2 class="rb-h" style="margin:0">📞 Me llamaron</h2><button class="btn small" type="button" data-rb="llamada-cerrar">← Volver</button></div>
-      <div class="muted rb-sub">Escribe o graba lo que te dijeron («me llamaron de fertilizantes Reinco») o el ID que te dio el cliente.</div>
-      <div class="rb-llamar"><textarea id="rbLlamada" rows="2" placeholder="Ej: me llamaron de la municipalidad por los fertilizantes, 1234-56-COT26">${esc(q.texto || "")}</textarea>
-        <div class="rb-row"><button class="btn rb-mic ${R.grabando ? "on" : ""}" type="button" data-rb="llamada-mic">${R.grabando ? "⏹ Detener y enviar" : "🎤 Audio"}</button>
-          <button class="btn rb-oro" type="button" data-rb="llamada-preguntar" style="flex:1">${q.id && !r && !q.error ? '<span class="spinner"></span> El robot está pensando…' : "Preguntar al robot"}</button></div></div>
-      ${loc.length ? `<div class="rb-sec">Encontré en tus ofertas</div>${loc.map(fichaLocal).join("")}` : ""}
-      ${q.error ? `<div class="rb-alertas"><b>No pude responder</b>${esc(q.error)}</div>` : ""}
-      ${r ? `<div class="rb-resp ${verd[1]}">
-          <div class="rb-verd">${verd[0]}</div>
-          <div class="rb-tit">${esc(r.titular || "")}</div>
-          ${q.transcripcion ? `<div class="muted" style="font-size:.72rem">🎤 «${esc(q.transcripcion)}»</div>` : ""}
-          ${r.por_que ? `<p>${esc(r.por_que)}</p>` : ""}
-          ${r.decirle_al_cliente ? `<div class="rb-sec">Dile al cliente</div><p>${esc(r.decirle_al_cliente)}</p>` : ""}
-          ${r.whatsapp ? `<div class="rb-sec">WhatsApp listo</div><div class="rb-wa">${esc(r.whatsapp)}</div>
-            <div class="rb-row"><button class="btn small" type="button" data-rb="cp" data-v="${esc(r.whatsapp)}">Copiar</button><a class="btn small rb-oro" href="${wa}" target="_blank" rel="noopener">Enviar por WhatsApp</a></div>` : ""}
-          ${(r.pasos || []).length ? `<div class="rb-sec">Qué hacer</div><ol class="rb-pasos">${r.pasos.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>` : ""}
-          ${(r.proveedores || []).length ? `<div class="rb-sec">Proveedores</div>${r.proveedores.map((o) => `<div class="rb-op"><div class="rb-env"><b>${esc(o.nombre || "")}</b>${o.precio_aprox ? `<b>${clp(o.precio_aprox)}</b>` : ""}</div>
-              ${o.nota ? `<div class="muted" style="font-size:.72rem">${esc(o.nota)}</div>` : ""}<div class="rb-row">${o.telefono ? `<a class="btn small" href="tel:${esc(String(o.telefono).replace(/[^\d+]/g, ""))}">📞 Llamar</a>` : ""}${o.web ? `<a class="btn small" href="${esc(o.web)}" target="_blank" rel="noopener">🌐 Web</a>` : ""}</div></div>`).join("")}` : ""}
-          ${r.alternativas ? `<div class="rb-sec">Alternativa</div><p>${esc(r.alternativas)}</p>` : ""}
-          <div class="rb-sec">⏰ Recuérdamelo</div>
-          <div class="rb-row">${(r.recordatorios || []).slice(0, 3).map((x) => `<button class="btn small" type="button" data-rb="recordar" data-min="${+x.minutos || 60}" data-t="${esc(x.texto)}" data-c="${esc(r.codigo || "")}">${esc(String(x.texto).slice(0, 34))} · ${(+x.minutos || 60) >= 1440 ? Math.round(x.minutos / 1440) + " d" : (+x.minutos || 60) >= 60 ? Math.round(x.minutos / 60) + " h" : x.minutos + " min"}</button>`).join("")}
-            <button class="btn small" type="button" data-rb="recordar" data-min="60" data-t="${esc("Responder: " + (r.titular || q.texto || "")).slice(0, 120)}" data-c="${esc(r.codigo || "")}">en 1 hora</button>
-            <button class="btn small" type="button" data-rb="recordar" data-min="manana" data-t="${esc("Seguir: " + (r.titular || q.texto || "")).slice(0, 120)}" data-c="${esc(r.codigo || "")}">mañana 9:00</button></div>
-          ${r.aviso ? `<div class="muted" style="font-size:.7rem;margin-top:6px">${esc(r.aviso)}</div>` : ""}</div>` : ""}
-      ${leerHist().length ? `<div class="rb-sec">Últimas consultas</div>${leerHist().slice(0, 6).map((h) => `<button class="rb-hist" type="button" data-rb="llamada-ver" data-id="${esc(h.id)}"><b>${esc((h.titular || h.texto || "").slice(0, 70))}</b><span>${esc(hace(h.t))}</span></button>`).join("")}` : ""}
+    return `<div class="rb-paso">${cab}
+      <div class="rb-card" style="border-color:rgba(245,207,107,.6)"><div class="rb-env"><b style="font-size:.78rem">${esc(cod)}</b><button class="btn small" type="button" data-rb="llam-cambiar">Cambiar</button></div>
+        <div class="rb-fnom">${esc(t.nombre || F?.nombre || "")}</div><div class="muted" style="font-size:.74rem">${esc(t.organismo || F?.organismo || "")}</div>
+        <div class="rb-kv"><span>Ofertamos <b>${clp(t.total)}</b></span>${g.ganada ? `<span>🏆 ganada${g.oc ? " · OC " + esc(g.oc) : ""}</span>` : g.glosa ? `<span>${esc(g.glosa)}</span>` : ""}${g.mi_lugar ? `<span>${g.mi_lugar}° de ${g.competidores}</span>` : ""}</div>
+        ${t.comprobante ? `<div class="rb-row"><button class="btn small" type="button" data-rb="comprobante" data-c="${esc(cod)}">🧾 Comprobante</button></div>` : ""}</div>
+      <div class="rb-resp ${verd ? verd[1] : finalLocal == null ? "dep" : finalLocal > 0 ? "si" : "no"}">
+        <div class="rb-verd">${verd ? verd[0] : finalLocal == null ? "🤔 Calculando…" : finalLocal > 0 ? "✅ SÍ DA" : "❌ NO DA"}</div>
+        ${finalLocal != null ? `<div class="rb-tit">Utilidad ${inf.final != null ? "según informe" : "con tu costo"}: <span class="${finalLocal < 0 ? "rb-neg-t" : "rb-vivo-t"}">${clp(finalLocal)}</span></div>` : ""}
+        ${r?.por_que ? `<p>${esc(r.por_que)}</p>` : q.id && !r && !q.error ? `<p class="muted"><span class="spinner"></span> El robot está revisando proveedores y precios…</p>` : ""}
+        ${q.error ? `<p style="color:#ffb3b9">${esc(q.error)}</p>` : ""}
+        ${r?.aviso ? `<div class="muted" style="font-size:.7rem">${esc(r.aviso)}</div>` : ""}
+        ${r?.decirle_al_cliente ? `<div class="rb-sec">Dile al cliente</div><p>${esc(r.decirle_al_cliente)}</p>` : ""}
+        ${r?.whatsapp ? `<div class="rb-row"><button class="btn small" type="button" data-rb="cp" data-v="${esc(r.whatsapp)}">Copiar WhatsApp</button><a class="btn small" href="${wa}" target="_blank" rel="noopener">💬 Enviar al cliente</a></div>` : ""}
+      </div>
+      <div class="rb-sec">🏪 A quién comprarle</div>
+      ${provs.length ? provs.map((o, i) => `<label class="rb-op ${elegidos[i] ? "on" : ""}" style="display:block"><div class="rb-env"><span><input type="checkbox" data-prov="${i}" ${elegidos[i] ? "checked" : ""} ${o.email ? "" : "disabled"}> <b>${esc(o.nombre)}</b></span>${o.precio_aprox ? `<b>${clp(o.precio_aprox)}</b>` : ""}</div>
+          <div class="muted" style="font-size:.7rem">${o.email ? "✉ " + esc(o.email) : "sin correo"}${o.telefono ? " · 📞 " + esc(o.telefono) : ""}${o.nota ? " · " + esc(String(o.nota).slice(0, 80)) : ""}</div></label>`).join("")
+        : `<div class="muted" style="font-size:.76rem">${q.id && !r ? "Buscando proveedores…" : "Sin proveedores todavía. El robot los busca con la IA (necesita saldo en OpenAI o una clave de Claude en el PC)."}</div>`}
+      <div class="rb-sec">✉ Correo para pedir cotización (${provs.filter((o, i) => elegidos[i] && o.email).length} proveedores en copia oculta)</div>
+      <input class="rb-in" id="rbAsunto" value="${esc(asunto)}">
+      <textarea id="rbCuerpo" rows="9" style="margin-top:6px">${esc(cuerpo)}</textarea>
+      <div class="rb-row"><a class="btn rb-oro" style="flex:1" href="${gmail}" data-rb="llam-gmail" data-bcc="${esc(bcc)}">✉ Abrir en Gmail</a><a class="btn small" href="${mailto}" data-rb="llam-mail" data-bcc="${esc(bcc)}">Otro correo</a>
+        <button class="btn small" type="button" data-rb="cp" data-v="${esc(asunto + "\n\n" + cuerpo)}">Copiar</button></div>
+      <div class="muted" style="font-size:.7rem;margin-top:4px">Se abre tu Gmail con el correo listo y los proveedores en copia oculta: tú revisas y presionas Enviar.</div>
+      <div class="rb-sec">⏰ Recuérdamelo</div>
+      <div class="rb-row"><button class="btn small" type="button" data-rb="recordar" data-min="120" data-t="${esc("Revisar respuestas de proveedores · " + cod)}" data-c="${esc(cod)}">Respuestas de proveedores en 2 h</button>
+        <button class="btn small" type="button" data-rb="recordar" data-min="manana" data-t="${esc("Responder al cliente · " + (t.nombre || cod)).slice(0, 120)}" data-c="${esc(cod)}">Responder al cliente mañana 9:00</button></div>
     </div>`;
   }
-  async function preguntarRobot(texto, audio) {
-    if (!texto && !audio) { toast("Escribe o graba qué te dijeron"); return; }
-    R.llamada = { texto, t: new Date().toISOString() }; pintarHoja(true);
+  async function preguntarRobot(texto, audio, codigo) {
+    if (!texto && !audio && !codigo) { toast("Escribe o dicta qué te dijeron"); return; }
+    R.llamada = { ...(R.llamada || {}), texto, t: new Date().toISOString(), respuesta: null, error: null, id: null };
+    pintarHoja(true);
     try {
-      const r = await api("preguntar", { method: "POST", body: JSON.stringify({ texto, ...(audio || {}) }) });
+      const r = await api("preguntar", { method: "POST", body: JSON.stringify({ texto, codigo, ...(audio || {}) }) });
       R.llamada.id = r.id;
-      const h = leerHist(); h.unshift({ id: r.id, texto, t: R.llamada.t }); try { localStorage.setItem(HIST, JSON.stringify(h.slice(0, 20))); } catch {}
+      const h = leerHist(); h.unshift({ id: r.id, texto, t: R.llamada.t, codigo }); try { localStorage.setItem(HIST, JSON.stringify(h.slice(0, 20))); } catch {}
       esperarRespuesta(r.id);
     } catch (e) { R.llamada.error = e.message; }
     pintarHoja(true);
@@ -1530,6 +1587,28 @@
     } catch {}
     if (n > 100) { R.llamada.error = "El PC no respondió. ¿Está encendido el robot?"; return pintarHoja(true); }
     setTimeout(() => esperarRespuesta(id, n + 1), 3000);
+  }
+  function dictar() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return grabar();
+    if (R.dictando) { R.sr?.stop(); return; }
+    const sr = new SR(); sr.lang = "es-CL"; sr.interimResults = true; sr.continuous = true;
+    const base = ($("#rbLlamada")?.value || "").trim();
+    sr.onresult = (e) => { const txt = [...e.results].map((x) => x[0].transcript).join(" "); const ta = $("#rbLlamada"); if (ta) ta.value = (base ? base + " " : "") + txt; };
+    sr.onerror = (e) => { R.dictando = false; if (e.error === "not-allowed" || e.error === "service-not-allowed") toast("Activa Siri y dictado en el iPhone, o usa el micrófono del teclado"); pintarHoja(true); };
+    sr.onend = () => { const v = ($("#rbLlamada")?.value || "").trim(); R.dictando = false; R.sr = null; R.llamada = { ...(R.llamada || {}), texto: v }; pintarHoja(true); if (v) buscarLlamada(v); };
+    try { sr.start(); R.sr = sr; R.dictando = true; R.llamada = { ...(R.llamada || {}), texto: base }; pintarHoja(true); } catch { grabar(); }
+  }
+  function buscarLlamada(texto) {
+    if (!texto) { toast("Escribe o dicta quién te llamó"); return; }
+    R.llamada = { texto, cands: candidatasLlamada(texto), idx: 0 };
+    pintarHoja(true);
+  }
+  function confirmarLlamada(cod) {
+    const texto = R.llamada?.texto || "";
+    R.llamada = { texto, confirmado: cod };
+    cargarDocs(cod);
+    preguntarRobot(texto || "Me llamaron por esta compra", null, cod);
   }
   async function grabar() {
     if (R.grabando) { R.rec?.stop(); return; }
@@ -1791,8 +1870,20 @@
     if (a === "llamada") { R.pantalla = "llamada"; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "llamada-cerrar") { R.pantalla = null; return pintarHoja(true); }
     if (a === "llamada-preguntar") return preguntarRobot(($("#rbLlamada")?.value || "").trim());
-    if (a === "llamada-mic") return grabar();
-    if (a === "llamada-ver") { const h = leerHist().find((x) => x.id === b.dataset.id); if (h) { R.llamada = { id: h.id, texto: h.texto, t: h.t }; esperarRespuesta(h.id); } return pintarHoja(true); }
+    if (a === "llamada-buscar") return buscarLlamada(($("#rbLlamada")?.value || "").trim());
+    if (a === "llamada-mic") return dictar();
+    if (a === "llam-si") return confirmarLlamada(cod);
+    if (a === "llam-no") { R.llamada.idx = (R.llamada.idx || 0) + 1; if (R.llamada.idx >= (R.llamada.cands || []).length) R.llamada.cands = []; return pintarHoja(true); }
+    if (a === "llam-cambiar") { R.llamada = { texto: R.llamada?.texto, cands: candidatasLlamada(R.llamada?.texto || ""), idx: 0 }; return pintarHoja(true); }
+    if (a === "llam-gmail" || a === "llam-mail") {          // abre el correo con lo que escribiste (tú presionas Enviar)
+      ev.preventDefault(); const q = R.llamada || {}; q.asunto = $("#rbAsunto")?.value || ""; q.cuerpo = $("#rbCuerpo")?.value || "";
+      const qs = `bcc=${encodeURIComponent(b.dataset.bcc || "")}&subject=${encodeURIComponent(q.asunto)}&body=${encodeURIComponent(q.cuerpo)}`;
+      if (a === "llam-mail") { location.href = "mailto:?" + qs; return; }
+      if (esIOS) { location.href = "googlegmail://co?" + qs; setTimeout(() => { if (!document.hidden) toast("¿No se abrió? Instala Gmail o usa «Otro correo»"); }, 1800); }
+      else window.open("https://mail.google.com/mail/?view=cm&fs=1&" + qs.replace("subject=", "su="), "_blank");
+      return;
+    }
+    if (a === "llamada-ver") { const h = leerHist().find((x) => x.id === b.dataset.id); if (h) { R.llamada = { id: h.id, texto: h.texto, t: h.t, confirmado: h.codigo || null }; if (h.codigo) cargarDocs(h.codigo); esperarRespuesta(h.id); } return pintarHoja(true); }
     if (a === "recordar") return recordar(b.dataset.t, b.dataset.min, b.dataset.c);
     if (a === "empresa-editar") { R.empresaEditar = true; R.empForm = null; R.empresas = null; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "empresa-form") { R.empForm = b.dataset.id ? { ...(R.empresas || {})[b.dataset.id] } : {}; return pintarHoja(true); }
@@ -1977,6 +2068,15 @@
     try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos, pedir_informe: informe }) }); toast(informe ? "Guardado · el PC recalcula la utilidad" : "Guardado"); await refrescar(); }
     catch (e) { toast(e.message); }
   });
+  sheet.addEventListener("input", (ev) => {
+    const id = ev.target.id, q = R.llamada; if (!q) return;
+    if (id === "rbAsunto") q.asunto = ev.target.value; else if (id === "rbCuerpo") q.cuerpo = ev.target.value; else if (id === "rbLlamada") q.texto = ev.target.value;
+  });
+  sheet.addEventListener("change", (ev) => {
+    if (ev.target.dataset?.prov == null || !R.llamada) return;
+    const q = R.llamada; q.provSel = { ...(q.provSel || Object.fromEntries($$("[data-prov]", sheet).map((x) => [x.dataset.prov, x.checked]))), [ev.target.dataset.prov]: ev.target.checked };
+    q.asunto = $("#rbAsunto")?.value; q.cuerpo = $("#rbCuerpo")?.value; pintarHoja(true);
+  });
   sheet.addEventListener("focusin", (ev) => { if (ev.target.classList?.contains("rb-costo") || ev.target.classList?.contains("rb-neg-in")) R.barra = true; });
   sheet.addEventListener("focusout", (ev) => { if (ev.target.classList?.contains("rb-costo") || ev.target.classList?.contains("rb-neg-in")) setTimeout(() => { R.barra = false; }, 300); });
   // fotos grandes se achican antes de subir (máx. ~1600 px, JPEG), los PDF van tal cual
@@ -2073,7 +2173,7 @@
     chip.classList.toggle("atn", atn > 0);
     chip.innerHTML = `<span class="rb-dot"></span><span>Robot</span>${atn ? `<span class="rb-n">${atn}</span>` : ""}`;
     decorarLista(); decorarCotizador(); decorarInicio();
-    if (sheet.classList.contains("on") && !sheet.contains(document.activeElement?.closest?.("input") || null)) pintarHoja();
+    if (sheet.classList.contains("on") && !sheet.contains(document.activeElement?.closest?.("input,textarea") || null)) pintarHoja();
   }
 
   function datosDesdeTarjeta(el, cod) {
