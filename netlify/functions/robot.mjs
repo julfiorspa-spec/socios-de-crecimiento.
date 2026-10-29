@@ -278,7 +278,7 @@ async function atender(req) {
     const uno = async (t) => {
       const c = cache[t.codigo];
       try {
-        const r = await fetch(RADAR_CA + "/" + encodeURIComponent(t.codigo), { headers: { "user-agent": "CotizAgil/1.0", accept: "application/json" } });
+        const r = await fetch(RADAR_CA + "/" + encodeURIComponent(t.codigo), { headers: { "user-agent": "CotizAgil/1.0", accept: "application/json" }, signal: AbortSignal.timeout(forzar ? 6000 : 3500) });
         if (!r.ok) throw new Error("HTTP " + r.status);
         const p = (await r.json()).payload || {};
         const pc = Array.isArray(p.proveedores_cotizando) ? p.proveedores_cotizando : [];
@@ -303,24 +303,26 @@ async function atender(req) {
         const techo = Math.min(...[g.presupuesto, g.siguiente ? g.siguiente - 1 : null].filter(Boolean));
         g.dejado = g.ganada && isFinite(techo) && g.mi_total ? Math.max(0, Math.round(techo - g.mi_total)) : null;
       } catch (err) {
-        res[t.codigo] = { ...(c || {}), error: String(err.message || err).slice(0, 120), visto: c?.visto || ahora() };
+        res[t.codigo] = cache[t.codigo] = { ...(c || {}), error: String(err.message || err).slice(0, 120), visto: ahora() };
       }
     };
     const pendientes = [];
     for (const t of fila) {            // primero lo que ya está en caché (instantáneo), luego consultas reales
       const c = cache[t.codigo];
       const final = c && (c.ganada || ["cancelada", "desierta"].includes(c.estado) || (c.estado === "proveedor_seleccionado" && c.ganador));
-      if (c && !c.error && !forzar && Date.now() - Date.parse(c.visto) < (final ? 6 * 3600_000 : 10 * 60_000)) res[t.codigo] = c; else pendientes.push(t);
+      const edad = c ? Date.now() - Date.parse(c.visto) : Infinity;
+      if (c && !forzar && (c.error ? edad < 3 * 60_000 : edad < (final ? 6 * 3600_000 : 10 * 60_000))) res[t.codigo] = c; else pendientes.push(t);
     }
     pendientes.sort((a, b) => (cache[a.codigo]?.visto || "").localeCompare(cache[b.codigo]?.visto || ""));   // lo más viejo primero
     let i = 0, limitado = false;
-    await Promise.all(Array.from({ length: 4 }, async () => {
+    // nunca hacer esperar al celular: a los 3 s (9 s si pidió «actualizar») responde con lo que haya
+    await Promise.race([Promise.all(Array.from({ length: 4 }, async () => {
       while (i < pendientes.length && !limitado && Date.now() - inicio < (forzar ? 8000 : 2500)) {
         const t = pendientes[i++];
         await uno(t);
         if (String(res[t.codigo]?.error || "").includes("429")) limitado = true;
       }
-    }));
+    })), new Promise((ok) => setTimeout(ok, forzar ? 9000 : 3000))]);
     for (const t of pendientes) if (!res[t.codigo]) res[t.codigo] = cache[t.codigo] || { pendiente: true };
     await store.setJSON("seguimiento/cache", cache);
     for (const t of fila) {               // recién ganada: abre su negocio y pide el informe al PC
