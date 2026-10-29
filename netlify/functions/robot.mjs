@@ -642,6 +642,12 @@ async function atender(req) {
     const campos = ["razon_social", "rut", "giro", "contacto", "email", "telefono", "direccion", "comuna", "ciudad", "representante", "rut_representante", "despacho", "banco"];
     const e = { ...(L[id] || {}), id, actualizado: ahora() };
     for (const k of campos) if (b[k] !== undefined) e[k] = texto(b[k], 200);
+    for (const k of ["descripcion", "web", "region", "nombre_fantasia"]) if (b[k] !== undefined) e[k] = texto(b[k], 400);
+    if (b.perfil && typeof b.perfil === "object") {        // 🔎 lo que el robot descubrió con el RUT: rubros, subrubros y aperturas
+      const L2 = (v, n, m) => (Array.isArray(v) ? v : []).slice(0, n).map((x) => (typeof x === "object" ? { rubro: texto(x.rubro, 80), por_que: texto(x.por_que, 200) } : texto(x, m)));
+      e.perfil = { rubros: L2(b.perfil.rubros, 8, 80), subrubros: L2(b.perfil.subrubros, 14, 80), aperturas: L2(b.perfil.aperturas, 5, 80),
+        palabras: L2(b.perfil.palabras, 12, 40), actividades: L2(b.perfil.actividades, 8, 160), confianza: texto(b.perfil.confianza, 10), t: ahora() };
+    }
     if (!e.razon_social) return json({ error: "Falta la razón social" }, 400);
     L[id] = e; await store.setJSON("empresas/lista", L);
     return json({ ok: true, empresa: e, empresas: L });
@@ -703,7 +709,8 @@ async function atender(req) {
     const id = idCorto();
     const audio = typeof b.audio_b64 === "string" && b.audio_b64.length < 5_500_000 ? b.audio_b64 : null;
     await store.setJSON("asistente/" + id, { id, creado: ahora(), estado: "pendiente", texto: texto(b.texto, 2000), codigo: limpiaCodigo(b.codigo) || null,
-      empresa: texto(b.empresa, 40), dispositivo: texto(b.dispositivo, 60), audio: !!audio, mime: texto(b.mime, 40) });
+      empresa: texto(b.empresa, 40), dispositivo: texto(b.dispositivo, 60), audio: !!audio, mime: texto(b.mime, 40),
+      tipo: texto(b.tipo, 20), rut: texto(b.rut, 20) });
     if (audio) await store.set("asistente-audio/" + id, audio);
     const cola = (await store.get("asistente-cola", { type: "json" })) || [];
     await store.setJSON("asistente-cola", [...cola, id].slice(-30));
@@ -728,7 +735,7 @@ async function atender(req) {
     await store.delete("asistente-audio/" + id).catch(() => {});
     const cola = (await store.get("asistente-cola", { type: "json" })) || [];
     await store.setJSON("asistente-cola", cola.filter((k) => k !== id));
-    if (!b.error) await avisarTexto(store, "📞 Respuesta lista", texto((b.respuesta || {}).titular || x.texto || "Tu consulta", 120), "asis-" + id, "/#robot");
+    if (!b.error && x.tipo !== "empresa") await avisarTexto(store, "📞 Respuesta lista", texto((b.respuesta || {}).titular || x.texto || "Tu consulta", 120), "asis-" + id, "/#robot");
     return json({ ok: true });
   }
 
