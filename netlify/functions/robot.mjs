@@ -363,6 +363,12 @@ async function atender(req) {
 
   // ---------- ⭐ Seleccionadas (compartidas entre tus celulares) ----------
   if (ruta === "seleccionadas" && req.method === "GET") {
+    if (url.searchParams.get("todos") === "1") {          // el PC ve las elegidas de todos los celulares (costo de mercado, panel)
+      const todas = { ...((await store.get("oportunidades/seleccionadas", { type: "json" })) || {}) };
+      const { blobs } = await store.list({ prefix: "oportunidades/seleccionadas/j/" });
+      for (const bl of blobs.slice(0, 40)) Object.assign(todas, (await store.get(bl.key, { type: "json" })) || {});
+      return json({ sel: todas });
+    }
     return json({ sel: await leerCajon(store, "oportunidades/seleccionadas", jug(url.searchParams.get("jugador")), url.searchParams.get("legado") === "1") });
   }
   if (ruta === "seleccionar" && req.method === "POST") {
@@ -663,6 +669,20 @@ async function atender(req) {
         ganador: texto((pc.find((x) => x.proveedor_seleccionado) || {}).razon_social, 120), oc: p.id_orden_compra || null,
       } });
     } catch (e) { return json({ error: "No pude consultar Mercado Público: " + String(e.message || e).slice(0, 100) }, 502); }
+  }
+
+  // ---------- 💹 costo de mercado real (el PC lo busca con IA en tiendas chilenas para cada seleccionada) ----------
+  if (ruta === "mercado" && req.method === "GET") return json({ mercado: (await store.get("mercado/lista", { type: "json" })) || {} });
+  if (ruta === "mercado" && req.method === "POST") {
+    const b = await cuerpo(req), codigo = limpiaCodigo(b.codigo), m = b.mercado || {};
+    if (!codigo) return json({ error: "Falta el código" }, 400);
+    const L = (await store.get("mercado/lista", { type: "json" })) || {};
+    L[codigo] = { t: ahora(), total_neto: Math.round(Number(m.total_neto) || 0) || null, total_con_iva: Math.round(Number(m.total_con_iva) || 0) || null,
+      completo: !!m.completo, fuente: texto(m.fuente, 60), nota: texto(m.nota, 240),
+      items: (Array.isArray(m.items) ? m.items : []).slice(0, 15).map((i) => ({ n: texto(i.nombre, 90), q: Number(i.cantidad) || null, u: Math.round(Number(i.unit_neto) || 0) || null, f: (i.fuentes || []).length || 0 })) };
+    const ks = Object.keys(L).sort((a, b2) => (L[b2].t || "").localeCompare(L[a].t || "")); for (const k of ks.slice(400)) delete L[k];
+    await store.setJSON("mercado/lista", L);
+    return json({ ok: true });
   }
 
   // ---------- ⏰ recordatorios (llegan como aviso al teléfono) ----------
