@@ -591,6 +591,7 @@ async function atender(req) {
     if (accion === "verificar") {          // revisar en el portal si ya quedó enviada: conserva la oferta preparada
       if (!previo) return json({ error: "No hay oferta preparada para verificar." }, 404);
       previo.accion = "verificar";
+      if (b.vista) previo.enviada_vista = ahora();     // Mercado Público mostró «Cotización enviada correctamente»: sale de Firmar en todos los celulares
       previo.dispositivo = texto(b.dispositivo, 60) || previo.dispositivo || null;   // qué celular la envió (registro «Enviados» del PC)
       anotar(previo, "en_cola", "El robot revisará en Mercado Público si ya quedó enviada.");
       return json({ trabajo: await escribir(store, previo) });
