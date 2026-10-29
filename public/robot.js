@@ -1544,16 +1544,17 @@
         const ocs = ganadasT.filter((t) => t.op?.oc_codigo && etapaDe(t) !== "rechazada");
         if (!ocs.length) return "";
         const tot = ocs.reduce((a, t) => a + (Number(t.oc_compra?.total || t.total) || 0), 0);
-        const listas = ocs.filter((t) => t.op?.informe?.final != null && !t.op.informe.incompleto);
+        const dud = (t) => { const i = t.op?.informe || {}; return (Number(i.compras) || 0) > 2.5 * (Number(i.total) || Number(t.total) || 1); };   // costo 2,5× la venta = unidades mal leídas (kg vs saco)
+        const listas = ocs.filter((t) => t.op?.informe?.final != null && !t.op.informe.incompleto && !dud(t));
         const util = listas.reduce((a, t) => a + (Number(t.op.informe.final) || 0), 0);
         const malas = listas.filter((t) => (Number(t.op.informe.final) || 0) <= 0).length;
         const calc = ocs.length - listas.length;
         return `<div class="rb-card" style="border-color:rgba(245,207,107,.45);padding:10px 12px">
           <div style="font-weight:700">📦 ${ocs.length} órdenes de compra · ${clp(tot)}</div>
-          <div class="muted" style="font-size:.76rem;margin-top:2px">💰 utilidad calculada ${clp(util)} en ${listas.length}${calc ? ` · ⟳ ${calc} calculándose (proveedores y costo)` : ""}${malas ? ` · <b style="color:#ff8a80">⚠ ${malas} no deja ganancia: negocia el costo</b>` : ""}</div>
+          <div class="muted" style="font-size:.76rem;margin-top:2px">💰 utilidad calculada ${clp(util)} en ${listas.length}${calc ? ` · 💲 ${calc} sin costo confiable: abre cada una y pon el precio del proveedor` : ""}${malas ? ` · <b style="color:#ff8a80">⚠ ${malas} no deja ganancia: negocia el costo</b>` : ""}</div>
           <div style="margin-top:6px;display:grid;gap:3px">${ocs.map((t) => { const f = t.op?.informe?.final, inc = t.op?.informe?.incompleto;
             return `<div style="display:flex;justify-content:space-between;gap:8px;font-size:.74rem"><span>${t.externa ? "🆕" : "🎮"} <b>${esc(t.op.oc_codigo)}</b> ${esc((t.oc_compra?.organismo || t.organismo || "").slice(0, 26))}</span>
-              <span style="white-space:nowrap">${clp(t.oc_compra?.total || t.total)} · ${f == null || inc ? "⟳" : `<b style="color:${f > 0 ? "#9be79b" : "#ff8a80"}">${f > 0 ? "+" : ""}${clp(f)}</b>`}</span></div>`; }).join("")}</div>
+              <span style="white-space:nowrap">${clp(t.oc_compra?.total || t.total)} · ${t.op?.pedido_informe ? "⟳" : f == null || inc ? `<span style="color:#f5cf6b">💲 falta costo</span>` : dud(t) ? `<span style="color:#f5cf6b">⚠ revisar unidades</span>` : `<b style="color:${f > 0 ? "#9be79b" : "#ff8a80"}">${f > 0 ? "+" : ""}${clp(f)}</b>`}</span></div>`; }).join("")}</div>
           <div class="muted" style="font-size:.66rem;margin-top:4px">🆕 cotizada fuera de la app · 🎮 jugada aquí. Llegan solas desde Mercado Público cada 10 min.</div></div>`; })()}<div class="rb-etapas">${ETAPAS.map(([k, n]) => `<button type="button" class="${netapa === k ? "on" : ""}" data-rb="neg-tab" data-e="${k}">${n} ${ganadasT.filter((t) => etapaDe(t) === k).length}</button>`).join("")}</div>
       ${ganadasT.filter((t) => etapaDe(t) === netapa).map(negocioCard).join("") || `<div class="empty">Nada en esta etapa.</div>`}`
       : `<div class="empty">${R._cargandoSeg ? "Revisando en Mercado Público…" : "Todavía no hay ganadas. Cuando el organismo te elija aparecen aquí con su orden de compra."}</div>`;
