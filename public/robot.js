@@ -1067,16 +1067,43 @@
     .map(([n, u]) => `<a class="rb-cp" href="${u}${encodeURIComponent(q)}" target="_blank" rel="noopener">${n}</a>`).join(" ");
   // 🛒 Facebook Marketplace: segunda opción cuando los proveedores autorizados no tienen stock o están caros.
   // Facebook no permite buscar por programa: se abre la búsqueda ya hecha (en el iPhone abre la app de Facebook).
-  const qMk = (n) => String(n || "").split(/[,(;:]|\s-\s/)[0].replace(/\b\d+([.,]\d+)?\s*(unidades?|un|uds?|cajas?|kg|kilos?|lts?|litros?)\b/gi, "").split(/\s+/).filter(Boolean).slice(0, 6).join(" ");
-  const urlMk = (n) => "https://www.facebook.com/marketplace/search/?query=" + encodeURIComponent(qMk(n));
-  function bloqueMarket(prods) {
+  const qMk = (n) => String(n || "").split(/[,(;:]|\s-\s/)[0].replace(/\b\d+([.,]\d+)?\s*(unidades?|un|uds?|cajas?|kgs?|kilos?|lts?|litros?|m3|m2|mts?|metros?( c[uú]bicos)?|sacos?|ton(eladas)?|tons?)\b/gi, "").split(/\s+/).filter(Boolean).slice(0, 6).join(" ");
+  // 📍 Marketplace donde se ENTREGA: Facebook solo tiene 3 ciudades de Chile con dirección propia (radio 65 km);
+  //    en el resto (Chiloé, Puerto Montt, Temuco…) se busca con la comuna en el texto.
+  const sinTilde = (x) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const ZONAS_MK = [
+    ["concepcion", "Concepción", /biobio|bio-bio|nuble|concepcion|talcahuano|chillan|los angeles|coronel|lota|hualpen|san pedro de la paz|tome|penco|chiguayante|arauco|lebu|canete|curanilahue|mulchen|nacimiento|yumbel|cabrero|bulnes|san carlos|angol|renaico|collipulli|victoria|malleco/],
+    ["antofagasta", "Antofagasta", /antofagasta|calama|tocopilla|mejillones|taltal|iquique|alto hospicio|tarapaca|arica|parinacota|pozo almonte/],
+    ["santiagocl", "Santiago", /metropolitana|santiago|providencia|las condes|nunoa|maipu|puente alto|la florida|la reina|vitacura|lo barnechea|penalolen|quilicura|pudahuel|san bernardo|colina|lampa|buin|talagante|melipilla|penaflor|valparaiso|vina del mar|quilpue|villa alemana|san antonio|quillota|los andes|rancagua|o'?higgins|machali|san fernando|santa cruz|rengo/],
+  ];
+  const lugarDe = (t) => String(t?.oc_compra?.direccion || t?.op?.informe?.direccion || (R.fichas || {})[t?.codigo]?.direccion || "");
+  function zonaMk(dir) {
+    const d = sinTilde(dir), partes = String(dir || "").split(",").map((x) => x.trim()).filter(Boolean);
+    const iR = partes.findIndex((x) => /regi[oó]n/i.test(x));
+    const comuna = (iR > 0 ? partes[iR - 1] : partes.length > 1 ? partes[partes.length - 1] : "").replace(/^\d+\s*/, "");
+    const z = d ? ZONAS_MK.find(([, , re]) => re.test(d)) : null;
+    return { slug: z ? z[0] : null, ciudad: z ? z[1] : null, comuna };
+  }
+  const urlMk = (n, dir) => {
+    const z = zonaMk(dir);
+    if (z.slug) return `https://www.facebook.com/marketplace/${z.slug}/search/?query=` + encodeURIComponent(qMk(n));
+    return "https://www.facebook.com/marketplace/search/?query=" + encodeURIComponent((qMk(n) + " " + (z.comuna || "")).trim());
+  };
+  function bloqueMarket(prods, dir) {
     const ps = (prods || []).filter((x) => x && x.nombre).slice(0, 12);
     if (!ps.length) return "";
-    return `<details class="rb-det rb-mk"><summary>🛒 Segunda opción: buscar en Facebook Marketplace</summary>
-      <div class="muted" style="font-size:.7rem;margin:4px 0 6px">Cuando los proveedores autorizados no tienen stock, tardan o están caros. Pide <b>factura</b> (o boleta), revisa el producto antes de pagar y anota el precio acordado para ver si ahorraste.</div>
+    const z = zonaMk(dir);
+    const dondeTxt = z.slug ? `📍 Busca en <b>${esc(z.ciudad)}</b> y 65 km a la redonda${z.comuna && sinTilde(z.comuna) !== sinTilde(z.ciudad) ? ` (entregas en ${esc(z.comuna)}: si queda lejos, toca 📍 en Marketplace y elige ${esc(z.comuna)})` : ""}.`
+      : z.comuna ? `📍 Entregas en <b>${esc(z.comuna)}</b>: la búsqueda lleva la comuna. En Marketplace toca 📍 Ubicación → ${esc(z.comuna)} para ver solo vendedores de ahí.` : "";
+    return `<details class="rb-det rb-mk"><summary>🛒 Segunda opción: proveedores locales en Facebook Marketplace</summary>
+      <div class="muted" style="font-size:.7rem;margin:4px 0 6px">${dondeTxt} Cuando los proveedores autorizados no tienen stock, tardan o están caros.
+        <b>¿Es confiable?</b> perfil con años y foto real, buenas calificaciones, que dé RUT y emita <b>factura</b>, ver el producto antes de pagar y nunca adelantar todo. Anota el precio acordado para ver si ahorraste.</div>
       ${ps.map((x) => `<div class="rb-env" style="gap:8px;margin:4px 0"><span style="font-size:.76rem;min-width:0">${esc(x.cantidad ?? "")} × ${esc(qMk(x.nombre))}</span>
-        <a class="btn small" href="${urlMk(x.nombre)}" target="_blank" rel="noopener" style="flex:none">🛒 Marketplace</a></div>`).join("")}</details>`;
+        <a class="btn small" href="${urlMk(x.nombre, dir)}" target="_blank" rel="noopener" style="flex:none">🛒 Marketplace</a></div>`).join("")}</details>`;
   }
+  // 📍 proveedor local encontrado por el robot (misma comuna / región de entrega) y qué tan confiable es
+  const chipLocal = (o) => (o && (o.local || o.confianza) ? ` <span class="rb-cp" style="font-size:.66rem;font-weight:600">${o.local ? "📍 local" + (o.ciudad ? " · " + esc(String(o.ciudad).slice(0, 18)) : "") : "🌐"}${o.confianza ? " · " + ({ alta: "✅ confiable", media: "🟡 confianza media", baja: "⚠ verificar" }[sinTilde(o.confianza)] || esc(o.confianza)) : ""}</span>` : "")
+    + (o && o.senales ? `<div class="muted" style="font-size:.68rem;font-weight:400">${esc(String(o.senales).slice(0, 160))}</div>` : "");
   const diasPlazo = (f) => { if (!f) return 99; const h = new Date(); h.setHours(12, 0, 0, 0); return Math.round((Date.parse(f + "T12:00") - h) / 86400000); };
   const textoPlazo = (f) => { const d = diasPlazo(f); return d < 0 ? `🔴 atrasado ${-d} día${d === -1 ? "" : "s"}` : d === 0 ? "🟠 es hoy" : d === 1 ? "🟡 mañana" : `🟢 quedan ${d} días`; };
   function tarjetaEj(t) {
@@ -1111,10 +1138,10 @@
       <div class="rb-sec">📦 Qué hay que comprar</div>
       ${prods.map((x) => `<div class="rb-prod"><b>${esc(x.cantidad ?? "")} × ${esc(x.nombre)}</b>${x.descripcion || x.detalle ? `<div class="muted" style="font-size:.7rem">${esc(String(x.descripcion || x.detalle).slice(0, 140))}</div>` : ""}<div class="rb-row">🔎 ${buscarEn(x.nombre)}</div></div>`).join("") || `<div class="muted" style="font-size:.74rem"><span class="spinner"></span> Trayendo productos…</div>`}
       <div class="rb-sec">📞 Proveedores para negociar</div>
-      ${(inf.opciones || []).map((o) => `<div class="rb-op"><div class="rb-env"><b>${esc(o.proveedor || "")}</b>${o.total_con_iva ? `<b>${clp(o.total_con_iva)}</b>` : ""}</div>
+      ${(inf.opciones || []).map((o) => `<div class="rb-op"><div class="rb-env"><b>${esc(o.proveedor || "")}${chipLocal(o)}</b>${o.total_con_iva ? `<b>${clp(o.total_con_iva)}</b>` : ""}</div>
         <div class="rb-row">${telf(o.telefono) ? `<a class="btn small" href="tel:${esc(telf(o.telefono))}">📞 Llamar</a>` : ""}${waN(o.telefono) ? `<a class="btn small" href="https://wa.me/${waN(o.telefono)}?text=${encodeURIComponent(msgProv)}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ""}${o.email ? `<a class="btn small" href="mailto:${esc(o.email)}?subject=${encodeURIComponent("Cotización " + (t.nombre || cod))}&body=${encodeURIComponent(msgProv)}">✉ Correo</a>` : ""}${o.web ? `<a class="btn small" href="${esc(o.web)}" target="_blank" rel="noopener">🌐</a>` : ""}</div></div>`).join("") || `<div class="muted" style="font-size:.74rem">Sin proveedores del informe: busca con los botones 🔎 o en «📞 Me llamaron».</div>`}
       <div class="rb-row"><button class="btn small" type="button" data-rb="cp" data-v="${esc(msgProv)}">Copiar mensaje para proveedores</button></div>
-      ${bloqueMarket(prods)}
+      ${bloqueMarket(prods, lugarDe(t))}
       <div class="rb-sec">🤝 Tu negociación</div>
       ${campo("proveedor", "Proveedor elegido", op.proveedor, "Nombre del proveedor")}
       ${campo("precio_acordado", "Precio de compra total (con IVA)", compra ? Number(compra).toLocaleString("es-CL") : "", estimado ? Number(estimado).toLocaleString("es-CL") : "", 1)}
@@ -1408,9 +1435,9 @@
             • <b>¿Cumplen la marca / especificación?</b> Revisa la ficha técnica que enviaste (📄 abajo) antes de responder.<br>
             • <b>¿Cuándo entregan?</b> ${esc(plazo)} desde que llegue la orden de compra.<br>
             • <b>Te seleccionan:</b> el robot te avisa y pasa a «🆕 OC ¿nos da?»; acepta la OC en Mercado Público cuando llegue.</div></details>
-          ${(inf.opciones || []).length ? `<div class="rb-sec">🛒 Proveedores ya cotizados</div>${inf.opciones.map((o) => `<div class="rb-op"><div class="rb-env"><b>${esc(o.proveedor || "")}</b><b>${num(o.total_con_iva)}</b></div>
+          ${(inf.opciones || []).length ? `<div class="rb-sec">🛒 Proveedores ya cotizados</div>${inf.opciones.map((o) => `<div class="rb-op"><div class="rb-env"><b>${esc(o.proveedor || "")}${chipLocal(o)}</b><b>${num(o.total_con_iva)}</b></div>
             <div class="rb-acc">${tel(o.telefono) ? `<a class="btn small" href="tel:${esc(tel(o.telefono))}">📞</a>` : ""}${wa(o.telefono) ? `<a class="btn small" href="https://wa.me/${wa(o.telefono)}" target="_blank" rel="noopener">💬</a>` : ""}<a class="btn small" href="${correo(t, o)}">✉ Confirmar stock</a></div></div>`).join("")}` : ""}
-          ${bloqueMarket((inf.productos || []).length ? inf.productos : (F?.productos || []))}
+          ${bloqueMarket((inf.productos || []).length ? inf.productos : (F?.productos || []), lugarDe(t))}
           <div class="rb-acc">${archivos}${btnInf}${t.pdf ? `<button class="btn small" type="button" data-rb="pdf" data-c="${esc(t.codigo)}">📄 Mi oferta (PDF)</button>` : ""}${t.comprobante ? `<button class="btn small" type="button" data-rb="comprobante" data-c="${esc(t.codigo)}">🧾 Comprobante</button>` : ""}</div>`;
       }
       else if (et === "ganada") cuerpoE = (R.ocNo || {})[t.codigo] ? `<div class="rb-sec">¿Por qué no da?</div>
@@ -1427,12 +1454,12 @@
         <div class="rb-acc">${archivos}${btnInf}</div>
         <button class="btn rb-firmar" type="button" style="width:100%;margin-top:8px" data-rb="neg-etapa" data-e="operacion" data-c="${esc(t.codigo)}">✅ Inversión aprobada → Operación</button>`;
       else if (et === "operacion") cuerpoE = `${(inf.opciones || []).map((o, k) => `<div class="rb-op ${(op.opcion ?? inf.elegida ?? 0) === k ? "on" : ""}">
-          <div class="rb-env"><b>Opción ${"AB"[k]} · ${esc(o.proveedor || "")}</b><b>${num(o.total_con_iva)}</b></div>
+          <div class="rb-env"><b>Opción ${"AB"[k]} · ${esc(o.proveedor || "")}${chipLocal(o)}</b><b>${num(o.total_con_iva)}</b></div>
           <div class="muted" style="font-size:.72rem">${esc(o.cubre || "")}${o.despacho ? " · despacho " + esc(o.despacho) : ""}${o.plazo ? " · " + esc(o.plazo) : ""}</div>
           <div class="rb-acc">${tel(o.telefono) ? `<a class="btn small" href="tel:${esc(tel(o.telefono))}">📞 Llamar</a>` : ""}${wa(o.telefono) ? `<a class="btn small" href="https://wa.me/${wa(o.telefono)}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ""}
             <a class="btn small" href="${correo(t, o)}">✉ Pedir precio y descuento</a>${o.web ? `<a class="btn small" href="${esc(o.web)}" target="_blank" rel="noopener">🌐 Web</a>` : ""}
             ${(op.opcion ?? inf.elegida ?? 0) === k ? "" : `<button class="btn small" type="button" data-rb="neg-opcion" data-k="${k}" data-c="${esc(t.codigo)}">Elegir esta</button>`}</div></div>`).join("") || `<div class="muted" style="font-size:.78rem">Sin proveedores aún: toca «Armar informe».</div>`}
-        ${bloqueMarket((inf.productos || []).length ? inf.productos : ((R.fichas || {})[t.codigo]?.productos || []))}
+        ${bloqueMarket((inf.productos || []).length ? inf.productos : ((R.fichas || {})[t.codigo]?.productos || []), lugarDe(t))}
         ${inf.comprador?.email || inf.comprador?.telefono ? `<div class="muted" style="font-size:.74rem;margin-top:6px">Contacto del comprador: <b>${esc(inf.comprador.nombre || "")}</b> ${inf.comprador.telefono ? `· <a href="tel:${esc(tel(inf.comprador.telefono))}">${esc(inf.comprador.telefono)}</a>` : ""} ${inf.comprador.email ? `· <a href="mailto:${esc(inf.comprador.email)}">${esc(inf.comprador.email)}</a>` : ""}</div>` : ""}
         <label class="muted" style="font-size:.74rem;display:block;margin-top:8px">Precio final acordado con el proveedor (con IVA)
           <input class="rb-neg-in" data-campo="precio_acordado" data-c="${esc(t.codigo)}" inputmode="numeric" value="${op.precio_acordado ? Number(op.precio_acordado).toLocaleString("es-CL") : ""}" placeholder="${inf.compras ? Number(inf.compras).toLocaleString("es-CL") : ""}" style="width:100%;margin-top:3px;padding:8px;border-radius:10px;border:1px solid var(--line-soft);background:rgba(255,255,255,.05);color:inherit;font:inherit"></label>
