@@ -117,6 +117,9 @@
   .rb-badge.rojo{background:rgba(232,49,63,.15);color:#ffb3b9;border:1px solid rgba(232,49,63,.5)}
   .rb-badge .spinner{width:11px;height:11px;border-width:2px}
   .btn.rb-go{background:linear-gradient(100deg,var(--red),var(--red-deep));border-color:transparent;color:#fff}
+  #rbSheet button,#rbSheet a.btn,#rbSheet [data-rb]{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  #rbSheet button:active,#rbSheet a.btn:active{transform:scale(.96);filter:brightness(1.12);transition:transform .05s}
+  #rbSheet .rb-rchip{transition:background .08s,color .08s,box-shadow .08s}
   .rb-swipe{position:relative;touch-action:pan-y;user-select:none;-webkit-user-select:none;will-change:transform}
   .rb-sello{position:absolute;top:10px;padding:2px 10px;border:3px solid;border-radius:8px;font-weight:900;font-size:1.1rem;letter-spacing:.06em;opacity:0;pointer-events:none;z-index:2}
   .rb-sello.si{left:12px;color:#22c55e;border-color:#22c55e;transform:rotate(-12deg)}
@@ -2145,8 +2148,15 @@
     if (a === "push-probar") { try { await api("push-probar", { method: "POST", body: "{}" }); toast("Aviso de prueba enviado"); } catch (e) { toast(e.message); } return; }
     if (a === "instalar") { const p = R.instalar; R.instalar = null; try { await p?.prompt(); } catch {} return pintarHoja(); }
     if (a === "vista") { R.vista = b.dataset.v; guardar({ vista: R.vista, v_cajas: 1 }); if (R.vista === "oport") R.oport = null; return pintarHoja(); }
-    if (a === "rubro-t") { const set = new Set(R.rubrosTmp || leer().rubros || []); const r = b.dataset.r; set.has(r) ? set.delete(r) : set.add(r);
-      R.rubrosTmp = [...set]; R.palabrasTmp = $("#rbPalabras")?.value ?? R.palabrasTmp; return pintarHoja(true); }
+    if (a === "rubro-t") {                      // ⚡ al instante: solo cambia el botón y el contador (sin repintar toda la pantalla)
+      const set = new Set(R.rubrosTmp || leer().rubros || []); const r = b.dataset.r; set.has(r) ? set.delete(r) : set.add(r);
+      R.rubrosTmp = [...set]; R.palabrasTmp = $("#rbPalabras")?.value ?? R.palabrasTmp;
+      b.classList.toggle("on", set.has(r)); navigator.vibrate?.(8);
+      const ws = String(R.palabrasTmp || "").split(/[,;\n]+/).map(norm).filter((w) => w.length > 2);
+      const n = (R.oport?.lista || []).filter((x) => Date.parse(x.cierre) - Date.now() > 30 * 60000 && (set.has(x.rubro) || (ws.length && ws.some((w) => norm(x.nombre).includes(w))))).length;
+      const ok = $('[data-rb="rubro-ok"]', sheet); if (ok) ok.innerHTML = `🔎 Buscar mis oportunidades${set.size || ws.length ? ` · <b data-rb-n>${n}</b> vigentes` : ""}`;
+      return;
+    }
     if (a === "rubro-editar") { R.rubroEditar = true; R.rubrosTmp = null; R.palabrasTmp = null; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "rubro-ok" || a === "rubro-todo") {
       const todo = a === "rubro-todo";
