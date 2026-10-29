@@ -169,6 +169,7 @@
   .rb-card.ambar .rb-msg{color:#ffe2a6}
   .rb-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
   .rb-det{margin-top:10px}
+  .rb-mk{border:1px solid rgba(24,119,242,.45);border-radius:12px;padding:6px 10px;background:rgba(24,119,242,.08)}.rb-mk summary{color:#9cc4ff;font-weight:700;font-size:.8rem}
   .rb-det summary{cursor:pointer;font-size:.78rem;color:var(--ink-faint)}
   .rb-det pre{white-space:pre-wrap;background:var(--bg-2);border:1px solid var(--line-soft);border-radius:10px;padding:10px;font-family:"IBM Plex Mono",monospace;font-size:.72rem;color:var(--ink-dim);margin:8px 0 0}
   .rb-line{display:flex;gap:8px;font-size:.74rem;color:var(--ink-faint);font-family:"IBM Plex Mono",monospace}
@@ -969,8 +970,20 @@
     R._cargEj = false; pintarHoja(true);
   }
   async function cargarEjecutores() { try { R.ejecutores = (await api("ejecutores")).ejecutores || {}; } catch {} pintarHoja(true); }
-  const buscarEn = (q) => [["Google", "https://www.google.com/search?tbm=shop&q="], ["MercadoLibre", "https://listado.mercadolibre.cl/"], ["Sodimac", "https://www.sodimac.cl/sodimac-cl/search?Ntt="], ["Lider", "https://www.lider.cl/search?q="]]
+  const buscarEn = (q) => [["Google", "https://www.google.com/search?tbm=shop&q="], ["Marketplace", "https://www.facebook.com/marketplace/search/?query="], ["MercadoLibre", "https://listado.mercadolibre.cl/"], ["Sodimac", "https://www.sodimac.cl/sodimac-cl/search?Ntt="], ["Lider", "https://www.lider.cl/search?q="]]
     .map(([n, u]) => `<a class="rb-cp" href="${u}${encodeURIComponent(q)}" target="_blank" rel="noopener">${n}</a>`).join(" ");
+  // 🛒 Facebook Marketplace: segunda opción cuando los proveedores autorizados no tienen stock o están caros.
+  // Facebook no permite buscar por programa: se abre la búsqueda ya hecha (en el iPhone abre la app de Facebook).
+  const qMk = (n) => String(n || "").split(/[,(;:]|\s-\s/)[0].replace(/\b\d+([.,]\d+)?\s*(unidades?|un|uds?|cajas?|kg|kilos?|lts?|litros?)\b/gi, "").split(/\s+/).filter(Boolean).slice(0, 6).join(" ");
+  const urlMk = (n) => "https://www.facebook.com/marketplace/search/?query=" + encodeURIComponent(qMk(n));
+  function bloqueMarket(prods) {
+    const ps = (prods || []).filter((x) => x && x.nombre).slice(0, 12);
+    if (!ps.length) return "";
+    return `<details class="rb-det rb-mk"><summary>🛒 Segunda opción: buscar en Facebook Marketplace</summary>
+      <div class="muted" style="font-size:.7rem;margin:4px 0 6px">Cuando los proveedores autorizados no tienen stock, tardan o están caros. Pide <b>factura</b> (o boleta), revisa el producto antes de pagar y anota el precio acordado para ver si ahorraste.</div>
+      ${ps.map((x) => `<div class="rb-env" style="gap:8px;margin:4px 0"><span style="font-size:.76rem;min-width:0">${esc(x.cantidad ?? "")} × ${esc(qMk(x.nombre))}</span>
+        <a class="btn small" href="${urlMk(x.nombre)}" target="_blank" rel="noopener" style="flex:none">🛒 Marketplace</a></div>`).join("")}</details>`;
+  }
   const diasPlazo = (f) => { if (!f) return 99; const h = new Date(); h.setHours(12, 0, 0, 0); return Math.round((Date.parse(f + "T12:00") - h) / 86400000); };
   const textoPlazo = (f) => { const d = diasPlazo(f); return d < 0 ? `🔴 atrasado ${-d} día${d === -1 ? "" : "s"}` : d === 0 ? "🟠 es hoy" : d === 1 ? "🟡 mañana" : `🟢 quedan ${d} días`; };
   function tarjetaEj(t) {
@@ -1008,6 +1021,7 @@
       ${(inf.opciones || []).map((o) => `<div class="rb-op"><div class="rb-env"><b>${esc(o.proveedor || "")}</b>${o.total_con_iva ? `<b>${clp(o.total_con_iva)}</b>` : ""}</div>
         <div class="rb-row">${telf(o.telefono) ? `<a class="btn small" href="tel:${esc(telf(o.telefono))}">📞 Llamar</a>` : ""}${waN(o.telefono) ? `<a class="btn small" href="https://wa.me/${waN(o.telefono)}?text=${encodeURIComponent(msgProv)}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ""}${o.email ? `<a class="btn small" href="mailto:${esc(o.email)}?subject=${encodeURIComponent("Cotización " + (t.nombre || cod))}&body=${encodeURIComponent(msgProv)}">✉ Correo</a>` : ""}${o.web ? `<a class="btn small" href="${esc(o.web)}" target="_blank" rel="noopener">🌐</a>` : ""}</div></div>`).join("") || `<div class="muted" style="font-size:.74rem">Sin proveedores del informe: busca con los botones 🔎 o en «📞 Me llamaron».</div>`}
       <div class="rb-row"><button class="btn small" type="button" data-rb="cp" data-v="${esc(msgProv)}">Copiar mensaje para proveedores</button></div>
+      ${bloqueMarket(prods)}
       <div class="rb-sec">🤝 Tu negociación</div>
       ${campo("proveedor", "Proveedor elegido", op.proveedor, "Nombre del proveedor")}
       ${campo("precio_acordado", "Precio de compra total (con IVA)", compra ? Number(compra).toLocaleString("es-CL") : "", estimado ? Number(estimado).toLocaleString("es-CL") : "", 1)}
@@ -1258,6 +1272,7 @@
           <div class="rb-acc">${tel(o.telefono) ? `<a class="btn small" href="tel:${esc(tel(o.telefono))}">📞 Llamar</a>` : ""}${wa(o.telefono) ? `<a class="btn small" href="https://wa.me/${wa(o.telefono)}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ""}
             <a class="btn small" href="${correo(t, o)}">✉ Pedir precio y descuento</a>${o.web ? `<a class="btn small" href="${esc(o.web)}" target="_blank" rel="noopener">🌐 Web</a>` : ""}
             ${(op.opcion ?? inf.elegida ?? 0) === k ? "" : `<button class="btn small" type="button" data-rb="neg-opcion" data-k="${k}" data-c="${esc(t.codigo)}">Elegir esta</button>`}</div></div>`).join("") || `<div class="muted" style="font-size:.78rem">Sin proveedores aún: toca «Armar informe».</div>`}
+        ${bloqueMarket((inf.productos || []).length ? inf.productos : ((R.fichas || {})[t.codigo]?.productos || []))}
         ${inf.comprador?.email || inf.comprador?.telefono ? `<div class="muted" style="font-size:.74rem;margin-top:6px">Contacto del comprador: <b>${esc(inf.comprador.nombre || "")}</b> ${inf.comprador.telefono ? `· <a href="tel:${esc(tel(inf.comprador.telefono))}">${esc(inf.comprador.telefono)}</a>` : ""} ${inf.comprador.email ? `· <a href="mailto:${esc(inf.comprador.email)}">${esc(inf.comprador.email)}</a>` : ""}</div>` : ""}
         <label class="muted" style="font-size:.74rem;display:block;margin-top:8px">Precio final acordado con el proveedor (con IVA)
           <input class="rb-neg-in" data-campo="precio_acordado" data-c="${esc(t.codigo)}" inputmode="numeric" value="${op.precio_acordado ? Number(op.precio_acordado).toLocaleString("es-CL") : ""}" placeholder="${inf.compras ? Number(inf.compras).toLocaleString("es-CL") : ""}" style="width:100%;margin-top:3px;padding:8px;border-radius:10px;border:1px solid var(--line-soft);background:rgba(255,255,255,.05);color:inherit;font:inherit"></label>
