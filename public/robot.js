@@ -334,6 +334,12 @@
   .rb-prod{padding:8px 10px;margin:6px 0;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);font-size:.8rem}
   .rb-prod .rb-row{font-size:.7rem;color:#a9b8d9}
   .rb-ejrow{margin:10px 0 4px;padding:8px 10px;border-radius:12px;background:rgba(120,180,255,.08);border:1px solid rgba(120,180,255,.25);font-size:.78rem}
+  #rbSheet .rb-libro{margin:10px 0;padding:10px 12px;border-radius:16px;background:linear-gradient(160deg,rgba(245,207,107,.14),rgba(255,255,255,.03));border:1px solid rgba(245,207,107,.38)}
+  #rbSheet .rb-libro summary{display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-weight:800;font-size:.86rem;color:#ffe9a8;list-style:none}
+  #rbSheet .rb-libro summary b{font-size:.78rem;padding:3px 10px;border-radius:99px;background:rgba(245,207,107,.18);border:1px solid rgba(245,207,107,.45)}
+  #rbSheet .rb-nivel{margin:8px 0 4px;font-size:.74rem}
+  #rbSheet .rb-mkc{margin-top:10px;padding:8px 10px;border-radius:12px;font-size:.74rem;line-height:1.45;background:rgba(94,240,176,.08);border:1px solid rgba(94,240,176,.35)}
+  #rbSheet .rb-mkc span{opacity:.7}#rbSheet .rb-mkc.mal{background:rgba(255,90,90,.12);border-color:rgba(255,90,90,.5)}#rbSheet .rb-mkc.espera{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.14);opacity:.85}
   #rbSheet .rb-yo{flex:none;background:rgba(94,240,176,.12);border:1px solid rgba(94,240,176,.4);color:#dfffee;border-radius:99px;padding:6px 10px;font:inherit;font-size:.74rem;font-weight:700;cursor:pointer;white-space:nowrap}
   #rbAtras{position:fixed;left:0;top:50%;z-index:2147483646;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;
     font:700 30px/1 system-ui;color:#1a1300;background:linear-gradient(180deg,#ffe9a8,#f5cf6b);box-shadow:0 6px 22px rgba(0,0,0,.45);opacity:0;pointer-events:none;
@@ -886,7 +892,47 @@
   const esSel = (cod) => !!leerSel()[cod];
   async function cargarSel() {
     try { const r = await api("seleccionadas"); guardarSel(r.sel || {}); } catch {}
+    cargarMercado();
   }
+  // 💹 costo de mercado real (lo busca el PC con IA para cada seleccionada)
+  async function cargarMercado() {
+    if (R._cargMk || (R.mercadoT && Date.now() - R.mercadoT < 60_000)) return; R._cargMk = true;
+    try { R.mercado = (await api("mercado")).mercado || {}; R.mercadoT = Date.now(); pintarHoja(); } catch {} R._cargMk = false;
+  }
+  // 🧠 inteligencia de competencia: con qué % del presupuesto ganan los que ganan (de nuestras propias compras ya decididas)
+  function intel() {
+    const ts = R.data?.trabajos || [], v = [];
+    for (const t of ts) { const g = segDe(t.codigo); if (g?.ganador_total && g.presupuesto) v.push({ r: g.ganador_total / g.presupuesto, seg: /^segundo/i.test(g.llamado || "") }); }
+    const med = (a) => { if (!a.length) return null; const b = [...a].sort((x, y) => x - y); return b[Math.floor(b.length / 2)]; };
+    return { n: v.length, med: med(v.map((x) => x.r)), medSeg: med(v.filter((x) => x.seg).map((x) => x.r)), medPri: med(v.filter((x) => !x.seg).map((x) => x.r)), todos: v.map((x) => x.r) };
+  }
+  // 📒 Libro del juego (el ERP que nace): vendido, comprado, facturado, utilidad, por mes; y tu nivel de jugador
+  const NIVELES = [[0, "🥉 Bronce"], [2e6, "🥈 Plata"], [10e6, "🥇 Oro"], [30e6, "💎 Diamante"], [100e6, "👑 Leyenda"]];
+  function libroJuego(gan, env) {
+    const vivas = gan.filter((t) => t.op?.etapa !== "rechazada");
+    const fila = (t) => { const op = t.op || {}, inf = op.informe || {};
+      const compra = Number(op.precio_acordado) || Number(inf.compras) || 0, util = inf.final != null && !inf.incompleto ? Number(inf.final) : null;
+      const fact = !!(op.folio_factura || (op.docs || []).some((d) => d.tipo === "factura"));
+      const f = (op.historial || [])[0]?.t || t.actualizado || "";
+      return { mes: f.slice(0, 7), venta: Number(t.total) || 0, compra, util, fact, cerr: op.etapa === "cerrado", dej: segDe(t.codigo)?.dejado || 0 }; };
+    const F = vivas.map(fila), sum = (k, L = F) => L.reduce((a, x) => a + (Number(x[k]) || 0), 0);
+    const vend = sum("venta"), comp = sum("compra"), util = F.reduce((a, x) => a + (x.util ?? 0), 0), fact = sum("venta", F.filter((x) => x.fact)), dej = sum("dej");
+    const meses = [...new Set(F.map((x) => x.mes).filter(Boolean))].sort().reverse().slice(0, 6);
+    const nv = [...NIVELES].reverse().find(([m]) => vend >= m) || NIVELES[0], sig = NIVELES[NIVELES.indexOf(nv) + 1];
+    const prog = sig ? Math.min(100, Math.round((vend - nv[0]) / (sig[0] - nv[0]) * 100)) : 100;
+    const mesN = (m) => { const [a, b] = m.split("-"); return ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"][+b - 1] + " " + a.slice(2); };
+    return `<details class="rb-libro" ${R.libroAbierto ? "open" : ""} data-libro><summary><span>📒 Libro del juego</span><b>${nv[1]}</b></summary>
+      <div class="rb-nivel"><div class="rb-env"><span>${nv[1]}${sig ? ` → ${sig[1]}` : ""}</span><span>${sig ? `faltan <b>${clp(sig[0] - vend)}</b> en ventas` : "nivel máximo"}</span></div><div class="rb-prob"><i style="width:${prog}%"></i></div></div>
+      <div class="rb-mini"><div><small>Vendido (adjudicado)</small><b>${clp(vend)}</b></div><div><small>Comprado a proveedores</small><b>${clp(comp)}</b></div>
+        <div><small>Facturado</small><b>${clp(fact)}</b></div><div><small>Utilidad confirmada</small><b style="color:${util < 0 ? "#ff8a80" : "#7ee2a0"}">${clp(util)}</b></div></div>
+      ${dej ? `<div class="muted" style="font-size:.72rem;margin-top:6px">💸 Dejado en la mesa (pudimos cobrar más y ganar igual): <b style="color:#ffd88a">${clp(dej)}</b>. El motor ya sube la apuesta cuando hay pocos rivales.</div>` : ""}
+      ${meses.length ? `<table class="rb-copias" style="margin-top:8px"><tr><td><b>Mes</b></td><td class="n"><b>Vendido</b></td><td class="n"><b>Utilidad</b></td></tr>${meses.map((m) => { const L = F.filter((x) => x.mes === m);
+        return `<tr><td>${mesN(m)}</td><td class="n">${clp(sum("venta", L))}</td><td class="n">${clp(L.reduce((a, x) => a + (x.util ?? 0), 0))}</td></tr>`; }).join("")}</table>` : ""}
+      <div class="muted" style="font-size:.68rem;margin-top:6px">${env.length} ofertas enviadas · ${vivas.length} negocios · ${F.filter((x) => x.cerr).length} cerrados en oro. Próximo: conexión con facturador SII, banco y factoring.</div></details>`;
+  }
+  const MARGEN_MIN = 0.12;                                       // utilidad mínima sobre la venta neta para que «dé»
+  const fijosDe = (pres) => (pres < 150000 ? 12000 : pres < 1000000 ? 20000 : 35000);   // despacho y gastos que no dependen del precio
+  const pisoDe = (costoNeto, pres) => costoNeto ? Math.ceil((costoNeto + fijosDe(pres)) / (1 - MARGEN_MIN) * 1.19 / 10) * 10 : 0;
   function datosOport(cod) {
     const x = (R.oport?.lista || []).find((y) => y.codigo === cod) || trabajo(cod) || {};
     return { codigo: cod, nombre: x.nombre, organismo: x.organismo, monto: x.monto, cierre: x.cierre, margen: x.margen };
@@ -1149,19 +1195,26 @@
       const pres = Number(x.monto) || 0;
       const margenRubro = Number(x._sel.margen ?? x.margen) || 0.2;
       const costoEst = Math.round(pres / 1.19 * (1 - margenRubro));
-      const costo = Number(x._sel.costo) || 0;
+      const mk = (R.mercado || {})[x.codigo], costoMk = mk ? Math.round(mk.total_neto || (mk.total_con_iva || 0) / 1.19) : 0;
+      const costo = Number(x._sel.costo) || costoMk || 0;
+      const real = !!costo, piso = pisoDe(costo || costoEst, pres);
       // 1er llamado: tope = el presupuesto · 🔥 2° llamado: se desbloquea, se puede ofertar sobre el presupuesto hasta 100 UTM
-      const tope = esSeg(x) ? TOPE_CA() : Math.min(pres, TOPE_CA()), precio0 = Math.round(Math.min(x._sel.precio || pres * (1 - sugerido(x).d), tope));
+      const tope = esSeg(x) ? TOPE_CA() : Math.min(pres, TOPE_CA()), precio0 = Math.round(Math.min(x._sel.precio || Math.max(pres * (1 - sugerido(x).d), real ? piso : 0), tope));
       const h = x.cierre ? Math.round((Date.parse(x.cierre) - ahora) / 3600000) : null;
       const of = x.ofertas ?? null, seg = esSeg(x);
       const rival = of === 0 ? `<span class="rb-rival solo">🎯 Vas solo</span>` : of != null && of <= 2 ? `<span class="rb-rival pocos">${of} rival${of === 1 ? "" : "es"}</span>`
         : of != null ? `<span class="rb-rival muchos">${of} rivales</span>` : "";
-      const sg = sugerido(x), vSug = Math.round(pres * (1 - sg.d));
-      return `<div class="rb-card rb-sel rb-swipe" data-modo="sel" data-c="${esc(x.codigo)}" data-pres="${pres}" data-costo="${costo || costoEst}" data-est="${costo ? 0 : 1}" data-of="${of ?? ""}" data-seg="${seg ? 1 : ""}" style="padding:14px;margin:6px 0">
+      const sg = sugerido(x), vSug = Math.min(tope, Math.max(Math.round(pres * (1 - sg.d) / 10) * 10, real ? piso : 0));
+      const noDa = real && piso > tope;
+      const chipMk = mk ? `<div class="rb-mkc ${noDa ? "mal" : ""}">💹 <b>Costo de mercado ${clp(mk.total_con_iva || costoMk * 1.19)}</b> c/IVA <span>(IA, ${mk.items?.reduce((s2, i) => s2 + (i.f || 0), 0) || "varias"} tiendas${mk.completo ? "" : ", incompleto"})</span><br>
+          ${noDa ? `🔴 <b>No da:</b> para ganar plata necesitas cobrar al menos ${clp(piso)} y el tope es ${clp(tope)}. Pasa o busca otro proveedor.` : `🛡 Piso para ganar plata: <b>${clp(piso)}</b> (costo + despacho + ${Math.round(MARGEN_MIN * 100)}% mínimo)`}</div>`
+        : `<div class="rb-mkc espera">⏳ El PC está buscando el <b>costo real</b> en tiendas (aparece en unos minutos). Mientras, el costo es estimado.</div>`;
+      return `<div class="rb-card rb-sel rb-swipe" data-modo="sel" data-c="${esc(x.codigo)}" data-pres="${pres}" data-costo="${costo || costoEst}" data-piso="${piso}" data-real="${real ? 1 : ""}" data-est="${costo ? 0 : 1}" data-of="${of ?? ""}" data-seg="${seg ? 1 : ""}" style="padding:14px;margin:6px 0">
         <span class="rb-sello si">APUESTO</span><span class="rb-sello no">PASO</span>
         <div class="rb-env"><div style="min-width:0"><div style="font-size:.76rem;opacity:.85"><b>${esc(x.codigo)}</b>${seg ? ` · <b style="color:#ffb347">🔥 2° llamado</b>` : ""}${h != null ? ` · <span style="${h < 12 ? "color:#ff8a80;font-weight:700" : ""}">cierra en ${h} h</span>` : ""}</div>
           <div style="margin:3px 0;font-weight:600">${esc(x.nombre || "Compra Ágil")}</div><div class="muted" style="font-size:.74rem">${esc(x.organismo || "")} · Ppto. <b>${clp(pres)}</b> ${rival}</div></div>
           <button type="button" class="rb-estrella on" data-rb="sel-quitar" data-c="${esc(x.codigo)}" title="Devolver a Por preparar">★</button></div>
+        ${pres ? chipMk : ""}
         ${pres ? `<div style="margin-top:12px;display:flex;justify-content:space-between;align-items:flex-end;gap:8px"><div><span class="muted" style="font-size:.72rem;letter-spacing:.06em;text-transform:uppercase">Tu apuesta (con IVA)</span><br><span class="rb-precio rb-oro-t">${clp(precio0)}</span></div><span class="rb-pct"></span></div>
         <input type="range" class="rb-range" min="0" max="1000" step="1" data-lo="${Math.round(pres * 0.5)}" data-mid="${Math.round(Math.min(pres * 1.5, tope))}" data-hi="${tope}" value="0" data-v0="${precio0}">
         ${tope > pres * 1.5 ? `<div class="rb-escala" style="position:relative;display:block;height:15px"><span style="position:absolute;left:0">−50%</span><span style="position:absolute;left:37.5%;transform:translateX(-50%)">Ppto. ${cortoG(pres)}</span><span style="position:absolute;left:75%;transform:translateX(-50%)">+50%</span><span style="position:absolute;right:0;color:#f5cf6b">100 UTM</span></div>`
@@ -1180,8 +1233,9 @@
           ${tope > pres ? `<button class="btn small rb-soltar" type="button" style="grid-column:1/-1;order:9" data-fijo="${tope}" title="Tope legal de la Compra Ágil">🚀 Soltar hasta 100 UTM · ${clp(tope)}</button>` : `<span class="muted" style="grid-column:1/-1;order:9;font-size:.68rem;text-align:center">🔒 1er llamado: el tope es el presupuesto · en 2° llamado se desbloquea hasta 100 UTM</span>`}
           <button class="btn small" type="button" data-paso="1">+1%</button></div>
         <div class="muted" style="font-size:.7rem;margin-top:4px">💡 ${esc(sg.por)}</div>
-        <details class="rb-det"><summary>✎ Mi costo: <b class="rb-cvis">${clp(costo || costoEst)}</b> <span class="rb-cest">${costo ? "" : `(estimado ${Math.round(margenRubro * 100)}% margen)`}</span></summary>
+        <details class="rb-det"><summary>✎ Mi costo: <b class="rb-cvis">${clp(costo || costoEst)}</b> <span class="rb-cest">${Number(x._sel.costo) ? "(tuyo)" : costoMk ? "(mercado, IA)" : `(estimado ${Math.round(margenRubro * 100)}% margen)`}</span></summary>
           <input class="rb-costo rb-in" inputmode="numeric" value="${(costo || costoEst).toLocaleString("es-CL")}" style="margin-top:6px"></details>
+        <div class="rb-bajo" style="display:none;color:#ff9a9a;font-size:.78rem;margin-top:6px">🔴 Bajo el piso (${clp(piso)}): ganarías la compra pero <b>perderías plata</b>. Sube la apuesta o consigue mejor costo.</div>
         <div class="rb-sobre muted" style="display:none;color:#ffd88a;font-size:.78rem;margin-top:6px">⚠ Sobre el presupuesto (${clp(pres)}): se oferta igual, hasta el tope de 100 UTM (${clp(tope)}). El organismo puede preferir una más barata.</div>
         <button class="btn rb-firmar" type="button" style="width:100%;margin-top:10px;padding:14px;font-size:1rem" data-rb="sel-preparar" data-c="${esc(x.codigo)}">✍ Apostar y firmar <span class="rb-p2">${clp(precio0)}</span></button>
         <div class="muted" style="font-size:.68rem;margin-top:5px;text-align:center">el robot arma cotización y PDF y la deja en ✍ Firmar</div>`
@@ -1191,19 +1245,22 @@
     // ---- 🎯 precio sugerido según el llamado y la competencia (lección: en 2° llamado casi nadie compite)
     const sugerido = (x) => {
       const seg = esSeg(x), of = x.ofertas ?? null;
-      const d = seg ? (of === 0 ? 0 : of === 1 ? 0.02 : of != null && of <= 3 ? 0.04 : 0.07) : (of != null && of <= 1 ? 0.04 : of != null && of <= 3 ? 0.06 : 0.09);
+      let d = seg ? (of === 0 ? 0 : of === 1 ? 0.02 : of != null && of <= 3 ? 0.04 : 0.07) : (of != null && of <= 1 ? 0.04 : of != null && of <= 3 ? 0.06 : 0.09);
+      const ic = intel(), mr = (seg ? ic.medSeg : ic.medPri) ?? ic.med;
+      if (ic.n >= 3 && mr != null && !(seg && of === 0)) d = Math.max(0, Math.min(0.35, (d + (1 - mr + 0.01)) / 2));   // mezcla: regla + lo que realmente gana
       const por = seg ? (of === 0 ? "2° llamado y nadie ha cotizado: oferta el presupuesto completo"
         : of != null && of <= 3 ? `2° llamado con solo ${of} cotización${of === 1 ? "" : "es"}: pocos compiten, no regales margen`
         : "2° llamado: menos competencia que en el primero") : (of != null && of <= 3 ? `Primer llamado con ${of} cotizaciones` : "Primer llamado: más competencia, baja un poco más");
-      return { d, por };
+      return { d, por: por + (ic.n >= 3 && mr != null ? ` · 🧠 los que ganan cotizan ~${Math.round((1 - mr) * 100)}% bajo el presupuesto (${ic.n} casos)` : "") };
     };
     // ---- marcador: lo que motiva (ganado, utilidad, tasa de éxito, en juego)
     const decididas = enviadosAll.filter((t) => { const g = segDe(t.codigo); return g && (g.ganada || g.estado === "proveedor_seleccionado"); });
-    const ganadoMonto = ganadasT.reduce((s, t) => s + (Number(t.total) || 0), 0);
+    const ganadasR = ganadasT.filter((t) => t.op?.etapa !== "previa");          // ya adjudicadas (sin las «vas 1°»)
+    const ganadoMonto = ganadasR.reduce((s, t) => s + (Number(t.total) || 0), 0);
     const utilOk = (t) => t.op?.informe && !t.op.informe.incompleto && t.op.informe.final != null;
-    const utilidadG = ganadasT.reduce((s, t) => s + (utilOk(t) ? Number(t.op.informe.final) : Math.round((Number(t.total) || 0) * 0.13)), 0);
+    const utilidadG = ganadasR.reduce((s, t) => s + (utilOk(t) ? Number(t.op.informe.final) : Math.round((Number(t.total) || 0) * 0.13)), 0);
     const enJuego = enviadosAll.filter((t) => ["publicada", "cerrada"].includes(segDe(t.codigo)?.estado)).reduce((s, t) => s + (Number(t.total) || 0), 0);
-    const tasa = decididas.length ? Math.round(ganadasT.length / decididas.length * 100) : null;
+    const tasa = decididas.length ? Math.round(ganadasR.length / decididas.length * 100) : null;
     const corto = (n) => n >= 1e6 ? "$" + (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace(".", ",") + "M" : clp(n);
     // cartera: lo ofertado acumulado en el tiempo (la curva que crece)
     const puntos = (() => {
@@ -1223,10 +1280,10 @@
       <div class="rb-cartera"><div class="rb-ctop"><div><span style="font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;opacity:.8">💼 Tu cartera ofertada</span><br>
         <b class="rb-oro-t" data-cnt="${cartera}" data-k="cartera" data-fmt="corto">${corto(cartera)}</b></div>
         <div style="text-align:right"><span class="rb-up">▲ ${corto(semana)}</span><div style="font-size:.66rem;opacity:.75">esta semana</div></div></div>${puntos}</div>
-      <div class="rb-m oro"><span>🏆 Ganado</span><b class="rb-oro-t" data-cnt="${ganadoMonto}" data-k="ganado" data-fmt="corto">${corto(ganadoMonto)}</b><small>${ganadasT.length} adjudicada${ganadasT.length === 1 ? "" : "s"}</small></div>
-      <div class="rb-m verde"><span>💰 Utilidad</span><b data-cnt="${utilidadG}" data-k="util" data-fmt="corto">${corto(utilidadG)}</b><small>${ganadasT.length && ganadasT.every(utilOk) ? "según informes" : "estimada · faltan precios"}</small></div>
-      <div class="rb-m azul"><span>🎯 Tasa de éxito</span><b data-cnt="${tasa ?? 0}" data-k="tasa" data-fmt="pct">${tasa == null ? "—" : tasa + "%"}</b><small>${ganadasT.length} de ${decididas.length} resueltas</small></div>
-      <div class="rb-m violeta"><span>⏳ En juego</span><b data-cnt="${enJuego}" data-k="juego" data-fmt="corto">${corto(enJuego)}</b><small>${enviadosAll.length - decididas.length} esperando resultado</small></div></div>`;
+      <div class="rb-m oro"><span>🏆 Ganado</span><b class="rb-oro-t" data-cnt="${ganadoMonto}" data-k="ganado" data-fmt="corto">${corto(ganadoMonto)}</b><small>${ganadasR.length} adjudicada${ganadasR.length === 1 ? "" : "s"}</small></div>
+      <div class="rb-m verde"><span>💰 Utilidad</span><b data-cnt="${utilidadG}" data-k="util" data-fmt="corto">${corto(utilidadG)}</b><small>${ganadasR.length && ganadasR.every(utilOk) ? "según informes" : "estimada · faltan precios"}</small></div>
+      <div class="rb-m azul"><span>🎯 Tasa de éxito</span><b data-cnt="${tasa ?? 0}" data-k="tasa" data-fmt="pct">${tasa == null ? "—" : tasa + "%"}</b><small>${ganadasR.length} de ${decididas.length} resueltas</small></div>
+      <div class="rb-m violeta"><span>⏳ En juego</span><b data-cnt="${enJuego}" data-k="juego" data-fmt="corto">${corto(enJuego)}</b><small>${enviadosAll.length - decididas.length} esperando resultado</small></div></div>${libroJuego(ganadasR, enviadosAll)}`;
     // ---- 🏆 negocios ganados por etapa
     const ETAPAS = [["previa", "📞 Vas 1°"], ["ganada", "🆕 OC ¿nos da?"], ["inversionista", "💼 Inversión"], ["operacion", "🛠 Proveedor"], ["pago", "💳 Pagar"], ["documentos", "🧾 Guía y factura"],
       ["despacho", "🚚 Despacho"], ["entrega", "📸 Entrega"], ["cerrado", "🥇 Cerrados"], ["rechazada", "❌ No dio"]];
@@ -2291,11 +2348,15 @@
   });
   // probabilidad de ganar (estimada): menos rivales y precio más bajo bajo el presupuesto = más chances
   function probGanar(of, seg, precio, pres) {
-    if (!pres || precio > pres) return 0;
+    if (!pres) return 0;
     const n = of == null || of === "" ? 3 : Math.min(+of, 6);
     const base = [0.82, 0.56, 0.42, 0.33, 0.27, 0.23, 0.2][n] + (seg ? 0.04 : 0);
+    if (precio > pres) return Math.max(0.02, Math.min(0.5, (n === 0 ? 0.7 : base * 0.45) * Math.pow(pres / precio, 4)));
     const d = 1 - precio / pres;
-    return Math.max(0.05, Math.min(0.95, base + (d - 0.05) * 1.6));
+    let p = base + (d - 0.05) * 1.6;
+    const ic = intel();
+    if (ic.n >= 3) { const r = precio / pres, bajo = ic.todos.filter((w) => r <= w).length / ic.n; p = (p + bajo) / 2; }   // ¿cuántos ganadores reales habrían perdido contra este precio?
+    return Math.max(0.05, Math.min(0.95, p));
   }
   function pintarSel(c, guardarAhora) {
     const r = c.querySelector(".rb-range"); if (!r) return;
@@ -2316,7 +2377,11 @@
     q(".rb-ev").textContent = clp(Math.max(0, gan) * pg);
     q(".rb-sobre").style.display = v > pres ? "block" : "none";
     q(".rb-p2").textContent = clp(ve);
-    const pct = r.value / 10; r.style.background = `linear-gradient(90deg,#c48f17,#f5cf6b ${pct}%,rgba(255,255,255,.12) ${pct}%)`;
+    const pct = r.value / 10, piso = +c.dataset.piso || 0, pp = piso ? Math.min(100, Math.max(0, posDe(r, piso) / 10)) : 0;
+    r.style.background = piso && c.dataset.real
+      ? `linear-gradient(90deg,rgba(255,90,90,.55) 0 ${pp}%,transparent ${pp}%),linear-gradient(90deg,#c48f17,#f5cf6b ${pct}%,rgba(255,255,255,.12) ${pct}%)`
+      : `linear-gradient(90deg,#c48f17,#f5cf6b ${pct}%,rgba(255,255,255,.12) ${pct}%)`;
+    const bajo = q(".rb-bajo"); if (bajo) bajo.style.display = c.dataset.real && piso && ve < piso ? "block" : "none";
     if (guardarAhora) guardarSelLuego(c.dataset.c, { precio: v });
   }
   sheet.addEventListener("input", (ev) => {
@@ -2347,6 +2412,7 @@
     const q = R.llamada; q.provSel = { ...(q.provSel || Object.fromEntries($$("[data-prov]", sheet).map((x) => [x.dataset.prov, x.checked]))), [ev.target.dataset.prov]: ev.target.checked };
     q.asunto = $("#rbAsunto")?.value; q.cuerpo = $("#rbCuerpo")?.value; pintarHoja(true);
   });
+  sheet.addEventListener("toggle", (ev) => { if (ev.target?.dataset && "libro" in ev.target.dataset) R.libroAbierto = ev.target.open; }, true);
   sheet.addEventListener("focusin", (ev) => { if (ev.target.classList?.contains("rb-costo") || ev.target.classList?.contains("rb-neg-in")) R.barra = true; });
   sheet.addEventListener("focusout", (ev) => { if (ev.target.classList?.contains("rb-costo") || ev.target.classList?.contains("rb-neg-in")) setTimeout(() => { R.barra = false; }, 300); });
   // fotos grandes se achican antes de subir (máx. ~1600 px, JPEG), los PDF van tal cual
