@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      1.8
+// @version      1.9
 // @description  Al abrir una Compra Ágil desde «Ir a firmar», carga sola los precios, el detalle y el PDF de tu oferta. NO envía, NO declara y NO firma: eso lo haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -32,6 +32,21 @@
       if (disp) gmSet("dispositivo", disp);
     } catch (e) {}
     document.documentElement.dataset.firmaRapida = "1";
+    // ✅ la pestaña de Mercado Público avisa «firmada» (aunque se haya cerrado): la app la saca de Firmar al instante
+    let ultFirmada = "";
+    const avisarFirmada = async () => {
+      try {
+        const f = JSON.parse((await gmGet("firmada")) || "null");
+        if (!f || !f.cod || Date.now() - f.t > 12 * 3600e3) return;
+        const k = f.cod + "@" + f.t; if (k === ultFirmada) return; ultFirmada = k;
+        try { const o = JSON.parse(localStorage.getItem("sdc:firmadas") || "{}"); o[f.cod] = Math.max(o[f.cod] || 0, f.t); localStorage.setItem("sdc:firmadas", JSON.stringify(o)); } catch (e) {}
+        window.dispatchEvent(new CustomEvent("cotizagil-firmada", { detail: f.cod }));
+      } catch (e) {}
+    };
+    avisarFirmada();
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) avisarFirmada(); });
+    window.addEventListener("focus", avisarFirmada);
+    setInterval(() => { if (!document.hidden) avisarFirmada(); }, 1500);
     // puente «Abrir compra»: /firmar.html#CODIGO → recuerda la compra y te lleva a ella (aunque pida iniciar sesión)
     const puente = location.pathname.startsWith("/firmar") && decodeURIComponent(location.hash.slice(1)).toUpperCase();
     if (puente === "CONECTAR") { location.replace("https://compra-agil.mercadopublico.cl/"); return; }
@@ -174,9 +189,13 @@
       const ua = navigator.userAgent;
       const disp = (await gmGet("dispositivo")) || (/iphone/i.test(ua) ? "iPhone" : /android/i.test(ua) ? "Android" : "Celular");
       // ⚡ vuelta inmediata a la app: el aviso al robot sale ya (y la app lo repite al abrir, por si se corta)
+      const L = lista.toUpperCase();
       decir("✓ Cotización enviada. Volviendo a la app…");
-      await Promise.race([pedir("pedir", "json", { codigo: lista.toUpperCase(), accion: "verificar", dispositivo: disp }).catch(() => {}), espera(500)]);
-      location.replace(APP + "/#firmada=" + encodeURIComponent(lista.toUpperCase()));
+      await gmSet("firmada", JSON.stringify({ cod: L, t: Date.now() }));        // la pestaña de la app la saca de Firmar
+      await Promise.race([pedir("pedir", "json", { codigo: L, accion: "verificar", vista: true, dispositivo: disp }).catch(() => {}), espera(500)]);
+      try { window.close(); } catch (e) {}                                     // se cierra esta pestaña y quedas en la app
+      await espera(350);
+      location.replace(APP + "/#firmada=" + encodeURIComponent(L));            // si Safari no deja cerrarla, la app se abre aquí
       return;
     }
     if (!cod && !publicada && !hechas.has("ir")) {          // en otra página de Compra Ágil (p. ej. después del login)
