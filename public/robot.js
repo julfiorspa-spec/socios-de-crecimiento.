@@ -936,6 +936,7 @@
   const leerFirmadas = () => { try { const o = JSON.parse(localStorage.getItem(FIRMADAS)) || {}; for (const k in o) if (Date.now() - o[k] > 12 * 3600e3) delete o[k]; return o; } catch { return {}; } };
   const yaFirmada = (t) => { if (!t || HECHA.includes(t.estado)) return false;
     const c = Date.parse(t.creado || 0) || 0, l = leerFirmadas()[t.codigo], v = Date.parse(t.enviada_vista || 0) || 0;
+    if (t.accion === "verificar" && ["en_cola", "tomado", "preparando"].includes(t.estado)) return true;   // el robot está confirmando el envío
     return (l && l >= c) || (v && v >= c); };
   function marcarFirmada(cod, avisar) {
     cod = String(cod || "").toUpperCase(); if (!cod) return;
