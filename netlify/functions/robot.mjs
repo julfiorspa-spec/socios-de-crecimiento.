@@ -739,14 +739,25 @@ async function atender(req) {
       visto: ahora(), ocupado: !!b.ocupado, tarea: texto(b.tarea, 200), equipo: texto(b.equipo, 60), version: texto(b.version, 20),
       rut: texto(b.rut, 20),
     });
+    // 🖥🖥 varios robots (PC de escritorio + notebook): cada uno se registra y la cola se reparte sin duplicar
+    const eq = texto(b.equipo, 60) || "pc";
+    const E = (await store.get("robot/equipos", { type: "json" })) || {};
+    E[eq] = { visto: ahora(), ocupado: !!b.ocupado, version: texto(b.version, 20) };
+    for (const k of Object.keys(E)) if (Date.now() - Date.parse(E[k].visto) > 600_000) delete E[k];
+    await store.setJSON("robot/equipos", E);
+    const vivos = Object.keys(E).filter((k) => Date.now() - Date.parse(E[k].visto) < 90_000).sort();
+    const hashTxt = (x) => [...String(x)].reduce((a, c) => Math.imul(a ^ c.charCodeAt(0), 16777619) >>> 0, 2166136261) >>> 5;   // FNV-1a
+    const dueno = (x) => (vivos.length < 2 ? eq : vivos[hashTxt(x) % vivos.length]);
+    const mio = (x) => dueno(x) === eq || !vivos.includes(dueno(x));
     const pidio = await store.get("oportunidades/pedido", { type: "json" });   // la app pidió actualizar oportunidades
     if (pidio) await store.delete("oportunidades/pedido");
     const lista = await todos(store);
-    const negocios = lista.filter((t) => t.op?.pedido_informe).map((t) => ({ codigo: t.codigo, total: t.total, op: t.op })).slice(0, 5);
+    const negocios = lista.filter((t) => t.op?.pedido_informe && mio(t.codigo)).map((t) => ({ codigo: t.codigo, total: t.total, op: t.op })).slice(0, 5);
     // preguntas del asistente que esperan al PC (las tomadas hace más de 3 min se reintentan)
     const cola = (await store.get("asistente-cola", { type: "json" })) || [];
     const preguntas = [];
     for (const id of cola) {
+      if (!mio(id)) continue;
       const x = await store.get("asistente/" + id, { type: "json" });
       if (x && (x.estado === "pendiente" || (x.estado === "tomada" && Date.now() - Date.parse(x.tomada) > 180_000))) {
         x.estado = "tomada"; x.tomada = ahora(); await store.setJSON("asistente/" + id, x); preguntas.push(x);
@@ -767,10 +778,12 @@ async function atender(req) {
       try { await revisarSeguimiento(store, false); } catch {}
     }
     const empresas = (await store.get("empresas/lista", { type: "json" })) || {};
-    const op = { ...(pidio ? { oportunidades: true } : {}), ...(negocios.length ? { negocios } : {}), ...(preguntas.length ? { preguntas } : {}), empresas };
+    const op = { ...(pidio ? { oportunidades: true } : {}), ...(negocios.length ? { negocios } : {}), ...(preguntas.length ? { preguntas } : {}), empresas, equipos: vivos };
     // ⚡ lo que pide una persona desde el celular va antes que el autopiloto del PC
     const humano = (t) => !!(t.jugador || t.dispositivo);
-    const enCola = lista.filter((t) => t.estado === "en_cola");
+    // un pedido es de este equipo si le toca por reparto, o si al dueño lo tienen ocupado y es de una persona (no se hace esperar)
+    const mioT = (t) => mio(t.codigo) || (humano(t) && E[dueno(t.codigo)]?.ocupado);
+    const enCola = lista.filter((t) => t.estado === "en_cola" && mioT(t));
     if (b.ocupado) return json({ siguiente: null, ...op, ...(enCola.some(humano) ? { espera_celular: true } : {}) });
     // un pedido tomado que quedó colgado (PC apagado a mitad de camino) vuelve a la cola
     for (const t of lista) {
@@ -779,7 +792,7 @@ async function atender(req) {
         await escribir(store, t);
       }
     }
-    const siguiente = lista.filter((t) => t.estado === "en_cola").sort((a, b) => (humano(b) - humano(a)) || a.creado.localeCompare(b.creado))[0];
+    const siguiente = lista.filter((t) => t.estado === "en_cola" && mioT(t)).sort((a, b) => (humano(b) - humano(a)) || a.creado.localeCompare(b.creado))[0];
     if (!siguiente) return json({ siguiente: null, ...op });
     anotar(siguiente, "tomado", "El robot del PC la tomó.");
     return json({ siguiente: await escribir(store, siguiente), ...op });
