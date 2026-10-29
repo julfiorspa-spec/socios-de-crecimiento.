@@ -845,7 +845,7 @@
       : `<div class="rb-prog2"><i style="width:${{ en_cola: 15, tomado: 30, preparando: 60, lista: 90 }[t.estado] || 45}%"></i></div><div class="muted" style="font-size:.72rem">${esc(t.mensaje || e.txt)}</div>`;
     return `<div class="rb-card rb-firma rb-swipe ${nueva ? "nueva" : ""}" data-modo="fir" data-c="${esc(t.codigo)}" id="rb-${esc(t.codigo)}">
       <span class="rb-sello si">FIRMAR</span><span class="rb-sello no">QUITAR</span>
-      <div class="rb-env"><span style="font-size:.72rem"><b>${esc(t.codigo)}</b>${nueva ? ' <span class="rb-pill oro">🆕 la última que hiciste</span>' : ""}</span>${badge(t)}</div>
+      <div class="rb-env"><span style="font-size:.72rem"><b>${esc(t.codigo)}</b>${nueva ? ' <span class="rb-pill oro">🆕 la más nueva lista</span>' : ""}</span>${badge(t)}</div>
       <div class="rb-fnom">${esc(t.nombre || "Compra Ágil")}</div>
       <div class="muted" style="font-size:.72rem">${esc(t.organismo || "")}${t.monto ? " · Ppto. " + clp(t.monto) : ""}${rojas ? ` · <b style="color:#ff8a80">⛔ ${rojas} alerta${rojas > 1 ? "s" : ""}</b>` : ""}</div>
       ${accion}
@@ -1135,8 +1135,8 @@
       const margenRubro = Number(x._sel.margen ?? x.margen) || 0.2;
       const costoEst = Math.round(pres / 1.19 * (1 - margenRubro));
       const costo = Number(x._sel.costo) || 0;
-      // 1er llamado: se puede ofertar sobre el presupuesto hasta 100 UTM · 2° llamado: tope = el presupuesto
-      const tope = esSeg(x) ? Math.min(pres, TOPE_CA()) : TOPE_CA(), precio0 = Math.round(Math.min(x._sel.precio || pres * (1 - sugerido(x).d), tope));
+      // 1er llamado: tope = el presupuesto · 🔥 2° llamado: se desbloquea, se puede ofertar sobre el presupuesto hasta 100 UTM
+      const tope = esSeg(x) ? TOPE_CA() : Math.min(pres, TOPE_CA()), precio0 = Math.round(Math.min(x._sel.precio || pres * (1 - sugerido(x).d), tope));
       const h = x.cierre ? Math.round((Date.parse(x.cierre) - ahora) / 3600000) : null;
       const of = x.ofertas ?? null, seg = esSeg(x);
       const rival = of === 0 ? `<span class="rb-rival solo">🎯 Vas solo</span>` : of != null && of <= 2 ? `<span class="rb-rival pocos">${of} rival${of === 1 ? "" : "es"}</span>`
@@ -1150,7 +1150,7 @@
         ${pres ? `<div style="margin-top:12px;display:flex;justify-content:space-between;align-items:flex-end;gap:8px"><div><span class="muted" style="font-size:.72rem;letter-spacing:.06em;text-transform:uppercase">Tu apuesta (con IVA)</span><br><span class="rb-precio rb-oro-t">${clp(precio0)}</span></div><span class="rb-pct"></span></div>
         <input type="range" class="rb-range" min="0" max="1000" step="1" data-lo="${Math.round(pres * 0.5)}" data-mid="${Math.round(Math.min(pres * 1.5, tope))}" data-hi="${tope}" value="0" data-v0="${precio0}">
         ${tope > pres * 1.5 ? `<div class="rb-escala" style="position:relative;display:block;height:15px"><span style="position:absolute;left:0">−50%</span><span style="position:absolute;left:37.5%;transform:translateX(-50%)">Ppto. ${cortoG(pres)}</span><span style="position:absolute;left:75%;transform:translateX(-50%)">+50%</span><span style="position:absolute;right:0;color:#f5cf6b">100 UTM</span></div>`
-          : `<div class="rb-escala"><span>−50%</span><span>Ppto. ${cortoG(pres)}</span><span>${tope <= pres ? "tope 2° llamado" : tope < pres * 1.5 ? "100 UTM" : "+50%"}</span></div>`}
+          : `<div class="rb-escala"><span>−50%</span><span>Ppto. ${cortoG(pres)}</span><span>${tope <= pres ? "tope" : tope < pres * 1.5 ? "100 UTM" : "+50%"}</span></div>`}
         <div class="rb-ticket">
           <div class="t"><span>🎰 Ticket de inversión</span><span class="rb-cuota">x—</span></div>
           <div class="g"><div><small>Inviertes</small><b class="rb-inv">—</b></div><div class="flecha">➜</div><div><small>Te pagan (neto)</small><b class="rb-neto">—</b></div></div>
@@ -1162,7 +1162,7 @@
         <div class="rb-chips2"><button class="btn small" type="button" data-paso="-1">−1%</button>
           <button class="btn small rb-sugb" type="button" data-fijo="${vSug}" title="${esc(sg.por)}">💡 ${cortoG(vSug)}</button>
           <button class="btn small rb-soltar ${of != null && of <= 1 ? "brilla" : ""}" type="button" data-fijo="${pres}">🔓 Todo ${cortoG(pres)}</button>
-          ${tope > pres ? `<button class="btn small rb-soltar" type="button" style="grid-column:1/-1;order:9" data-fijo="${tope}" title="Tope legal de la Compra Ágil">🚀 Soltar hasta 100 UTM · ${clp(tope)}</button>` : `<span class="muted" style="grid-column:1/-1;order:9;font-size:.68rem;text-align:center">🔒 2° llamado: el tope es el presupuesto</span>`}
+          ${tope > pres ? `<button class="btn small rb-soltar" type="button" style="grid-column:1/-1;order:9" data-fijo="${tope}" title="Tope legal de la Compra Ágil">🚀 Soltar hasta 100 UTM · ${clp(tope)}</button>` : `<span class="muted" style="grid-column:1/-1;order:9;font-size:.68rem;text-align:center">🔒 1er llamado: el tope es el presupuesto · en 2° llamado se desbloquea hasta 100 UTM</span>`}
           <button class="btn small" type="button" data-paso="1">+1%</button></div>
         <div class="muted" style="font-size:.7rem;margin-top:4px">💡 ${esc(sg.por)}</div>
         <details class="rb-det"><summary>✎ Mi costo: <b class="rb-cvis">${clp(costo || costoEst)}</b> <span class="rb-cest">${costo ? "" : `(estimado ${Math.round(margenRubro * 100)}% margen)`}</span></summary>
@@ -1345,9 +1345,12 @@
       ${verN.slice(0, n).map((x) => fila(x, "nuevas")).join("") || `<div class="empty">No quedan oportunidades en esta vista. Toca «↻ Buscar más».</div>`}
       ${verN.length > n ? `<button class="btn" style="width:100%;margin-top:8px" type="button" data-rb="oport-mas">Ver más (${verN.length - n} restantes)</button>` : ""}`;
     else if (tab === "firmar") cuerpo = enFirma.length ? (() => {
-        const L = [...enFirma].sort((a, b) => (b.creado || "").localeCompare(a.creado || ""));
+        // el jugador viene a firmar: primero las listas para firmar (la más nueva arriba); las que se preparan van al final
+        const lista_ = (t) => t.estado === "firmar" && t.firma?.precios?.length ? 0 : ["requiere", "error"].includes(t.estado) ? 1 : 2;
+        const L = [...enFirma].sort((a, b) => (lista_(a) - lista_(b)) || (b.creado || "").localeCompare(a.creado || ""));
+        const enPrep = L.filter((t) => lista_(t) === 2).length;
         const k = Math.max(0, Math.min(L.length - 1, R.firIdx || 0)); R.firIdx = k;
-        return `<div class="rb-env rb-sec"><button class="btn small" type="button" data-rb="fir-mover" data-d="-1" ${k ? "" : "disabled"}>‹</button><span>✍ Por firmar · <b>${k + 1}</b> de ${L.length}</span><button class="btn small" type="button" data-rb="fir-mover" data-d="1" ${k < L.length - 1 ? "" : "disabled"}>›</button></div>
+        return `<div class="rb-env rb-sec"><button class="btn small" type="button" data-rb="fir-mover" data-d="-1" ${k ? "" : "disabled"}>‹</button><span>✍ Por firmar · <b>${k + 1}</b> de ${L.length}${enPrep ? ` <small style="opacity:.75">· ⏳ ${enPrep} preparándose</small>` : ""}</span><button class="btn small" type="button" data-rb="fir-mover" data-d="1" ${k < L.length - 1 ? "" : "disabled"}>›</button></div>
           <div class="muted" style="font-size:.72rem;text-align:center;margin-bottom:4px">👉 desliza a la derecha = <b>ir a firmar</b> · 👈 a la izquierda = <b>quitarla</b></div>${tarjetaFirma(L[k], k === 0)}`; })()
       : `<div class="empty">Nada por firmar. Desliza a la derecha en «Por preparar».</div>`;
     else if (tab === "sel") cuerpo = sel.length ? (() => { const k = Math.max(0, Math.min(sel.length - 1, R.selIdx || 0)); R.selIdx = k;
