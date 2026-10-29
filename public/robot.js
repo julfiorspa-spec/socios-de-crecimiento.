@@ -151,6 +151,9 @@
   .rb-sug b{color:#ffd88a}
   .rb-etapas{display:flex;gap:4px;overflow-x:auto;margin:6px 0 8px}.rb-etapas button{flex:0 0 auto;border:1px solid var(--line-soft);background:transparent;color:inherit;border-radius:999px;padding:5px 10px;font:inherit;font-size:.74rem;cursor:pointer}
   .rb-etapas button.on{background:linear-gradient(100deg,#f8d56b,#c8900f);color:#2b1d00;border-color:transparent;font-weight:800}
+  .rb-mision{margin:10px 0 6px;padding:10px 12px;border-radius:14px;border:1px solid rgba(245,207,107,.45);background:rgba(245,207,107,.07)}
+  .rb-barra{height:8px;border-radius:8px;background:rgba(255,255,255,.08);margin:6px 0;overflow:hidden}.rb-barra i{display:block;height:100%;background:linear-gradient(90deg,#f5cf6b,#5ef0b0);transition:width .4s}
+  .rb-op.on{border-color:rgba(94,240,176,.55)}
   .rb-neg{border:1px solid #c8900f;border-radius:16px;padding:12px;margin:8px 0;background:linear-gradient(180deg,rgba(248,213,107,.10),rgba(255,255,255,.02))}
   .rb-neg.cerrado{background:linear-gradient(160deg,#f8d56b,#b8860b);color:#2b1d00;border-color:#f8d56b}
   .rb-neg .rb-big{font-size:1.6rem;font-weight:900;color:#7ee2a0;letter-spacing:-.02em}.rb-neg.cerrado .rb-big{color:#1a3d12}
@@ -1072,10 +1075,59 @@
   // ======================= 🛠 EJECUTA: el portal de los socios ejecutadores =======================
   // El que ganó deriva el negocio (o lo ejecuta él). El ejecutador negocia con proveedores, fija el precio de compra,
   // pide la transferencia al inversionista, prepara la entrega y cierra con la guía y la factura firmadas.
-  const ETAPAS_EJ = [["operacion", "🤝 Negociar"], ["pago", "💸 Transferencia"], ["despacho", "📦 Preparación"], ["entrega", "🚚 Entrega"], ["cerrado", "🥇 Cerrados"]];
+  const ETAPAS_EJ = [["operacion", "🤝 Proveedores"], ["transporte", "🚚 Transporte"], ["despacho", "🛣 En trayecto"], ["entrega", "📦 Recepción"], ["cerrado", "🥇 Cerrados"]];
+  const etEj = (t) => (["previa", "ganada", "inversionista"].includes(t.op?.etapa) ? "operacion" : ["pago", "documentos"].includes(t.op?.etapa) ? "transporte" : t.op?.etapa || "operacion");
+  const TARIFA_KM_STGO = 900;            // 🚚 flete en Santiago: $900 por km
+  const netoDe = (v) => (v ? Math.round(v / 1.19) : 0);
+  const mailUrl = (to, su, body) => conex().gmail
+    ? "https://mail.google.com/mail/?view=cm&fs=1&authuser=" + encodeURIComponent(conex().gmail) + "&to=" + encodeURIComponent(to || "") + "&su=" + encodeURIComponent(su) + "&body=" + encodeURIComponent(body)
+    : "mailto:" + encodeURIComponent(to || "") + "?subject=" + encodeURIComponent(su) + "&body=" + encodeURIComponent(body);
+  const waNum = (n) => { let d = String(n || "").replace(/\D/g, ""); if (d.length === 9 && d[0] === "9") d = "56" + d; if (d.length === 8) d = "569" + d; return d.length >= 10 ? d : ""; };
+  const telNum = (n) => String(n || "").replace(/[^\d+]/g, "");
+  const itemsDe = (t) => { const oc = t.oc_compra?.items || [], W = (R.full || {})[t.codigo], F = (R.fichas || {})[t.codigo], inf = t.op?.informe || {};
+    if (oc.length) return oc.map((i) => ({ d: i.especificacion || i.nombre, q: i.cantidad, u: i.unidad, p: i.precio }));
+    if ((W?.items || []).length) return W.items.map((i) => ({ d: i.d, q: i.q, p: i.p }));
+    return ((inf.productos || []).length ? inf.productos : F?.productos || []).map((x) => ({ d: x.nombre + (x.descripcion ? " · " + String(x.descripcion).slice(0, 80) : ""), q: x.cantidad, p: null })); };
+  // 🧮 números del negocio (lo que entra, lo que sale y lo que queda)
+  function cuentasDe(t) {
+    const op = t.op || {}, inf = op.informe || {};
+    const venta = Number(t.oc_compra?.total || t.total) || 0, ventaN = Number(t.oc_compra?.neto || t.neto) || netoDe(venta);
+    const compra = Number(op.precio_acordado) || 0, flete = Number(op.costo_transporte) || 0;
+    const ivaD = venta - ventaN, ivaC = compra - netoDe(compra);
+    const bruta = ventaN - netoDe(compra) - flete;
+    return { venta, ventaN, compra, flete, ivaD, ivaC, iva: ivaD - ivaC, bruta, final: inf.final, inv: inf.inversionista, estimado: inf.compras || null };
+  }
+  // 📄 guía de despacho con acta de recepción conforme / factura (borrador): se abre lista para imprimir o compartir en PDF
+  function docNegocio(t, tipo) {
+    const op = t.op || {}, e = empresaActual() || {}, oc = t.oc_compra || {}, F = (R.fichas || {})[t.codigo] || {}, k = cuentasDe(t), it = itemsDe(t);
+    const hoy = new Date().toLocaleDateString("es-CL"), ocN = op.oc_codigo || op.oc || op.informe?.oc || "";
+    const receptor = { nombre: oc.organismo || F.organismo || t.organismo || "", unidad: oc.unidad || "", rut: oc.rut_organismo || F.rut_organismo || "", dir: oc.direccion || F.direccion || op.informe?.direccion || "" };
+    const guia = tipo === "guia";
+    const filas = it.map((i, n) => `<tr><td>${n + 1}</td><td>${esc(String(i.d || "").slice(0, 160))}</td><td class=n>${esc(i.q ?? "")} ${esc(i.u || "")}</td>${guia ? "" : `<td class=n>${i.p ? clp(i.p) : ""}</td><td class=n>${i.p && i.q ? clp(i.p * i.q) : ""}</td>`}</tr>`).join("");
+    const html = `<!doctype html><html lang=es><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>${guia ? "Guía de despacho" : "Factura"} ${esc(t.codigo)}</title>
+<style>body{font:12px/1.45 system-ui,Arial,sans-serif;color:#111;margin:18px;max-width:780px}h1{font-size:18px;margin:0}.box{border:1.5px solid #111;padding:8px 10px;border-radius:6px;margin:8px 0}
+.top{display:flex;justify-content:space-between;gap:12px}.folio{border:2px solid #c00;color:#c00;padding:8px 12px;text-align:center;font-weight:700}table{width:100%;border-collapse:collapse;margin-top:6px}
+td,th{border:1px solid #999;padding:4px 6px;text-align:left;vertical-align:top}.n{text-align:right;white-space:nowrap}.firma{height:54px;border-bottom:1px solid #111}.aviso{font-size:10px;color:#a00;margin-top:6px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}@media print{.np{display:none}}</style></head><body>
+<div class=np style="margin-bottom:10px"><button onclick="print()" style="font-size:16px;padding:10px 16px">🖨 Imprimir / Guardar PDF</button></div>
+<div class=top><div><h1>${esc(e.razon_social || "")}</h1><div>RUT ${esc(e.rut || "")}${e.giro ? " · " + esc(e.giro) : ""}</div><div>${esc(e.direccion || "")}</div></div>
+<div class=folio>R.U.T. ${esc(e.rut || "")}<br>${guia ? "GUÍA DE DESPACHO" : "FACTURA"}<br>BORRADOR · N° ${esc((guia ? op.folio_guia : op.folio_factura) || "_____")}</div></div>
+<div class="box grid"><div><b>Señor(es):</b> ${esc(receptor.nombre)}</div><div><b>RUT:</b> ${esc(receptor.rut)}</div><div><b>Unidad:</b> ${esc(receptor.unidad)}</div><div><b>Fecha:</b> ${hoy}</div>
+<div style="grid-column:1/-1"><b>Dirección de entrega:</b> ${esc(receptor.dir)}</div><div><b>Referencia:</b> OC ${esc(ocN)}</div><div><b>Compra Ágil:</b> ${esc(t.codigo)}</div>
+${guia ? `<div><b>Traslado:</b> venta (constituye venta)</div><div><b>Transportista:</b> ${esc(op.transportista || "")} ${op.transportista_tel ? "· " + esc(op.transportista_tel) : ""}</div><div><b>Patente:</b> ${esc(op.patente || "")}</div><div><b>Retiro en:</b> ${esc(op.origen_flete || op.proveedor || "")}</div>` : ""}</div>
+<table><tr><th>#</th><th>Detalle</th><th class=n>Cant.</th>${guia ? "" : "<th class=n>P. unit. neto</th><th class=n>Total neto</th>"}</tr>${filas}</table>
+${guia ? "" : `<table style="width:46%;margin-left:auto"><tr><td>Neto</td><td class=n>${clp(k.ventaN)}</td></tr><tr><td>IVA 19%</td><td class=n>${clp(k.ivaD)}</td></tr><tr><td><b>Total</b></td><td class=n><b>${clp(k.venta)}</b></td></tr></table>`}
+${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style="margin-top:8px"><div>Recibí conforme (nombre):<div class=firma></div></div><div>RUT:<div class=firma></div></div><div>Firma y timbre:<div class=firma></div></div><div>Fecha y hora:<div class=firma></div></div></div>
+<div style="margin-top:8px">Transportista (nombre y firma):<div class=firma></div></div></div>` : ""}
+<div class=aviso>Borrador con los datos del negocio. El documento tributario válido (DTE ${guia ? "52" : "33"}) se emite en sii.cl → Sistema de facturación gratuito, con el mismo detalle; anota el folio en la app.</div>
+</body></html>`;
+    const w = window.open("", "_blank");
+    if (w) { w.document.open(); w.document.write(html); w.document.close(); }
+    else { const u = URL.createObjectURL(new Blob([html], { type: "text/html" })); location.href = u; }
+  }
   async function cargarEjecuta() {
     if (R._cargEj) return; R._cargEj = true;
-    try { const [a, b] = await Promise.all([api("ejecuta?ejecutor=" + miJug()), api("ejecutores")]); R.ejec = a.negocios || []; R.ejecutores = b.ejecutores || {}; R.ejecT = Date.now(); }
+    try { const [a, b] = await Promise.all([api("ejecuta?todos=1&ejecutor=" + miJug()), api("ejecutores")]); R.ejec = a.negocios || []; R.ejecutores = b.ejecutores || {}; R.ejecT = Date.now(); }
     catch (e) { R.ejec = R.ejec || []; toast(e.message); }
     R._cargEj = false; pintarHoja(true);
   }
@@ -1151,38 +1203,91 @@
             ${comp.email ? `<a class="btn small" href="mailto:${esc(comp.email)}?subject=${encodeURIComponent("OC " + (inf.oc || "") + " · plazo de entrega")}&body=${encodeURIComponent(msgCli)}">✉ Correo</a>` : ""}
             <button class="btn small" type="button" data-rb="cp" data-v="${esc(msgCli)}">Copiar mensaje</button></div>
           ${!comp.telefono && !comp.email ? `<div class="muted" style="font-size:.7rem">Sin contacto del comprador en el informe: búscalo en la OC.</div>` : ""}</details></div>`;
-    if (et === "operacion" || et === "ganada" || et === "inversionista" || et === "previa") cuerpo = (et === "previa" ? `<div class="rb-sug" style="border-color:#5ef0b0">📞 <b>Aún sin OC:</b> vamos 1° en el portal. Adelanta: confirma stock y plazo con proveedores, sin comprar todavía.</div>` : "") + plazoBox + `
-      <div class="rb-sec">📦 Qué hay que comprar</div>
-      ${prods.map((x) => `<div class="rb-prod"><b>${esc(x.cantidad ?? "")} × ${esc(x.nombre)}</b>${x.descripcion || x.detalle ? `<div class="muted" style="font-size:.7rem">${esc(String(x.descripcion || x.detalle).slice(0, 140))}</div>` : ""}<div class="rb-row">🔎 ${buscarEn(x.nombre)}</div></div>`).join("") || `<div class="muted" style="font-size:.74rem"><span class="spinner"></span> Trayendo productos…</div>`}
-      <div class="rb-sec">📞 Proveedores para negociar</div>
-      ${(inf.opciones || []).map((o) => `<div class="rb-op"><div class="rb-env"><b>${esc(o.proveedor || "")}${chipLocal(o)}</b>${o.total_con_iva ? `<b>${clp(o.total_con_iva)}</b>` : ""}</div>
-        <div class="rb-row">${telf(o.telefono) ? `<a class="btn small" href="tel:${esc(telf(o.telefono))}">📞 Llamar</a>` : ""}${waN(o.telefono) ? `<a class="btn small" href="https://wa.me/${waN(o.telefono)}?text=${encodeURIComponent(msgProv)}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ""}${o.email ? `<a class="btn small" href="mailto:${esc(o.email)}?subject=${encodeURIComponent("Cotización " + (t.nombre || cod))}&body=${encodeURIComponent(msgProv)}">✉ Correo</a>` : ""}${o.web ? `<a class="btn small" href="${esc(o.web)}" target="_blank" rel="noopener">🌐</a>` : ""}</div></div>`).join("") || `<div class="muted" style="font-size:.74rem">Sin proveedores del informe: busca con los botones 🔎 o en «📞 Me llamaron».</div>`}
-      <div class="rb-row"><button class="btn small" type="button" data-rb="cp" data-v="${esc(msgProv)}">Copiar mensaje para proveedores</button></div>
-      ${bloqueMarket(prods, lugarDe(t))}
-      <div class="rb-sec">🤝 Tu negociación</div>
-      ${campo("proveedor", "Proveedor elegido", op.proveedor, "Nombre del proveedor")}
-      ${campo("precio_acordado", "Precio de compra total (con IVA)", compra ? Number(compra).toLocaleString("es-CL") : "", estimado ? Number(estimado).toLocaleString("es-CL") : "", 1)}
-      ${campo("plazo_proveedor", "Plazo que da el proveedor", op.plazo_proveedor, "Ej: 3 días hábiles")}
-      ${campo("banco_proveedor", "Datos para transferir (banco, cuenta, RUT, correo)", op.banco_proveedor, "Banco Estado · Cta. Vista 123 · RUT 76… · pagos@…")}
-      ${campo("negociacion", "Cómo te fue (descuento logrado, condiciones)", op.negociacion, "Ej: 5% por pago contado, despacho incluido")}
-      <button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-transferir" data-c="${esc(cod)}">💸 Pedir transferencia al inversionista</button>`;
-    else if (et === "pago" || et === "documentos") {
-      const txt = `Transferencia para el negocio ${cod} (${t.nombre || ""}):\nProveedor: ${op.proveedor || ""}\nMonto: ${clp(compra)}\nDatos: ${op.banco_proveedor || "(pedir al proveedor)"}\nPlazo de entrega: ${op.plazo_proveedor || ""}`;
-      cuerpo = plazoBox + `<div class="rb-sec">💸 Esperando la transferencia</div><div class="rb-wa">${esc(txt)}</div>
-        <div class="rb-row"><button class="btn small" type="button" data-rb="cp" data-v="${esc(txt)}">Copiar</button><a class="btn small" href="https://wa.me/?text=${encodeURIComponent(txt)}" target="_blank" rel="noopener">💬 Enviar al inversionista</a></div>
-        <button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-etapa" data-e="despacho" data-c="${esc(cod)}" data-d="transferido">✅ Ya transfirieron → Preparación</button>`;
-    } else if (et === "despacho") cuerpo = plazoBox + `<div class="rb-sec">📦 En preparación</div>
-      ${campo("plazo_proveedor", "Tiempo que dio el proveedor", op.plazo_proveedor, "Ej: listo el jueves")}
-      ${campo("fecha_entrega", "Fecha de entrega al cliente", op.fecha_entrega, "Ej: viernes 6 de noviembre")}
-      ${campo("transporte", "Transporte", op.transporte, "Camión propio, Starken…")}
-      <div class="rb-row"><button class="btn small" type="button" data-rb="recordar" data-min="manana" data-t="${esc("Confirmar con el proveedor el retiro · " + cod)}" data-c="${esc(cod)}">⏰ Recordarme mañana</button></div>
-      <button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-etapa" data-e="entrega" data-c="${esc(cod)}">🚚 Retiré la compra → Entrega</button>`;
-    else if (et === "entrega") { const docs = op.docs || [], hay = (tp) => docs.some((d) => d.tipo === tp);
-      cuerpo = plazoBox + docsSIIg(t).replace(/<button class="btn rb-firmar"[^>]*data-e="despacho"[\s\S]*?<\/button>/, "") + `
-      <div class="rb-sec">📸 Cierre en terreno</div>
+    const E = etEj(t), k = cuentasDe(t), dir = lugarDe(t) || F?.direccion || inf.direccion || "", z = zonaMk(dir);
+    const enStgo = /metropolitana/i.test(sinTilde(dir)) || (z.slug === "santiagocl" && !/valparaiso|vina|quilpue|villa alemana|san antonio|quillota|los andes|rancagua|o'?higgins|machali|san fernando|santa cruz|rengo/.test(sinTilde(dir)));
+    const empN = (empresaActual() || {}).razon_social || "nuestra empresa";
+    const lineas = itemsDe(t).map((x) => `- ${x.q ?? ""} ${x.u || ""} ${String(x.d || "").slice(0, 120)}`).join("\n");
+    if (E === "operacion") {
+      // 🎯 misión: pedir precio a 4 proveedores (correo o llamada). Cada contacto suma; el más barato gana.
+      const cands = [...(inf.opciones || []).map((o) => ({ ...o, fuente: o.fuente || "robot" })), ...(op.extras || [])].filter((o) => o.proveedor);
+      const key = (o) => sinTilde(o.proveedor).replace(/[^a-z0-9]+/g, "-").slice(0, 60);
+      const cont = op.contactados || {}, cots = op.cotizaciones || {};
+      const hechos = cands.filter((o) => cont[key(o)]).length, meta = 4;
+      const asunto = `Cotización con factura · ${t.nombre || cod}`;
+      const cuerpoMail = (o) => `Hola${o.contacto ? " " + o.contacto : ""},\n\nLe escribo de ${empN}. Necesito cotización con factura de:\n${lineas}\n\nEntrega en: ${dir} · fecha comprometida ${op.plazo_fecha || "(a convenir)"}.\n¿Me puede indicar precio con IVA, stock, plazo y si incluye despacho? Pago contado al confirmar.\n\nGracias,\n${persona()?.nombre || ""}\n${empN}`;
+      const mejor = Object.entries(cots).sort((x, y) => x[1].v - y[1].v)[0];
+      const tarj = (o) => { const kk = key(o), c = cont[kk], q = cots[kk];
+        return `<div class="rb-op ${c ? "on" : ""}"><div class="rb-env"><b>${c ? "✅ " : ""}${esc(o.proveedor)}${chipLocal(o)}</b>${o.total_con_iva ? `<span class="muted" style="font-size:.7rem">IA ~${clp(o.total_con_iva)}</span>` : ""}</div>
+          <div class="rb-row">${o.email ? `<a class="btn small ${c?.via === "correo" ? "" : "rb-oro"}" href="${esc(mailUrl(o.email, asunto, cuerpoMail(o)))}" target="_blank" rel="noopener" data-rb="ej-contacto" data-c="${esc(cod)}" data-k="${esc(kk)}" data-n="${esc(o.proveedor)}" data-via="correo">✉ Enviar correo</a>` : ""}
+            ${telNum(o.telefono) ? `<a class="btn small" href="tel:${esc(telNum(o.telefono))}" data-rb="ej-contacto" data-c="${esc(cod)}" data-k="${esc(kk)}" data-n="${esc(o.proveedor)}" data-via="llamada">📞 Llamar</a>` : ""}
+            ${waNum(o.telefono) ? `<a class="btn small" href="https://wa.me/${waNum(o.telefono)}?text=${encodeURIComponent(cuerpoMail(o))}" target="_blank" rel="noopener" data-rb="ej-contacto" data-c="${esc(cod)}" data-k="${esc(kk)}" data-n="${esc(o.proveedor)}" data-via="whatsapp">💬</a>` : ""}
+            ${o.web ? `<a class="btn small" href="${esc(o.web)}" target="_blank" rel="noopener">🌐</a>` : ""}</div>
+          ${c ? `<div class="muted" style="font-size:.68rem">${c.via === "correo" ? "✉ correo enviado" : c.via === "llamada" ? "📞 llamado" : "💬 WhatsApp"} ${esc(hace(c.t))}</div>` : ""}
+          <label class="rb-lab" style="margin-top:4px">💲 Precio que te dio (total con IVA)<input class="rb-cot-in" inputmode="numeric" data-c="${esc(cod)}" data-k="${esc(kk)}" data-n="${esc(o.proveedor)}" value="${q ? Number(q.v).toLocaleString("es-CL") : ""}" placeholder="${o.total_con_iva ? Number(o.total_con_iva).toLocaleString("es-CL") : "Ej: 850.000"}"></label></div>`; };
+      cuerpo = (op.etapa === "previa" ? `<div class="rb-sug" style="border-color:#5ef0b0">📞 <b>Aún sin OC:</b> vas 1° en el portal. Adelanta precios y stock, sin comprar todavía.</div>` : "") + plazoBox + `
+      <details class="rb-det"><summary>📦 Qué hay que comprar (${itemsDe(t).length})</summary>${itemsDe(t).map((x) => `<div class="rb-prod"><b>${esc(x.q ?? "")} ${esc(x.u || "")} × ${esc(String(x.d || "").slice(0, 110))}</b>${x.p ? ` <span class="muted">· vendes a ${clp(x.p)} c/u neto</span>` : ""}<div class="rb-row">🔎 ${buscarEn(String(x.d || "").slice(0, 60))}</div></div>`).join("")}</details>
+      <div class="rb-mision"><div class="rb-env"><b>🎯 Misión: pide precio a ${meta} proveedores</b><b>${Math.min(hechos, meta)}/${meta}</b></div>
+        <div class="rb-barra"><i style="width:${Math.min(100, hechos / meta * 100)}%"></i></div>
+        <div class="muted" style="font-size:.7rem">Toca «Enviar correo» (ya va escrito) o «Llamar». Cuando te respondan, anota el precio: el más barato gana.</div></div>
+      ${cands.map(tarj).join("") || `<div class="muted" style="font-size:.74rem">⟳ El robot está buscando proveedores… mientras, agrega uno abajo o búscalo en Marketplace.</div>`}
+      ${cands.length < meta ? `<details class="rb-det" ${cands.length < 2 ? "open" : ""}><summary>➕ Agregar proveedor (${meta - cands.length} por completar la misión)</summary>
+        <label class="rb-lab">Nombre<input class="rb-in" id="rbPxN-${esc(cod)}" placeholder="Ej: Ferretería Castro"></label>
+        <div class="rb-row"><label class="rb-lab" style="flex:1">Teléfono<input class="rb-in" id="rbPxT-${esc(cod)}" inputmode="tel" placeholder="+56 9 ..."></label><label class="rb-lab" style="flex:1">Correo<input class="rb-in" id="rbPxE-${esc(cod)}" inputmode="email" placeholder="ventas@..."></label></div>
+        <button class="btn small rb-oro" type="button" data-rb="ej-prov-extra" data-c="${esc(cod)}">➕ Agregar a la misión</button></details>` : ""}
+      ${bloqueMarket(itemsDe(t).map((x) => ({ nombre: String(x.d || ""), cantidad: x.q })), dir)}
+      <div class="rb-sec">🏆 Elegir proveedor</div>
+      ${mejor ? `<div class="rb-sug" style="border-color:#f5cf6b">Más barato: <b>${esc(mejor[1].nombre)}</b> · <b>${clp(mejor[1].v)}</b>${k.venta ? ` · te quedaría ~<b class="${netoDe(k.venta) - netoDe(mejor[1].v) > 0 ? "rb-vivo-t" : "rb-neg-t"}">${clp(netoDe(k.venta) - netoDe(mejor[1].v))}</b> antes del flete` : ""}
+        <button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-elegir" data-c="${esc(cod)}" data-n="${esc(mejor[1].nombre)}" data-v="${mejor[1].v}">🏆 Comprar a ${esc(mejor[1].nombre)} → Transporte</button></div>`
+        : `<div class="muted" style="font-size:.74rem">Anota al menos un precio para elegir.</div>`}
+      <details class="rb-det"><summary>✍ Datos del proveedor elegido</summary>
+        ${campo("proveedor", "Proveedor elegido", op.proveedor, "Nombre")}
+        ${campo("precio_acordado", "Precio de compra total (con IVA)", compra ? Number(compra).toLocaleString("es-CL") : "", estimado ? Number(estimado).toLocaleString("es-CL") : "", 1)}
+        ${campo("plazo_proveedor", "Plazo que da el proveedor", op.plazo_proveedor, "Ej: 3 días hábiles")}
+        ${campo("banco_proveedor", "Datos para transferir (banco, cuenta, RUT, correo)", op.banco_proveedor, "Banco Estado · Cta. Vista 123 · RUT 76… · pagos@…")}
+        ${campo("negociacion", "Cómo te fue (descuento, condiciones)", op.negociacion, "Ej: 5% por pago contado")}</details>`;
+    } else if (E === "transporte") {
+      const km = Number(op.km) || 0, tarifa = enStgo && km ? km * TARIFA_KM_STGO : null;
+      const zonaFlete = z.slug ? `https://www.facebook.com/marketplace/${z.slug}/search/?query=${encodeURIComponent("fletes")}` : `https://www.facebook.com/marketplace/search/?query=${encodeURIComponent("flete " + (z.comuna || ""))}`;
+      const msgFlete = `Hola, necesito un flete para un trabajo de ${empN}:\n• Retiro: ${op.origen_flete || op.proveedor || "(dirección del proveedor)"}\n• Entrega: ${dir}${op.plazo_fecha ? "\n• Fecha: " + op.plazo_fecha : ""}\n• Carga:\n${lineas}\n¿Estás disponible y cuánto me cobras? Necesito que el receptor firme la guía de despacho y me la devuelvas firmada (foto). Gracias.`;
+      const util = k.ventaN - netoDe(k.compra) - (Number(op.costo_transporte) || tarifa || 0);
+      cuerpo = plazoBox + `<div class="rb-sec">🚚 Transporte a ${esc(z.comuna || dir || "destino")}</div>
+      <div class="rb-kv"><span>Compra <b>${clp(k.compra)}</b> a <b>${esc(op.proveedor || "—")}</b></span></div>
+      ${campo("origen_flete", "Dónde se retira (dirección del proveedor)", op.origen_flete, "Ej: Av. Matta 1234, Santiago")}
+      <div class="rb-row">${op.origen_flete && dir ? `<a class="btn small" href="https://www.google.com/maps/dir/${encodeURIComponent(op.origen_flete)}/${encodeURIComponent(dir)}" target="_blank" rel="noopener">🗺 Ver km en Maps</a>` : ""}</div>
+      ${campo("km", "Kilómetros del viaje", op.km || "", "Ej: 18", 1)}
+      ${enStgo ? `<div class="rb-sug" style="border-color:#f5cf6b">📍 Santiago: tarifa <b>${clp(TARIFA_KM_STGO)}/km</b>${km ? ` → <b>${clp(tarifa)}</b> por ${km} km` : " · escribe los km"}.
+          Llama a tu fletero de confianza o busca en Marketplace y ofrécele esa tarifa.</div>`
+        : `<div class="rb-sug" style="border-color:#7c4dff">🧭 Región: busca fletes locales en Marketplace, mándales el trabajo y compara precios.</div>`}
+      <div class="rb-row"><a class="btn small rb-oro" href="${zonaFlete}" target="_blank" rel="noopener">🛒 Fletes en Marketplace</a>
+        <a class="btn small" href="https://wa.me/?text=${encodeURIComponent(msgFlete)}" target="_blank" rel="noopener">💬 Mandar el trabajo</a>
+        <button class="btn small" type="button" data-rb="cp" data-v="${esc(msgFlete)}">📋 Copiar mensaje</button></div>
+      <div class="rb-sec">🤝 Transportista acordado</div>
+      ${campo("transportista", "Nombre del transportista", op.transportista, "Ej: Fletes Juan")}
+      <div class="rb-row"><div style="flex:1">${campo("transportista_tel", "Teléfono", op.transportista_tel, "+56 9 ...")}</div><div style="flex:1">${campo("patente", "Patente", op.patente, "AB-CD-12")}</div></div>
+      ${campo("costo_transporte", "¿Cuánto te cobró? (total)", op.costo_transporte ? Number(op.costo_transporte).toLocaleString("es-CL") : "", tarifa ? Number(tarifa).toLocaleString("es-CL") : "Ej: 45.000", 1)}
+      <div class="rb-kv"><span>Venta neta <b>${clp(k.ventaN)}</b></span><span>− compra neta <b>${clp(netoDe(k.compra))}</b></span><span>− flete <b>${clp(Number(op.costo_transporte) || tarifa || 0)}</b></span>
+        <span class="${util >= 0 ? "rb-vivo-t" : "rb-neg-t"}"><b>= ${util >= 0 ? "💰" : "🔺"} ${clp(util)}</b></span></div>
+      ${op.pedido_transferencia ? `<div class="muted" style="font-size:.72rem">💸 Transferencia pedida al inversionista${op.transferido ? " · ✅ transferido" : ""}</div>`
+        : `${campo("inversionista_tel", "WhatsApp del inversionista", op.inversionista_tel, "+56 9 ...")}<button class="btn small" type="button" data-rb="ej-pedir-pago" data-c="${esc(cod)}">💸 Pedir transferencia al inversionista (compra + flete)</button>`}
+      <button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-etapa" data-e="despacho" data-c="${esc(cod)}">🛣 Acordado → va en trayecto</button>`;
+    } else if (E === "despacho") {
+      const msgT = `Hola ${op.transportista || ""}, te envío la guía de despacho del pedido ${cod} para ${(t.oc_compra?.organismo || t.organismo || "").slice(0, 60)} (${dir}). Por favor pide que la firmen con nombre, RUT y fecha en "Recepción conforme" y mándame la foto. ¡Gracias!`;
+      cuerpo = plazoBox + `<div class="rb-sec">🛣 En trayecto${op.transportista ? " con " + esc(op.transportista) : ""}</div>
+      <div class="rb-kv"><span>Flete <b>${clp(op.costo_transporte)}</b></span>${op.patente ? `<span>Patente <b>${esc(op.patente)}</b></span>` : ""}${op.transportista_tel ? `<span><a href="tel:${esc(telNum(op.transportista_tel))}">📞 ${esc(op.transportista_tel)}</a></span>` : ""}</div>
+      <div class="rb-row"><button class="btn rb-oro" type="button" data-rb="ej-doc" data-t="guia" data-c="${esc(cod)}">📄 Guía de despacho + recepción conforme</button>
+        <button class="btn" type="button" data-rb="ej-doc" data-t="factura" data-c="${esc(cod)}">🧾 Factura (borrador)</button></div>
+      <div class="muted" style="font-size:.7rem">Se abre lista: toca «Imprimir / Guardar PDF» → compartir. Luego mándasela al transportista.</div>
+      <div class="rb-row">${waNum(op.transportista_tel) ? `<a class="btn small" href="https://wa.me/${waNum(op.transportista_tel)}?text=${encodeURIComponent(msgT)}" target="_blank" rel="noopener">💬 Mandar guía al transportista</a>` : `<a class="btn small" href="https://wa.me/?text=${encodeURIComponent(msgT)}" target="_blank" rel="noopener">💬 Mandar guía al transportista</a>`}</div>
+      <details class="rb-det"><summary>🏛 Emitir en el SII (documento válido)</summary>${docsSIIg(t).replace(/<button class="btn rb-firmar"[^>]*data-e="despacho"[\s\S]*?<\/button>/, "")}</details>
+      <button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-etapa" data-e="entrega" data-c="${esc(cod)}">📦 Llegó al cliente → Recepción</button>`;
+    } else if (E === "entrega") { const docs = op.docs || [], hay = (tp) => docs.some((d) => d.tipo === tp);
+      cuerpo = `<div class="rb-sec">📦 Recepción conforme</div>
+      <div class="muted" style="font-size:.72rem">Pide al transportista la foto de la guía firmada (nombre, RUT, fecha). Con eso cobras y cierras.</div>
+      <div class="rb-row"><div style="flex:1">${campo("recibio_nombre", "Recibió", op.recibio_nombre, "Nombre")}</div><div style="flex:1">${campo("recibio_rut", "RUT", op.recibio_rut, "12.345.678-9")}</div></div>
       <div class="rb-row"><button class="btn small ${hay("guia") ? "rb-oro" : ""}" type="button" data-rb="neg-subir" data-tipo="guia" data-c="${esc(cod)}">${hay("guia") ? "✓" : "📸"} Guía firmada</button>
-        <button class="btn small ${hay("factura") ? "rb-oro" : ""}" type="button" data-rb="neg-subir" data-tipo="factura" data-c="${esc(cod)}">${hay("factura") ? "✓" : "📸"} Factura recibida</button></div>
-      <button class="btn rb-oro rb-big-btn" type="button" data-rb="neg-subir" data-tipo="foto" data-cerrar="1" data-c="${esc(cod)}">🥇 Foto de la entrega y cerrar en oro</button>`; }
+        <button class="btn small ${hay("factura") ? "rb-oro" : ""}" type="button" data-rb="neg-subir" data-tipo="factura" data-c="${esc(cod)}">${hay("factura") ? "✓" : "🧾"} Factura emitida</button></div>
+      <button class="btn rb-oro rb-big-btn" type="button" data-rb="neg-subir" data-tipo="foto" data-cerrar="1" data-c="${esc(cod)}">🥇 Foto de la entrega y cerrar en oro</button>
+      <div class="muted" style="font-size:.68rem">Al cerrar, el inversionista recibe el aviso «negocio OK» y su Excel se actualiza con los costos reales.</div>`; }
     else cuerpo = `<div style="font-weight:900;margin-top:6px">🥇 Cerrado${op.cerrado ? " · " + esc(new Date(op.cerrado).toLocaleDateString("es-CL")) : ""}</div>`;
     return `<div class="rb-neg ${et === "cerrado" ? "cerrado" : ""}">
       <div class="rb-env"><div style="min-width:0"><div style="font-size:.74rem"><b>${esc(cod)}</b>${inf.oc || op.oc ? " · OC " + esc(inf.oc || op.oc) : ""}</div><div class="rb-fnom">${esc(t.nombre || "")}</div>
@@ -1191,6 +1296,26 @@
       <div class="rb-kv"><span>Estimado compra <b>${clp(estimado)}</b></span><span>Tu compra <b>${clp(compra)}</b></span>
         ${dif != null ? `<span class="${dif >= 0 ? "rb-vivo-t" : "rb-neg-t"}"><b>${dif >= 0 ? "💰 ahorraste " + clp(dif) : "🔺 pagaste " + clp(-dif) + " más"}</b></span>` : ""}</div>
       ${cuerpo}</div>`;
+  }
+  // 📒 ERP: libro de ventas y compras, IVA, flujo de caja y cómo separar la plata (3 cuentas)
+  function libroERP(L) {
+    const act = L.filter((t) => t.op?.oc_codigo || t.op?.oc);
+    if (!act.length) return "";
+    const S = act.reduce((a, t) => { const k = cuentasDe(t), op = t.op || {};
+      a.v += k.venta; a.vn += k.ventaN; a.c += k.compra; a.f += k.flete; a.ivaD += k.ivaD; a.ivaC += k.ivaC; a.u += op.precio_acordado ? k.bruta : 0;
+      if (!op.cobrado) a.cobrar += k.venta; if (op.precio_acordado && !op.proveedor_pagado) a.pagar += k.compra + k.flete; return a; },
+      { v: 0, vn: 0, c: 0, f: 0, ivaD: 0, ivaC: 0, u: 0, cobrar: 0, pagar: 0 });
+    const iva = S.ivaD - S.ivaC;
+    return `<details class="rb-det rb-libro" ${R.libroEj ? "open" : ""} data-libroej><summary>📒 Libro y caja · ${act.length} OC · ventas ${cortoG(S.v)} · utilidad ${cortoG(S.u)}</summary>
+      <table class="rb-copias"><tr><td>🧾 Ventas (OC)</td><td class="n">${clp(S.vn)} neto · ${clp(S.v)} total</td></tr>
+        <tr><td>🛒 Compras acordadas</td><td class="n">${clp(netoDe(S.c))} neto · ${clp(S.c)} total</td></tr><tr><td>🚚 Fletes</td><td class="n">${clp(S.f)}</td></tr>
+        <tr><td>🏛 IVA a pagar (débito − crédito)</td><td class="n"><b>${clp(iva)}</b></td></tr><tr><td>💰 Utilidad bruta (con compra acordada)</td><td class="n"><b class="${S.u >= 0 ? "rb-vivo-t" : "rb-neg-t"}">${clp(S.u)}</b></td></tr>
+        <tr><td>⏳ Por cobrar al Estado</td><td class="n">${clp(S.cobrar)}</td></tr><tr><td>📤 Por pagar a proveedores y fletes</td><td class="n">${clp(S.pagar)}</td></tr></table>
+      <div class="rb-sec">🏦 Separa la plata: 3 cuentas</div>
+      <div class="muted" style="font-size:.72rem;line-height:1.5">1️⃣ <b>Cuenta corriente operativa</b> de la empresa: aquí paga el Estado y de aquí pagas proveedores y fletes.<br>
+        2️⃣ <b>Cuenta de impuestos</b> (vista o ahorro): apenas cobras, aparta el IVA (${clp(iva)} ahora) y el PPM; se usa solo para el F29.<br>
+        3️⃣ <b>Cuenta de utilidades e inversionista</b>: devuelves el capital del inversionista con su parte y guardas la utilidad de la empresa.</div>
+      <div class="rb-row" style="margin-top:6px"><button class="btn small" type="button" data-rb="ej-csv">📊 Exportar libro (Excel / contador)</button><a class="btn small" href="https://www.sii.cl" target="_blank" rel="noopener">🏛 SII ↗</a></div></details>`;
   }
   function portalEjecuta() {
     const yo = (R.ejecutores || {})[miJug()];
@@ -1201,15 +1326,16 @@
       <label class="rb-lab">Tu WhatsApp<input class="rb-in" id="rbEjTel" inputmode="tel" value="${esc(persona()?.telefono || "")}" placeholder="+56 9 ..."></label>
       <button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-registro">Entrar a Ejecuta</button></div>`;
     if (!R.ejec || Date.now() - (R.ejecT || 0) > 15000) setTimeout(cargarEjecuta, 0);
-    const L = R.ejec || [], et = (t) => (["previa", "ganada", "inversionista"].includes(t.op?.etapa) ? "operacion" : t.op?.etapa === "documentos" ? "pago" : t.op?.etapa || "operacion");
+    const L = R.ejec || [], et = etEj;
     const tab = R.ejTab || "operacion";
     const cumplidos = L.filter((t) => et(t) === "cerrado" && t.op?.plazo_fecha && t.op?.cerrado && Date.parse(t.op.cerrado) <= Date.parse(t.op.plazo_fecha + "T23:59")).length;
     const atrasados = L.filter((t) => et(t) !== "cerrado" && t.op?.plazo_fecha && diasPlazo(t.op.plazo_fecha) < 0).length;
     const ahorro = L.reduce((s2, t) => s2 + (t.op?.informe?.compras && t.op?.precio_acordado ? t.op.informe.compras - t.op.precio_acordado : 0), 0);
     const cerr = L.filter((t) => et(t) === "cerrado").length;
     return `<div class="rb-tira"><span>🛠 <b>${esc(yo.nombre)}</b></span><span>💰 <b class="${ahorro >= 0 ? "rb-vivo-t" : "rb-neg-t"}">${cortoG(ahorro)}</b> ahorro</span><span>🥇 <b>${cerr}</b>${cerr ? ` · ${cumplidos} a tiempo` : ""}</span><span>${atrasados ? `🔴 <b>${atrasados}</b> atrasado${atrasados > 1 ? "s" : ""}` : `⏳ <b>${L.length - cerr}</b>`}</span></div>
+      ${libroERP(L)}
       <div class="rb-etapas">${ETAPAS_EJ.map(([k, n]) => `<button type="button" class="${tab === k ? "on" : ""}" data-rb="ej-tab" data-e="${k}">${n} ${L.filter((t) => et(t) === k).length}</button>`).join("")}</div>
-      ${!R.ejec ? `<div class="empty"><span class="spinner"></span></div>` : L.filter((t) => et(t) === tab).sort((a, b) => diasPlazo(a.op?.plazo_fecha) - diasPlazo(b.op?.plazo_fecha)).map(tarjetaEj).join("") || `<div class="empty">${L.length ? "Nada en esta etapa." : "Aún no te asignan negocios. Cuando alguien gane una compra y te la derive, aparece aquí."}</div>`}`;
+      ${!R.ejec ? `<div class="empty"><span class="spinner"></span></div>` : L.filter((t) => et(t) === tab).sort((a, b) => diasPlazo(a.op?.plazo_fecha) - diasPlazo(b.op?.plazo_fecha)).map(tarjetaEj).join("") || `<div class="empty">${L.length ? "Nada en esta etapa." : "Aún no hay órdenes de compra. Cuando llegue una (o vayas 1°), queda anclada aquí sola."}</div>`}`;
   }
   function vistaOport() {
     if (!R.oport) { cargarOport(); return `<div class="empty"><span class="spinner"></span> Cargando oportunidades…</div>`; }
@@ -1410,7 +1536,7 @@
       <div class="rb-m azul"><span>🎯 Tasa de éxito</span><b data-cnt="${tasa ?? 0}" data-k="tasa" data-fmt="pct">${tasa == null ? "—" : tasa + "%"}</b><small>${ganadasR.length} de ${decididas.length} resueltas</small></div>
       <div class="rb-m violeta"><span>⏳ En juego</span><b data-cnt="${enJuego}" data-k="juego" data-fmt="corto">${corto(enJuego)}</b><small>${enviadosAll.length - decididas.length} esperando resultado</small></div></div>${libroJuego(ganadasR, enviadosAll)}`;
     // ---- 🏆 negocios ganados por etapa
-    const ETAPAS = [["previa", "📞 Vas 1°"], ["ganada", "🆕 OC ¿nos da?"], ["inversionista", "💼 Inversión"], ["operacion", "🛠 Proveedor"], ["pago", "💳 Pagar"], ["documentos", "🧾 Guía y factura"],
+    const ETAPAS = [["previa", "📞 Vas 1°"], ["ganada", "🆕 OC ¿nos da?"], ["inversionista", "💼 Inversión"], ["operacion", "🛠 Proveedor"], ["transporte", "🚚 Transporte"], ["pago", "💳 Pagar"], ["documentos", "🧾 Guía y factura"],
       ["despacho", "🚚 Despacho"], ["entrega", "📸 Entrega"], ["cerrado", "🥇 Cerrados"], ["rechazada", "❌ No dio"]];
     const etapaDe = (t) => t.op?.etapa || "ganada";
     // 🧾 datos listos para el Sistema de Facturación Gratuito del SII (guía de despacho 52 y factura 33)
@@ -2378,6 +2504,35 @@
     }
     if (a === "portal") { guardar({ portal: b.dataset.v }); R.pantalla = null; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "ej-tab") { R.ejTab = b.dataset.e; return pintarHoja(true); }
+    const ejOp = async (datos, etapa, msg) => {
+      try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos, ...(etapa ? { etapa } : {}), dispositivo: dispositivo(false) }) });
+        if (msg) toast(msg); if (etapa) R.ejTab = etapa; R.ejecT = 0; await cargarEjecuta(); pintarHoja(true); } catch (e) { toast(e.message); }
+    };
+    if (a === "ej-contacto") {          // el enlace abre el correo / la llamada / WhatsApp; aquí se anota el punto de la misión
+      const t = (R.ejec || []).find((x) => x.codigo === cod);
+      if (t) { t.op = t.op || {}; t.op.contactados = { ...(t.op.contactados || {}), [b.dataset.k]: { via: b.dataset.via, t: new Date().toISOString(), nombre: b.dataset.n } }; }
+      navigator.vibrate?.(10);
+      setTimeout(() => ejOp({ contactado: { k: b.dataset.k, via: b.dataset.via, nombre: b.dataset.n } }, null, b.dataset.via === "correo" ? "✉ +1 · correo listo para enviar" : "+1 a la misión"), 400);
+      return;
+    }
+    if (a === "ej-prov-extra") {
+      const n = ($("#rbPxN-" + cod)?.value || "").trim(); if (!n) { toast("Escribe el nombre del proveedor"); return; }
+      return ejOp({ proveedor_extra: { proveedor: n, telefono: ($("#rbPxT-" + cod)?.value || "").trim(), email: ($("#rbPxE-" + cod)?.value || "").trim() } }, null, "➕ Agregado a la misión");
+    }
+    if (a === "ej-elegir") return ejOp({ proveedor: b.dataset.n, precio_acordado: +b.dataset.v }, "transporte", "🏆 Proveedor elegido · ahora el transporte");
+    if (a === "ej-pedir-pago") {
+      const t = (R.ejec || []).find((x) => x.codigo === cod) || {}, op = t.op || {};
+      const txt = `💸 Transferencia negocio ${cod} (${t.nombre || ""})\nProveedor: ${op.proveedor || ""} · ${clp(op.precio_acordado)}\nDatos: ${op.banco_proveedor || "(pedir al proveedor)"}\nFlete: ${op.transportista || ""} · ${clp(op.costo_transporte)}\nTotal a transferir: ${clp((+op.precio_acordado || 0) + (+op.costo_transporte || 0))}`;
+      window.open("https://wa.me/" + (waNum(op.inversionista_tel) || "") + "?text=" + encodeURIComponent(txt), "_blank");
+      return ejOp({ pedido_transferencia: true }, null, "💸 Pedido al inversionista");
+    }
+    if (a === "ej-doc") { const t = (R.ejec || []).find((x) => x.codigo === cod); if (t) docNegocio(t, b.dataset.t); return; }
+    if (a === "ej-csv") {
+      const L = R.ejec || [];
+      const fila = (t) => { const k = cuentasDe(t), op = t.op || {}; return [op.oc_codigo || op.oc || "", t.codigo, (t.oc_compra?.organismo || t.organismo || "").replace(/;/g, ","), etEj(t), k.ventaN, k.ivaD, k.venta, op.proveedor || "", netoDe(k.compra), k.ivaC, k.compra, k.flete, k.bruta, op.cobrado ? "sí" : "no"].join(";"); };
+      const csv = "\ufeffOC;Compra Ágil;Cliente;Etapa;Venta neta;IVA débito;Venta total;Proveedor;Compra neta;IVA crédito;Compra total;Flete;Utilidad bruta;Cobrado\n" + L.map(fila).join("\n");
+      const u = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); const x = document.createElement("a"); x.href = u; x.download = "libro_negocios.csv"; x.click(); return;
+    }
     if (a === "ej-registro") {
       const nombre = ($("#rbEjNom")?.value || "").trim(); if (!nombre) { toast("Escribe tu nombre"); return; }
       try { const r = await api("ejecutor", { method: "POST", body: JSON.stringify({ id: miJug(), nombre, telefono: ($("#rbEjTel")?.value || "").trim() }) }); R.ejecutores = r.ejecutores; localStorage.setItem("sdc:dispositivo", nombre); toast("🛠 Listo, " + nombre); } catch (e) { toast(e.message); }
@@ -2645,14 +2800,17 @@
   sheet.addEventListener("change", async (ev) => {
     const el = ev.target, cod = el.dataset?.c; if (!cod) return;
     let datos = null, informe = false;
-    if (el.classList.contains("rb-neg-in")) { const txt = !["precio_acordado", "costo_transporte"].includes(el.dataset.campo);
+    if (el.classList.contains("rb-cot-in")) { const v = +(el.value || "").replace(/\D/g, "") || 0; el.value = v ? v.toLocaleString("es-CL") : "";
+      datos = { cotizacion: { k: el.dataset.k, v, nombre: el.dataset.n } }; }
+    if (el.classList.contains("rb-neg-in")) { const txt = !["precio_acordado", "costo_transporte", "km"].includes(el.dataset.campo);
       const v = txt ? el.value : +(el.value || "").replace(/\D/g, "") || null; datos = { [el.dataset.campo]: v }; informe = !txt; }
     if (el.type === "date") el.blur();
     if (el.dataset.rbChk) datos = { [el.dataset.rbChk]: el.checked };
     if (el.dataset.rbCom === "aplica") { datos = { aplica_comision: el.checked }; informe = true; }
     if (el.dataset.rbCom === "pct") { datos = { comision: +el.value, aplica_comision: true }; informe = true; }
     if (!datos) return;
-    try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos, pedir_informe: informe }) }); toast(informe ? "Guardado · el PC recalcula la utilidad" : "Guardado"); if (leer().portal === "ejecuta") { R.ejecT = 0; cargarEjecuta(); } else await refrescar(); }
+    if (el.dataset.campo === "km") informe = false;
+    try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos, pedir_informe: informe }) }); toast(datos.cotizacion ? "💲 Precio anotado" : informe ? "Guardado · el PC recalcula la utilidad" : "Guardado"); if (leer().portal === "ejecuta") { R.ejecT = 0; cargarEjecuta(); } else await refrescar(); }
     catch (e) { toast(e.message); }
   });
   sheet.addEventListener("input", (ev) => {
@@ -2665,7 +2823,8 @@
     q.asunto = $("#rbAsunto")?.value; q.cuerpo = $("#rbCuerpo")?.value; pintarHoja(true);
   });
   sheet.addEventListener("toggle", (ev) => { if (ev.target?.dataset && "libro" in ev.target.dataset) R.libroAbierto = ev.target.open;
-    if (ev.target?.classList?.contains("rb-p-desc")) R.perfilAbierto = ev.target.open; }, true);
+    if (ev.target?.classList?.contains("rb-p-desc")) R.perfilAbierto = ev.target.open;
+    if (ev.target?.dataset && "libroej" in ev.target.dataset) R.libroEj = ev.target.open; }, true);
   sheet.addEventListener("focusin", (ev) => { if (ev.target.classList?.contains("rb-costo") || ev.target.classList?.contains("rb-neg-in")) R.barra = true; });
   sheet.addEventListener("focusout", (ev) => { if (ev.target.classList?.contains("rb-costo") || ev.target.classList?.contains("rb-neg-in")) setTimeout(() => { R.barra = false; }, 300); });
   // fotos grandes se achican antes de subir (máx. ~1600 px, JPEG), los PDF van tal cual
