@@ -359,16 +359,18 @@
   const deCache = (k) => { try { return JSON.parse(localStorage.getItem(CK + k)); } catch { return null; } };
   const aCache = (k, v) => { try { localStorage.setItem(CK + k, JSON.stringify(v)); } catch {} };
   if (R.token) {
-    const c = deCache("estado"); if (c?.data) { R.data = c.data; R.ver = null; }
-    const o = deCache("oport"); if (o?.lista) { R.oport = o; R.oportViejo = true; }
+    const c = deCache("estado2"); if (c?.data) { R.data = c.data; R.ver = null; }
+    const o = deCache("oport2"); if (o?.lista) { R.oport = o; R.oportViejo = true; }
     const g = deCache("seg"); if (g?.seg) { R.seg = g.seg; R.segT = 0; }
   }
 
   async function api(ruta, opt = {}) {
     if (!R.token) throw new Error("Robot sin enlazar");
-    if (opt.body && /^(pedir|seleccionar|preguntar)$/.test(ruta)) {      // cada pedido viaja con TU empresa y tu celular
-      try { const o = JSON.parse(opt.body); if (!o.empresa && leer().empresa) o.empresa = leer().empresa; if (!o.dispositivo) o.dispositivo = dispositivo(false); opt = { ...opt, body: JSON.stringify(o) }; } catch {}
+    if (opt.body && /^(pedir|seleccionar|preguntar|oport-descartar)$/.test(ruta)) {      // cada pedido viaja con TU empresa, tu celular y tu juego
+      try { const o = JSON.parse(opt.body); if (!o.empresa && leer().empresa) o.empresa = leer().empresa; if (!o.dispositivo) o.dispositivo = dispositivo(false);
+        o.jugador = miJug(); if (legado()) o.legado = true; opt = { ...opt, body: JSON.stringify(o) }; } catch {}
     }
+    if (/^(seleccionadas|oportunidades|oport-descartes)(\?|$)/.test(ruta)) ruta += (ruta.includes("?") ? "&" : "?") + "jugador=" + miJug() + (legado() ? "&legado=1" : "");
     const r = await fetch("/bot/" + ruta, {
       ...opt,
       headers: { "x-robot-token": R.token, ...(opt.body ? { "content-type": "application/json" } : {}), ...(opt.headers || {}) },
@@ -384,7 +386,15 @@
   // 🏢 cada celular ve y oferta solo con su empresa ("principal" = la del robot del PC)
   const miEmp = () => leer().empresa || null;
   const deMiEmpresa = (x) => !miEmp() || (x?.empresa || "principal") === miEmp();
-  function filtrarEmpresa(d) { return d ? { ...d, trabajos: (d.trabajos || []).filter(deMiEmpresa) } : d; }
+  // 🎮 cada celular es un juego aparte: ve solo lo que pidió él (lo de antes de separar, solo si este celular lo pidió)
+  function miJug() {
+    let j = null; try { j = localStorage.getItem("sdc:jugador"); } catch {}
+    if (!j) { j = "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); try { localStorage.setItem("sdc:jugador", j); } catch {} }
+    return j;
+  }
+  const legado = () => leer().legado === true;
+  const deMiJuego = (t) => (t.jugador ? t.jugador === miJug() : legado()) && deMiEmpresa(t);
+  function filtrarEmpresa(d) { if (d) R.hayLegado = (d.trabajos || []).some((t) => !t.jugador); return d ? { ...d, trabajos: (d.trabajos || []).filter(deMiJuego) } : d; }
   const empresaActual = () => (R.empresas || {})[miEmp()] || null;
   async function cargarEmpresas() {
     if (R._cargEmp) return; R._cargEmp = true;
@@ -557,7 +567,7 @@
         R.data = filtrarEmpresa(await r.json()); R.ver = r.headers.get("x-version");
         revisarCambios(R.data.trabajos || []);
         cerrarEnviadas(R.data.trabajos || []);
-        aCache("estado", { data: R.data });
+        aCache("estado2", { data: R.data });
       }
       if (R.err) cambio = true; R.err = null;
     } catch (e) {
@@ -806,11 +816,13 @@
         <div class="rb-row" style="justify-content:center"><button class="btn small" data-rb="verificar" data-c="${esc(t.codigo)}" type="button">Ya la firmé</button><button class="btn small" data-rb="det" data-c="${esc(t.codigo)}" type="button">Ver detalle</button></div>`
       : ["requiere", "error"].includes(t.estado) ? `<div class="rb-row"><button class="btn small rb-oro" data-rb="ofertar" data-c="${esc(t.codigo)}" type="button">Reintentar</button><button class="btn small" data-rb="det" data-c="${esc(t.codigo)}" type="button">Ver qué pasó</button></div>`
       : `<div class="rb-prog2"><i style="width:${{ en_cola: 15, tomado: 30, preparando: 60, lista: 90 }[t.estado] || 45}%"></i></div><div class="muted" style="font-size:.72rem">${esc(t.mensaje || e.txt)}</div>`;
-    return `<div class="rb-card rb-firma ${nueva ? "nueva" : ""}" id="rb-${esc(t.codigo)}">
+    return `<div class="rb-card rb-firma rb-swipe ${nueva ? "nueva" : ""}" data-modo="fir" data-c="${esc(t.codigo)}" id="rb-${esc(t.codigo)}">
+      <span class="rb-sello si">FIRMAR</span><span class="rb-sello no">QUITAR</span>
       <div class="rb-env"><span style="font-size:.72rem"><b>${esc(t.codigo)}</b>${nueva ? ' <span class="rb-pill oro">🆕 la última que hiciste</span>' : ""}</span>${badge(t)}</div>
       <div class="rb-fnom">${esc(t.nombre || "Compra Ágil")}</div>
       <div class="muted" style="font-size:.72rem">${esc(t.organismo || "")}${t.monto ? " · Ppto. " + clp(t.monto) : ""}${rojas ? ` · <b style="color:#ff8a80">⛔ ${rojas} alerta${rojas > 1 ? "s" : ""}</b>` : ""}</div>
-      ${accion}</div>`;
+      ${accion}
+      <div class="rb-row" style="justify-content:center"><button class="btn small" type="button" data-rb="fir-quitar" data-c="${esc(t.codigo)}" style="opacity:.75">🗑 Quitar</button></div></div>`;
   }
   function caja(t) {
     const e = est(t.estado);
@@ -839,7 +851,7 @@
     "lic_bajando", "lic_captcha", "lic_analizando", "lic_revisar", "lic_lista", "lic_ingresando"];
   const HECHA = ["enviada", "confirmada"];
   /* ---------- ⭐ Seleccionadas (compartidas entre tus celulares, guardadas en la nube) ---------- */
-  const SELK = "sdc:seleccionadas";
+  const SELK = "sdc:sel-juego";
   const leerSel = () => R.sel || (() => { try { return JSON.parse(localStorage.getItem(SELK)) || {}; } catch { return {}; } })();
   const guardarSel = (o) => { R.sel = o; try { localStorage.setItem(SELK, JSON.stringify(o)); } catch {} };
   const esSel = (cod) => !!leerSel()[cod];
@@ -909,7 +921,15 @@
     const vigente = (x) => Date.parse(x.cierre) - ahora > 30 * 60000;
     const lista = o.lista || [];
     const nuevas = lista.filter((x) => vigente(x) && !descartada(x.codigo) && !trabajo(x.codigo) && !x.ya_ofertada && !x.trabajada && !esSel(x.codigo));
-    const enFirma = trabajos.filter((t) => EN_FIRMA.includes(t.estado));
+    const ocultas = leerOcultas();
+    const cierreDe = (t) => t.cierre || (lista.find((x) => x.codigo === t.codigo) || {}).cierre || (leerSel()[t.codigo] || {}).cierre;
+    const cerrada = (t) => /\bCERRADA\b/.test(t.mensaje || "") || /(compra|cotizaci[oó]n|convocatoria)[^.]{0,30}cerrad|ya no (recibe|acepta) (cotizaciones|ofertas)|fuera de plazo/i.test(t.mensaje || "")
+      || (cierreDe(t) && Date.parse(cierreDe(t)) < ahora);
+    const enFirma = trabajos.filter((t) => EN_FIRMA.includes(t.estado) && !ocultas[t.codigo] && !(cerrada(t) && !["tomado", "preparando"].includes(t.estado)));
+    const aLimpiar = trabajos.filter((t) => EN_FIRMA.includes(t.estado) && !ocultas[t.codigo] && cerrada(t) && !["tomado", "preparando"].includes(t.estado));
+    if (aLimpiar.length && !R._limpiando) { R._limpiando = true;
+      setTimeout(async () => { for (const t of aLimpiar) await quitarFirma(t.codigo, null, "cerrada");
+        toast(`🗑 Quité ${aLimpiar.length} compra${aLimpiar.length > 1 ? "s" : ""} ya cerrada${aLimpiar.length > 1 ? "s" : ""} de Firmar`); R._limpiando = false; }, 0); }
     const hechas = [...trabajos.filter((t) => HECHA.includes(t.estado)),
       ...lista.filter((x) => (x.ya_ofertada || x.trabajada) && !trabajo(x.codigo)).map((x) => ({ ...x, _oport: true }))];
     const papelera = lista.filter((x) => descartada(x.codigo));
@@ -948,7 +968,7 @@
     // Seleccionadas: las que elegiste y todavía no van al robot (cuando las mandas a firmar pasan a «Por firmar»)
     const sel = Object.keys(selObj).filter((c) => deMiEmpresa(selObj[c]) && !(R.selFuera || {})[c] && !enviadasCods.has(c) && !trabajo(c) && !lista.find((x) => x.codigo === c && x.ya_ofertada))
       .map((c) => ({ ...selObj[c], ...(lista.find((x) => x.codigo === c) || {}), codigo: c, _sel: selObj[c] }))
-      .sort((a, b) => (a.cierre || "9").localeCompare(b.cierre || "9"));
+      .sort((a, b) => (b._sel.desde || "").localeCompare(a._sel.desde || ""));        // la última que elegiste, primero
     if (!R.sel && !R._selPedido) { R._selPedido = true; cargarSel().then(pintarHoja); }
     const enviadosAll = trabajos.filter((t) => HECHA.includes(t.estado)).sort((a, b) => (b.actualizado || "").localeCompare(a.actualizado || ""));
     if ((tab === "hechas" || tab === "ganadas" || !R.seg) && enviadosAll.length && (!R.segT || Date.now() - R.segT > 60_000)) cargarSeg(false);
@@ -1186,7 +1206,11 @@
       <div class="muted" style="font-size:.74rem;margin-bottom:4px;text-align:center">👉 desliza a la derecha = <b>me gusta</b> · 👈 a la izquierda = <b>no</b></div>
       ${verN.slice(0, n).map((x) => fila(x, "nuevas")).join("") || `<div class="empty">No quedan oportunidades en esta vista. Toca «↻ Buscar más».</div>`}
       ${verN.length > n ? `<button class="btn" style="width:100%;margin-top:8px" type="button" data-rb="oport-mas">Ver más (${verN.length - n} restantes)</button>` : ""}`;
-    else if (tab === "firmar") cuerpo = enFirma.length ? `<div class="rb-sec">✍ Por firmar · la última que hiciste arriba</div>${[...enFirma].sort((a, b) => (b.creado || "").localeCompare(a.creado || "")).map((t, k) => tarjetaFirma(t, k === 0)).join("")}`
+    else if (tab === "firmar") cuerpo = enFirma.length ? (() => {
+        const L = [...enFirma].sort((a, b) => (b.creado || "").localeCompare(a.creado || ""));
+        const k = Math.max(0, Math.min(L.length - 1, R.firIdx || 0)); R.firIdx = k;
+        return `<div class="rb-env rb-sec"><button class="btn small" type="button" data-rb="fir-mover" data-d="-1" ${k ? "" : "disabled"}>‹</button><span>✍ Por firmar · <b>${k + 1}</b> de ${L.length}</span><button class="btn small" type="button" data-rb="fir-mover" data-d="1" ${k < L.length - 1 ? "" : "disabled"}>›</button></div>
+          <div class="muted" style="font-size:.72rem;text-align:center;margin-bottom:4px">👉 desliza a la derecha = <b>ir a firmar</b> · 👈 a la izquierda = <b>quitarla</b></div>${tarjetaFirma(L[k], k === 0)}`; })()
       : `<div class="empty">Nada por firmar. Desliza a la derecha en «Por preparar».</div>`;
     else if (tab === "sel") cuerpo = sel.length ? (() => { const k = Math.max(0, Math.min(sel.length - 1, R.selIdx || 0)); R.selIdx = k;
         return `<div class="rb-env rb-sec"><button class="btn small" type="button" data-rb="sel-mover" data-d="-1" ${k ? "" : "disabled"}>‹</button><span>⭐ Juega el precio · <b>${k + 1}</b> de ${sel.length}</span><button class="btn small" type="button" data-rb="sel-mover" data-d="1" ${k < sel.length - 1 ? "" : "disabled"}>›</button></div>
@@ -1205,7 +1229,9 @@
     const tira = `<div class="rb-tira"><span>🏆 <b class="rb-oro-t" data-cnt="${ganadoMonto}" data-k="ganado" data-fmt="corto">${corto(ganadoMonto)}</b></span>
       <span>💰 <b class="rb-vivo-t" data-cnt="${utilidadG}" data-k="util" data-fmt="corto">${corto(utilidadG)}</b></span>
       <span>🎯 <b>${tasa == null ? "—" : tasa + "%"}</b></span><span>⏳ <b>${corto(enJuego)}</b></span></div>`;
-    return `${tab === "nuevas" ? tira : tab === "ganadas" ? marcador : ""}
+    const banLeg = leer().legado === undefined && R.hayLegado ? `<div class="rb-sug" style="border-color:#f5cf6b">🎮 Ahora <b>cada celular juega su propio juego</b>. ¿Este celular debe ver también las ofertas de antes (las de todos)?
+      <div class="rb-row"><button class="btn small rb-oro" type="button" data-rb="legado" data-v="1">Sí, es el celular principal</button><button class="btn small" type="button" data-rb="legado" data-v="0">No, juego nuevo</button></div></div>` : "";
+    return `${banLeg}${tab === "nuevas" ? tira : tab === "ganadas" ? marcador : ""}
       ${cuerpo}
       <nav class="rb-nav">${NAV.map(([k, i, t, c]) => `<button type="button" class="${tab === k || (tab === "papelera" && k === "nuevas") ? "on" : ""}" data-rb="oport-tab" data-t="${k}"><span class="i">${i}${c ? `<em>${c > 99 ? "99+" : c}</em>` : ""}</span><span class="t">${t}</span></button>`).join("")}</nav>`;
   }
@@ -1259,6 +1285,28 @@
       toast("⏰ Te aviso " + (min === "manana" ? "mañana a las 9:00" : +min >= 60 ? "en " + Math.round(min / 60) + " h" : "en " + min + " min"));
       if (!R.push) suscribirPush(true); } catch (e) { toast(e.message); }
   }
+  // ✍ Firmar: derecha = ir a firmar · izquierda = quitarla para siempre
+  function irFirmar(cod) {
+    const t = trabajo(cod); if (!t?.firma) { toast("Todavía no está lista para firmar"); return false; }
+    api("mp-orden", { method: "POST", body: JSON.stringify({ codigo: cod }) }).catch(() => {});
+    ABIERTAS[String(cod).toUpperCase()] = { w: null, t: Date.now() };
+    if (esIOS && instalada()) { abrirEnSafari(cod); return true; }      // la app del inicio no tiene la extensión: va a Safari
+    toast(firmaRapida() ? "Abriendo la compra: Firma rápida carga precios, detalle y PDF" : "Abriendo la compra: ahí toca tu marcador «Rellenar»");
+    const w = window.open(portalDe(cod), "_blank");
+    if (w) { try { w.opener = null; } catch {} ABIERTAS[String(cod).toUpperCase()].w = w; } else location.href = portalDe(cod);
+    return true;
+  }
+  const OCULTAS = "sdc:ocultas";
+  const leerOcultas = () => { try { return JSON.parse(localStorage.getItem(OCULTAS)) || {}; } catch { return {}; } };
+  async function quitarFirma(cod, el, motivo) {
+    const o = leerOcultas(); o[cod] = new Date().toISOString(); try { localStorage.setItem(OCULTAS, JSON.stringify(o)); } catch {}
+    if (el) { sacarTarjeta(el, -1); sumarTab("firmar", -1); setTimeout(() => pintarHoja(true), 460); }
+    const t = trabajo(cod);
+    if (t && ["en_cola", "tomado"].includes(t.estado)) await api("cancelar", { method: "POST", body: JSON.stringify({ codigo: cod }) }).catch(() => {});
+    api("olvidar", { method: "POST", body: JSON.stringify({ codigo: cod }) }).catch(() => {});
+    api("oport-descartar", { method: "POST", body: JSON.stringify({ codigo: cod, descartar: true }) }).catch(() => {});   // no vuelve a aparecer
+    if (!motivo) toast("🗑 Quitada: no vuelve a aparecer");
+  }
   function selPasar(c) {
     const cod = c.dataset.c;
     R.selFuera = { ...(R.selFuera || {}), [cod]: 1 };
@@ -1274,7 +1322,7 @@
     sacarTarjeta(el, si ? 1 : -1); sumarTab(deTab, -1);
     try { navigator.vibrate?.(12); } catch {}
     if (si && !esLic) {                               // Compra Ágil: pasa a ⭐ Seleccionadas para elegir el precio
-      sumarTab("sel", 1);
+      sumarTab("sel", 1); R.selIdx = 0;                // en Jugar aparece primero la que acabas de elegir
       toast("⭐ A Seleccionadas: ahí juegas el precio");
       ponerSel(cod);
     } else if (si) {
@@ -1337,7 +1385,12 @@
       const derecha = horiz && (dx > ancho * 0.28 || (dx > 30 && vel > 0.45));
       const izquierda = horiz && (dx < -ancho * 0.28 || (dx < -30 && vel < -0.45));
       c.style.willChange = "";
-      const modoSel = c.dataset.modo === "sel", modoOc = c.dataset.modo === "oc";
+      const modoSel = c.dataset.modo === "sel", modoOc = c.dataset.modo === "oc", modoFir = c.dataset.modo === "fir";
+      if (modoFir) {
+        c.classList.add("vuela"); c.style.transform = ""; c.querySelectorAll(".rb-sello").forEach((x) => (x.style.opacity = 0));
+        if (derecha) irFirmar(c.dataset.c); else if (izquierda) quitarFirma(c.dataset.c, c);
+        return fin();
+      }
       if (derecha && modoOc) { ocSi(c.dataset.c, c); }
       else if (izquierda && modoOc) { c.classList.add("vuela"); c.style.transform = ""; R.ocNo = { ...(R.ocNo || {}), [c.dataset.c]: 1 }; setTimeout(() => pintarHoja(true), 230); }
       else if (derecha) { modoSel ? selFirmar(c) : papel ? oportRestaurar(c.dataset.c, c) : oportDecidir(c.dataset.c, true, c); }
@@ -1356,7 +1409,7 @@
       const o = await api("oportunidades"); o.descartes = o.descartes || {};
       const ya = Date.now() + 30 * 60000; o.lista = (o.lista || []).filter((x) => !x.cierre || Date.parse(x.cierre) > ya);
       R.oport = o; R.oportViejo = false; R.oportT = Date.now();
-      setTimeout(() => aCache("oport", o), 50);
+      setTimeout(() => aCache("oport2", o), 50);
     } catch (e) { if (!R.oport) R.oport = { lista: [], error: e.message }; toast(e.message); }
     R._cargandoOport = false; pintarHoja();
   }
@@ -1524,6 +1577,7 @@
         ${!R.push && pushPosible && !(esIOS && !instalada()) ? `<button class="btn small" type="button" data-rb="avisos">🔔 Activar avisos</button>` : ""}
         ${esIOS && !instalada() ? `<button class="btn small" type="button" data-rb="copiar-enlace-app">📲 Copiar enlace para la app del inicio</button>` : `<button class="btn small" type="button" data-rb="copiar-enlace-app">📲 Copiar enlace para otro celular</button>`}
         <button class="btn small" type="button" data-rb="bienvenida">🧭 Instalación para otra persona</button>
+        <button class="btn small" type="button" data-rb="legado" data-v="${legado() ? "0" : "1"}">🎮 ${legado() ? "Ocultar" : "Ver"} las ofertas de antes (de todos)</button>
         <div class="rb-row" style="margin-top:8px">${VISTAS.filter(([k]) => k !== "oport").map(([k, n]) => `<button type="button" class="btn small" data-rb="vista" data-v="${k}">${n}</button>`).join("")}</div>
         <div class="label" style="margin-top:12px">Firma rápida ${firmaRapida() ? "✓ instalada" : "(recomendado)"}</div>
         <div class="muted" style="font-size:.74rem">iPhone: app gratis <b>Userscripts</b> (App Store) → actívala en Safari → toca <a href="/cotizagil-firma.user.js" target="_blank" rel="noopener">Instalar Firma rápida</a>. PC/Android: extensión <b>Tampermonkey</b> y el mismo enlace.</div>
@@ -1733,6 +1787,7 @@
       catch (e) { w?.close(); toast(e.message); }
       return;
     }
+    if (a === "legado") { guardar({ legado: b.dataset.v === "1" }); R.ver = null; R.sel = null; R._selPedido = false; R.oport = null; toast(b.dataset.v === "1" ? "Este celular ve también lo anterior" : "🎮 Juego nuevo en este celular"); refrescar(); return pintarHoja(true); }
     if (a === "llamada") { R.pantalla = "llamada"; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "llamada-cerrar") { R.pantalla = null; return pintarHoja(true); }
     if (a === "llamada-preguntar") return preguntarRobot(($("#rbLlamada")?.value || "").trim());
@@ -1837,7 +1892,10 @@
       if (esIOS && instalada()) { abrirEnSafari("conectar"); return; }
       window.open(location.origin + "/firmar.html#conectar", "_blank"); return;
     }
-    if (a === "ir-firmar") {
+    if (a === "ir-firmar") return irFirmar(cod);
+    if (a === "fir-quitar") return quitarFirma(cod, b.closest(".rb-firma"));
+    if (a === "fir-mover") { R.firIdx = (R.firIdx || 0) + +b.dataset.d; return pintarHoja(true); }
+    if (a === "__ir-firmar-viejo") {
       const t = trabajo(cod); if (!t?.firma) return;
       // iPhone con la app en la pantalla de inicio: la ventana interna NO tiene la extensión ni tu sesión.
       // Nunca se abre ahí: se ofrece abrir en Safari (toque directo del usuario) o copiar el enlace.
