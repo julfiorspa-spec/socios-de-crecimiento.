@@ -663,6 +663,16 @@
   }
   // enlaces que abren el robot: #enlazar=<código> (QR del PC) y #robot=<compra> (avisos)
   function desdeHash() {
+    const f = location.hash.match(/^#firmada=([A-Za-z0-9-]+)/);      // ⚡ vuelves de firmar en Mercado Público: sigue el juego al instante
+    if (f) {
+      const cod = decodeURIComponent(f[1]).toUpperCase();
+      history.replaceState(null, "", location.pathname + "#inicio");
+      try { sessionStorage.setItem("sdc:portada", "1"); } catch {}
+      R.oportTab = "firmar"; R.firIdx = 0;
+      if (R.token) api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "verificar", dispositivo: dispositivo(false) }) }).catch(() => {});
+      setTimeout(() => { abrir(); toast("✅ " + cod + " enviada · el robot la confirma. ¡Sigue con la próxima!"); }, 30);
+      return;
+    }
     const m = location.hash.match(/enlazar=([A-Za-z0-9_-]{16,})/);
     const r = location.hash.match(/^#robot(?:=([A-Za-z0-9-]+))?$/);
     if (!m && !r) return;
