@@ -936,6 +936,8 @@
         return `<tr><td>${mesN(m)}</td><td class="n">${clp(sum("venta", L))}</td><td class="n">${clp(L.reduce((a, x) => a + (x.util ?? 0), 0))}</td></tr>`; }).join("")}</table>` : ""}
       <div class="muted" style="font-size:.68rem;margin-top:6px">${env.length} ofertas enviadas · ${vivas.length} negocios · ${F.filter((x) => x.cerr).length} cerrados en oro. Próximo: conexión con facturador SII, banco y factoring.</div></details>`;
   }
+  // costo de la IA que no cuadra (menos de 1/4 del presupuesto: casi siempre leyó el precio de UNA unidad, sin la cantidad)
+  const mkDudoso = (mk, pres) => !!(mk && pres && (mk.total_con_iva || 0) < pres * 0.25);
   const MIN_PRES = 250000;                                       // bajo esto el despacho y los gastos fijos se comen la utilidad
   const MARGEN_MIN = 0.12;                                       // utilidad mínima sobre la venta neta para que «dé»
   const fijosDe = (pres) => (pres < 150000 ? 12000 : pres < 1000000 ? 20000 : 35000);   // despacho y gastos que no dependen del precio
@@ -1169,10 +1171,11 @@
       if (hrs < 6) fuera.push("cierra en menos de 6 h");
       if (!seg && of != null && of >= 6) fuera.push(`guerra de precios: ya hay ${of} cotizaciones`);
       const mk = (R.mercado || {})[x.codigo]; let m = null, util = null;
-      if (mk && pres) { const costo = mk.total_neto || (mk.total_con_iva || 0) / 1.19, venta = pres * (1 - (seg ? 0.02 : 0.06)) / 1.19;
+      const dudoso = mkDudoso(mk, pres);
+      if (mk && pres && !dudoso) { const costo = mk.total_neto || (mk.total_con_iva || 0) / 1.19, venta = pres * (1 - (seg ? 0.02 : 0.06)) / 1.19;
         util = venta - costo - fijosDe(pres); m = venta ? util / venta : null;
         if (m != null && m < MARGEN_MIN) fuera.push(`no da: con el costo de mercado (${clp(mk.total_con_iva)}) queda ${Math.round(m * 100)}% de margen`); }
-      return { fuera, m, util, mk };
+      return { fuera, m, util, mk, dudoso };
     };
     const EV = {}; for (const x of nuevas) EV[x.codigo] = evaluar(x);
     const EVg = (x) => EV[x.codigo] || evaluar(x);
@@ -1205,7 +1208,7 @@
             <div class="rb-fnom">${esc(x.nombre)}</div>
             <div class="muted" style="font-size:.75rem">${/^segundo/i.test(x.llamado || "") ? `<b style="color:#ffb347">🔥 2° llamado</b>${(x.ofertas ?? 9) <= 2 ? '<span class="rb-chip">🎯 casi sin competencia</span>' : ""} · ` : ""}${esc(x.organismo)}${x.region ? " · " + esc(x.region.replace(/^Región (de |del |de la )?/i, "")) : ""}${x.ofertas != null && !lic(x) ? ` · ${x.ofertas ? x.ofertas + " cotizaciones" : "sin cotizaciones aún"}` : ""}</div>
             ${(() => { const e = EVg(x); if (!e || lic(x)) return "";
-              return e.fuera.length ? `<div class="rb-chip-no">🚫 ${esc(e.fuera[0])}</div>` : e.m != null ? `<div class="rb-chip-si">✅ Da: ${Math.round(e.m * 100)}% de margen con costo real (${clp(e.mk.total_con_iva)}) · utilidad ≈ <b>${clp(e.util)}</b></div>` : `<div class="rb-chip-esp">⏳ Pasa el filtro · el PC está verificando el costo real</div>`; })()}
+              return e.fuera.length ? `<div class="rb-chip-no">🚫 ${esc(e.fuera[0])}</div>` : e.dudoso ? `<div class="rb-chip-esp">⚠ Costo IA dudoso (${clp(e.mk.total_con_iva)} para Ppto. ${clp(x.monto)}): faltan cantidades, no lo cuento como verificado</div>` : e.m != null ? `<div class="rb-chip-si">✅ Da: ${Math.round(e.m * 100)}% de margen con costo real (${clp(e.mk.total_con_iva)}) · utilidad ≈ <b>${clp(e.util)}</b></div>` : `<div class="rb-chip-esp">⏳ Pasa el filtro · el PC está verificando el costo real</div>`; })()}
             <div style="font-size:.8rem;margin-top:3px">Gana ≈ <b class="rb-vivo-t" style="font-size:.95rem">${clp(x.ganancia)}</b> · Ppto. ${clp(x.monto)}${x.monto_estimado ? " (estimado)" : ""} · <span style="${h < 12 ? "color:#ff8a80;font-weight:700" : ""}">cierra en ${h} h</span></div>
           </div></div>
         <div class="row" style="margin-top:6px;gap:6px">${modo === "papelera"
@@ -1235,7 +1238,7 @@
       const pres = Number(x.monto) || 0;
       const margenRubro = Number(x._sel.margen ?? x.margen) || 0.2;
       const costoEst = Math.round(pres / 1.19 * (1 - margenRubro));
-      const mk = (R.mercado || {})[x.codigo], costoMk = mk ? Math.round(mk.total_neto || (mk.total_con_iva || 0) / 1.19) : 0;
+      const mk0 = (R.mercado || {})[x.codigo], mk = mkDudoso(mk0, pres) ? null : mk0, costoMk = mk ? Math.round(mk.total_neto || (mk.total_con_iva || 0) / 1.19) : 0;
       const costo = Number(x._sel.costo) || costoMk || 0;
       const real = !!costo, piso = pisoDe(costo || costoEst, pres);
       // 1er llamado: tope = el presupuesto · 🔥 2° llamado: se desbloquea, se puede ofertar sobre el presupuesto hasta 100 UTM
@@ -1248,6 +1251,7 @@
       const noDa = real && piso > tope;
       const chipMk = mk ? `<div class="rb-mkc ${noDa ? "mal" : ""}">💹 <b>Costo de mercado ${clp(mk.total_con_iva || costoMk * 1.19)}</b> c/IVA <span>(IA, ${mk.items?.reduce((s2, i) => s2 + (i.f || 0), 0) || "varias"} tiendas${mk.completo ? "" : ", incompleto"})</span><br>
           ${noDa ? `🔴 <b>No da:</b> para ganar plata necesitas cobrar al menos ${clp(piso)} y el tope es ${clp(tope)}. Pasa o busca otro proveedor.` : `🛡 Piso para ganar plata: <b>${clp(piso)}</b> (costo + despacho + ${Math.round(MARGEN_MIN * 100)}% mínimo)`}</div>`
+        : mk0 ? `<div class="rb-mkc espera">⚠ La IA dio un costo que no cuadra (${clp(mk0.total_con_iva)} para un presupuesto de ${clp(pres)}): probablemente sin cantidades. Escribe tu costo real en «✎ Mi costo».</div>`
         : `<div class="rb-mkc espera">⏳ El PC está buscando el <b>costo real</b> en tiendas (aparece en unos minutos). Mientras, el costo es estimado.</div>`;
       return `<div class="rb-card rb-sel rb-swipe" data-modo="sel" data-c="${esc(x.codigo)}" data-pres="${pres}" data-costo="${costo || costoEst}" data-piso="${piso}" data-real="${real ? 1 : ""}" data-est="${costo ? 0 : 1}" data-of="${of ?? ""}" data-seg="${seg ? 1 : ""}" style="padding:14px;margin:6px 0">
         <span class="rb-sello si">APUESTO</span><span class="rb-sello no">PASO</span>
