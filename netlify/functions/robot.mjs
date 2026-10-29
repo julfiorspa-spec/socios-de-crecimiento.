@@ -715,7 +715,10 @@ async function atender(req) {
     }
     const empresas = (await store.get("empresas/lista", { type: "json" })) || {};
     const op = { ...(pidio ? { oportunidades: true } : {}), ...(negocios.length ? { negocios } : {}), ...(preguntas.length ? { preguntas } : {}), empresas };
-    if (b.ocupado) return json({ siguiente: null, ...op });
+    // ⚡ lo que pide una persona desde el celular va antes que el autopiloto del PC
+    const humano = (t) => !!(t.jugador || t.dispositivo);
+    const enCola = lista.filter((t) => t.estado === "en_cola");
+    if (b.ocupado) return json({ siguiente: null, ...op, ...(enCola.some(humano) ? { espera_celular: true } : {}) });
     // un pedido tomado que quedó colgado (PC apagado a mitad de camino) vuelve a la cola
     for (const t of lista) {
       if (t.estado === "tomado" && Date.now() - Date.parse(t.actualizado) > TOMADO_VENCE_MS) {
@@ -723,7 +726,7 @@ async function atender(req) {
         await escribir(store, t);
       }
     }
-    const siguiente = lista.filter((t) => t.estado === "en_cola").sort((a, b) => a.creado.localeCompare(b.creado))[0];
+    const siguiente = lista.filter((t) => t.estado === "en_cola").sort((a, b) => (humano(b) - humano(a)) || a.creado.localeCompare(b.creado))[0];
     if (!siguiente) return json({ siguiente: null, ...op });
     anotar(siguiente, "tomado", "El robot del PC la tomó.");
     return json({ siguiente: await escribir(store, siguiente), ...op });
