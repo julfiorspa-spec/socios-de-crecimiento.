@@ -1267,7 +1267,7 @@
     if (!R.sel && !R._selPedido) { R._selPedido = true; cargarSel().then(pintarHoja); }
     const enviadosAll = trabajos.filter((t) => HECHA.includes(t.estado)).sort((a, b) => (b.actualizado || "").localeCompare(a.actualizado || ""));
     if ((tab === "hechas" || tab === "ganadas" || !R.seg) && enviadosAll.length && (!R.segT || Date.now() - R.segT > 60_000)) cargarSeg(false);
-    const ganadasT = enviadosAll.filter((t) => segDe(t.codigo)?.ganada || t.op?.etapa === "previa");   // 📞 previa: vas 1°, antes de la OC
+    const ganadasT = enviadosAll.filter((t) => segDe(t.codigo)?.ganada || t.op?.etapa === "previa" || t.op?.oc_codigo || t.externa);   // 📞 previa: vas 1°, antes de la OC
     const enviadosT = enviadosAll.filter((t) => !segDe(t.codigo)?.ganada);
     const tabs = [["nuevas", "👆 Por preparar", nuevas.length], ["sel", "⭐ Seleccionadas", sel.length], ["firmar", "✍ Por firmar", enFirma.length],
       ["hechas", "📨 Enviadas", enviadosT.length], ["ganadas", "🏆 Ganadas", ganadasT.length], ["papelera", "🗑 No deseadas", papelera.length]];
@@ -1540,7 +1540,21 @@
     else if (tab === "hechas") cuerpo = enviadosT.length ? `<div class="row" style="justify-content:space-between;align-items:center;margin:6px 0"><span class="muted" style="font-size:.74rem">${enviadosT.length} enviadas · ${clp(enviadosT.reduce((s, t) => s + (Number(t.total) || 0), 0))} · estado en vivo de Mercado Público${R.segT ? " (" + esc(hace(new Date(R.segT).toISOString())) + ")" : ""}</span>
         <button class="btn small" type="button" data-rb="seg-actualizar">↻</button></div>${enviadosT.map(enviado).join("")}`
       : `<div class="empty">Aún no hay ofertas enviadas.</div>`;
-    else if (tab === "ganadas") cuerpo = ganadasT.length ? `<div class="rb-etapas">${ETAPAS.map(([k, n]) => `<button type="button" class="${netapa === k ? "on" : ""}" data-rb="neg-tab" data-e="${k}">${n} ${ganadasT.filter((t) => etapaDe(t) === k).length}</button>`).join("")}</div>
+    else if (tab === "ganadas") cuerpo = ganadasT.length ? `${(() => {      // 📦 todas las OC que llegaron (también las cotizadas fuera de la app) y cuánto deja cada una
+        const ocs = ganadasT.filter((t) => t.op?.oc_codigo && etapaDe(t) !== "rechazada");
+        if (!ocs.length) return "";
+        const tot = ocs.reduce((a, t) => a + (Number(t.oc_compra?.total || t.total) || 0), 0);
+        const listas = ocs.filter((t) => t.op?.informe?.final != null && !t.op.informe.incompleto);
+        const util = listas.reduce((a, t) => a + (Number(t.op.informe.final) || 0), 0);
+        const malas = listas.filter((t) => (Number(t.op.informe.final) || 0) <= 0).length;
+        const calc = ocs.length - listas.length;
+        return `<div class="rb-card" style="border-color:rgba(245,207,107,.45);padding:10px 12px">
+          <div style="font-weight:700">📦 ${ocs.length} órdenes de compra · ${clp(tot)}</div>
+          <div class="muted" style="font-size:.76rem;margin-top:2px">💰 utilidad calculada ${clp(util)} en ${listas.length}${calc ? ` · ⟳ ${calc} calculándose (proveedores y costo)` : ""}${malas ? ` · <b style="color:#ff8a80">⚠ ${malas} no deja ganancia: negocia el costo</b>` : ""}</div>
+          <div style="margin-top:6px;display:grid;gap:3px">${ocs.map((t) => { const f = t.op?.informe?.final, inc = t.op?.informe?.incompleto;
+            return `<div style="display:flex;justify-content:space-between;gap:8px;font-size:.74rem"><span>${t.externa ? "🆕" : "🎮"} <b>${esc(t.op.oc_codigo)}</b> ${esc((t.oc_compra?.organismo || t.organismo || "").slice(0, 26))}</span>
+              <span style="white-space:nowrap">${clp(t.oc_compra?.total || t.total)} · ${f == null || inc ? "⟳" : `<b style="color:${f > 0 ? "#9be79b" : "#ff8a80"}">${f > 0 ? "+" : ""}${clp(f)}</b>`}</span></div>`; }).join("")}</div>
+          <div class="muted" style="font-size:.66rem;margin-top:4px">🆕 cotizada fuera de la app · 🎮 jugada aquí. Llegan solas desde Mercado Público cada 10 min.</div></div>`; })()}<div class="rb-etapas">${ETAPAS.map(([k, n]) => `<button type="button" class="${netapa === k ? "on" : ""}" data-rb="neg-tab" data-e="${k}">${n} ${ganadasT.filter((t) => etapaDe(t) === k).length}</button>`).join("")}</div>
       ${ganadasT.filter((t) => etapaDe(t) === netapa).map(negocioCard).join("") || `<div class="empty">Nada en esta etapa.</div>`}`
       : `<div class="empty">${R._cargandoSeg ? "Revisando en Mercado Público…" : "Todavía no hay ganadas. Cuando el organismo te elija aparecen aquí con su orden de compra."}</div>`;
     else cuerpo = papelera.length ? `<div class="muted" style="font-size:.74rem;margin:6px 0">Desliza → o toca «Recuperar» para devolverla a Por preparar.</div>${papelera.map((x) => fila(x, "papelera")).join("")}`
