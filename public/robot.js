@@ -44,6 +44,19 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const clp = (n) => n == null || isNaN(n) ? "—" : "$" + Math.round(n).toLocaleString("es-CL");
+  const cortoG = (n) => Math.abs(n) >= 1e6 ? (n < 0 ? "−" : "") + "$" + (Math.abs(n) / 1e6).toFixed(Math.abs(n) >= 1e7 ? 0 : 1).replace(".", ",") + "M" : clp(n);
+  // números que «suben» al aparecer (sensación de crecer); solo animan cuando el valor cambia
+  function contar(box) {
+    const quieto = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    $$("[data-cnt]", box).forEach((el) => {
+      const k = el.dataset.k || "", v = +el.dataset.cnt, a = R.cnt[k] ?? 0; R.cnt[k] = v;
+      if (a === v || quieto || !isFinite(v)) return;
+      const fmt = el.dataset.fmt === "pct" ? (n) => Math.round(n) + "%" : el.dataset.fmt === "corto" ? cortoG : clp;
+      const t0 = performance.now();
+      const paso = (t) => { const p = Math.min(1, (t - t0) / 750), e = 1 - Math.pow(1 - p, 3); el.textContent = fmt(a + (v - a) * e); if (p < 1) requestAnimationFrame(paso); };
+      el.textContent = fmt(a); requestAnimationFrame(paso);
+    });
+  }
   const leer = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
   const guardar = (o) => { try { localStorage.setItem(KEY, JSON.stringify({ ...leer(), ...o })); } catch {} };
   const hace = (iso) => {
@@ -200,12 +213,104 @@
   .rb-alertas li{margin:3px 0 3px 14px;color:var(--ink-dim)} .rb-alertas li.rojo{color:#ffc9cd}
   .rb-caja .rb-ojo{position:absolute;top:8px;right:8px;background:var(--red);color:#fff;border-radius:99px;font-size:.62rem;font-weight:700;padding:1px 6px}
   @media (min-width:560px){.rb-col{flex-basis:220px}}
+  /* ======== tema «cristal, oro, cielo, mar y luna» (solo en la hoja del robot) ======== */
+  #rbSheet{top:0;max-height:none;height:100%;border:0;border-radius:0;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+    padding:calc(10px + env(safe-area-inset-top,0px)) 14px calc(28px + env(safe-area-inset-bottom,0px));background:#030713;
+    --panel:rgba(255,255,255,.06);--panel-2:rgba(255,255,255,.10);--bg-2:rgba(255,255,255,.05);--line:rgba(255,255,255,.18);--line-soft:rgba(255,255,255,.11);
+    --oro:#f5cf6b;--oro-d:#c48f17;--vivo:#5ef0b0;font-feature-settings:"tnum" 1}
+  #rbSheet::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+    background:radial-gradient(52px 52px at 86% 6%,rgba(255,251,233,.9) 0,rgba(255,241,194,.8) 38%,rgba(255,229,150,.25) 55%,transparent 72%),
+      radial-gradient(260px 200px at 84% 7%,rgba(255,226,140,.20),transparent 70%),
+      radial-gradient(1.2px 1.2px at 12% 14%,#fff 50%,transparent 51%),radial-gradient(1px 1px at 33% 6%,#fff 50%,transparent 51%),
+      radial-gradient(1.4px 1.4px at 58% 18%,#fff 50%,transparent 51%),radial-gradient(1px 1px at 72% 28%,#dfe8ff 50%,transparent 51%),
+      radial-gradient(1px 1px at 22% 32%,#dfe8ff 50%,transparent 51%),radial-gradient(1.3px 1.3px at 92% 22%,#fff 50%,transparent 51%),
+      radial-gradient(900px 380px at 50% 112%,rgba(18,160,190,.55),transparent 65%),
+      linear-gradient(180deg,#02040d 0%,#061230 34%,#0a2547 62%,#0b3f5c 84%,#0d5a6e 100%)}
+  #rbSheet .sheet-in{position:relative}
+  #rbSheet h2{font-family:"Fraunces",serif;font-weight:600;letter-spacing:-.01em;background:linear-gradient(180deg,#fff8e0,#f5cf6b 55%,#c48f17);-webkit-background-clip:text;background-clip:text;color:transparent}
+  #rbSheet .btn{background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.05));border:1px solid rgba(255,255,255,.18);color:#f4f7ff;box-shadow:inset 0 1px 0 rgba(255,255,255,.18);transition:transform .08s}
+  #rbSheet .btn:active{transform:scale(.97)}
+  #rbSheet .btn.rb-firmar,#rbSheet .btn.rb-oro{background:linear-gradient(180deg,#fff0bd 0%,#f5cf6b 38%,#d9a52a 70%,#b37a0f 100%);color:#2a1a00;border-color:rgba(255,236,170,.9);font-weight:800;
+    box-shadow:0 6px 20px rgba(245,190,70,.28),inset 0 1px 0 rgba(255,255,255,.7);text-shadow:0 1px 0 rgba(255,255,255,.35)}
+  #rbSheet .rb-card,#rbSheet .rb-caja,#rbSheet .rb-conf{background:linear-gradient(155deg,rgba(255,255,255,.11),rgba(255,255,255,.035) 60%,rgba(120,200,255,.05));
+    border:1px solid rgba(255,255,255,.14);border-radius:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 10px 28px rgba(0,0,0,.30)}
+  #rbSheet .rb-card.oro{border-color:rgba(245,207,107,.7);box-shadow:0 0 0 1px rgba(245,207,107,.25),0 10px 30px rgba(245,190,70,.18)}
+  #rbSheet .rb-otabs{position:sticky;top:calc(-10px + env(safe-area-inset-top,0px));z-index:5;margin:8px -14px 6px;padding:8px 14px;
+    background:rgba(6,16,40,.72);-webkit-backdrop-filter:blur(16px) saturate(150%);backdrop-filter:blur(16px) saturate(150%);border-bottom:1px solid rgba(255,255,255,.08)}
+  #rbSheet .rb-otabs button{border-color:rgba(255,255,255,.14);background:rgba(255,255,255,.04)}
+  #rbSheet .rb-otabs button.on{background:linear-gradient(180deg,#fff0bd,#f5cf6b 45%,#c48f17);border-color:transparent;color:#2a1a00;box-shadow:0 4px 14px rgba(245,190,70,.3)}
+  .rb-oro-t{background:linear-gradient(180deg,#fffaf0 0%,#ffe69a 40%,#f5cf6b 62%,#c48f17 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .rb-vivo-t{color:var(--vivo);text-shadow:0 0 18px rgba(94,240,176,.35)}
+  #rbSheet .rb-marcador{gap:8px}
+  #rbSheet .rb-m{background:linear-gradient(160deg,rgba(255,255,255,.13),rgba(255,255,255,.04));border:1px solid rgba(255,255,255,.14);color:#eef3ff;border-radius:18px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 10px 26px rgba(0,0,0,.28)}
+  #rbSheet .rb-m b{font-family:"Fraunces",serif;font-weight:600;font-size:1.5rem}
+  #rbSheet .rb-m span{opacity:.75}
+  #rbSheet .rb-m.oro{background:linear-gradient(160deg,rgba(255,226,140,.30),rgba(196,143,23,.14));border-color:rgba(245,207,107,.6)}
+  #rbSheet .rb-m.verde{background:linear-gradient(160deg,rgba(94,240,176,.22),rgba(20,120,90,.12));border-color:rgba(94,240,176,.45)}
+  #rbSheet .rb-m.verde b{color:var(--vivo);text-shadow:0 0 22px rgba(94,240,176,.4)}
+  #rbSheet .rb-m.azul{background:linear-gradient(160deg,rgba(120,180,255,.20),rgba(40,80,160,.10))}
+  #rbSheet .rb-m.violeta{background:linear-gradient(160deg,rgba(190,160,255,.20),rgba(90,60,180,.10))}
+  .rb-filtros{display:flex;gap:6px;overflow-x:auto;margin:6px -14px;padding:2px 14px 4px;scrollbar-width:none}.rb-filtros::-webkit-scrollbar{display:none}.rb-filtros .btn{flex:0 0 auto}
+  #rbSheet .rb-status{font-size:.78rem;margin:2px 0}
+  #rbSheet .rb-vistas{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1)}
+  #rbSheet .rb-vistas button.on{background:rgba(245,207,107,.18);color:#ffe9a8}
+  body:has(#rbSheet.on) .toast{background:rgba(8,20,48,.82);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid rgba(245,207,107,.5);color:#fff6d6;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+  .rb-fnom{margin:3px 0;font-weight:600;font-size:.9rem;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-transform:lowercase}
+  .rb-fnom::first-letter{text-transform:uppercase}
+  .rb-rchips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px}
+  .rb-rchip{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#eef3ff;border-radius:999px;padding:10px 14px;font:inherit;font-size:.86rem;cursor:pointer;transition:transform .08s}
+  .rb-rchip:active{transform:scale(.96)}.rb-rchip i{font-style:normal;margin-left:7px;font-size:.72rem;opacity:.7}
+  .rb-rchip.on{background:linear-gradient(180deg,#fff0bd,#f5cf6b 45%,#c48f17);color:#2a1a00;border-color:transparent;font-weight:800;box-shadow:0 4px 16px rgba(245,190,70,.35)}
+  .rb-cartera{grid-column:1/-1;border-radius:18px;padding:12px 14px 6px;border:1px solid rgba(245,207,107,.45);
+    background:linear-gradient(160deg,rgba(255,226,140,.16),rgba(255,255,255,.03) 55%,rgba(18,160,190,.10));box-shadow:inset 0 1px 0 rgba(255,255,255,.16)}
+  .rb-cartera .rb-ctop{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .rb-cartera b{font-family:"Fraunces",serif;font-size:2rem;font-weight:600;line-height:1.05}
+  .rb-cartera svg{display:block;width:100%;height:46px;margin-top:4px}
+  .rb-up{color:var(--vivo);font-weight:800;font-size:.8rem}
+  /* deslizar fluido */
+  #rbSheet .rb-swipe{touch-action:pan-y}
+  #rbSheet .vuela{transition:transform .22s cubic-bezier(.2,.7,.3,1),opacity .22s}
+  #rbSheet .cierra{transition:max-height .22s ease,margin .22s ease,padding .22s ease,opacity .18s;overflow:hidden}
+  /* ⭐ apuesta en Seleccionadas */
+  .rb-rival{display:inline-block;font-size:.7rem;font-weight:800;padding:2px 9px;border-radius:999px;margin-left:4px;vertical-align:middle}
+  .rb-rival.solo{background:linear-gradient(180deg,#fff0bd,#f5cf6b);color:#2a1a00;box-shadow:0 0 14px rgba(245,207,107,.5)}
+  .rb-rival.pocos{background:rgba(94,240,176,.16);color:var(--vivo);border:1px solid rgba(94,240,176,.4)}
+  .rb-rival.muchos{background:rgba(255,255,255,.08);color:#c9d4ee;border:1px solid rgba(255,255,255,.15)}
+  #rbSheet .rb-sel .rb-precio{font-family:"Fraunces",serif;font-size:2.3rem;font-weight:600;letter-spacing:-.02em}
+  #rbSheet .rb-range{height:12px;background:rgba(255,255,255,.12);margin:16px 0 6px;box-shadow:inset 0 1px 3px rgba(0,0,0,.5)}
+  #rbSheet .rb-range::-webkit-slider-thumb{width:34px;height:34px;border:0;background:radial-gradient(circle at 35% 30%,#fffaf0,#f5cf6b 45%,#b37a0f);box-shadow:0 0 0 4px rgba(245,207,107,.25),0 4px 14px rgba(0,0,0,.5)}
+  #rbSheet .rb-range::-moz-range-thumb{width:30px;height:30px;border:0;background:#f5cf6b}
+  .rb-ticket{margin:12px 0 8px;border-radius:16px;padding:12px;background:linear-gradient(160deg,rgba(4,10,30,.65),rgba(10,40,70,.55));border:1px solid rgba(245,207,107,.35);position:relative;overflow:hidden}
+  .rb-ticket::after{content:"";position:absolute;top:-40%;left:-60%;width:40%;height:180%;transform:rotate(20deg);background:linear-gradient(90deg,transparent,rgba(255,240,190,.10),transparent);animation:rbBrillo 4.5s ease-in-out infinite;pointer-events:none}
+  @keyframes rbBrillo{0%,60%{left:-60%}100%{left:130%}}
+  .rb-ticket .t{display:flex;justify-content:space-between;align-items:center;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;opacity:.75;margin-bottom:8px}
+  .rb-ticket .g{display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center;text-align:center}
+  .rb-ticket .g small{display:block;font-size:.66rem;opacity:.7}.rb-ticket .g b{font-size:1rem}
+  .rb-ticket .flecha{font-size:1.1rem;opacity:.6}
+  .rb-cuota{display:inline-block;font-family:"IBM Plex Mono",monospace;font-weight:700;font-size:.9rem;padding:3px 10px;border-radius:10px;background:rgba(245,207,107,.15);color:var(--oro);border:1px solid rgba(245,207,107,.45)}
+  .rb-prob{height:8px;border-radius:9px;background:rgba(255,255,255,.1);overflow:hidden;margin:8px 0 2px}
+  .rb-prob i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,#1fb98a,#5ef0b0,#f5cf6b);transition:width .25s}
+  .rb-si-ganas{display:flex;justify-content:space-between;align-items:flex-end;margin-top:8px}
+  .rb-si-ganas b{font-family:"Fraunces",serif;font-size:1.8rem;font-weight:600}
+  .btn.rb-soltar{width:100%;margin-top:6px;background:linear-gradient(180deg,rgba(94,240,176,.22),rgba(20,120,90,.18))!important;border-color:rgba(94,240,176,.55)!important;color:#dfffee!important;font-weight:800}
+  .btn.rb-soltar.brilla{box-shadow:0 0 0 1px rgba(94,240,176,.5),0 0 22px rgba(94,240,176,.35)!important}
   `;
   document.head.appendChild(css);
 
   /* ---------------- estado ---------------- */
   const R = { token: leer().token || null, data: null, err: null, previos: {}, timer: null, enCurso: false, foco: null,
-              vista: (leer().v_cajas ? leer().vista : "oport") || "oport", detalle: null, push: false, instalar: null };
+              vista: (leer().v_cajas ? leer().vista : "oport") || "oport", detalle: null, push: false, instalar: null,
+              oportTab: leer().oportTab || "nuevas", toque: 0, cnt: {} };
+  // ---- rapidez: lo último que se vio queda guardado y se muestra al instante; la red solo actualiza
+  const CK = "sdc:cache:";
+  const deCache = (k) => { try { return JSON.parse(localStorage.getItem(CK + k)); } catch { return null; } };
+  const aCache = (k, v) => { try { localStorage.setItem(CK + k, JSON.stringify(v)); } catch {} };
+  if (R.token) {
+    const c = deCache("estado"); if (c?.data) { R.data = c.data; R.ver = null; }
+    const o = deCache("oport"); if (o?.lista) { R.oport = o; R.oportViejo = true; }
+    const g = deCache("seg"); if (g?.seg) { R.seg = g.seg; R.segT = 0; }
+  }
 
   async function api(ruta, opt = {}) {
     if (!R.token) throw new Error("Robot sin enlazar");
@@ -377,18 +482,27 @@
   async function refrescar() {
     clearTimeout(R.timer);
     if (!R.token) { pintar(); return; }
+    let cambio = true;
     try {
-      R.data = await api("estado"); R.err = null;
-      revisarCambios(R.data.trabajos || []);
-      cerrarEnviadas(R.data.trabajos || []);
+      const r = await fetch("/bot/estado?ligero=1", { headers: { "x-robot-token": R.token, ...(R.ver && R.data ? { "x-ya-tengo": R.ver } : {}) }, cache: "no-store" });
+      if (r.status === 401) { const e = new Error("Código de enlace inválido"); e.auth = true; throw e; }
+      if (r.status === 204) cambio = false;                       // nada nuevo: no se descarga ni se repinta nada
+      else if (!r.ok) throw new Error("Error " + r.status);
+      else {
+        R.data = await r.json(); R.ver = r.headers.get("x-version");
+        revisarCambios(R.data.trabajos || []);
+        cerrarEnviadas(R.data.trabajos || []);
+        aCache("estado", { data: R.data });
+      }
+      if (R.err) cambio = true; R.err = null;
     } catch (e) {
       R.err = e.message;
       if (e.auth) { R.token = null; guardar({ token: null }); }
     }
-    pintar();
+    if (cambio) pintar();
     const activos = (R.data?.trabajos || []).some((t) => est(t.estado).activo);
     const abierto = $("#rbSheet")?.classList.contains("on");
-    if (!document.hidden) R.timer = setTimeout(refrescar, activos || abierto ? POLL_RAPIDO : POLL_LENTO);
+    if (!document.hidden) R.timer = setTimeout(refrescar, activos ? POLL_RAPIDO : abierto ? 12000 : POLL_LENTO);
   }
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) { ocultaDesde = Date.now(); return; }
@@ -554,6 +668,13 @@
     return `
       <div class="rb-sheet-head"><h2 style="margin:0">Conecta tu robot</h2><button class="rb-x" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
       <p class="lead" style="margin:8px 0 14px">El robot trabaja en tu PC con tu sesión de Mercado Público. Desde aquí le pides ofertas y ves cómo avanzan.</p>
+      ${esIOS && instalada() ? `<div class="card" style="border-color:rgba(245,207,107,.6)">
+        <h3>📲 App del inicio del iPhone</h3>
+        <div class="muted">El iPhone guarda esta app <b>separada de Safari</b>, por eso aquí no está tu enlace. Es una sola vez:</div>
+        <ol class="rb-pasos"><li>Abre <b>cotizagil.netlify.app</b> en <b>Safari</b> → Robot → Ajustes → <b>«Copiar enlace para la app del inicio»</b>.</li>
+          <li>Vuelve aquí y toca:</li></ol>
+        <button class="btn rb-oro" type="button" data-rb="pegar-enlace" style="width:100%;margin-top:8px;padding:14px">📋 Pegar enlace y entrar</button>
+      </div>` : ""}
       <div class="card">
         <h3>1 · En el PC</h3>
         <div class="muted">Abre el panel del robot y entra a <strong>Celular</strong>. Escanea el código QR con la cámara de este teléfono.</div>
@@ -670,15 +791,40 @@
   /* ---------- 📨 seguimiento en vivo (estado en Mercado Público) ---------- */
   async function cargarSeg(forzar) {
     if (R._cargandoSeg) return; R._cargandoSeg = true;
-    try { const r = await api("seguimiento" + (forzar ? "?forzar=1" : "")); R.seg = r.seguimiento || {}; R.segT = Date.now(); } catch (e) { R.segErr = e.message; }
+    try { const r = await api("seguimiento" + (forzar ? "?forzar=1" : "")); R.seg = { ...(R.seg || {}), ...(r.seguimiento || {}) }; R.segT = Date.now(); aCache("seg", { seg: R.seg }); } catch (e) { R.segErr = e.message; }
     R._cargandoSeg = false; pintarHoja();
   }
   const segDe = (cod) => (R.seg || {})[cod] || null;
   const descartada = (cod) => { const d = { ...(R.oport?.descartes || {}), ...(R.desc || {}) }; return !!d[cod]; };
+  const norm = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  function pantallaRubro(lista) {
+    const c = leer(), ya = new Set(R.rubrosTmp || c.rubros || []);
+    const vig = lista.filter((x) => Date.parse(x.cierre) - Date.now() > 30 * 60000);
+    const cuenta = {}; vig.forEach((x) => { if (x.rubro) cuenta[x.rubro] = (cuenta[x.rubro] || 0) + 1; });
+    const rubros = Object.keys(cuenta).filter((r) => !/^otro/i.test(r)).sort((a, b) => cuenta[b] - cuenta[a]);
+    const pal = R.palabrasTmp ?? c.palabras ?? "";
+    const ws = pal.split(/[,;\n]+/).map(norm).filter((w) => w.length > 2);
+    const n = vig.filter((x) => ya.has(x.rubro) || (ws.length && ws.some((w) => norm(x.nombre).includes(w)))).length;
+    return `<div class="rb-rubro">
+      <div style="text-align:center;margin:18px 0 6px"><div style="font-size:2.4rem">🎯</div>
+        <h2 style="margin:4px 0 4px;font-size:1.9rem">¿Cuál es tu rubro?</h2>
+        <div class="muted" style="font-size:.86rem">Con esto busco y te muestro solo las oportunidades que puedes ganar. Elige uno o varios.</div></div>
+      <div class="rb-rchips">${rubros.map((r) => `<button type="button" class="rb-rchip ${ya.has(r) ? "on" : ""}" data-rb="rubro-t" data-r="${esc(r)}">${esc(r)}<i>${cuenta[r]}</i></button>`).join("") || `<div class="empty"><span class="spinner"></span> Cargando rubros…</div>`}</div>
+      <label class="muted" style="font-size:.78rem;display:block;margin-top:14px">¿Qué vendes? (palabras separadas por coma, ej. <i>neumáticos, toldos, pintura</i>)
+        <input id="rbPalabras" value="${esc(pal)}" autocomplete="off" style="width:100%;margin-top:4px;padding:12px;border-radius:14px;border:1px solid var(--line);background:rgba(255,255,255,.07);color:inherit;font:inherit"></label>
+      <button class="btn rb-oro" type="button" data-rb="rubro-ok" style="width:100%;margin-top:16px;padding:15px;font-size:1.02rem">🔎 Buscar mis oportunidades${ya.size || ws.length ? ` · <b data-rb-n>${n}</b> vigentes` : ""}</button>
+      <button class="btn small" type="button" data-rb="rubro-todo" style="width:100%;margin-top:8px;opacity:.8">Ver todas, sin filtrar por rubro</button></div>`;
+  }
   function vistaOport() {
     if (!R.oport) { cargarOport(); return `<div class="empty"><span class="spinner"></span> Cargando oportunidades…</div>`; }
+    if ((R.oportViejo || Date.now() - (R.oportT || 0) > 10 * 60000) && !R._cargandoOport) setTimeout(cargarOport, 0);   // muestra lo guardado y actualiza por detrás
     const o = R.oport, ahora = Date.now();
-    const tab = R.oportTab || "nuevas", filtro = R.oportFiltro || "todas";
+    const tab = R.oportTab || "nuevas", filtro = R.oportFiltro || "mio";
+    // ---- 🎯 tu rubro: la base de todo. La primera vez se pregunta; después filtra y ordena las oportunidades
+    const conf = leer();
+    if (!conf.rubroListo || R.rubroEditar) return pantallaRubro(o.lista || []);
+    const misR = new Set(conf.rubros || []), palabras = (conf.palabras || "").split(/[,;\n]+/).map(norm).filter((w) => w.length > 2);
+    const mio = (x) => (!misR.size && !palabras.length) || misR.has(x.rubro) || (palabras.length && palabras.some((w) => norm(x.nombre).includes(w)));
     const lic = (x) => x.fuente === "licitacion";
     const trabajos = R.data?.trabajos || [];
     const vigente = (x) => Date.parse(x.cierre) - ahora > 30 * 60000;
@@ -689,8 +835,8 @@
       ...lista.filter((x) => (x.ya_ofertada || x.trabajada) && !trabajo(x.codigo)).map((x) => ({ ...x, _oport: true }))];
     const papelera = lista.filter((x) => descartada(x.codigo));
     const esSeg = (x) => /^segundo/i.test(x.llamado || "");
-    const verN = nuevas.filter((x) => filtro === "lic" ? lic(x) : !lic(x) && (filtro === "seg" ? esSeg(x) && x.tipo !== "esp"
-      : filtro === "exp" ? x.tipo === "exp" : x.tipo !== "esp"))
+    const verN = nuevas.filter((x) => (filtro === "todas" || mio(x)) && (filtro === "lic" ? lic(x) : !lic(x) && (filtro === "seg" ? esSeg(x) && x.tipo !== "esp"
+      : filtro === "exp" ? x.tipo === "exp" : x.tipo !== "esp")))
       .sort((a, b) => { const poca = (x) => esSeg(x) && (x.ofertas ?? 9) <= 2;   // 2° llamado primero; los casi sin competencia, más arriba
         return (poca(b) - poca(a)) || (esSeg(b) - esSeg(a)) || (b.ganancia || 0) - (a.ganancia || 0); });
     const n = R.oportN || 40;
@@ -704,9 +850,9 @@
             ${lic(x) || modo === "papelera" ? "" : `<button type="button" class="rb-estrella ${esSel(x.codigo) ? "on" : ""}" data-rb="oport-sel" data-c="${esc(x.codigo)}" title="Seleccionar">${esSel(x.codigo) ? "★" : "☆"}</button>`}</div>
           <div style="flex:1;min-width:0">
             <div style="font-size:.78rem"><b>${esc(x.codigo)}</b> · ${lic(x) ? "📑 " : ""}<span style="color:${color[x.tipo] || "#999"}">${esc(x.etiqueta || "")}</span> · ${esc(x.rubro || "")}</div>
-            <div style="margin:2px 0">${esc(x.nombre)}</div>
+            <div class="rb-fnom">${esc(x.nombre)}</div>
             <div class="muted" style="font-size:.75rem">${/^segundo/i.test(x.llamado || "") ? `<b style="color:#ffb347">🔥 2° llamado</b>${(x.ofertas ?? 9) <= 2 ? '<span class="rb-chip">🎯 casi sin competencia</span>' : ""} · ` : ""}${esc(x.organismo)}${x.region ? " · " + esc(x.region.replace(/^Región (de |del |de la )?/i, "")) : ""}${x.ofertas != null && !lic(x) ? ` · ${x.ofertas ? x.ofertas + " cotizaciones" : "sin cotizaciones aún"}` : ""}</div>
-            <div style="font-size:.8rem;margin-top:3px">Gana ≈ <b>${clp(x.ganancia)}</b> · Ppto. ${clp(x.monto)}${x.monto_estimado ? " (estimado)" : ""} · <span style="${h < 12 ? "color:#ff8a80;font-weight:700" : ""}">cierra en ${h} h</span></div>
+            <div style="font-size:.8rem;margin-top:3px">Gana ≈ <b class="rb-vivo-t" style="font-size:.95rem">${clp(x.ganancia)}</b> · Ppto. ${clp(x.monto)}${x.monto_estimado ? " (estimado)" : ""} · <span style="${h < 12 ? "color:#ff8a80;font-weight:700" : ""}">cierra en ${h} h</span></div>
           </div></div>
         <div class="row" style="margin-top:6px;gap:6px">${modo === "papelera"
           ? `<button class="btn small rb-firmar" type="button" data-rb="oport-restaurar" data-c="${esc(x.codigo)}">↩ Recuperar</button>`
@@ -736,26 +882,37 @@
       const margenRubro = Number(x._sel.margen ?? x.margen) || 0.2;
       const costoEst = Math.round(pres / 1.19 * (1 - margenRubro));
       const costo = Number(x._sel.costo) || 0;
-      const precio0 = Math.round(Math.min(x._sel.precio || pres * (1 - (leer().descuento ?? 0.08)), pres * 1.5));
+      const precio0 = Math.round(Math.min(x._sel.precio || pres * (1 - sugerido(x).d), pres * 1.5));
       const h = x.cierre ? Math.round((Date.parse(x.cierre) - ahora) / 3600000) : null;
-      return `<div class="rb-card rb-sel" data-c="${esc(x.codigo)}" data-pres="${pres}" data-costo="${costo || costoEst}" data-est="${costo ? 0 : 1}" style="padding:12px;margin:8px 0">
-        <div class="rb-env"><div style="min-width:0"><div style="font-size:.78rem"><b>${esc(x.codigo)}</b>${h != null ? ` · <span style="${h < 12 ? "color:#ff8a80;font-weight:700" : ""}">cierra en ${h} h</span>` : ""}</div>
-          <div style="margin:2px 0">${esc(x.nombre || "Compra Ágil")}</div><div class="muted" style="font-size:.74rem">${esc(x.organismo || "")} · Ppto. <b>${clp(pres)}</b></div></div>
+      const of = x.ofertas ?? null, seg = esSeg(x);
+      const rival = of === 0 ? `<span class="rb-rival solo">🎯 Vas solo</span>` : of != null && of <= 2 ? `<span class="rb-rival pocos">${of} rival${of === 1 ? "" : "es"}</span>`
+        : of != null ? `<span class="rb-rival muchos">${of} rivales</span>` : "";
+      const sg = sugerido(x), vSug = Math.round(pres * (1 - sg.d));
+      return `<div class="rb-card rb-sel" data-c="${esc(x.codigo)}" data-pres="${pres}" data-costo="${costo || costoEst}" data-est="${costo ? 0 : 1}" data-of="${of ?? ""}" data-seg="${seg ? 1 : ""}" style="padding:14px;margin:10px 0">
+        <div class="rb-env"><div style="min-width:0"><div style="font-size:.76rem;opacity:.85"><b>${esc(x.codigo)}</b>${seg ? ` · <b style="color:#ffb347">🔥 2° llamado</b>` : ""}${h != null ? ` · <span style="${h < 12 ? "color:#ff8a80;font-weight:700" : ""}">cierra en ${h} h</span>` : ""}</div>
+          <div style="margin:3px 0;font-weight:600">${esc(x.nombre || "Compra Ágil")}</div><div class="muted" style="font-size:.74rem">${esc(x.organismo || "")} · Ppto. <b>${clp(pres)}</b> ${rival}</div></div>
           <button type="button" class="rb-estrella on" data-rb="sel-quitar" data-c="${esc(x.codigo)}" title="Devolver a Por preparar">★</button></div>
-        ${pres ? `<div style="margin-top:10px"><span class="muted" style="font-size:.74rem">Tu precio con IVA</span><br><span class="rb-precio">${clp(precio0)}</span><span class="rb-pct"></span></div>
-        <input type="range" class="rb-range" min="${Math.round(pres * 0.5)}" max="${Math.round(pres * 1.5)}" step="${Math.max(10, Math.round(pres / 2000 / 10) * 10)}" value="${precio0}">
+        ${pres ? `<div style="margin-top:12px;display:flex;justify-content:space-between;align-items:flex-end;gap:8px"><div><span class="muted" style="font-size:.72rem;letter-spacing:.06em;text-transform:uppercase">Tu apuesta (con IVA)</span><br><span class="rb-precio rb-oro-t">${clp(precio0)}</span></div><span class="rb-pct"></span></div>
+        <input type="range" class="rb-range" min="${Math.round(pres * 0.5)}" max="${Math.round(pres * 1.5)}" step="${Math.max(10, Math.round(pres / 4000 / 10) * 10)}" value="${precio0}">
         <div class="rb-escala"><span>−50%</span><span>Presupuesto ${clp(pres)}</span><span>+50%</span></div>
-        ${(() => { const sg = sugerido(x); const v = Math.round(pres * (1 - sg.d)); return `<div class="rb-sug">💡 <b>Sugerido ${clp(v)}</b> (${sg.d ? "−" + Math.round(sg.d * 100) + "%" : "presupuesto completo"}) · ${esc(sg.por)}
-          <button class="btn small" type="button" data-fijo="${v}" style="margin-left:6px">Usar</button></div>`; })()}
-        <div class="rb-pasos2"><button class="btn small" type="button" data-paso="-10">−10%</button><button class="btn small" type="button" data-paso="-5">−5%</button><button class="btn small" type="button" data-paso="-1">−1%</button>
-          <button class="btn small" type="button" data-paso="1">+1%</button><button class="btn small" type="button" data-paso="5">+5%</button><button class="btn small" type="button" data-paso="10">+10%</button></div>
-        <div class="rb-mini"><div><small>Ganancia</small><b class="rb-gan">—</b></div><div><small>Margen</small><b class="rb-mar">—</b></div>
-          <div><small>Neto (sin IVA)</small><b class="rb-neto">—</b></div><div><small>Bajo el presupuesto</small><b class="rb-bajo">—</b></div></div>
-        <label class="muted" style="font-size:.72rem;display:block">Mi costo neto total <span class="rb-cest">${costo ? "" : `(estimado ${Math.round(margenRubro * 100)}% margen del rubro)`}</span>
-          <input class="rb-costo" inputmode="numeric" value="${(costo || costoEst).toLocaleString("es-CL")}" style="width:100%;margin-top:3px;padding:8px;border-radius:10px;border:1px solid var(--line-soft);background:rgba(255,255,255,.05);color:inherit;font:inherit"></label>
+        <div class="rb-ticket">
+          <div class="t"><span>🎰 Ticket de inversión</span><span class="rb-cuota">x—</span></div>
+          <div class="g"><div><small>Inviertes</small><b class="rb-inv">—</b></div><div class="flecha">➜</div><div><small>Te pagan (neto)</small><b class="rb-neto">—</b></div></div>
+          <div class="rb-prob"><i style="width:0"></i></div>
+          <div class="rb-env" style="font-size:.72rem;opacity:.85"><span>Prob. de ganar (estimada) <b class="rb-pg">—</b></span><span>Margen <b class="rb-mar">—</b></span></div>
+          <div class="rb-si-ganas"><div><div style="font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;opacity:.75">Si ganas te llevas</div><b class="rb-gan rb-vivo-t">—</b></div>
+            <div style="text-align:right;font-size:.72rem;opacity:.85">Valor esperado<br><b class="rb-ev" style="font-size:.95rem">—</b></div></div>
+        </div>
+        <div class="rb-pasos2"><button class="btn small" type="button" data-paso="-5">−5%</button><button class="btn small" type="button" data-paso="-1">−1%</button>
+          <button class="btn small" type="button" data-paso="1">+1%</button><button class="btn small" type="button" data-paso="5">+5%</button></div>
+        <div class="rb-sug">💡 <b>Sugerido ${clp(vSug)}</b> (${sg.d ? "−" + Math.round(sg.d * 100) + "%" : "presupuesto completo"}) · ${esc(sg.por)}
+          <button class="btn small" type="button" data-fijo="${vSug}" style="margin-left:6px">Usar</button></div>
+        <button class="btn rb-soltar ${of != null && of <= 1 ? "brilla" : ""}" type="button" data-fijo="${pres}">🔓 Soltar el presupuesto · apostar ${clp(pres)}${of === 0 ? " (vas solo)" : ""}</button>
+        <label class="muted" style="font-size:.72rem;display:block;margin-top:10px">Mi costo neto total <span class="rb-cest">${costo ? "" : `(estimado ${Math.round(margenRubro * 100)}% margen del rubro)`}</span>
+          <input class="rb-costo" inputmode="numeric" value="${(costo || costoEst).toLocaleString("es-CL")}" style="width:100%;margin-top:3px;padding:9px;border-radius:12px;border:1px solid var(--line-soft);background:rgba(255,255,255,.06);color:inherit;font:inherit"></label>
         <div class="rb-sobre muted" style="display:none;color:#ff9a9a;font-size:.78rem;margin-top:6px">⚠ Supera el presupuesto: se ofertará el presupuesto (${clp(pres)}).</div>
-        <button class="btn rb-firmar" type="button" style="width:100%;margin-top:8px" data-rb="sel-preparar" data-c="${esc(x.codigo)}">✍ Firmar con <span class="rb-p2">${clp(Math.min(precio0, pres))}</span></button>
-        <div class="muted" style="font-size:.7rem;margin-top:4px;text-align:center">el robot arma cotización y PDF y la deja en ✍ Por firmar</div>`
+        <button class="btn rb-firmar" type="button" style="width:100%;margin-top:10px;padding:14px;font-size:1rem" data-rb="sel-preparar" data-c="${esc(x.codigo)}">✍ Apostar y firmar <span class="rb-p2">${clp(Math.min(precio0, pres))}</span></button>
+        <div class="muted" style="font-size:.7rem;margin-top:5px;text-align:center">el robot arma cotización y PDF · tú sigues aquí jugando con las demás</div>`
         : `<div class="muted" style="margin-top:8px">Sin presupuesto conocido: abre la compra para ver el monto.</div>`}
       </div>`;
     };
@@ -776,11 +933,28 @@
     const enJuego = enviadosAll.filter((t) => ["publicada", "cerrada"].includes(segDe(t.codigo)?.estado)).reduce((s, t) => s + (Number(t.total) || 0), 0);
     const tasa = decididas.length ? Math.round(ganadasT.length / decididas.length * 100) : null;
     const corto = (n) => n >= 1e6 ? "$" + (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace(".", ",") + "M" : clp(n);
+    // cartera: lo ofertado acumulado en el tiempo (la curva que crece)
+    const puntos = (() => {
+      const xs = [...enviadosAll].filter((t) => t.total).sort((a, b) => (a.actualizado || "").localeCompare(b.actualizado || ""));
+      let acc = 0; const ys = xs.map((t) => (acc += Number(t.total) || 0));
+      if (ys.length < 2) return "";
+      const W = 300, H = 46, max = ys[ys.length - 1] || 1;
+      const pts = ys.map((y, k) => [k / (ys.length - 1) * W, H - 4 - y / max * (H - 8)]);
+      const linea = pts.map(([x, y]) => x.toFixed(1) + "," + y.toFixed(1)).join(" ");
+      return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="rbG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f5cf6b" stop-opacity=".45"/><stop offset="1" stop-color="#f5cf6b" stop-opacity="0"/></linearGradient></defs>
+        <polygon points="0,${H} ${linea} ${W},${H}" fill="url(#rbG)"/><polyline points="${linea}" fill="none" stroke="#f5cf6b" stroke-width="2.2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
+        <circle cx="${pts[pts.length - 1][0]}" cy="${pts[pts.length - 1][1]}" r="3.5" fill="#fff6d6"/></svg>`;
+    })();
+    const cartera = enviadosAll.reduce((s, t) => s + (Number(t.total) || 0), 0);
+    const semana = enviadosAll.filter((t) => Date.now() - Date.parse(t.actualizado || 0) < 7 * 86400000).reduce((s, t) => s + (Number(t.total) || 0), 0);
     const marcador = `<div class="rb-marcador">
-      <div class="rb-m oro"><span>🏆 Ganado</span><b>${corto(ganadoMonto)}</b><small>${ganadasT.length} adjudicada${ganadasT.length === 1 ? "" : "s"}</small></div>
-      <div class="rb-m verde"><span>💰 Utilidad</span><b>${corto(utilidadG)}</b><small>${ganadasT.length && ganadasT.every(utilOk) ? "según informes" : "estimada · faltan precios"}</small></div>
-      <div class="rb-m azul"><span>🎯 Tasa de éxito</span><b>${tasa == null ? "—" : tasa + "%"}</b><small>${ganadasT.length} de ${decididas.length} resueltas</small></div>
-      <div class="rb-m violeta"><span>⏳ En juego</span><b>${corto(enJuego)}</b><small>${enviadosAll.length - decididas.length} esperando resultado</small></div></div>`;
+      <div class="rb-cartera"><div class="rb-ctop"><div><span style="font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;opacity:.8">💼 Tu cartera ofertada</span><br>
+        <b class="rb-oro-t" data-cnt="${cartera}" data-k="cartera" data-fmt="corto">${corto(cartera)}</b></div>
+        <div style="text-align:right"><span class="rb-up">▲ ${corto(semana)}</span><div style="font-size:.66rem;opacity:.75">esta semana</div></div></div>${puntos}</div>
+      <div class="rb-m oro"><span>🏆 Ganado</span><b class="rb-oro-t" data-cnt="${ganadoMonto}" data-k="ganado" data-fmt="corto">${corto(ganadoMonto)}</b><small>${ganadasT.length} adjudicada${ganadasT.length === 1 ? "" : "s"}</small></div>
+      <div class="rb-m verde"><span>💰 Utilidad</span><b data-cnt="${utilidadG}" data-k="util" data-fmt="corto">${corto(utilidadG)}</b><small>${ganadasT.length && ganadasT.every(utilOk) ? "según informes" : "estimada · faltan precios"}</small></div>
+      <div class="rb-m azul"><span>🎯 Tasa de éxito</span><b data-cnt="${tasa ?? 0}" data-k="tasa" data-fmt="pct">${tasa == null ? "—" : tasa + "%"}</b><small>${ganadasT.length} de ${decididas.length} resueltas</small></div>
+      <div class="rb-m violeta"><span>⏳ En juego</span><b data-cnt="${enJuego}" data-k="juego" data-fmt="corto">${corto(enJuego)}</b><small>${enviadosAll.length - decididas.length} esperando resultado</small></div></div>`;
     // ---- 🏆 negocios ganados por etapa
     const ETAPAS = [["ganada", "🏆 Nuevas"], ["inversionista", "💼 Inversionista"], ["operacion", "🛠 Operación"], ["despacho", "🚚 Despacho"], ["entrega", "📸 Entrega"], ["cerrado", "🥇 Cerrados"]];
     const etapaDe = (t) => t.op?.etapa || "ganada";
@@ -875,13 +1049,15 @@
         <a class="btn small" href="${portalDe(t.codigo)}" target="_blank" rel="noopener noreferrer">Mercado Público ↗</a></div></div>`;
     };
     let cuerpo;
-    if (tab === "nuevas") cuerpo = `<div class="row" style="gap:6px;margin:6px 0">
+    if (tab === "nuevas") cuerpo = `<div class="rb-filtros">
+        <button class="btn small ${filtro === "mio" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="mio">🎯 Mi rubro</button>
         <button class="btn small ${filtro === "seg" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="seg">🔥 2° llamado</button>
         <button class="btn small ${filtro === "exp" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="exp">★ Lo que ya vendemos</button>
-        <button class="btn small ${filtro === "todas" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="todas">Compras Ágiles</button>
+        <button class="btn small ${filtro === "todas" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="todas">🌐 Todas</button>
         <button class="btn small ${filtro === "lic" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="lic">📑 Licitaciones</button>
+        <button class="btn small" type="button" data-rb="rubro-editar">✏️ ${esc(((conf.rubros || []).length ? conf.rubros.length + " rubro" + (conf.rubros.length === 1 ? "" : "s") : "Rubro"))}</button>
         <button class="btn small" type="button" data-rb="oport-actualizar">↻ Buscar más</button></div>
-      <div class="muted" style="font-size:.74rem;margin-bottom:4px">Desliza → <b>me gusta</b> (pasa a ⭐ Seleccionadas para elegir el precio) · ← <b>no</b> (va a No deseadas)</div>
+      <div class="muted" style="font-size:.74rem;margin-bottom:4px;text-align:center">👉 desliza a la derecha = <b>me gusta</b> · 👈 a la izquierda = <b>no</b></div>
       ${verN.slice(0, n).map((x) => fila(x, "nuevas")).join("") || `<div class="empty">No quedan oportunidades en esta vista. Toca «↻ Buscar más».</div>`}
       ${verN.length > n ? `<button class="btn" style="width:100%;margin-top:8px" type="button" data-rb="oport-mas">Ver más (${verN.length - n} restantes)</button>` : ""}`;
     else if (tab === "firmar") cuerpo = enFirma.length ? `<div class="rb-cajas">${[...enFirma].sort((a, b) => ordenF(a) - ordenF(b)).map(caja).join("")}</div>`
@@ -901,70 +1077,108 @@
       <div class="rb-otabs">${tabs.map(([k, t, c]) => `<button type="button" class="${tab === k ? "on" : ""}" data-rb="oport-tab" data-t="${k}">${t}<i>${c}</i></button>`).join("")}</div>
       ${cuerpo}`;
   }
+  // la tarjeta se va al instante; la red trabaja por detrás (antes la pantalla esperaba a internet y se «atascaba»)
+  function sacarTarjeta(el, dir) {
+    if (!el) return;
+    R.ultimoHtml = null;
+    el.classList.add("vuela");
+    el.style.transform = `translate3d(${dir * 115}%,0,0) rotate(${dir * 9}deg)`; el.style.opacity = "0";
+    setTimeout(() => {
+      el.style.maxHeight = el.offsetHeight + "px"; el.classList.add("cierra");
+      requestAnimationFrame(() => { el.style.maxHeight = "0px"; el.style.marginTop = el.style.marginBottom = "0px"; el.style.paddingTop = el.style.paddingBottom = "0px"; });
+      setTimeout(() => el.remove(), 240);
+    }, 200);
+  }
+  function sumarTab(tab, d) {
+    const i = $(`[data-rb="oport-tab"][data-t="${tab}"] i`, sheet); if (i) i.textContent = Math.max(0, (+i.textContent || 0) + d);
+  }
   async function oportDecidir(cod, si, el) {
     const x = (R.oport?.lista || []).find((y) => y.codigo === cod);
     const esLic = x?.fuente === "licitacion";
-    if (el) { el.style.transition = "transform .25s ease, opacity .25s"; el.style.transform = `translateX(${si ? 130 : -130}%) rotate(${si ? 12 : -12}deg)`; el.style.opacity = "0"; }
+    const deTab = el?.dataset.modo === "papelera" ? "papelera" : "nuevas";
+    sacarTarjeta(el, si ? 1 : -1); sumarTab(deTab, -1);
+    try { navigator.vibrate?.(12); } catch {}
     if (si && !esLic) {                               // Compra Ágil: pasa a ⭐ Seleccionadas para elegir el precio
-      toast("⭐ A Seleccionadas: ahí eliges el precio y firmas");
-      await ponerSel(cod);
+      sumarTab("sel", 1);
+      toast("⭐ A Seleccionadas: ahí juegas el precio");
+      ponerSel(cod);
     } else if (si) {
-      try {
-        const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: esLic ? "licitar" : "firmar", ...(esLic ? {} : { descuento: leer().descuento ?? 0.08 }) }) });
-        toast(r._status === 409 ? "Ya estaba en manos del robot" : esLic ? "📑 El robot prepara la licitación" : "✍ El robot la deja lista para firmar");
-        await refrescar();
-      } catch (e) { toast(e.message); }
+      api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: esLic ? "licitar" : "firmar", ...(esLic ? {} : { descuento: leer().descuento ?? 0.08 }) }) })
+        .then((r) => { toast(r._status === 409 ? "Ya estaba en manos del robot" : esLic ? "📑 El robot prepara la licitación" : "✍ El robot la deja lista para firmar"); refrescar(); })
+        .catch((e) => toast(e.message));
     } else {
+      sumarTab("papelera", 1);
       R.desc = { ...(R.desc || {}), [cod]: new Date().toISOString() };
       R.deshacer = cod;
       toast("🗑 A No deseadas");
       api("oport-descartar", { method: "POST", body: JSON.stringify({ codigo: cod, descartar: true }) }).catch((e) => toast(e.message));
     }
-    setTimeout(pintarHoja, el ? 260 : 0);
+    if (!el) pintarHoja(true);
   }
   async function oportRestaurar(cod, el) {
-    if (el) { el.style.transition = "transform .25s ease, opacity .25s"; el.style.transform = "translateX(130%)"; el.style.opacity = "0"; }
+    sacarTarjeta(el, 1); sumarTab("papelera", -1); sumarTab("nuevas", 1);
     if (R.desc) delete R.desc[cod];
     if (R.oport?.descartes) delete R.oport.descartes[cod];
     toast("↩ De vuelta en Por preparar");
     api("oport-descartar", { method: "POST", body: JSON.stringify({ codigo: cod, descartar: false }) }).catch((e) => toast(e.message));
-    setTimeout(pintarHoja, el ? 260 : 0);
+    if (!el) pintarHoja(true);
   }
-  // deslizar con el dedo (como Tinder): → sí, ← no
+  // deslizar con el dedo (como Tinder): → sí, ← no. Sigue al dedo con rAF y acepta un «golpe» rápido.
   (function swipe() {
-    let el = null, x0 = 0, y0 = 0, dx = 0, horiz = null;
-    const fin = () => { R.arrastrando = false; el = null; horiz = null; };
-    document.addEventListener("pointerdown", (ev) => {
+    let el = null, x0 = 0, y0 = 0, dx = 0, horiz = null, t0 = 0, xs = [], raf = 0;
+    const fin = () => { R.arrastrando = false; el = null; horiz = null; xs = []; cancelAnimationFrame(raf); raf = 0; };
+    const pinta = () => {
+      raf = 0; if (!el) return;
+      el.style.transform = `translate3d(${dx}px,0,0) rotate(${dx / 28}deg)`;
+      const papel = el.dataset.modo === "papelera", k = Math.min(1, Math.abs(dx) / 90);
+      const si = el.querySelector(".rb-sello.si"), no = el.querySelector(".rb-sello.no");
+      if (si) si.style.opacity = dx > 0 ? k : 0; if (no) no.style.opacity = papel || dx > 0 ? 0 : k;
+    };
+    sheet.addEventListener("pointerdown", (ev) => {
+      R.toque = Date.now();
       const c = ev.target.closest?.(".rb-swipe");
-      if (!c || ev.target.closest("button,a,input")) return;
-      el = c; x0 = ev.clientX; y0 = ev.clientY; dx = 0; horiz = null;
+      if (!c || ev.target.closest("button,a,input,select,label")) return;
+      el = c; x0 = ev.clientX; y0 = ev.clientY; dx = 0; horiz = null; t0 = performance.now(); xs = [[t0, x0]];
     }, { passive: true });
-    document.addEventListener("pointermove", (ev) => {
+    sheet.addEventListener("pointermove", (ev) => {
       if (!el) return;
+      R.toque = Date.now();
       dx = ev.clientX - x0; const dy = ev.clientY - y0;
-      if (horiz === null && Math.abs(dx) + Math.abs(dy) > 12) horiz = Math.abs(dx) > Math.abs(dy) * 1.2;
+      if (horiz === null && Math.abs(dx) + Math.abs(dy) > 8) {
+        horiz = Math.abs(dx) > Math.abs(dy);
+        if (horiz) { R.arrastrando = true; el.classList.remove("vuela"); el.style.willChange = "transform"; x0 += Math.sign(dx) * 8; dx = ev.clientX - x0; }
+        else { el = null; return; }
+      }
       if (!horiz) return;
-      R.arrastrando = true;
-      el.style.transition = "none";
-      el.style.transform = `translateX(${dx}px) rotate(${dx / 25}deg)`;
-      const papel = el.dataset.modo === "papelera";
-      el.querySelector(".rb-sello.si").style.opacity = Math.max(0, Math.min(1, dx / 100));
-      el.querySelector(".rb-sello.no").style.opacity = papel ? 0 : Math.max(0, Math.min(1, -dx / 100));
+      const t = performance.now(); xs.push([t, ev.clientX]); while (xs.length > 2 && t - xs[0][0] > 90) xs.shift();
+      if (!raf) raf = requestAnimationFrame(pinta);
     }, { passive: true });
     const soltar = () => {
-      if (!el) return;
+      if (!el) return fin();
       const c = el, papel = c.dataset.modo === "papelera";
-      if (horiz && dx > 100) { papel ? oportRestaurar(c.dataset.c, c) : oportDecidir(c.dataset.c, true, c); }
-      else if (horiz && dx < -100 && !papel) oportDecidir(c.dataset.c, false, c);
-      else { c.style.transition = "transform .2s"; c.style.transform = ""; c.querySelectorAll(".rb-sello").forEach((s) => (s.style.opacity = 0)); }
+      const [a, b] = [xs[0], xs[xs.length - 1]];
+      const vel = a && b && b[0] > a[0] ? (b[1] - a[1]) / (b[0] - a[0]) : 0;      // px por ms
+      const ancho = c.offsetWidth || 320;
+      const derecha = horiz && (dx > ancho * 0.28 || (dx > 30 && vel > 0.45));
+      const izquierda = horiz && (dx < -ancho * 0.28 || (dx < -30 && vel < -0.45));
+      c.style.willChange = "";
+      if (derecha) { papel ? oportRestaurar(c.dataset.c, c) : oportDecidir(c.dataset.c, true, c); }
+      else if (izquierda && !papel) oportDecidir(c.dataset.c, false, c);
+      else if (horiz) { c.classList.add("vuela"); c.style.transform = ""; c.querySelectorAll(".rb-sello").forEach((x) => (x.style.opacity = 0)); }
       fin();
     };
-    document.addEventListener("pointerup", soltar, { passive: true });
-    document.addEventListener("pointercancel", soltar, { passive: true });
+    sheet.addEventListener("pointerup", soltar, { passive: true });
+    sheet.addEventListener("pointercancel", soltar, { passive: true });
+    sheet.addEventListener("scroll", () => { R.toque = Date.now(); }, { passive: true });
   })();
   async function cargarOport() {
     if (R._cargandoOport) return; R._cargandoOport = true;
-    try { R.oport = await api("oportunidades"); R.oport.descartes = R.oport.descartes || {}; } catch (e) { R.oport = { lista: [], error: e.message }; toast(e.message); }
+    try {
+      const o = await api("oportunidades"); o.descartes = o.descartes || {};
+      const ya = Date.now() + 30 * 60000; o.lista = (o.lista || []).filter((x) => !x.cierre || Date.parse(x.cierre) > ya);
+      R.oport = o; R.oportViejo = false; R.oportT = Date.now();
+      setTimeout(() => aCache("oport", o), 50);
+    } catch (e) { if (!R.oport) R.oport = { lista: [], error: e.message }; toast(e.message); }
     R._cargandoOport = false; pintarHoja();
   }
   function vistaTablero(lista) {
@@ -991,6 +1205,10 @@
     const permiso = "Notification" in window ? Notification.permission : "unsupported";
     const pushPosible = "PushManager" in window && permiso !== "denied";
     const vista = { lista: vistaLista, cajas: vistaCajas, tablero: vistaTablero, oport: vistaOport }[R.vista] || vistaCajas;
+    if (R.vista === "oport" && (!leer().rubroListo || R.rubroEditar)) {       // al empezar: solo la pregunta del rubro
+      if (!R.oport) cargarOport();
+      return `<div class="rb-sheet-head"><span></span><button class="rb-x" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>${pantallaRubro(R.oport?.lista || [])}`;
+    }
     return `
       <div class="rb-sheet-head"><h2 style="margin:0">Robot de ofertas</h2><button class="rb-x" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
       <div class="rb-status ${conectado ? "on" : ""}"><span class="rb-dot"></span>
@@ -1010,10 +1228,12 @@
         ${R.instalar ? `<button class="btn small" type="button" data-rb="instalar">📲 Instalar app</button>` : ""}
         ${esIOS && !instalada() ? `<div class="note" style="margin:0">En iPhone: toca <b>Compartir</b> → <b>Agregar a pantalla de inicio</b>. Desde ahí la app recibe avisos.</div>` : ""}
       </div>` : ""}
-      ${lista.length || R.vista === "oport" ? (lista.length ? kpis(lista) : "") + `<div class="rb-vistas" role="tablist">${VISTAS.map(([k, n]) =>
+      ${lista.length || R.vista === "oport" ? (lista.length && R.vista !== "oport" ? kpis(lista) : "") + `<div class="rb-vistas" role="tablist">${VISTAS.map(([k, n]) =>
         `<button type="button" role="tab" aria-selected="${R.vista === k}" class="${R.vista === k ? "on" : ""}" data-rb="vista" data-v="${k}">${n}</button>`).join("")}</div>` + vista(lista) : ""}
       ${R.data && !lista.length ? `<div class="empty">Aún no hay ofertas. Toca «Hacer oferta» en una Compra Ágil.</div>` : ""}
+      ${esIOS && !instalada() ? `<button class="btn rb-oro" type="button" data-rb="copiar-enlace-app" style="width:100%;margin-top:12px">📲 Copiar enlace para la app del inicio</button>` : ""}
       <details class="rb-ajustes"><summary>Ajustes</summary>
+        <button class="btn small" type="button" data-rb="copiar-enlace-app" style="margin-top:10px">📲 Copiar enlace para la app del inicio (u otro celular)</button>
         <div class="field" style="margin-top:10px"><label class="muted" for="rbRemoto">Enlace de escritorio remoto (para dar el clic final desde el celular)</label>
           <input id="rbRemoto" value="${esc(leer().remoto || REMOTO_DEF)}" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
         <div class="muted" style="margin-top:6px">Instala <b>Chrome Remote Desktop</b> en el PC y en el celular (gratis). Con «Dar el clic desde aquí» ves la ventana del robot y presionas Enviar tú mismo.</div>
@@ -1031,14 +1251,20 @@
       </details>`;
   }
 
-  function pintarHoja() {
-    const box = $("#rbIn"); if (!box || R.arrastrando || R.barra) return;
+  function pintarHoja(forzar) {
+    const box = $("#rbIn"); if (!box) return;
+    if (R.arrastrando || R.barra || (!forzar && Date.now() - R.toque < 900)) {     // no repintar bajo tu dedo
+      clearTimeout(R.tPend); R.tPend = setTimeout(() => pintarHoja(), 700); return;
+    }
+    const html = !R.token ? pantallaEnlace() : R.conf ? pantallaConfirmar(R.conf) : R.detalle ? pantallaDetalle(R.detalle) : pantallaLista();
+    if (html === R.ultimoHtml && box.childElementCount) return;
+    R.ultimoHtml = html;
     const y = sheet.scrollTop;
     // el repintado cada pocos segundos no debe cerrar lo que la persona abrió
     const abiertos = new Set($$("details", box).map((d, i) => d.open && (d.closest("[id]")?.id || "") + d.className + i).filter(Boolean));
     const tabX = $(".rb-tablero", box)?.scrollLeft || 0;
-    box.innerHTML = !R.token ? pantallaEnlace() : R.conf ? pantallaConfirmar(R.conf)
-      : R.detalle ? pantallaDetalle(R.detalle) : pantallaLista();
+    box.innerHTML = html;
+    contar(box);
     $$("details", box).forEach((d, i) => { if (abiertos.has((d.closest("[id]")?.id || "") + d.className + i)) d.open = true; });
     const tab = $(".rb-tablero", box);
     if (tab && !R.tabInit) {            // la primera vez, el tablero se abre en lo que necesita tu clic
@@ -1102,17 +1328,42 @@
 
   sheet.addEventListener("click", async (ev) => {
     const b = ev.target.closest("[data-rb]"); if (!b) return;
+    R.toque = 0;                                     // un toque en un botón repinta al instante
     const a = b.dataset.rb, cod = b.dataset.c;
     if (a === "cerrar") return cerrar();
     if (a === "volver") { R.conf = null; return pintarHoja(); }
-    if (a === "enlazar") { if (enlazar($("#rbTok")?.value)) pintarHoja(); return; }
+    if (a === "enlazar") { if (enlazar($("#rbTok")?.value)) pintarHoja(true); return; }
+    if (a === "pegar-enlace") {
+      let t = "";
+      try { t = await navigator.clipboard.readText(); } catch {}
+      const m = String(t || "").match(/enlazar=([A-Za-z0-9_-]{16,})/) || String(t || "").trim().match(/^([A-Za-z0-9_-]{16,})$/);
+      if (!m) { toast("No hay un enlace copiado. Cópialo primero en Safari."); const i = $("#rbTok"); if (i) { i.focus(); } return; }
+      if (enlazar(m[1])) pintarHoja(true);
+      return;
+    }
+    if (a === "copiar-enlace-app") {
+      const ok = await copiar(location.origin + "/#enlazar=" + R.token);
+      toast(ok ? "✓ Copiado. Abre la app del inicio y toca «Pegar enlace y entrar»" : "No se pudo copiar");
+      return;
+    }
     if (a === "desenlazar") { R.token = null; R.data = null; guardar({ token: null }); return pintarHoja(); }
     if (a === "avisos") { if (await suscribirPush(true)) toast("Avisos activados en este teléfono"); return pintarHoja(); }
     if (a === "push-probar") { try { await api("push-probar", { method: "POST", body: "{}" }); toast("Aviso de prueba enviado"); } catch (e) { toast(e.message); } return; }
     if (a === "instalar") { const p = R.instalar; R.instalar = null; try { await p?.prompt(); } catch {} return pintarHoja(); }
     if (a === "vista") { R.vista = b.dataset.v; guardar({ vista: R.vista, v_cajas: 1 }); if (R.vista === "oport") R.oport = null; return pintarHoja(); }
+    if (a === "rubro-t") { const set = new Set(R.rubrosTmp || leer().rubros || []); const r = b.dataset.r; set.has(r) ? set.delete(r) : set.add(r);
+      R.rubrosTmp = [...set]; R.palabrasTmp = $("#rbPalabras")?.value ?? R.palabrasTmp; return pintarHoja(true); }
+    if (a === "rubro-editar") { R.rubroEditar = true; R.rubrosTmp = null; R.palabrasTmp = null; sheet.scrollTop = 0; return pintarHoja(true); }
+    if (a === "rubro-ok" || a === "rubro-todo") {
+      const todo = a === "rubro-todo";
+      guardar({ rubroListo: 1, rubros: todo ? [] : (R.rubrosTmp || leer().rubros || []), palabras: todo ? "" : ($("#rbPalabras")?.value || "").trim() });
+      R.rubroEditar = false; R.rubrosTmp = null; R.palabrasTmp = null; R.oportFiltro = todo ? "todas" : "mio"; R.oportTab = "nuevas"; sheet.scrollTop = 0;
+      api("oportunidades-actualizar", { method: "POST", body: "{}" }).catch(() => {});      // el PC baja lo más nuevo del portal
+      toast(todo ? "Mostrando todas las oportunidades" : "🔎 Buscando oportunidades de tu rubro…");
+      return pintarHoja(true);
+    }
     if (a === "oport-filtro") { R.oportFiltro = b.dataset.f; R.oportN = 40; return pintarHoja(); }
-    if (a === "oport-tab") { R.oportTab = b.dataset.t; R.oportN = 40; sheet.scrollTop = 0; return pintarHoja(); }
+    if (a === "oport-tab") { R.oportTab = b.dataset.t; guardar({ oportTab: R.oportTab }); R.oportN = 40; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "oport-mas") { R.oportN = (R.oportN || 40) + 40; return pintarHoja(); }
     if (a === "oport-sel") { if (esSel(cod)) await quitarSel(cod); else { toast("⭐ A Seleccionadas"); await ponerSel(cod); } return pintarHoja(); }
     if (a === "sel-quitar") { await quitarSel(cod); toast("↩ De vuelta en Por preparar"); return pintarHoja(); }
@@ -1157,15 +1408,15 @@
       return;
     }
     if (a === "sel-preparar") {
-      const c = b.closest(".rb-sel"); const pres = +c.dataset.pres; const v = Math.min(+c.querySelector(".rb-range").value, pres);
+      const c = b.closest(".rb-sel"); const pres = +c.dataset.pres; const v = Math.min(c.dataset.v ? +c.dataset.v : +c.querySelector(".rb-range").value, pres);
       const descuento = Math.max(0, Math.min(0.6, 1 - v / pres));
       guardarSelLuego(cod, { precio: v });
       b.disabled = true;
       try {
         const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "firmar", descuento }) });
-        toast(r._status === 409 ? "Ya estaba en manos del robot" : `✍ El robot la prepara por ${clp(v)} · la verás en Por firmar`);
-        R.oportTab = "firmar"; R.barra = false; sheet.scrollTop = 0;
-        await refrescar(); pintarHoja();
+        toast(r._status === 409 ? "Ya estaba en manos del robot" : `✍ Apuesta hecha: ${clp(v)} · el robot la deja en Por firmar`);
+        R.barra = false; sacarTarjeta(c, 1); sumarTab("sel", -1); sumarTab("firmar", 1);   // sigues en Seleccionadas jugando con las demás
+        refrescar();
       } catch (e) { toast(e.message); b.disabled = false; }
       return;
     }
@@ -1277,21 +1528,33 @@
       } catch (e) { w?.close(); toast(e.message); }
     }
   });
+  // probabilidad de ganar (estimada): menos rivales y precio más bajo bajo el presupuesto = más chances
+  function probGanar(of, seg, precio, pres) {
+    if (!pres || precio > pres) return 0;
+    const n = of == null || of === "" ? 3 : Math.min(+of, 6);
+    const base = [0.82, 0.56, 0.42, 0.33, 0.27, 0.23, 0.2][n] + (seg ? 0.04 : 0);
+    const d = 1 - precio / pres;
+    return Math.max(0.05, Math.min(0.95, base + (d - 0.05) * 1.6));
+  }
   function pintarSel(c, guardarAhora) {
     const r = c.querySelector(".rb-range"); if (!r) return;
-    const pres = +c.dataset.pres, v = +r.value, ve = Math.min(v, pres);
+    const pres = +c.dataset.pres, v = c.dataset.v ? +c.dataset.v : +r.value, ve = Math.min(v, pres);
     const costo = +(c.querySelector(".rb-costo")?.value || "").replace(/\D/g, "") || +c.dataset.costo || 0;
-    c.querySelector(".rb-precio").textContent = clp(v);
-    const p = c.querySelector(".rb-pct"), d = v / pres - 1;
-    p.textContent = (d > 0 ? "+" : "") + (d * 100).toFixed(1).replace(".", ",") + "% vs presupuesto"; p.className = "rb-pct " + (d < 0 ? "baja" : "sube");
+    const q = (k) => c.querySelector(k);
+    q(".rb-precio").textContent = clp(v);
+    const p = q(".rb-pct"), d = v / pres - 1;
+    p.textContent = (d > 0 ? "+" : "") + (d * 100).toFixed(1).replace(".", ",") + "% vs ppto."; p.className = "rb-pct " + (d < 0 ? "baja" : "sube");
     const neto = ve / 1.19, gan = neto - costo, mar = neto ? gan / neto : 0;
-    c.querySelector(".rb-neto").textContent = clp(neto);
-    const g = c.querySelector(".rb-gan"); g.textContent = clp(gan); g.style.color = gan < 0 ? "#ff8a80" : "#7ee2a0";
-    const m = c.querySelector(".rb-mar"); m.textContent = (mar * 100).toFixed(1).replace(".", ",") + "%"; m.style.color = mar < 0 ? "#ff8a80" : mar < 0.08 ? "#ffd88a" : "#7ee2a0";
-    c.querySelector(".rb-bajo").textContent = ((1 - ve / pres) * 100).toFixed(1).replace(".", ",") + "%";
-    c.querySelector(".rb-sobre").style.display = v > pres ? "block" : "none";
-    c.querySelector(".rb-p2").textContent = clp(ve);
-    const pct = (v - r.min) / (r.max - r.min) * 100; r.style.background = `linear-gradient(90deg,#7c4dff ${pct}%,#2a3550 ${pct}%)`;
+    const pg = probGanar(c.dataset.of, !!c.dataset.seg, ve, pres);
+    q(".rb-neto").textContent = clp(neto); q(".rb-inv").textContent = clp(costo);
+    q(".rb-cuota").textContent = costo > 0 ? "x" + (neto / costo).toFixed(2).replace(".", ",") : "x—";
+    const g = q(".rb-gan"); g.textContent = (gan >= 0 ? "+" : "") + clp(gan); g.style.color = gan < 0 ? "#ff8a80" : "";
+    const m = q(".rb-mar"); m.textContent = (mar * 100).toFixed(1).replace(".", ",") + "%"; m.style.color = mar < 0 ? "#ff8a80" : mar < 0.08 ? "#ffd88a" : "#7ee2a0";
+    q(".rb-pg").textContent = Math.round(pg * 100) + "%"; q(".rb-prob i").style.width = Math.round(pg * 100) + "%";
+    q(".rb-ev").textContent = clp(Math.max(0, gan) * pg);
+    q(".rb-sobre").style.display = v > pres ? "block" : "none";
+    q(".rb-p2").textContent = clp(ve);
+    const pct = (v - r.min) / (r.max - r.min) * 100; r.style.background = `linear-gradient(90deg,#c48f17,#f5cf6b ${pct}%,rgba(255,255,255,.12) ${pct}%)`;
     if (guardarAhora) guardarSelLuego(c.dataset.c, { precio: v });
   }
   sheet.addEventListener("input", (ev) => {
@@ -1326,11 +1589,15 @@
   // mientras mueves la barra no se repinta la pantalla (si no, la barra «salta»)
   sheet.addEventListener("pointerdown", (ev) => { if (ev.target.classList?.contains("rb-range")) R.barra = true; });
   ["pointerup", "pointercancel"].forEach((n) => document.addEventListener(n, () => { if (R.barra) setTimeout(() => { R.barra = false; }, 400); }));
-  sheet.addEventListener("input", (ev) => { const c = ev.target.closest?.(".rb-sel"); if (c && ev.target.classList.contains("rb-range")) pintarSel(c, true); });
+  let rafSel = 0;
+  sheet.addEventListener("input", (ev) => { const c = ev.target.closest?.(".rb-sel"); if (!c || !ev.target.classList.contains("rb-range")) return;
+    delete c.dataset.v; R.toque = Date.now(); if (!rafSel) rafSel = requestAnimationFrame(() => { rafSel = 0; pintarSel(c, true); }); });
   sheet.addEventListener("click", (ev) => {
     const b = ev.target.closest?.("[data-paso],[data-fijo]"); if (!b) return;
     const c = b.closest(".rb-sel"); if (!c) return; const r = c.querySelector(".rb-range");
-    r.value = b.dataset.fijo ? Math.max(+r.min, Math.min(+r.max, +b.dataset.fijo)) : Math.max(+r.min, Math.min(+r.max, Math.round(+r.value * (1 + b.dataset.paso / 100)))); pintarSel(c, true);
+    const base = c.dataset.v ? +c.dataset.v : +r.value;
+    const nv = b.dataset.fijo ? Math.max(+r.min, Math.min(+r.max, +b.dataset.fijo)) : Math.max(+r.min, Math.min(+r.max, Math.round(base * (1 + b.dataset.paso / 100))));
+    r.value = nv; c.dataset.v = nv; pintarSel(c, true);
   });
   new MutationObserver(() => sheet.querySelectorAll(".rb-sel").forEach((c) => { if (!c.dataset.ok) { c.dataset.ok = 1; pintarSel(c, false); } }))
     .observe(sheet, { childList: true, subtree: true });
@@ -1435,6 +1702,8 @@
   pintar();
   refrescar();
   desdeHash();
+  // app del inicio (iPhone/Android): abre directo en el robot, que es donde se trabaja
+  if (instalada() && !location.hash.includes("robot")) setTimeout(() => { if (!sheet.classList.contains("on")) abrir(); }, 250);
   // si ya dio permiso antes, renueva la suscripción en silencio (por si el teléfono la cambió)
   if (R.token && "Notification" in window && Notification.permission === "granted") suscribirPush(false);
 })();
