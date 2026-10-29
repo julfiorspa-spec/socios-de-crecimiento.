@@ -378,9 +378,10 @@ async function atender(req) {
       op.etapa = b.etapa;
     }
     const d = b.datos && typeof b.datos === "object" ? b.datos : {};
-    for (const k of ["proveedor", "contacto", "telefono", "email", "transporte", "notas", "medio_pago", "guia", "factura", "motivo_no", "folio_guia", "folio_factura"]) if (d[k] !== undefined) op[k] = texto(d[k], 300);
+    for (const k of ["proveedor", "contacto", "telefono", "email", "transporte", "notas", "medio_pago", "guia", "factura", "motivo_no", "folio_guia", "folio_factura",
+      "ejecutor", "ejecutor_nombre", "plazo_proveedor", "fecha_entrega", "banco_proveedor", "negociacion", "plazo_fecha", "plazo_nota", "incidencia"]) if (d[k] !== undefined) op[k] = texto(d[k], 400);
     for (const k of ["precio_acordado", "costo_transporte", "opcion"]) if (d[k] !== undefined) op[k] = d[k] === null ? null : Math.max(0, Math.round(Number(d[k]) || 0));
-    for (const k of ["inversion_ok", "compra_ok", "despacho_ok", "guia_firmada", "factura_firmada", "aplica_comision", "nos_da", "proveedor_pagado", "guia_hecha", "factura_hecha", "oc_aceptada"]) if (d[k] !== undefined) op[k] = !!d[k];
+    for (const k of ["inversion_ok", "compra_ok", "despacho_ok", "guia_firmada", "factura_firmada", "aplica_comision", "nos_da", "proveedor_pagado", "guia_hecha", "factura_hecha", "oc_aceptada", "pedido_transferencia", "transferido"]) if (d[k] !== undefined) op[k] = !!d[k];
     if (d.comision !== undefined) op.comision = Math.min(0.10, Math.max(0.01, Number(d.comision) || 0.04));
     if (b.pedir_informe) op.pedido_informe = { t: ahora(), rebuscar: !!b.rebuscar };
     t.op = op;
@@ -575,6 +576,23 @@ async function atender(req) {
     if (!t) return json({ error: "No existe." }, 404);
     const { firma, historial, ...r } = t;
     return json({ trabajo: r });
+  }
+  // ---------- 🛠 Ejecuta: socios ejecutadores (compran, negocian, entregan y cierran con guía y factura firmadas) ----------
+  if (ruta === "ejecutores" && req.method === "GET") return json({ ejecutores: (await store.get("ejecutores/lista", { type: "json" })) || {} });
+  if (ruta === "ejecutor" && req.method === "POST") {
+    const b = await cuerpo(req);
+    const id = jug(b.id); if (!id) return json({ error: "Falta id" }, 400);
+    const L = (await store.get("ejecutores/lista", { type: "json" })) || {};
+    if (b.borrar) delete L[id];
+    else L[id] = { ...(L[id] || {}), id, nombre: texto(b.nombre, 60) || L[id]?.nombre || "Ejecutador", telefono: texto(b.telefono, 30) ?? L[id]?.telefono ?? null, actualizado: ahora() };
+    await store.setJSON("ejecutores/lista", L);
+    return json({ ok: true, ejecutores: L });
+  }
+  if (ruta === "ejecuta" && req.method === "GET") {      // los negocios que te asignaron para ejecutar
+    const id = jug(url.searchParams.get("ejecutor"));
+    const lista = (await todos(store)).filter((t) => t.op && id && t.op.ejecutor === id)
+      .map(({ firma, historial, envios, ...t }) => t);
+    return json({ negocios: lista });
   }
   // ---------- 🏢 empresas: cada celular oferta con su RUT y sus datos ----------
   if (ruta === "empresas" && req.method === "GET") {
