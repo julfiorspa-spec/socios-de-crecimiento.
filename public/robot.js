@@ -262,6 +262,58 @@
   .rb-rchip{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#eef3ff;border-radius:999px;padding:10px 14px;font:inherit;font-size:.86rem;cursor:pointer;transition:transform .08s}
   .rb-rchip:active{transform:scale(.96)}.rb-rchip i{font-style:normal;margin-left:7px;font-size:.72rem;opacity:.7}
   .rb-rchip.on{background:linear-gradient(180deg,#fff0bd,#f5cf6b 45%,#c48f17);color:#2a1a00;border-color:transparent;font-weight:800;box-shadow:0 4px 16px rgba(245,190,70,.35)}
+  /* ======== portal ejecutivo: letra más chica, navegación abajo, menos botones ======== */
+  #rbSheet{font-size:14px;padding-bottom:calc(86px + env(safe-area-inset-bottom,0px))}
+  #rbSheet .btn{padding:9px 13px;font-size:.84rem;border-radius:12px}#rbSheet .btn.small{padding:6px 10px;font-size:.76rem;border-radius:10px}
+  #rbSheet .rb-card{padding:12px}
+  .rb-top2{display:flex;align-items:center;gap:8px;margin:0 0 8px}
+  .rb-emp{flex:1;min-width:0;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);color:#f4f7ff;border-radius:12px;padding:8px 10px;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer;text-align:left}
+  .rb-emp span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rb-pcs{display:flex;align-items:center;gap:4px;font-size:.66rem;color:#a9b8d9;letter-spacing:.04em}
+  .rb-pcs i{width:7px;height:7px;border-radius:50%;background:#64708a;display:inline-block;margin-left:4px}.rb-pcs i.on{background:#3fdc8a;box-shadow:0 0 0 3px rgba(63,220,138,.18)}
+  .rb-ico{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);color:#fff;border-radius:12px;width:38px;height:36px;font-size:1rem;cursor:pointer}
+  .rb-ico.rb-tel{background:linear-gradient(180deg,#fff0bd,#f5cf6b 50%,#c48f17);border-color:transparent;box-shadow:0 4px 14px rgba(245,190,70,.35)}
+  .rb-nav{position:fixed;left:0;right:0;bottom:0;z-index:6;display:flex;justify-content:space-around;gap:2px;padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px));
+    background:rgba(4,12,32,.86);-webkit-backdrop-filter:blur(18px) saturate(160%);backdrop-filter:blur(18px) saturate(160%);border-top:1px solid rgba(255,255,255,.1)}
+  .rb-nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;background:none;border:0;color:#8f9cba;font:inherit;padding:4px 0;cursor:pointer;border-radius:12px}
+  .rb-nav .i{position:relative;font-size:1.25rem;line-height:1.2}.rb-nav .t{font-size:.62rem;font-weight:700;letter-spacing:.02em}
+  .rb-nav em{position:absolute;top:-4px;right:-14px;font-style:normal;font-size:.58rem;font-weight:800;background:#e8313f;color:#fff;border-radius:99px;padding:0 5px;line-height:15px}
+  .rb-nav button.on{color:#ffe9a8;background:rgba(245,207,107,.12)}.rb-nav button.on .t{color:#f5cf6b}
+  .rb-tira{display:flex;justify-content:space-between;gap:6px;font-size:.74rem;padding:8px 10px;border-radius:14px;margin:0 0 6px;background:linear-gradient(160deg,rgba(255,255,255,.09),rgba(255,255,255,.03));border:1px solid rgba(255,255,255,.1)}
+  .rb-tira b{font-size:.9rem}
+  .rb-sec{font-size:.68rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#a9b8d9;margin:12px 0 6px}
+  .rb-env.rb-sec{align-items:center;text-transform:none;letter-spacing:0;font-size:.8rem;color:#e8edf8}
+  .rb-paso{padding-top:4px}.rb-paso-n{font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:#f5cf6b;font-weight:800}
+  #rbSheet .rb-h{font-size:1.45rem;margin:4px 0}.rb-sub{font-size:.8rem;margin-bottom:10px}
+  .rb-lab{display:block;font-size:.7rem;color:#a9b8d9;margin-top:8px}
+  .rb-lab input,.rb-in,#rbSheet textarea{display:block;width:100%;margin-top:3px;padding:10px 11px;border-radius:12px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.07);color:#fff;font:inherit;font-size:.88rem;box-sizing:border-box}
+  .rb-big-btn{width:100%;margin-top:12px;padding:13px!important;font-size:.95rem!important}
+  .rb-link{width:100%;margin-top:6px;background:none!important;border:0!important;box-shadow:none!important;opacity:.75}
+  .rb-emp-c{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:8px 0}.rb-emp-c.on{border-color:rgba(245,207,107,.7)!important}
+  .rb-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px}
+  .rb-llamar{border-radius:16px;padding:10px;background:linear-gradient(160deg,rgba(255,226,140,.12),rgba(255,255,255,.03));border:1px solid rgba(245,207,107,.35)}
+  .btn.rb-mic.on{background:#e8313f!important;border-color:#e8313f!important;animation:pulse 1.2s ease-in-out infinite}
+  .rb-resp{margin-top:12px;border-radius:18px;padding:14px;border:1px solid rgba(255,255,255,.16);background:linear-gradient(160deg,rgba(255,255,255,.10),rgba(255,255,255,.03))}
+  .rb-resp.si{border-color:rgba(94,240,176,.6);box-shadow:0 0 28px rgba(94,240,176,.12)}.rb-resp.no{border-color:rgba(255,120,120,.6)}.rb-resp.dep{border-color:rgba(245,207,107,.6)}
+  .rb-resp p{margin:4px 0;font-size:.84rem;line-height:1.45}
+  .rb-verd{font-family:"Fraunces",serif;font-size:1.7rem;font-weight:600}.rb-resp.si .rb-verd{color:var(--vivo)}.rb-resp.no .rb-verd{color:#ff8a80}.rb-resp.dep .rb-verd{color:#f5cf6b}
+  .rb-tit{font-weight:700;margin:2px 0 6px}
+  .rb-wa{white-space:pre-wrap;font-size:.8rem;padding:10px;border-radius:12px;background:rgba(37,211,102,.08);border:1px solid rgba(37,211,102,.35)}
+  .rb-hist{display:flex;justify-content:space-between;gap:8px;width:100%;text-align:left;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:#dfe6f5;border-radius:12px;padding:8px 10px;margin:4px 0;font:inherit;font-size:.78rem;cursor:pointer}
+  .rb-hist span{color:#8f9cba;white-space:nowrap;font-size:.7rem}
+  .rb-mini2{padding:10px!important;margin:6px 0}.rb-kv{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.74rem;margin-top:4px}
+  .rb-pill{display:inline-block;font-size:.64rem;font-weight:800;padding:2px 8px;border-radius:99px;background:rgba(255,255,255,.1);color:#dfe6f5}.rb-pill.oro{background:rgba(245,207,107,.2);color:#ffe9a8}
+  .rb-neg-t{color:#ff8a80}
+  .rb-chips2{display:grid;grid-template-columns:auto 1fr 1fr auto;gap:6px;margin-top:6px}.rb-chips2 .btn{justify-content:center;white-space:nowrap;min-width:0;padding-left:6px!important;padding-right:6px!important}
+  #rbSheet .btn.rb-soltar{width:auto;margin:0}
+  .rb-firma{margin:8px 0}.rb-firma.nueva{border-color:rgba(245,207,107,.75)!important;box-shadow:0 0 0 1px rgba(245,207,107,.3),0 10px 30px rgba(245,190,70,.15)!important}
+  .rb-prog2{height:6px;border-radius:9px;background:rgba(255,255,255,.1);overflow:hidden;margin:10px 0 4px}.rb-prog2 i{display:block;height:100%;background:linear-gradient(90deg,#3b82f6,#5ef0b0);animation:pulse 1.6s ease-in-out infinite}
+  .rb-sii{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0}.rb-sii div{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:7px 9px;min-width:0}
+  .rb-sii small{display:block;font-size:.64rem;color:#8f9cba}.rb-sii b{font-size:.8rem;word-break:break-word}
+  .rb-chk{display:flex;gap:6px;align-items:center;font-size:.8rem;margin-top:8px}
+  #rbSheet .rb-neg{padding:12px;border-radius:18px}
+  #rbSheet .rb-etapas button{font-size:.7rem;padding:5px 9px}
+  .rb-mas{margin-top:18px}
   .rb-cartera{grid-column:1/-1;border-radius:18px;padding:12px 14px 6px;border:1px solid rgba(245,207,107,.45);
     background:linear-gradient(160deg,rgba(255,226,140,.16),rgba(255,255,255,.03) 55%,rgba(18,160,190,.10));box-shadow:inset 0 1px 0 rgba(255,255,255,.16)}
   .rb-cartera .rb-ctop{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
@@ -314,6 +366,9 @@
 
   async function api(ruta, opt = {}) {
     if (!R.token) throw new Error("Robot sin enlazar");
+    if (opt.body && /^(pedir|seleccionar|preguntar)$/.test(ruta)) {      // cada pedido viaja con TU empresa y tu celular
+      try { const o = JSON.parse(opt.body); if (!o.empresa && leer().empresa) o.empresa = leer().empresa; if (!o.dispositivo) o.dispositivo = dispositivo(false); opt = { ...opt, body: JSON.stringify(o) }; } catch {}
+    }
     const r = await fetch("/bot/" + ruta, {
       ...opt,
       headers: { "x-robot-token": R.token, ...(opt.body ? { "content-type": "application/json" } : {}), ...(opt.headers || {}) },
@@ -326,6 +381,16 @@
     return j ? { ...j, _status: r.status } : r;
   }
   const trabajo = (cod) => R.data?.trabajos?.find((t) => t.codigo === String(cod).toUpperCase());
+  // 🏢 cada celular ve y oferta solo con su empresa ("principal" = la del robot del PC)
+  const miEmp = () => leer().empresa || null;
+  const deMiEmpresa = (x) => !miEmp() || (x?.empresa || "principal") === miEmp();
+  function filtrarEmpresa(d) { return d ? { ...d, trabajos: (d.trabajos || []).filter(deMiEmpresa) } : d; }
+  const empresaActual = () => (R.empresas || {})[miEmp()] || null;
+  async function cargarEmpresas() {
+    if (R._cargEmp) return; R._cargEmp = true;
+    try { R.empresas = (await api("empresas")).empresas || {}; } catch (e) { R.empresas = R.empresas || {}; }
+    R._cargEmp = false; pintarHoja(true);
+  }
 
   /* ---------- quién envía + cerrar la pestaña de Mercado Público cuando queda enviada ---------- */
   const DISP = "sdc:dispositivo";
@@ -489,7 +554,7 @@
       if (r.status === 204) cambio = false;                       // nada nuevo: no se descarga ni se repinta nada
       else if (!r.ok) throw new Error("Error " + r.status);
       else {
-        R.data = await r.json(); R.ver = r.headers.get("x-version");
+        R.data = filtrarEmpresa(await r.json()); R.ver = r.headers.get("x-version");
         revisarCambios(R.data.trabajos || []);
         cerrarEnviadas(R.data.trabajos || []);
         aCache("estado", { data: R.data });
@@ -733,6 +798,20 @@
       <div class="rb-kpi"><b>${corto(monto)}</b><span>Ofertado (${env.length})</span></div>
     </div>`;
   }
+  // ✍ Firmar: tarjeta simple, una acción grande
+  function tarjetaFirma(t, nueva) {
+    const e = est(t.estado), firmable = t.estado === "firmar" && t.firma?.precios?.length;
+    const rojas = (firmable && t.firma.alertas || []).filter((a) => a.nivel === "rojo").length;
+    const accion = firmable ? `<button class="btn rb-oro rb-big-btn" data-rb="ir-firmar" data-c="${esc(t.codigo)}" type="button">✍ Ir a firmar ${clp(t.total)}</button>
+        <div class="rb-row" style="justify-content:center"><button class="btn small" data-rb="verificar" data-c="${esc(t.codigo)}" type="button">Ya la firmé</button><button class="btn small" data-rb="det" data-c="${esc(t.codigo)}" type="button">Ver detalle</button></div>`
+      : ["requiere", "error"].includes(t.estado) ? `<div class="rb-row"><button class="btn small rb-oro" data-rb="ofertar" data-c="${esc(t.codigo)}" type="button">Reintentar</button><button class="btn small" data-rb="det" data-c="${esc(t.codigo)}" type="button">Ver qué pasó</button></div>`
+      : `<div class="rb-prog2"><i style="width:${{ en_cola: 15, tomado: 30, preparando: 60, lista: 90 }[t.estado] || 45}%"></i></div><div class="muted" style="font-size:.72rem">${esc(t.mensaje || e.txt)}</div>`;
+    return `<div class="rb-card rb-firma ${nueva ? "nueva" : ""}" id="rb-${esc(t.codigo)}">
+      <div class="rb-env"><span style="font-size:.72rem"><b>${esc(t.codigo)}</b>${nueva ? ' <span class="rb-pill oro">🆕 la última que hiciste</span>' : ""}</span>${badge(t)}</div>
+      <div class="rb-fnom">${esc(t.nombre || "Compra Ágil")}</div>
+      <div class="muted" style="font-size:.72rem">${esc(t.organismo || "")}${t.monto ? " · Ppto. " + clp(t.monto) : ""}${rojas ? ` · <b style="color:#ff8a80">⛔ ${rojas} alerta${rojas > 1 ? "s" : ""}</b>` : ""}</div>
+      ${accion}</div>`;
+  }
   function caja(t) {
     const e = est(t.estado);
     const rojas = (t.estado === "firmar" && t.firma?.alertas || []).filter((a) => a.nivel === "rojo").length;
@@ -867,7 +946,7 @@
     const selObj = leerSel();
     const enviadasCods = new Set(trabajos.filter((t) => HECHA.includes(t.estado)).map((t) => t.codigo));
     // Seleccionadas: las que elegiste y todavía no van al robot (cuando las mandas a firmar pasan a «Por firmar»)
-    const sel = Object.keys(selObj).filter((c) => !enviadasCods.has(c) && !trabajo(c) && !lista.find((x) => x.codigo === c && x.ya_ofertada))
+    const sel = Object.keys(selObj).filter((c) => deMiEmpresa(selObj[c]) && !(R.selFuera || {})[c] && !enviadasCods.has(c) && !trabajo(c) && !lista.find((x) => x.codigo === c && x.ya_ofertada))
       .map((c) => ({ ...selObj[c], ...(lista.find((x) => x.codigo === c) || {}), codigo: c, _sel: selObj[c] }))
       .sort((a, b) => (a.cierre || "9").localeCompare(b.cierre || "9"));
     if (!R.sel && !R._selPedido) { R._selPedido = true; cargarSel().then(pintarHoja); }
@@ -888,7 +967,8 @@
       const rival = of === 0 ? `<span class="rb-rival solo">🎯 Vas solo</span>` : of != null && of <= 2 ? `<span class="rb-rival pocos">${of} rival${of === 1 ? "" : "es"}</span>`
         : of != null ? `<span class="rb-rival muchos">${of} rivales</span>` : "";
       const sg = sugerido(x), vSug = Math.round(pres * (1 - sg.d));
-      return `<div class="rb-card rb-sel" data-c="${esc(x.codigo)}" data-pres="${pres}" data-costo="${costo || costoEst}" data-est="${costo ? 0 : 1}" data-of="${of ?? ""}" data-seg="${seg ? 1 : ""}" style="padding:14px;margin:10px 0">
+      return `<div class="rb-card rb-sel rb-swipe" data-modo="sel" data-c="${esc(x.codigo)}" data-pres="${pres}" data-costo="${costo || costoEst}" data-est="${costo ? 0 : 1}" data-of="${of ?? ""}" data-seg="${seg ? 1 : ""}" style="padding:14px;margin:6px 0">
+        <span class="rb-sello si">APUESTO</span><span class="rb-sello no">PASO</span>
         <div class="rb-env"><div style="min-width:0"><div style="font-size:.76rem;opacity:.85"><b>${esc(x.codigo)}</b>${seg ? ` · <b style="color:#ffb347">🔥 2° llamado</b>` : ""}${h != null ? ` · <span style="${h < 12 ? "color:#ff8a80;font-weight:700" : ""}">cierra en ${h} h</span>` : ""}</div>
           <div style="margin:3px 0;font-weight:600">${esc(x.nombre || "Compra Ágil")}</div><div class="muted" style="font-size:.74rem">${esc(x.organismo || "")} · Ppto. <b>${clp(pres)}</b> ${rival}</div></div>
           <button type="button" class="rb-estrella on" data-rb="sel-quitar" data-c="${esc(x.codigo)}" title="Devolver a Por preparar">★</button></div>
@@ -903,16 +983,16 @@
           <div class="rb-si-ganas"><div><div style="font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;opacity:.75">Si ganas te llevas</div><b class="rb-gan rb-vivo-t">—</b></div>
             <div style="text-align:right;font-size:.72rem;opacity:.85">Valor esperado<br><b class="rb-ev" style="font-size:.95rem">—</b></div></div>
         </div>
-        <div class="rb-pasos2"><button class="btn small" type="button" data-paso="-5">−5%</button><button class="btn small" type="button" data-paso="-1">−1%</button>
-          <button class="btn small" type="button" data-paso="1">+1%</button><button class="btn small" type="button" data-paso="5">+5%</button></div>
-        <div class="rb-sug">💡 <b>Sugerido ${clp(vSug)}</b> (${sg.d ? "−" + Math.round(sg.d * 100) + "%" : "presupuesto completo"}) · ${esc(sg.por)}
-          <button class="btn small" type="button" data-fijo="${vSug}" style="margin-left:6px">Usar</button></div>
-        <button class="btn rb-soltar ${of != null && of <= 1 ? "brilla" : ""}" type="button" data-fijo="${pres}">🔓 Soltar el presupuesto · apostar ${clp(pres)}${of === 0 ? " (vas solo)" : ""}</button>
-        <label class="muted" style="font-size:.72rem;display:block;margin-top:10px">Mi costo neto total <span class="rb-cest">${costo ? "" : `(estimado ${Math.round(margenRubro * 100)}% margen del rubro)`}</span>
-          <input class="rb-costo" inputmode="numeric" value="${(costo || costoEst).toLocaleString("es-CL")}" style="width:100%;margin-top:3px;padding:9px;border-radius:12px;border:1px solid var(--line-soft);background:rgba(255,255,255,.06);color:inherit;font:inherit"></label>
+        <div class="rb-chips2"><button class="btn small" type="button" data-paso="-1">−1%</button>
+          <button class="btn small rb-sugb" type="button" data-fijo="${vSug}" title="${esc(sg.por)}">💡 ${cortoG(vSug)}</button>
+          <button class="btn small rb-soltar ${of != null && of <= 1 ? "brilla" : ""}" type="button" data-fijo="${pres}">🔓 Todo ${cortoG(pres)}</button>
+          <button class="btn small" type="button" data-paso="1">+1%</button></div>
+        <div class="muted" style="font-size:.7rem;margin-top:4px">💡 ${esc(sg.por)}</div>
+        <details class="rb-det"><summary>✎ Mi costo: <b class="rb-cvis">${clp(costo || costoEst)}</b> <span class="rb-cest">${costo ? "" : `(estimado ${Math.round(margenRubro * 100)}% margen)`}</span></summary>
+          <input class="rb-costo rb-in" inputmode="numeric" value="${(costo || costoEst).toLocaleString("es-CL")}" style="margin-top:6px"></details>
         <div class="rb-sobre muted" style="display:none;color:#ff9a9a;font-size:.78rem;margin-top:6px">⚠ Supera el presupuesto: se ofertará el presupuesto (${clp(pres)}).</div>
         <button class="btn rb-firmar" type="button" style="width:100%;margin-top:10px;padding:14px;font-size:1rem" data-rb="sel-preparar" data-c="${esc(x.codigo)}">✍ Apostar y firmar <span class="rb-p2">${clp(Math.min(precio0, pres))}</span></button>
-        <div class="muted" style="font-size:.7rem;margin-top:5px;text-align:center">el robot arma cotización y PDF · tú sigues aquí jugando con las demás</div>`
+        <div class="muted" style="font-size:.68rem;margin-top:5px;text-align:center">el robot arma cotización y PDF y la deja en ✍ Firmar</div>`
         : `<div class="muted" style="margin-top:8px">Sin presupuesto conocido: abre la compra para ver el monto.</div>`}
       </div>`;
     };
@@ -956,8 +1036,35 @@
       <div class="rb-m azul"><span>🎯 Tasa de éxito</span><b data-cnt="${tasa ?? 0}" data-k="tasa" data-fmt="pct">${tasa == null ? "—" : tasa + "%"}</b><small>${ganadasT.length} de ${decididas.length} resueltas</small></div>
       <div class="rb-m violeta"><span>⏳ En juego</span><b data-cnt="${enJuego}" data-k="juego" data-fmt="corto">${corto(enJuego)}</b><small>${enviadosAll.length - decididas.length} esperando resultado</small></div></div>`;
     // ---- 🏆 negocios ganados por etapa
-    const ETAPAS = [["ganada", "🏆 Nuevas"], ["inversionista", "💼 Inversionista"], ["operacion", "🛠 Operación"], ["despacho", "🚚 Despacho"], ["entrega", "📸 Entrega"], ["cerrado", "🥇 Cerrados"]];
+    const ETAPAS = [["ganada", "🆕 OC ¿nos da?"], ["inversionista", "💼 Inversión"], ["operacion", "🛠 Proveedor"], ["pago", "💳 Pagar"], ["documentos", "🧾 Guía y factura"],
+      ["despacho", "🚚 Despacho"], ["entrega", "📸 Entrega"], ["cerrado", "🥇 Cerrados"], ["rechazada", "❌ No dio"]];
     const etapaDe = (t) => t.op?.etapa || "ganada";
+    // 🧾 datos listos para el Sistema de Facturación Gratuito del SII (guía de despacho 52 y factura 33)
+    const docsSII = (t) => {
+      const op = t.op || {}, inf = op.informe || {}, F = (R.fichas || {})[t.codigo], W = (R.full || {})[t.codigo];
+      if (!F && !(R._pidiendo || {})[t.codigo]) setTimeout(() => cargarDocs(t.codigo), 0);
+      const items = (W?.items || []).length ? W.items.map((i) => ({ d: i.d, q: i.q, p: i.p })) : (F?.productos || []).map((x) => ({ d: x.nombre, q: x.cantidad, p: null }));
+      const neto = t.neto || (t.total ? Math.round(t.total / 1.19) : null), iva = t.total && neto ? t.total - neto : null;
+      const oc = segDe(t.codigo)?.oc || inf.oc || op.oc || "";
+      const texto = [`RECEPTOR`, `RUT: ${F?.rut_organismo || "(ver OC)"}`, `Razón social: ${F?.organismo || t.organismo || ""}`, `Dirección de entrega: ${F?.direccion || inf.direccion || ""}`,
+        `Referencia: Orden de compra ${oc} · Compra Ágil ${t.codigo}`, ``, `DETALLE`, ...items.map((i, k) => `${k + 1}. ${i.d} | Cant. ${i.q}${i.p ? ` | P. unit. ${clp(i.p)}` : ""}`),
+        ``, `Neto: ${clp(neto)}  IVA 19%: ${clp(iva)}  Total: ${clp(t.total)}`].join("\n");
+      return `<div class="rb-sec">🧾 Guía de despacho y factura (SII gratuito)</div>
+        ${!F ? `<div class="muted" style="font-size:.74rem"><span class="spinner"></span> Trayendo los datos del organismo…</div>` : ""}
+        <div class="rb-sii"><div><small>RUT receptor</small><b>${esc(F?.rut_organismo || "—")}</b> ${F?.rut_organismo ? `<button class="rb-cp" type="button" data-rb="cp" data-v="${esc(F.rut_organismo)}">Copiar</button>` : ""}</div>
+          <div><small>Razón social</small><b>${esc(F?.organismo || t.organismo || "—")}</b></div>
+          <div><small>Dirección de entrega</small><b>${esc(F?.direccion || inf.direccion || "—")}</b></div>
+          <div><small>Referencia</small><b>OC ${esc(oc || "—")}</b> ${oc ? `<button class="rb-cp" type="button" data-rb="cp" data-v="${esc(oc)}">Copiar</button>` : ""}</div></div>
+        <table class="rb-copias">${items.map((i, k) => `<tr><td>${k + 1}. ${esc(String(i.d || "").slice(0, 60))}</td><td class="n">${esc(i.q ?? "")}</td><td class="n">${i.p ? clp(i.p) : ""}</td></tr>`).join("")}
+          <tr><td><b>Neto · IVA · Total</b></td><td class="n" colspan="2">${clp(neto)} · ${clp(iva)} · <b>${clp(t.total)}</b></td></tr></table>
+        <div class="rb-row" style="margin-top:8px"><button class="btn small rb-oro" type="button" data-rb="cp" data-v="${esc(texto)}">📋 Copiar todo para el SII</button>
+          <a class="btn small" href="https://www.sii.cl" target="_blank" rel="noopener">Abrir SII ↗</a></div>
+        <div class="muted" style="font-size:.7rem;margin-top:4px">En sii.cl: Servicios online → Factura electrónica → Sistema de facturación gratuito → Emitir documento (Guía de despacho y luego Factura con referencia a la OC). Las emites tú con tu clave del SII.</div>
+        <div class="rb-row"><label class="rb-lab" style="flex:1">Folio guía<input class="rb-neg-in" data-campo="folio_guia" data-c="${esc(t.codigo)}" value="${esc(op.folio_guia || "")}" inputmode="numeric"></label>
+          <label class="rb-lab" style="flex:1">Folio factura<input class="rb-neg-in" data-campo="folio_factura" data-c="${esc(t.codigo)}" value="${esc(op.folio_factura || "")}" inputmode="numeric"></label></div>
+        <div class="rb-acc"><button class="btn small" type="button" data-rb="neg-subir" data-tipo="guia" data-c="${esc(t.codigo)}">🚚 Subir guía PDF</button><button class="btn small" type="button" data-rb="neg-subir" data-tipo="factura" data-c="${esc(t.codigo)}">🧾 Subir factura PDF</button></div>
+        <button class="btn rb-firmar" type="button" style="width:100%;margin-top:8px" data-rb="neg-etapa" data-e="despacho" data-c="${esc(t.codigo)}">✅ Documentos listos → Despacho</button>`;
+    };
     const netapa = R.netapa || "ganada";
     const tel = (n) => String(n || "").replace(/[^\d+]/g, "");
     const wa = (n) => { let d = String(n || "").replace(/\D/g, ""); if (d.length === 9 && d[0] === "9") d = "56" + d; if (d.length === 8) d = "569" + d; return d.length >= 10 ? d : ""; };
@@ -979,8 +1086,13 @@
         : `<button class="btn small" type="button" data-rb="neg-informe" data-c="${esc(t.codigo)}">${inf.final != null ? "↻ Recalcular" : "🧮 Armar informe"}</button>`;
       const archivos = inf.final != null ? `<button class="btn small rb-firmar" type="button" data-rb="neg-archivo" data-t="informe" data-c="${esc(t.codigo)}">📄 Informe PDF</button>
         <button class="btn small" type="button" data-rb="neg-archivo" data-t="excel" data-c="${esc(t.codigo)}">📊 Excel utilidad</button>` : "";
-      if (et === "ganada") cuerpoE = `<div class="rb-acc">${archivos}${btnInf}</div>
-        <button class="btn rb-firmar" type="button" style="width:100%;margin-top:8px" data-rb="neg-etapa" data-e="inversionista" data-c="${esc(t.codigo)}">💼 Pasar a Inversionista</button>`;
+      if (et === "ganada") cuerpoE = (R.ocNo || {})[t.codigo] ? `<div class="rb-sec">¿Por qué no da?</div>
+          <textarea class="rb-in" id="rbNo-${esc(t.codigo)}" rows="2" placeholder="Ej: el proveedor subió el precio, no hay stock, plazo imposible">${esc(op.motivo_no || "")}</textarea>
+          <div class="muted" style="font-size:.7rem;margin-top:4px">Ojo: rechazar una orden de compra aceptada en el portal puede traer reclamos o sanciones; revisa las condiciones antes.</div>
+          <div class="rb-row"><button class="btn small" type="button" data-rb="oc-volver" data-c="${esc(t.codigo)}">← Volver</button><button class="btn small" type="button" data-rb="oc-no" data-c="${esc(t.codigo)}" style="border-color:#ff8a80;color:#ffb3b9">Confirmar: no da</button></div>`
+        : `<div class="muted" style="font-size:.72rem;text-align:center;margin-top:6px">👉 desliza: <b>nos da</b> · 👈 <b>no da</b></div>
+          <div class="rb-acc">${archivos}${btnInf}</div>
+          <div class="rb-row"><button class="btn small" type="button" data-rb="oc-pre-no" data-c="${esc(t.codigo)}">❌ No da</button><button class="btn rb-oro" type="button" style="flex:1" data-rb="oc-si" data-c="${esc(t.codigo)}">✅ Nos da → Inversión</button></div>`;
       else if (et === "inversionista") cuerpoE = `<div class="rb-mini"><div><small>Capital a invertir (90%)</small><b>${num(inf.anticipo)}</b></div><div><small>Gana inversionista (15,6%)</small><b style="color:#7ee2a0">${num(inf.inversionista)}</b></div>
           <div><small>JULFIOR (84,4%)</small><b>${num(inf.julfior)}</b></div><div><small>Rentabilidad</small><b>${inf.rentabilidad != null ? (inf.rentabilidad * 100).toFixed(1).replace(".", ",") + "%" : "—"}</b></div></div>
         <label class="muted" style="font-size:.74rem;display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" data-rb-com="aplica" data-c="${esc(t.codigo)}" ${op.aplica_comision !== false ? "checked" : ""}> Comisión del ingresador
@@ -997,7 +1109,16 @@
         <label class="muted" style="font-size:.74rem;display:block;margin-top:8px">Precio final acordado con el proveedor (con IVA)
           <input class="rb-neg-in" data-campo="precio_acordado" data-c="${esc(t.codigo)}" inputmode="numeric" value="${op.precio_acordado ? Number(op.precio_acordado).toLocaleString("es-CL") : ""}" placeholder="${inf.compras ? Number(inf.compras).toLocaleString("es-CL") : ""}" style="width:100%;margin-top:3px;padding:8px;border-radius:10px;border:1px solid var(--line-soft);background:rgba(255,255,255,.05);color:inherit;font:inherit"></label>
         <div class="rb-acc">${archivos}${btnInf}</div>
-        <button class="btn rb-firmar" type="button" style="width:100%;margin-top:8px" data-rb="neg-etapa" data-e="despacho" data-c="${esc(t.codigo)}">✅ Compra hecha → Despacho</button>`;
+        <button class="btn rb-firmar" type="button" style="width:100%;margin-top:8px" data-rb="neg-etapa" data-e="pago" data-c="${esc(t.codigo)}">✅ Proveedor elegido → Pagar</button>`;
+      else if (et === "pago") { const o = (inf.opciones || [])[op.opcion ?? inf.elegida ?? 0] || {}; const monto = op.precio_acordado || o.total_con_iva || inf.compras;
+        cuerpoE = `<div class="rb-sec">💳 Pagar al proveedor</div>
+          <div class="rb-op on"><div class="rb-env"><b>${esc(o.proveedor || op.proveedor || "Proveedor")}</b><b class="rb-oro-t" style="font-size:1.2rem">${num(monto)}</b></div>
+            <div class="rb-acc">${tel(o.telefono) ? `<a class="btn small" href="tel:${esc(tel(o.telefono))}">📞</a>` : ""}${wa(o.telefono) ? `<a class="btn small" href="https://wa.me/${wa(o.telefono)}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ""}${o.email ? `<a class="btn small" href="mailto:${esc(o.email)}">✉</a>` : ""}</div></div>
+          <label class="rb-lab">Medio de pago / N° transferencia<input class="rb-neg-in" data-campo="medio_pago" data-c="${esc(t.codigo)}" value="${esc(op.medio_pago || "")}" placeholder="Transferencia 123456"></label>
+          <label class="muted rb-chk"><input type="checkbox" data-rb-chk="proveedor_pagado" data-c="${esc(t.codigo)}" ${op.proveedor_pagado ? "checked" : ""}> Proveedor pagado</label>
+          <div class="rb-row"><button class="btn small" type="button" data-rb="recordar" data-min="manana" data-t="Pagar al proveedor ${esc(o.proveedor || "")} · ${esc(t.codigo)}" data-c="${esc(t.codigo)}">⏰ Recordarme mañana</button>
+          <button class="btn rb-firmar" type="button" style="flex:1" data-rb="neg-etapa" data-e="documentos" data-c="${esc(t.codigo)}">✅ Pagado → Guía y factura</button></div>`; }
+      else if (et === "documentos") cuerpoE = docsSII(t);
       else if (et === "despacho") cuerpoE = `<label class="muted" style="font-size:.74rem;display:block">Transporte (empresa / chofer)
           <input class="rb-neg-in" data-campo="transporte" data-c="${esc(t.codigo)}" value="${esc(op.transporte || "")}" placeholder="ej. Starken, camión propio" style="width:100%;margin-top:3px;padding:8px;border-radius:10px;border:1px solid var(--line-soft);background:rgba(255,255,255,.05);color:inherit;font:inherit"></label>
         <label class="muted" style="font-size:.74rem;display:block;margin-top:6px">Costo del transporte
@@ -1008,8 +1129,12 @@
         <button class="btn rb-firmar" type="button" style="width:100%;margin-top:8px" data-rb="neg-etapa" data-e="entrega" data-c="${esc(t.codigo)}">🚚 Despachado → Entrega</button>`;
       else if (et === "entrega") cuerpoE = `<div class="muted" style="font-size:.78rem">Cuando el cliente reciba, sube la foto de la entrega (con la guía firmada si puedes): el negocio queda <b>cerrado en oro</b>.</div>
         <button class="btn rb-firmar" type="button" style="width:100%;margin-top:8px;font-size:1rem" data-rb="neg-subir" data-tipo="foto" data-cerrar="1" data-c="${esc(t.codigo)}">📸 Subir foto de la entrega y cerrar</button>`;
+      else if (et === "rechazada") cuerpoE = `<div class="rb-sug" style="border-color:#ff8a80">❌ No dio${op.motivo_no ? ": " + esc(op.motivo_no) : ""}</div>
+        <button class="btn small" type="button" data-rb="neg-etapa" data-e="ganada" data-c="${esc(t.codigo)}">↩ Reconsiderar</button>`;
       else cuerpoE = `<div style="font-weight:900;font-size:1.05rem;margin-top:6px">🥇 Negocio cerrado${op.cerrado ? " · " + esc(new Date(op.cerrado).toLocaleDateString("es-CL")) : ""}</div>`;
-      return `<div class="rb-neg ${et === "cerrado" ? "cerrado" : ""}">
+      const desl = et === "ganada" && !(R.ocNo || {})[t.codigo];
+      return `<div class="rb-neg ${et === "cerrado" ? "cerrado" : ""} ${desl ? "rb-swipe" : ""}" ${desl ? `data-modo="oc" data-c="${esc(t.codigo)}"` : ""}>
+        ${desl ? '<span class="rb-sello si">NOS DA</span><span class="rb-sello no">NO DA</span>' : ""}
         <div class="rb-env"><div style="min-width:0"><div style="font-size:.76rem"><b>${esc(t.codigo)}</b> · OC <b>${esc(g.oc || inf.oc || op.oc || "—")}</b></div>
           <div style="margin:2px 0;font-weight:700">${esc(t.nombre || "Compra Ágil")}</div><div class="muted" style="font-size:.72rem">${esc(t.organismo || "")}</div></div>
           <div style="text-align:right"><div style="font-size:.66rem;opacity:.8">VENTA</div><b>${clp(t.total)}</b></div></div>
@@ -1056,13 +1181,16 @@
         <button class="btn small ${filtro === "todas" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="todas">🌐 Todas</button>
         <button class="btn small ${filtro === "lic" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="lic">📑 Licitaciones</button>
         <button class="btn small" type="button" data-rb="rubro-editar">✏️ ${esc(((conf.rubros || []).length ? conf.rubros.length + " rubro" + (conf.rubros.length === 1 ? "" : "s") : "Rubro"))}</button>
-        <button class="btn small" type="button" data-rb="oport-actualizar">↻ Buscar más</button></div>
+        <button class="btn small" type="button" data-rb="oport-actualizar">↻ Buscar más</button>
+        <button class="btn small" type="button" data-rb="oport-tab" data-t="papelera">🗑 ${papelera.length}</button></div>
       <div class="muted" style="font-size:.74rem;margin-bottom:4px;text-align:center">👉 desliza a la derecha = <b>me gusta</b> · 👈 a la izquierda = <b>no</b></div>
       ${verN.slice(0, n).map((x) => fila(x, "nuevas")).join("") || `<div class="empty">No quedan oportunidades en esta vista. Toca «↻ Buscar más».</div>`}
       ${verN.length > n ? `<button class="btn" style="width:100%;margin-top:8px" type="button" data-rb="oport-mas">Ver más (${verN.length - n} restantes)</button>` : ""}`;
-    else if (tab === "firmar") cuerpo = enFirma.length ? `<div class="rb-cajas">${[...enFirma].sort((a, b) => ordenF(a) - ordenF(b)).map(caja).join("")}</div>`
+    else if (tab === "firmar") cuerpo = enFirma.length ? `<div class="rb-sec">✍ Por firmar · la última que hiciste arriba</div>${[...enFirma].sort((a, b) => (b.creado || "").localeCompare(a.creado || "")).map((t, k) => tarjetaFirma(t, k === 0)).join("")}`
       : `<div class="empty">Nada por firmar. Desliza a la derecha en «Por preparar».</div>`;
-    else if (tab === "sel") cuerpo = sel.length ? `<div class="muted" style="font-size:.74rem;margin:6px 0">Ajusta el precio con la barra (hasta 50% bajo o sobre el presupuesto) mirando ganancia y margen. «Firmar» la manda al robot.</div>${sel.map(tarjetaSel).join("")}`
+    else if (tab === "sel") cuerpo = sel.length ? (() => { const k = Math.max(0, Math.min(sel.length - 1, R.selIdx || 0)); R.selIdx = k;
+        return `<div class="rb-env rb-sec"><button class="btn small" type="button" data-rb="sel-mover" data-d="-1" ${k ? "" : "disabled"}>‹</button><span>⭐ Juega el precio · <b>${k + 1}</b> de ${sel.length}</span><button class="btn small" type="button" data-rb="sel-mover" data-d="1" ${k < sel.length - 1 ? "" : "disabled"}>›</button></div>
+          <div class="muted" style="font-size:.72rem;text-align:center;margin-bottom:4px">👉 desliza a la derecha = <b>apuesto y firmo</b> · 👈 a la izquierda = <b>paso</b></div>${tarjetaSel(sel[k])}`; })()
       : `<div class="empty">Desliza a la derecha las que te gusten en «👆 Por preparar» y aparecen aquí.</div>`;
     else if (tab === "hechas") cuerpo = enviadosT.length ? `<div class="row" style="justify-content:space-between;align-items:center;margin:6px 0"><span class="muted" style="font-size:.74rem">${enviadosT.length} enviadas · ${clp(enviadosT.reduce((s, t) => s + (Number(t.total) || 0), 0))} · estado en vivo de Mercado Público${R.segT ? " (" + esc(hace(new Date(R.segT).toISOString())) + ")" : ""}</span>
         <button class="btn small" type="button" data-rb="seg-actualizar">↻</button></div>${enviadosT.map(enviado).join("")}`
@@ -1072,10 +1200,14 @@
       : `<div class="empty">${R._cargandoSeg ? "Revisando en Mercado Público…" : "Todavía no hay ganadas. Cuando el organismo te elija aparecen aquí con su orden de compra."}</div>`;
     else cuerpo = papelera.length ? `<div class="muted" style="font-size:.74rem;margin:6px 0">Desliza → o toca «Recuperar» para devolverla a Por preparar.</div>${papelera.map((x) => fila(x, "papelera")).join("")}`
       : `<div class="empty">La papelera está vacía.</div>`;
-    return `<div class="muted" style="font-size:.78rem;margin:6px 0">Ordenadas por ganancia estimada · ${o.fecha ? "actualizado " + esc(hace(o.fecha)) : "sin datos aún"}${o.resumen ? ` · ${o.resumen.total} vigentes en el portal` : ""}</div>
-      ${marcador}
-      <div class="rb-otabs">${tabs.map(([k, t, c]) => `<button type="button" class="${tab === k ? "on" : ""}" data-rb="oport-tab" data-t="${k}">${t}<i>${c}</i></button>`).join("")}</div>
-      ${cuerpo}`;
+    const NAV = [["nuevas", "🎯", "Oportunidades", verN.length], ["sel", "⭐", "Jugar", sel.length], ["firmar", "✍", "Firmar", enFirma.length],
+      ["hechas", "📨", "Enviadas", enviadosT.length], ["ganadas", "🏆", "Negocios", ganadasT.length]];
+    const tira = `<div class="rb-tira"><span>🏆 <b class="rb-oro-t" data-cnt="${ganadoMonto}" data-k="ganado" data-fmt="corto">${corto(ganadoMonto)}</b></span>
+      <span>💰 <b class="rb-vivo-t" data-cnt="${utilidadG}" data-k="util" data-fmt="corto">${corto(utilidadG)}</b></span>
+      <span>🎯 <b>${tasa == null ? "—" : tasa + "%"}</b></span><span>⏳ <b>${corto(enJuego)}</b></span></div>`;
+    return `${tab === "nuevas" ? tira : tab === "ganadas" ? marcador : ""}
+      ${cuerpo}
+      <nav class="rb-nav">${NAV.map(([k, i, t, c]) => `<button type="button" class="${tab === k || (tab === "papelera" && k === "nuevas") ? "on" : ""}" data-rb="oport-tab" data-t="${k}"><span class="i">${i}${c ? `<em>${c > 99 ? "99+" : c}</em>` : ""}</span><span class="t">${t}</span></button>`).join("")}</nav>`;
   }
   // la tarjeta se va al instante; la red trabaja por detrás (antes la pantalla esperaba a internet y se «atascaba»)
   function sacarTarjeta(el, dir) {
@@ -1090,7 +1222,50 @@
     }, 200);
   }
   function sumarTab(tab, d) {
-    const i = $(`[data-rb="oport-tab"][data-t="${tab}"] i`, sheet); if (i) i.textContent = Math.max(0, (+i.textContent || 0) + d);
+    const i = $(`.rb-nav [data-t="${tab}"] em`, sheet); if (i) i.textContent = Math.max(0, (+i.textContent || 0) + d);
+  }
+  // ⭐ Jugar: derecha = apuesto y firmo (va al robot), izquierda = paso (vuelve a Oportunidades)
+  async function selFirmar(c, b) {
+    if (!c) return; const cod = c.dataset.c;
+    const pres = +c.dataset.pres; const v = Math.min(c.dataset.v ? +c.dataset.v : +c.querySelector(".rb-range").value, pres);
+    const descuento = Math.max(0, Math.min(0.6, 1 - v / pres));
+    guardarSelLuego(cod, { precio: v });
+    if (b) b.disabled = true;
+    R.selFuera = { ...(R.selFuera || {}), [cod]: 1 }; R.barra = false;
+    sacarTarjeta(c, 1); sumarTab("sel", -1); sumarTab("firmar", 1);
+    setTimeout(() => pintarHoja(true), 460);                     // aparece la siguiente para seguir jugando
+    try {
+      const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "firmar", descuento }) });
+      toast(r._status === 409 ? "Ya estaba en manos del robot" : `✍ Apostaste ${clp(v)} · el robot la deja en Firmar`);
+      refrescar();
+    } catch (e) { toast(e.message); delete R.selFuera[cod]; pintarHoja(true); }
+  }
+  // 🏆 OC: «nos da» avanza a Inversión · «no da» la deja en ❌ con el motivo
+  async function ocSi(cod, el) {
+    if (el) sacarTarjeta(el, 1);
+    try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, etapa: "inversionista", datos: { nos_da: true }, dispositivo: dispositivo(false) }) });
+      toast("✅ ¡Nos da! Pasa a Inversión"); R.netapa = "inversionista"; await refrescar(); pintarHoja(true); } catch (e) { toast(e.message); }
+  }
+  async function cargarDocs(cod) {
+    R._pidiendo = { ...(R._pidiendo || {}), [cod]: 1 };
+    try { const [f, w] = await Promise.all([api("ficha?codigo=" + encodeURIComponent(cod)).catch(() => ({})), api("trabajo?codigo=" + encodeURIComponent(cod)).catch(() => ({}))]);
+      R.fichas = { ...(R.fichas || {}), [cod]: f.ficha || { codigo: cod } }; R.full = { ...(R.full || {}), [cod]: w.trabajo || null }; } catch {}
+    pintarHoja(true);
+  }
+  async function recordar(texto, min, cod) {
+    let cuando;
+    if (min === "manana") { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); cuando = d.toISOString(); }
+    try { await api("recordar", { method: "POST", body: JSON.stringify({ texto, codigo: cod || null, ...(cuando ? { cuando } : { minutos: +min || 60 }) }) });
+      toast("⏰ Te aviso " + (min === "manana" ? "mañana a las 9:00" : +min >= 60 ? "en " + Math.round(min / 60) + " h" : "en " + min + " min"));
+      if (!R.push) suscribirPush(true); } catch (e) { toast(e.message); }
+  }
+  function selPasar(c) {
+    const cod = c.dataset.c;
+    R.selFuera = { ...(R.selFuera || {}), [cod]: 1 };
+    sacarTarjeta(c, -1); sumarTab("sel", -1);
+    toast("↩ La soltaste: vuelve a Oportunidades");
+    quitarSel(cod).finally(() => { delete R.selFuera[cod]; });
+    setTimeout(() => pintarHoja(true), 460);
   }
   async function oportDecidir(cod, si, el) {
     const x = (R.oport?.lista || []).find((y) => y.codigo === cod);
@@ -1137,7 +1312,7 @@
     sheet.addEventListener("pointerdown", (ev) => {
       R.toque = Date.now();
       const c = ev.target.closest?.(".rb-swipe");
-      if (!c || ev.target.closest("button,a,input,select,label")) return;
+      if (!c || ev.target.closest("button,a,input,select,label,details,textarea")) return;
       el = c; x0 = ev.clientX; y0 = ev.clientY; dx = 0; horiz = null; t0 = performance.now(); xs = [[t0, x0]];
     }, { passive: true });
     sheet.addEventListener("pointermove", (ev) => {
@@ -1162,7 +1337,11 @@
       const derecha = horiz && (dx > ancho * 0.28 || (dx > 30 && vel > 0.45));
       const izquierda = horiz && (dx < -ancho * 0.28 || (dx < -30 && vel < -0.45));
       c.style.willChange = "";
-      if (derecha) { papel ? oportRestaurar(c.dataset.c, c) : oportDecidir(c.dataset.c, true, c); }
+      const modoSel = c.dataset.modo === "sel", modoOc = c.dataset.modo === "oc";
+      if (derecha && modoOc) { ocSi(c.dataset.c, c); }
+      else if (izquierda && modoOc) { c.classList.add("vuela"); c.style.transform = ""; R.ocNo = { ...(R.ocNo || {}), [c.dataset.c]: 1 }; setTimeout(() => pintarHoja(true), 230); }
+      else if (derecha) { modoSel ? selFirmar(c) : papel ? oportRestaurar(c.dataset.c, c) : oportDecidir(c.dataset.c, true, c); }
+      else if (izquierda && modoSel) selPasar(c);
       else if (izquierda && !papel) oportDecidir(c.dataset.c, false, c);
       else if (horiz) { c.classList.add("vuela"); c.style.transform = ""; c.querySelectorAll(".rb-sello").forEach((x) => (x.style.opacity = 0)); }
       fin();
@@ -1198,6 +1377,126 @@
         `${new Date(h.t).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}  ${est(h.estado).txt}${h.mensaje ? " · " + h.mensaje : ""}`).join("\n"))}</pre></details>` : ""}`;
   }
 
+  // ---------- 🏢 ¿con qué empresa ofertas? (cada persona, sus datos: RUT, contacto, ficha técnica) ----------
+  const corta = (n) => String(n || "").replace(/^(sociedad (de )?(inversiones )?(y gesti[oó]n )?|comercial(izadora)? |empresa )/i, "").replace(/\s+(spa|ltda\.?|s\.a\.|eirl|limitada)\.?$/i, "").slice(0, 26);
+  function pantallaEmpresa() {
+    if (!R.empresas) cargarEmpresas();
+    const L = Object.values(R.empresas || {}), yo = miEmp(), f = R.empForm;
+    const campo = (k, lab, ph, tipo) => `<label class="rb-lab">${lab}<input data-emp="${k}" value="${esc((f || {})[k] || "")}" placeholder="${esc(ph || "")}" ${tipo || ""}></label>`;
+    return `<div class="rb-paso"><div class="rb-paso-n">Paso 1 de 2</div>
+      <h2 class="rb-h">¿Con qué empresa ofertas?</h2>
+      <div class="muted rb-sub">La cotización, la ficha técnica y el PDF salen con <b>sus</b> datos. Cada celular elige la suya.</div>
+      ${!R.empresas ? `<div class="empty"><span class="spinner"></span></div>` : ""}
+      ${f ? `<div class="rb-card" style="padding:14px">
+          ${campo("razon_social", "Razón social *", "Ej. Comercial Los Andes SpA")}${campo("rut", "RUT empresa *", "76.123.456-7", 'inputmode="text" autocapitalize="characters"')}
+          ${campo("giro", "Giro", "Venta de artículos de ferretería")}${campo("contacto", "Contacto (nombre)", "Nombre y apellido")}
+          ${campo("telefono", "Teléfono", "+56 9 ...", 'inputmode="tel"')}${campo("email", "Correo", "ventas@empresa.cl", 'inputmode="email" autocapitalize="off"')}
+          ${campo("direccion", "Dirección", "Calle 123")}${campo("comuna", "Comuna / ciudad", "Los Andes")}
+          ${campo("representante", "Representante legal", "")}${campo("rut_representante", "RUT representante", "")}
+          ${campo("despacho", "Condición de despacho", "Incluido, puesto en dirección del cliente")}
+          <input type="hidden" data-emp="id" value="${esc((f || {}).id || "")}">
+          <button class="btn rb-oro rb-big-btn" type="button" data-rb="empresa-guardar">Guardar y usar esta empresa</button>
+          <button class="btn small rb-link" type="button" data-rb="empresa-cancelar">Cancelar</button></div>`
+      : `${L.map((e) => `<div class="rb-card rb-emp-c ${e.id === yo ? "on" : ""}"><div style="min-width:0"><b>${esc(e.razon_social)}</b><div class="muted" style="font-size:.74rem">RUT ${esc(e.rut || "")}${e.contacto ? " · " + esc(e.contacto) : ""}</div></div>
+          <div class="rb-row"><button class="btn small" type="button" data-rb="empresa-form" data-id="${esc(e.id)}">Editar</button><button class="btn small rb-oro" type="button" data-rb="empresa-usar" data-id="${esc(e.id)}">${e.id === yo ? "✓ En uso" : "Usar"}</button></div></div>`).join("")}
+        <button class="btn rb-big-btn" type="button" data-rb="empresa-form">＋ Agregar otra empresa</button>`}
+    </div>`;
+  }
+  // ---------- 📞 «Me llamaron»: escribe o graba qué te dijeron y el robot te dice si da o no ----------
+  const HIST = "sdc:llamadas";
+  const leerHist = () => { try { return JSON.parse(localStorage.getItem(HIST)) || []; } catch { return []; } };
+  function buscarLocal(texto) {
+    const n = (t) => norm(t);
+    const cods = (String(texto).toUpperCase().match(COD_CA_G) || []);
+    const ts = R.data?.trabajos || [];
+    if (cods.length) return ts.filter((t) => cods.includes(t.codigo));
+    const ws = n(texto).split(/[^a-z0-9ñ]+/).filter((w) => w.length > 3 && !/^(llamaron|llamo|quiere|saber|sobre|oferta|compra|para|cliente|hola|como|tiene|dice|proveedor)$/.test(w));
+    if (!ws.length) return [];
+    return ts.map((t) => [ws.filter((w) => n((t.nombre || "") + " " + (t.organismo || "") + " " + t.codigo).includes(w.length > 5 ? w.slice(0, -1) : w)).length, t])
+      .filter(([p]) => p).sort((a, b) => b[0] - a[0]).slice(0, 3).map(([, t]) => t);
+  }
+  function pantallaLlamada() {
+    const q = R.llamada || {}, r = q.respuesta;
+    const loc = q.texto ? buscarLocal(q.texto) : [];
+    const verd = r ? ({ si: ["✅ SÍ DA", "si"], no: ["❌ NO DA", "no"] }[r.da] || ["🤔 DEPENDE", "dep"]) : null;
+    const g = (c) => segDe(c) || {};
+    const fichaLocal = (t) => { const inf = t.op?.informe || {}, s2 = g(t.codigo);
+      return `<div class="rb-card rb-mini2"><div class="rb-env"><b>${esc(t.codigo)}</b><span class="rb-pill">${esc(s2.ganada ? "🏆 ganada" : s2.glosa || est(t.estado).txt)}</span></div>
+        <div class="rb-fnom">${esc(t.nombre || "")}</div><div class="muted" style="font-size:.72rem">${esc(t.organismo || "")}</div>
+        <div class="rb-kv"><span>Ofertamos <b>${clp(t.total)}</b></span>${inf.final != null ? `<span>Utilidad <b class="${inf.final < 0 ? "rb-neg-t" : "rb-vivo-t"}">${inf.incompleto ? "por confirmar" : clp(inf.final)}</b></span>` : ""}${s2.mi_lugar ? `<span>Lugar <b>${s2.mi_lugar}° de ${s2.competidores}</b></span>` : ""}</div></div>`; };
+    const wa = r?.whatsapp ? `https://wa.me/?text=${encodeURIComponent(r.whatsapp)}` : "";
+    return `<div class="rb-paso">
+      <div class="rb-env"><h2 class="rb-h" style="margin:0">📞 Me llamaron</h2><button class="btn small" type="button" data-rb="llamada-cerrar">← Volver</button></div>
+      <div class="muted rb-sub">Escribe o graba lo que te dijeron («me llamaron de fertilizantes Reinco») o el ID que te dio el cliente.</div>
+      <div class="rb-llamar"><textarea id="rbLlamada" rows="2" placeholder="Ej: me llamaron de la municipalidad por los fertilizantes, 1234-56-COT26">${esc(q.texto || "")}</textarea>
+        <div class="rb-row"><button class="btn rb-mic ${R.grabando ? "on" : ""}" type="button" data-rb="llamada-mic">${R.grabando ? "⏹ Detener y enviar" : "🎤 Audio"}</button>
+          <button class="btn rb-oro" type="button" data-rb="llamada-preguntar" style="flex:1">${q.id && !r && !q.error ? '<span class="spinner"></span> El robot está pensando…' : "Preguntar al robot"}</button></div></div>
+      ${loc.length ? `<div class="rb-sec">Encontré en tus ofertas</div>${loc.map(fichaLocal).join("")}` : ""}
+      ${q.error ? `<div class="rb-alertas"><b>No pude responder</b>${esc(q.error)}</div>` : ""}
+      ${r ? `<div class="rb-resp ${verd[1]}">
+          <div class="rb-verd">${verd[0]}</div>
+          <div class="rb-tit">${esc(r.titular || "")}</div>
+          ${q.transcripcion ? `<div class="muted" style="font-size:.72rem">🎤 «${esc(q.transcripcion)}»</div>` : ""}
+          ${r.por_que ? `<p>${esc(r.por_que)}</p>` : ""}
+          ${r.decirle_al_cliente ? `<div class="rb-sec">Dile al cliente</div><p>${esc(r.decirle_al_cliente)}</p>` : ""}
+          ${r.whatsapp ? `<div class="rb-sec">WhatsApp listo</div><div class="rb-wa">${esc(r.whatsapp)}</div>
+            <div class="rb-row"><button class="btn small" type="button" data-rb="cp" data-v="${esc(r.whatsapp)}">Copiar</button><a class="btn small rb-oro" href="${wa}" target="_blank" rel="noopener">Enviar por WhatsApp</a></div>` : ""}
+          ${(r.pasos || []).length ? `<div class="rb-sec">Qué hacer</div><ol class="rb-pasos">${r.pasos.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>` : ""}
+          ${(r.proveedores || []).length ? `<div class="rb-sec">Proveedores</div>${r.proveedores.map((o) => `<div class="rb-op"><div class="rb-env"><b>${esc(o.nombre || "")}</b>${o.precio_aprox ? `<b>${clp(o.precio_aprox)}</b>` : ""}</div>
+              ${o.nota ? `<div class="muted" style="font-size:.72rem">${esc(o.nota)}</div>` : ""}<div class="rb-row">${o.telefono ? `<a class="btn small" href="tel:${esc(String(o.telefono).replace(/[^\d+]/g, ""))}">📞 Llamar</a>` : ""}${o.web ? `<a class="btn small" href="${esc(o.web)}" target="_blank" rel="noopener">🌐 Web</a>` : ""}</div></div>`).join("")}` : ""}
+          ${r.alternativas ? `<div class="rb-sec">Alternativa</div><p>${esc(r.alternativas)}</p>` : ""}
+          <div class="rb-sec">⏰ Recuérdamelo</div>
+          <div class="rb-row">${(r.recordatorios || []).slice(0, 3).map((x) => `<button class="btn small" type="button" data-rb="recordar" data-min="${+x.minutos || 60}" data-t="${esc(x.texto)}" data-c="${esc(r.codigo || "")}">${esc(String(x.texto).slice(0, 34))} · ${(+x.minutos || 60) >= 1440 ? Math.round(x.minutos / 1440) + " d" : (+x.minutos || 60) >= 60 ? Math.round(x.minutos / 60) + " h" : x.minutos + " min"}</button>`).join("")}
+            <button class="btn small" type="button" data-rb="recordar" data-min="60" data-t="${esc("Responder: " + (r.titular || q.texto || "")).slice(0, 120)}" data-c="${esc(r.codigo || "")}">en 1 hora</button>
+            <button class="btn small" type="button" data-rb="recordar" data-min="manana" data-t="${esc("Seguir: " + (r.titular || q.texto || "")).slice(0, 120)}" data-c="${esc(r.codigo || "")}">mañana 9:00</button></div>
+          ${r.aviso ? `<div class="muted" style="font-size:.7rem;margin-top:6px">${esc(r.aviso)}</div>` : ""}</div>` : ""}
+      ${leerHist().length ? `<div class="rb-sec">Últimas consultas</div>${leerHist().slice(0, 6).map((h) => `<button class="rb-hist" type="button" data-rb="llamada-ver" data-id="${esc(h.id)}"><b>${esc((h.titular || h.texto || "").slice(0, 70))}</b><span>${esc(hace(h.t))}</span></button>`).join("")}` : ""}
+    </div>`;
+  }
+  async function preguntarRobot(texto, audio) {
+    if (!texto && !audio) { toast("Escribe o graba qué te dijeron"); return; }
+    R.llamada = { texto, t: new Date().toISOString() }; pintarHoja(true);
+    try {
+      const r = await api("preguntar", { method: "POST", body: JSON.stringify({ texto, ...(audio || {}) }) });
+      R.llamada.id = r.id;
+      const h = leerHist(); h.unshift({ id: r.id, texto, t: R.llamada.t }); try { localStorage.setItem(HIST, JSON.stringify(h.slice(0, 20))); } catch {}
+      esperarRespuesta(r.id);
+    } catch (e) { R.llamada.error = e.message; }
+    pintarHoja(true);
+  }
+  async function esperarRespuesta(id, n = 0) {
+    if (!R.llamada || R.llamada.id !== id) return;
+    try {
+      const x = (await api("respuesta?id=" + id)).pregunta;
+      if (x.estado === "lista" || x.estado === "error") {
+        Object.assign(R.llamada, { respuesta: x.respuesta, error: x.error, transcripcion: x.transcripcion, texto: R.llamada.texto || x.transcripcion });
+        const h = leerHist(); const k = h.find((y) => y.id === id); if (k) { k.titular = x.respuesta?.titular; try { localStorage.setItem(HIST, JSON.stringify(h)); } catch {} }
+        try { navigator.vibrate?.([30, 40, 30]); } catch {}
+        return pintarHoja(true);
+      }
+    } catch {}
+    if (n > 100) { R.llamada.error = "El PC no respondió. ¿Está encendido el robot?"; return pintarHoja(true); }
+    setTimeout(() => esperarRespuesta(id, n + 1), 3000);
+  }
+  async function grabar() {
+    if (R.grabando) { R.rec?.stop(); return; }
+    try {
+      const st = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mime = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"].find((m) => window.MediaRecorder?.isTypeSupported?.(m)) || "";
+      const rec = new MediaRecorder(st, mime ? { mimeType: mime } : {}); const partes = [];
+      rec.ondataavailable = (e) => e.data.size && partes.push(e.data);
+      rec.onstop = async () => {
+        st.getTracks().forEach((t) => t.stop()); R.grabando = false; R.rec = null;
+        const blob = new Blob(partes, { type: rec.mimeType || mime || "audio/mp4" });
+        if (blob.size < 2000) { toast("Audio muy corto"); return pintarHoja(true); }
+        const b64 = await new Promise((ok) => { const f = new FileReader(); f.onload = () => ok(String(f.result).split(",")[1]); f.readAsDataURL(blob); });
+        preguntarRobot(($("#rbLlamada")?.value || "").trim(), { audio_b64: b64, mime: blob.type });
+      };
+      rec.start(); R.rec = rec; R.grabando = true; pintarHoja(true);
+      setTimeout(() => { if (R.rec === rec) rec.stop(); }, 90000);
+    } catch (e) { toast("No pude usar el micrófono: " + (e.message || e)); }
+  }
+
   function pantallaLista() {
     const r = R.data?.robot;
     const lista = R.data?.trabajos || [];
@@ -1205,9 +1504,33 @@
     const permiso = "Notification" in window ? Notification.permission : "unsupported";
     const pushPosible = "PushManager" in window && permiso !== "denied";
     const vista = { lista: vistaLista, cajas: vistaCajas, tablero: vistaTablero, oport: vistaOport }[R.vista] || vistaCajas;
-    if (R.vista === "oport" && (!leer().rubroListo || R.rubroEditar)) {       // al empezar: solo la pregunta del rubro
-      if (!R.oport) cargarOport();
-      return `<div class="rb-sheet-head"><span></span><button class="rb-x" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>${pantallaRubro(R.oport?.lista || [])}`;
+    if (R.vista === "oport") {
+      const mp = R.data?.mp, emp = empresaActual();
+      if (!R.empresas) cargarEmpresas();
+      const cab = `<div class="rb-top2">
+        <button class="rb-emp" type="button" data-rb="empresa-editar">🏢 <span>${esc(corta(emp?.razon_social) || "Mi empresa")}</span> ▾</button>
+        <span class="rb-pcs" title="${conectado ? "PC conectado" : "PC desconectado"}"><i class="${conectado ? "on" : ""}"></i>PC<i class="${mp?.conectado ? "on" : ""}"></i>MP</span>
+        <button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
+        <button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>`;
+      let cuerpo;
+      if (!miEmp() || R.empresaEditar) cuerpo = pantallaEmpresa();
+      else if (!leer().rubroListo || R.rubroEditar) { if (!R.oport) cargarOport(); cuerpo = `<div class="rb-paso-n" style="text-align:center;margin-top:10px">Paso 2 de 2</div>` + pantallaRubro(R.oport?.lista || []); }
+      else if (R.pantalla === "llamada") cuerpo = pantallaLlamada();
+      else cuerpo = vistaOport();
+      const mas = `<details class="rb-ajustes rb-mas"><summary>⚙ Más opciones</summary>
+        ${!conectado ? `<div class="rb-alertas"><b>PC desconectado</b>${r?.visto ? "Visto " + esc(hace(r.visto)) + ". " : ""}Abre el robot en el PC.</div>` : ""}
+        ${mp?.conectado ? "" : `<button class="btn small rb-oro" data-rb="conectar-mp" type="button" style="margin:8px 0">Conectar tu Mercado Público</button>`}
+        <div class="rb-row" style="margin:8px 0"><input id="rbCod" class="rb-in" placeholder="Preparar por código: 3704-203-COT26" autocomplete="off" autocapitalize="characters"><button class="btn small rb-oro" type="button" data-rb="nuevo">✍</button></div>
+        ${!R.push && pushPosible && !(esIOS && !instalada()) ? `<button class="btn small" type="button" data-rb="avisos">🔔 Activar avisos</button>` : ""}
+        ${esIOS && !instalada() ? `<button class="btn small" type="button" data-rb="copiar-enlace-app">📲 Copiar enlace para la app del inicio</button>` : `<button class="btn small" type="button" data-rb="copiar-enlace-app">📲 Copiar enlace para otro celular</button>`}
+        <button class="btn small" type="button" data-rb="bienvenida">🧭 Instalación para otra persona</button>
+        <div class="rb-row" style="margin-top:8px">${VISTAS.filter(([k]) => k !== "oport").map(([k, n]) => `<button type="button" class="btn small" data-rb="vista" data-v="${k}">${n}</button>`).join("")}</div>
+        <div class="label" style="margin-top:12px">Firma rápida ${firmaRapida() ? "✓ instalada" : "(recomendado)"}</div>
+        <div class="muted" style="font-size:.74rem">iPhone: app gratis <b>Userscripts</b> (App Store) → actívala en Safari → toca <a href="/cotizagil-firma.user.js" target="_blank" rel="noopener">Instalar Firma rápida</a>. PC/Android: extensión <b>Tampermonkey</b> y el mismo enlace.</div>
+        <div class="rb-row" style="margin-top:8px"><button class="btn small" type="button" data-rb="copiar-marcador">Copiar marcador «Rellenar» (sin extensión)</button>
+          ${R.push ? `<button class="btn small" type="button" data-rb="push-probar">Probar aviso</button>` : ""}<button class="btn small" type="button" data-rb="desenlazar">Desenlazar</button></div>
+      </details>`;
+      return cab + cuerpo + (R.pantalla === "llamada" || !miEmp() || R.empresaEditar || !leer().rubroListo || R.rubroEditar ? "" : mas);
     }
     return `
       <div class="rb-sheet-head"><h2 style="margin:0">Robot de ofertas</h2><button class="rb-x" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
@@ -1375,7 +1698,10 @@
       if (a === "neg-opcion") { cuerpo.datos = { opcion: +b.dataset.k }; cuerpo.pedir_informe = true; }
       if (a === "neg-informe") cuerpo.pedir_informe = true;
       try { await api("operacion", { method: "POST", body: JSON.stringify(cuerpo) });
-        if (a === "neg-etapa") { R.netapa = b.dataset.e; toast("✓ Avanzó a " + (b.textContent.split("→")[1] || b.dataset.e).trim()); } else toast("El PC recalcula el informe (1–2 min)");
+        if (a === "neg-etapa") { R.netapa = b.dataset.e; toast("✓ Avanzó a " + (b.textContent.split("→")[1] || b.dataset.e).trim());
+          const auto = { pago: ["Pagar al proveedor · " + cod, 1440], documentos: ["Emitir guía y factura en el SII · " + cod, 240], despacho: ["Confirmar despacho y guía firmada · " + cod, 1440], entrega: ["Subir foto de la entrega · " + cod, 1440] }[b.dataset.e];
+          if (auto) api("recordar", { method: "POST", body: JSON.stringify({ codigo: cod, texto: auto[0], minutos: auto[1] }) }).catch(() => {}); }
+        else toast("El PC recalcula el informe (1–2 min)");
         await refrescar(); pintarHoja(); } catch (e) { toast(e.message); }
       return;
     }
@@ -1407,19 +1733,37 @@
       catch (e) { w?.close(); toast(e.message); }
       return;
     }
-    if (a === "sel-preparar") {
-      const c = b.closest(".rb-sel"); const pres = +c.dataset.pres; const v = Math.min(c.dataset.v ? +c.dataset.v : +c.querySelector(".rb-range").value, pres);
-      const descuento = Math.max(0, Math.min(0.6, 1 - v / pres));
-      guardarSelLuego(cod, { precio: v });
-      b.disabled = true;
-      try {
-        const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "firmar", descuento }) });
-        toast(r._status === 409 ? "Ya estaba en manos del robot" : `✍ Apuesta hecha: ${clp(v)} · el robot la deja en Por firmar`);
-        R.barra = false; sacarTarjeta(c, 1); sumarTab("sel", -1); sumarTab("firmar", 1);   // sigues en Seleccionadas jugando con las demás
-        refrescar();
-      } catch (e) { toast(e.message); b.disabled = false; }
+    if (a === "llamada") { R.pantalla = "llamada"; sheet.scrollTop = 0; return pintarHoja(true); }
+    if (a === "llamada-cerrar") { R.pantalla = null; return pintarHoja(true); }
+    if (a === "llamada-preguntar") return preguntarRobot(($("#rbLlamada")?.value || "").trim());
+    if (a === "llamada-mic") return grabar();
+    if (a === "llamada-ver") { const h = leerHist().find((x) => x.id === b.dataset.id); if (h) { R.llamada = { id: h.id, texto: h.texto, t: h.t }; esperarRespuesta(h.id); } return pintarHoja(true); }
+    if (a === "recordar") return recordar(b.dataset.t, b.dataset.min, b.dataset.c);
+    if (a === "empresa-editar") { R.empresaEditar = true; R.empForm = null; R.empresas = null; sheet.scrollTop = 0; return pintarHoja(true); }
+    if (a === "empresa-form") { R.empForm = b.dataset.id ? { ...(R.empresas || {})[b.dataset.id] } : {}; return pintarHoja(true); }
+    if (a === "empresa-cancelar") { R.empForm = null; return pintarHoja(true); }
+    if (a === "empresa-usar") { guardar({ empresa: b.dataset.id }); R.empresaEditar = false; R.ver = null; R.data = null; R.ultimoHtml = null; toast("🏢 Ofertas con " + corta((R.empresas || {})[b.dataset.id]?.razon_social)); refrescar(); return pintarHoja(true); }
+    if (a === "empresa-guardar") {
+      const d = {}; $$("[data-emp]", sheet).forEach((i) => { d[i.dataset.emp] = i.value.trim(); }); if (!d.id) delete d.id;
+      if (!d.razon_social || !d.rut) { toast("Falta razón social y RUT"); return; }
+      try { const r = await api("empresa", { method: "POST", body: JSON.stringify(d) }); R.empresas = r.empresas; R.empForm = null;
+        guardar({ empresa: r.empresa.id }); R.empresaEditar = false; R.ver = null; R.data = null; toast("🏢 Listo: ofertas con " + corta(r.empresa.razon_social)); refrescar(); }
+      catch (e) { toast(e.message); }
+      return pintarHoja(true);
+    }
+    if (a === "bienvenida") { const u = location.origin + "/#enlazar=" + R.token; const txt = `Te invito a la app de Compras Ágiles:\n1) Abre este enlace en Safari (iPhone) o Chrome: ${u}\n2) Compartir → Agregar a pantalla de inicio.\n3) Elige o crea tu empresa y tu rubro.\n4) Para firmar rápido: instala la app gratis «Userscripts» (iPhone) o «Tampermonkey» (PC/Android) y abre ${location.origin}/cotizagil-firma.user.js`;
+      const ok = await copiar(txt); toast(ok ? "✓ Invitación copiada: pégala en WhatsApp" : "No se pudo copiar"); return; }
+    if (a === "oc-si") return ocSi(cod, b.closest(".rb-neg"));
+    if (a === "oc-pre-no") { R.ocNo = { ...(R.ocNo || {}), [cod]: 1 }; return pintarHoja(true); }
+    if (a === "oc-volver") { if (R.ocNo) delete R.ocNo[cod]; return pintarHoja(true); }
+    if (a === "oc-no") {
+      const m = ($(`#rbNo-${CSS.escape(cod)}`)?.value || "").trim();
+      try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, etapa: "rechazada", datos: { nos_da: false, motivo_no: m }, dispositivo: dispositivo(false) }) });
+        if (R.ocNo) delete R.ocNo[cod]; toast("❌ Marcada como «no da»"); await refrescar(); pintarHoja(true); } catch (e) { toast(e.message); }
       return;
     }
+    if (a === "sel-mover") { R.selIdx = (R.selIdx || 0) + +b.dataset.d; return pintarHoja(true); }
+    if (a === "sel-preparar") return selFirmar(b.closest(".rb-sel"), b);
     if (a === "oport-si") return oportDecidir(cod, true, b.closest(".rb-swipe"));
     if (a === "oport-no") return oportDecidir(cod, false, b.closest(".rb-swipe"));
     if (a === "oport-restaurar") return oportRestaurar(cod, b.closest(".rb-swipe"));
@@ -1546,7 +1890,7 @@
     p.textContent = (d > 0 ? "+" : "") + (d * 100).toFixed(1).replace(".", ",") + "% vs ppto."; p.className = "rb-pct " + (d < 0 ? "baja" : "sube");
     const neto = ve / 1.19, gan = neto - costo, mar = neto ? gan / neto : 0;
     const pg = probGanar(c.dataset.of, !!c.dataset.seg, ve, pres);
-    q(".rb-neto").textContent = clp(neto); q(".rb-inv").textContent = clp(costo);
+    q(".rb-neto").textContent = clp(neto); q(".rb-inv").textContent = clp(costo); const cv = q(".rb-cvis"); if (cv) cv.textContent = clp(costo);
     q(".rb-cuota").textContent = costo > 0 ? "x" + (neto / costo).toFixed(2).replace(".", ",") : "x—";
     const g = q(".rb-gan"); g.textContent = (gan >= 0 ? "+" : "") + clp(gan); g.style.color = gan < 0 ? "#ff8a80" : "";
     const m = q(".rb-mar"); m.textContent = (mar * 100).toFixed(1).replace(".", ",") + "%"; m.style.color = mar < 0 ? "#ff8a80" : mar < 0.08 ? "#ffd88a" : "#7ee2a0";
@@ -1566,7 +1910,8 @@
   sheet.addEventListener("change", async (ev) => {
     const el = ev.target, cod = el.dataset?.c; if (!cod) return;
     let datos = null, informe = false;
-    if (el.classList.contains("rb-neg-in")) { const v = el.dataset.campo === "transporte" ? el.value : +(el.value || "").replace(/\D/g, "") || null; datos = { [el.dataset.campo]: v }; informe = el.dataset.campo !== "transporte"; }
+    if (el.classList.contains("rb-neg-in")) { const txt = ["transporte", "medio_pago", "folio_guia", "folio_factura"].includes(el.dataset.campo);
+      const v = txt ? el.value : +(el.value || "").replace(/\D/g, "") || null; datos = { [el.dataset.campo]: v }; informe = !txt; }
     if (el.dataset.rbChk) datos = { [el.dataset.rbChk]: el.checked };
     if (el.dataset.rbCom === "aplica") { datos = { aplica_comision: el.checked }; informe = true; }
     if (el.dataset.rbCom === "pct") { datos = { comision: +el.value, aplica_comision: true }; informe = true; }
