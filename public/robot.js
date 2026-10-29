@@ -338,6 +338,12 @@
   #rbSheet .rb-libro summary{display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-weight:800;font-size:.86rem;color:#ffe9a8;list-style:none}
   #rbSheet .rb-libro summary b{font-size:.78rem;padding:3px 10px;border-radius:99px;background:rgba(245,207,107,.18);border:1px solid rgba(245,207,107,.45)}
   #rbSheet .rb-nivel{margin:8px 0 4px;font-size:.74rem}
+  #rbSheet .rb-filtro-ganador{margin:6px 0 8px;padding:10px 12px;border-radius:16px;background:linear-gradient(160deg,rgba(245,207,107,.16),rgba(255,255,255,.03));border:1px solid rgba(245,207,107,.45);font-size:.8rem}
+  #rbSheet .rb-filtro-ganador .rb-link{padding:4px 0!important;font-size:.72rem;color:#ffb3b9;text-align:left;white-space:normal}
+  #rbSheet .rb-chip-si,#rbSheet .rb-chip-no,#rbSheet .rb-chip-esp{margin-top:4px;font-size:.72rem;padding:4px 8px;border-radius:10px;display:inline-block}
+  #rbSheet .rb-chip-si{background:rgba(94,240,176,.14);color:#c9ffe6;border:1px solid rgba(94,240,176,.4)}
+  #rbSheet .rb-chip-no{background:rgba(255,90,90,.12);color:#ffc4c4;border:1px solid rgba(255,90,90,.35)}
+  #rbSheet .rb-chip-esp{background:rgba(255,255,255,.05);color:#d6dcef;border:1px solid rgba(255,255,255,.14)}
   #rbSheet .rb-mkc{margin-top:10px;padding:8px 10px;border-radius:12px;font-size:.74rem;line-height:1.45;background:rgba(94,240,176,.08);border:1px solid rgba(94,240,176,.35)}
   #rbSheet .rb-mkc span{opacity:.7}#rbSheet .rb-mkc.mal{background:rgba(255,90,90,.12);border-color:rgba(255,90,90,.5)}#rbSheet .rb-mkc.espera{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.14);opacity:.85}
   #rbSheet .rb-yo{flex:none;background:rgba(94,240,176,.12);border:1px solid rgba(94,240,176,.4);color:#dfffee;border-radius:99px;padding:6px 10px;font:inherit;font-size:.74rem;font-weight:700;cursor:pointer;white-space:nowrap}
@@ -930,6 +936,7 @@
         return `<tr><td>${mesN(m)}</td><td class="n">${clp(sum("venta", L))}</td><td class="n">${clp(L.reduce((a, x) => a + (x.util ?? 0), 0))}</td></tr>`; }).join("")}</table>` : ""}
       <div class="muted" style="font-size:.68rem;margin-top:6px">${env.length} ofertas enviadas · ${vivas.length} negocios · ${F.filter((x) => x.cerr).length} cerrados en oro. Próximo: conexión con facturador SII, banco y factoring.</div></details>`;
   }
+  const MIN_PRES = 250000;                                       // bajo esto el despacho y los gastos fijos se comen la utilidad
   const MARGEN_MIN = 0.12;                                       // utilidad mínima sobre la venta neta para que «dé»
   const fijosDe = (pres) => (pres < 150000 ? 12000 : pres < 1000000 ? 20000 : 35000);   // despacho y gastos que no dependen del precio
   const pisoDe = (costoNeto, pres) => costoNeto ? Math.ceil((costoNeto + fijosDe(pres)) / (1 - MARGEN_MIN) * 1.19 / 10) * 10 : 0;
@@ -1125,7 +1132,7 @@
     if (!R.oport) { cargarOport(); return `<div class="empty"><span class="spinner"></span> Cargando oportunidades…</div>`; }
     if ((R.oportViejo || Date.now() - (R.oportT || 0) > 10 * 60000) && !R._cargandoOport) setTimeout(cargarOport, 0);   // muestra lo guardado y actualiza por detrás
     const o = R.oport, ahora = Date.now();
-    const tab = R.oportTab || "nuevas", filtro = R.oportFiltro || "mio";
+    const tab = R.oportTab || "nuevas", filtro = R.oportFiltro || "real";
     // ---- 🎯 tu rubro: la base de todo. La primera vez se pregunta; después filtra y ordena las oportunidades
     const conf = leer();
     if (!conf.rubroListo || R.rubroEditar) return pantallaRubro(o.lista || []);
@@ -1149,7 +1156,38 @@
       ...lista.filter((x) => (x.ya_ofertada || x.trabajada) && !trabajo(x.codigo)).map((x) => ({ ...x, _oport: true }))];
     const papelera = lista.filter((x) => descartada(x.codigo));
     const esSeg = (x) => /^segundo/i.test(x.llamado || "");
-    const verN = nuevas.filter((x) => (filtro === "todas" || mio(x)) && (filtro === "lic" ? lic(x) : !lic(x) && (filtro === "seg" ? esSeg(x) && x.tipo !== "esp"
+    // 🏆 PRE-FILTRO GANADOR: solo pasan las que se pueden ganar Y dejan plata (las demás quedan fuera con su motivo)
+    if (tab === "nuevas") cargarMercado();
+    const evaluar = (x) => {
+      const pres = Number(x.monto) || 0, hrs = (Date.parse(x.cierre) - ahora) / 3600000, seg = esSeg(x), of = x.ofertas ?? null, fuera = [];
+      if (lic(x)) fuera.push("licitación (otro flujo)");
+      if (x.tipo === "esp") fuera.push("especializado: difícil de abastecer a buen precio");
+      else if ((x.viab ?? 1) < 0.85) fuera.push("rubro no reconocido: no sabemos abastecerlo bien");
+      else if ((x.margen ?? 1) < 0.2) fuera.push("rubro de margen bajo (tecnología y similares)");
+      if (pres && pres < MIN_PRES) fuera.push("compra chica: el despacho y los costos fijos se comen la utilidad");
+      if (pres > TOPE_CA()) fuera.push("sobre 100 UTM");
+      if (hrs < 6) fuera.push("cierra en menos de 6 h");
+      if (!seg && of != null && of >= 6) fuera.push(`guerra de precios: ya hay ${of} cotizaciones`);
+      const mk = (R.mercado || {})[x.codigo]; let m = null, util = null;
+      if (mk && pres) { const costo = mk.total_neto || (mk.total_con_iva || 0) / 1.19, venta = pres * (1 - (seg ? 0.02 : 0.06)) / 1.19;
+        util = venta - costo - fijosDe(pres); m = venta ? util / venta : null;
+        if (m != null && m < MARGEN_MIN) fuera.push(`no da: con el costo de mercado (${clp(mk.total_con_iva)}) queda ${Math.round(m * 100)}% de margen`); }
+      return { fuera, m, util, mk };
+    };
+    const EV = {}; for (const x of nuevas) EV[x.codigo] = evaluar(x);
+    const EVg = (x) => EV[x.codigo] || evaluar(x);
+    const reales = nuevas.filter((x) => mio(x) && !EV[x.codigo].fuera.length);
+    const descartadas = nuevas.filter((x) => mio(x) && EV[x.codigo].fuera.length);
+    const motivos = {}; for (const x of descartadas) { const k = EV[x.codigo].fuera[0].split(":")[0]; motivos[k] = (motivos[k] || 0) + 1; }
+    const verif = reales.filter((x) => EV[x.codigo].m != null).length;
+    // orden de prioridad (el mismo que usa el PC para verificar costos): 2° llamado, poca competencia, lo que ya vendemos, ganancia
+    const prio = (x) => (esSeg(x) ? 4 : 0) + ((x.ofertas ?? 3) <= 1 ? 2 : (x.ofertas ?? 3) <= 3 ? 1 : 0) + (x.tipo === "exp" ? 2 : x.tipo === "rev" ? 1 : 0) + Math.min(2, (x.ganancia || 0) / 500000);
+    const okV = reales.filter((x) => EV[x.codigo].m != null).sort((a, b) => EV[b.codigo].util - EV[a.codigo].util);
+    const porV = reales.filter((x) => EV[x.codigo].m == null).sort((a, b) => prio(b) - prio(a));
+    const esperan = Math.max(0, porV.length - 8);
+    const verN = filtro === "real" ? [...okV, ...porV.slice(0, 8)]
+      : filtro === "fuera" ? descartadas
+      : nuevas.filter((x) => (filtro === "todas" || mio(x)) && (filtro === "lic" ? lic(x) : !lic(x) && (filtro === "seg" ? esSeg(x) && x.tipo !== "esp"
       : filtro === "exp" ? x.tipo === "exp" : x.tipo !== "esp")))
       .sort((a, b) => { const poca = (x) => esSeg(x) && (x.ofertas ?? 9) <= 2;   // 2° llamado primero; los casi sin competencia, más arriba
         return (poca(b) - poca(a)) || (esSeg(b) - esSeg(a)) || (b.ganancia || 0) - (a.ganancia || 0); });
@@ -1166,6 +1204,8 @@
             <div style="font-size:.78rem"><b>${esc(x.codigo)}</b> · ${lic(x) ? "📑 " : ""}<span style="color:${color[x.tipo] || "#999"}">${esc(x.etiqueta || "")}</span> · ${esc(x.rubro || "")}</div>
             <div class="rb-fnom">${esc(x.nombre)}</div>
             <div class="muted" style="font-size:.75rem">${/^segundo/i.test(x.llamado || "") ? `<b style="color:#ffb347">🔥 2° llamado</b>${(x.ofertas ?? 9) <= 2 ? '<span class="rb-chip">🎯 casi sin competencia</span>' : ""} · ` : ""}${esc(x.organismo)}${x.region ? " · " + esc(x.region.replace(/^Región (de |del |de la )?/i, "")) : ""}${x.ofertas != null && !lic(x) ? ` · ${x.ofertas ? x.ofertas + " cotizaciones" : "sin cotizaciones aún"}` : ""}</div>
+            ${(() => { const e = EVg(x); if (!e || lic(x)) return "";
+              return e.fuera.length ? `<div class="rb-chip-no">🚫 ${esc(e.fuera[0])}</div>` : e.m != null ? `<div class="rb-chip-si">✅ Da: ${Math.round(e.m * 100)}% de margen con costo real (${clp(e.mk.total_con_iva)}) · utilidad ≈ <b>${clp(e.util)}</b></div>` : `<div class="rb-chip-esp">⏳ Pasa el filtro · el PC está verificando el costo real</div>`; })()}
             <div style="font-size:.8rem;margin-top:3px">Gana ≈ <b class="rb-vivo-t" style="font-size:.95rem">${clp(x.ganancia)}</b> · Ppto. ${clp(x.monto)}${x.monto_estimado ? " (estimado)" : ""} · <span style="${h < 12 ? "color:#ff8a80;font-weight:700" : ""}">cierra en ${h} h</span></div>
           </div></div>
         <div class="row" style="margin-top:6px;gap:6px">${modo === "papelera"
@@ -1426,7 +1466,12 @@
         <a class="btn small" href="${portalDe(t.codigo)}" target="_blank" rel="noopener noreferrer">Mercado Público ↗</a></div></div>`;
     };
     let cuerpo;
-    if (tab === "nuevas") cuerpo = `<div class="rb-filtros">
+    if (tab === "nuevas") cuerpo = `<div class="rb-filtro-ganador">
+        <div class="rb-env"><b>🏆 Pre-filtro ganador</b><span>✅ <b>${okV.length}</b> dan · ⏳ ${Math.min(8, porV.length)} verificando</span></div>
+        <div class="muted" style="font-size:.7rem;margin-top:3px">Solo pasan las que se pueden ganar <b>y</b> dejan ≥${Math.round(MARGEN_MIN * 100)}%: sin guerra de precios, monto que soporta el despacho, abastecible y con tiempo. El PC verifica el costo real de las mejores en tiendas${esperan ? ` (${esperan} candidatas más en cola)` : ""}.</div>
+        ${descartadas.length ? `<button class="btn small rb-link" type="button" data-rb="oport-filtro" data-f="${filtro === "fuera" ? "real" : "fuera"}" style="margin-top:4px">${filtro === "fuera" ? "← Volver a las reales" : `🚫 ${descartadas.length} fuera: ${Object.entries(motivos).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${esc(k)} (${v})`).join(" · ")}`}</button>` : ""}</div>
+      <div class="rb-filtros">
+        <button class="btn small ${filtro === "real" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="real">🏆 Reales</button>
         <button class="btn small ${filtro === "mio" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="mio">🎯 Mi rubro</button>
         <button class="btn small ${filtro === "seg" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="seg">🔥 2° llamado</button>
         <button class="btn small ${filtro === "exp" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="exp">★ Lo que ya vendemos</button>
@@ -1436,7 +1481,7 @@
         <button class="btn small" type="button" data-rb="oport-actualizar">↻ Buscar más</button>
         <button class="btn small" type="button" data-rb="oport-tab" data-t="papelera">🗑 ${papelera.length}</button></div>
       <div class="muted" style="font-size:.74rem;margin-bottom:4px;text-align:center">👉 desliza a la derecha = <b>me gusta</b> · 👈 a la izquierda = <b>no</b></div>
-      ${verN.slice(0, n).map((x) => fila(x, "nuevas")).join("") || `<div class="empty">No quedan oportunidades en esta vista. Toca «↻ Buscar más».</div>`}
+      ${verN.slice(0, n).map((x) => fila(x, "nuevas")).join("") || `<div class="empty">${filtro === "real" ? "Ninguna pasa el filtro ganador ahora. Es mejor no jugar que jugar a pérdida: toca «↻ Buscar más», amplía tus rubros o revisa «2° llamado»." : "No quedan oportunidades en esta vista. Toca «↻ Buscar más»."}</div>`}
       ${verN.length > n ? `<button class="btn" style="width:100%;margin-top:8px" type="button" data-rb="oport-mas">Ver más (${verN.length - n} restantes)</button>` : ""}`;
     else if (tab === "firmar") cuerpo = enFirma.length ? (() => {
         // el jugador viene a firmar: primero las listas para firmar (la más nueva arriba); las que se preparan van al final
@@ -2102,7 +2147,7 @@
     if (a === "rubro-ok" || a === "rubro-todo") {
       const todo = a === "rubro-todo";
       guardar({ rubroListo: 1, rubros: todo ? [] : (R.rubrosTmp || leer().rubros || []), palabras: todo ? "" : ($("#rbPalabras")?.value || "").trim() });
-      R.rubroEditar = false; R.rubrosTmp = null; R.palabrasTmp = null; R.oportFiltro = todo ? "todas" : "mio"; R.oportTab = "nuevas"; sheet.scrollTop = 0;
+      R.rubroEditar = false; R.rubrosTmp = null; R.palabrasTmp = null; R.oportFiltro = todo ? "todas" : "real"; R.oportTab = "nuevas"; sheet.scrollTop = 0;
       api("oportunidades-actualizar", { method: "POST", body: "{}" }).catch(() => {});      // el PC baja lo más nuevo del portal
       toast(todo ? "Mostrando todas las oportunidades" : "🔎 Buscando oportunidades de tu rubro…");
       return pintarHoja(true);
