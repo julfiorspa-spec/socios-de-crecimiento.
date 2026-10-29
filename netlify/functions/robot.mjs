@@ -198,7 +198,7 @@ const ORIGENES_MP = new Set([ORIGEN_MP, "https://www.mercadopublico.cl"]);
 async function revisarSeguimiento(store, forzar) {
   const robot = (await store.get("robot/latido", { type: "json" })) || {};
   const miRut = String(robot.rut || process.env.PROVEEDOR_RUT || "").replace(/[.\s]/g, "").toUpperCase();
-  const lista = (await todos(store)).filter((t) => t.estado === "enviada" || t.estado === "confirmada");
+  const lista = (await todos(store)).filter((t) => (t.estado === "enviada" || t.estado === "confirmada") && /COT\d{2}$/.test(t.codigo));
   const cache = (await store.get("seguimiento/cache", { type: "json" })) || {};
   const res = {};
   // de a 4 consultas a la vez: RadarPúblico corta (429) si recibe muchas juntas; lo que no alcance queda para la próxima
@@ -282,6 +282,79 @@ async function transicion(store, t, g) {
     delete t.op; t.previa_fin = { t: ahora(), motivo: g.ganador ? "Seleccionaron a " + g.ganador : g.estado || "ya no vas 1°" };
     await escribir(store, t);
   }
+}
+
+// 📦 TODAS las órdenes de compra que te mandan (Compra Ágil, trato directo, convenio): directo de la API oficial de Mercado Público.
+//    Las que el robot cotizó se marcan «ganada» con su OC; las que cotizaste por fuera entran igual a Negocios con sus ítems.
+const RADAR_OC = "https://radar-publico-blond.vercel.app/mp/servicios/v1/publico/ordenesdecompra.json";
+const PROV_MP = { "78493114-5": "2129328" };                     // RUT → código de proveedor en Mercado Público
+const fechaMP = (d) => { const c = new Date(d.getTime() - 3 * 3600_000); return String(c.getUTCDate()).padStart(2, "0") + String(c.getUTCMonth() + 1).padStart(2, "0") + c.getUTCFullYear(); };
+async function getMP(q, ms) {
+  const r = await fetch(RADAR_OC + q, { headers: { "user-agent": "CotizAgil/1.0", accept: "application/json" }, signal: AbortSignal.timeout(ms || 12000) });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return ((await r.json()) || {}).Listado || [];
+}
+async function revisarOCs(store, forzar) {
+  const robot = (await store.get("robot/latido", { type: "json" })) || {};
+  const rut = String(robot.rut || process.env.PROVEEDOR_RUT || "78493114-5").replace(/[.\s]/g, "").toUpperCase();
+  const prov = process.env.MP_CODIGO_PROVEEDOR || PROV_MP[rut];
+  if (!prov) return { error: "Sin código de proveedor para " + rut };
+  const reg = (await store.get("oc/lista", { type: "json" })) || {};
+  const ini = Date.now();
+  const dias = Array.from({ length: reg._lleno ? 3 : 40 }, (_, i) => fechaMP(new Date(Date.now() - i * 864e5)));
+  const vistos = {}; let k = 0;
+  await Promise.all(Array.from({ length: 4 }, async () => {
+    while (k < dias.length && Date.now() - ini < 15000) {
+      const f = dias[k++];
+      try { for (const x of await getMP("?CodigoProveedor=" + prov + "&fecha=" + f)) vistos[x.Codigo] = x.CodigoEstado; } catch {}
+    }
+  }));
+  if (k >= dias.length) reg._lleno = true;
+  const nuevos = Object.keys(vistos).filter((c) => !reg[c] || reg[c].estado_cod !== vistos[c] || forzar);
+  for (const c of nuevos.slice(0, 12)) {
+    if (Date.now() - ini > 22000) break;
+    try {
+      const d = (await getMP("?codigo=" + encodeURIComponent(c)))[0];
+      if (!d) continue;
+      const cot = ((d.Nombre || "") + " " + (d.Descripcion || "")).match(/\b\d{1,8}-\d{1,8}-COT\d{2}\b/);
+      const C = d.Comprador || {}, F = d.Fechas || {};
+      const o = reg[c] = {
+        codigo: c, cot: cot ? cot[0].toUpperCase() : null, nombre: texto(d.Nombre, 200), estado: texto(d.Estado, 60), estado_cod: d.CodigoEstado,
+        estado_prov: texto(d.EstadoProveedor, 60), tipo: texto(d.Tipo, 10), neto: d.TotalNeto || 0, total: d.Total || 0,
+        organismo: texto(C.NombreOrganismo, 200), unidad: texto(C.NombreUnidad, 200), rut_organismo: texto(C.RutUnidad, 20),
+        direccion: texto([C.DireccionUnidad, C.ComunaUnidad, C.RegionUnidad].filter(Boolean).join(", "), 300),
+        contacto: texto(C.NombreContacto, 120), fono: texto(C.FonoContacto, 40), mail: texto(C.MailContacto, 120),
+        enviada: F.FechaEnvio || F.FechaCreacion || null, aceptada: F.FechaAceptacion || null, descripcion: texto(d.Descripcion, 800),
+        items: ((d.Items || {}).Listado || []).slice(0, 60).map((i) => ({ nombre: texto(i.Producto, 120), especificacion: texto(i.EspecificacionComprador, 500),
+          ofrecido: texto(i.EspecificacionProveedor, 300), cantidad: i.Cantidad, unidad: texto(i.Unidad, 30), precio: i.PrecioNeto, total: i.Total || Math.round((i.PrecioNeto || 0) * (i.Cantidad || 0)) })),
+        visto: ahora(),
+      };
+      await enlazarOC(store, o);
+    } catch {}
+  }
+  await store.setJSON("oc/lista", reg);
+  return { ocs: Object.values(reg).filter((x) => x && x.codigo).sort((a, b) => String(b.enviada).localeCompare(String(a.enviada))) };
+}
+async function enlazarOC(store, o) {
+  const cod = o.cot || o.codigo;
+  const t = (await leer(store, cod)) || null;
+  const nuevo = !t;
+  const x = t || { codigo: cod, accion: "externa", externa: true, creado: ahora(), estado: "confirmada", historial: [],
+    mensaje: "Cotizada fuera de la app · llegó la orden de compra", pdf: false, envios: 1 };
+  if (nuevo || x.externa) {
+    x.nombre = o.nombre; x.organismo = o.organismo; x.total = o.total; x.neto = o.neto; x.monto = o.total;
+    x.items = o.items.map((i) => ({ nombre: i.nombre, descripcion: i.especificacion, cantidad: i.cantidad, precio_unit: i.precio, total: i.total }));
+  }
+  x.oc_compra = o;               // la OC completa: ítems, precios, contacto y dirección
+  const op = x.op && x.op.etapa !== "previa" ? x.op : { ...(x.op || {}), etapa: "ganada", historial: [...((x.op || {}).historial || []), { t: ahora(), etapa: "ganada" }] };
+  const llego = !op.oc_codigo && !(t && t.op && t.op.oc);          // aviso solo si es la primera noticia de esta OC
+  op.oc = op.oc || o.codigo; op.oc_codigo = o.codigo; op.oc_estado = o.estado;
+  if (!op.pedido_informe && !op.informe) op.pedido_informe = { t: ahora() };
+  x.op = op;
+  await escribir(store, x);
+  if (llego) await avisarTexto(store, "📦 ¡Orden de compra! " + o.codigo,
+    `${(o.organismo || "").slice(0, 50)} · $${Math.round(o.total || 0).toLocaleString("es-CL")} · ${(o.nombre || "").slice(0, 60)}. Abre Negocios: el robot ya busca proveedores y calcula la utilidad.`,
+    "oc-" + o.codigo, "/#robot", true).catch(() => {});
 }
 
 export default async (req) => {
@@ -394,6 +467,7 @@ async function atender(req) {
   }
 
   // ---------- 📨 seguimiento en vivo de las enviadas (estado en Mercado Público, ganador y orden de compra) ----------
+  if (ruta === "ocs" && req.method === "GET") return json(await revisarOCs(store, url.searchParams.get("forzar") === "1"));
   if (ruta === "seguimiento" && req.method === "GET") {
     const { res, miRut } = await revisarSeguimiento(store, url.searchParams.get("forzar") === "1");
     return json({ seguimiento: res, rut: miRut || null });
@@ -759,7 +833,7 @@ async function atender(req) {
     const pidio = await store.get("oportunidades/pedido", { type: "json" });   // la app pidió actualizar oportunidades
     if (pidio) await store.delete("oportunidades/pedido");
     const lista = await todos(store);
-    const negocios = lista.filter((t) => t.op?.pedido_informe && mio(t.codigo)).map((t) => ({ codigo: t.codigo, total: t.total, op: t.op })).slice(0, 5);
+    const negocios = lista.filter((t) => t.op?.pedido_informe && mio(t.codigo)).map((t) => ({ codigo: t.codigo, total: t.total, op: t.op, externa: !!t.externa, oc_compra: t.oc_compra || null })).slice(0, 5);
     // preguntas del asistente que esperan al PC (las tomadas hace más de 3 min se reintentan)
     const cola = (await store.get("asistente-cola", { type: "json" })) || [];
     const preguntas = [];
@@ -783,6 +857,12 @@ async function atender(req) {
     if (Date.now() - Date.parse(segAuto.t || 0) > 5 * 60_000) {
       await store.setJSON("seguimiento/auto", { t: ahora() });
       try { await revisarSeguimiento(store, false); } catch {}
+    }
+    // 📦 cada 10 min: las órdenes de compra nuevas (todas, también las cotizadas por fuera)
+    const ocAuto = (await store.get("oc/auto", { type: "json" })) || {};
+    if (Date.now() - Date.parse(ocAuto.t || 0) > 10 * 60_000) {
+      await store.setJSON("oc/auto", { t: ahora() });
+      try { await revisarOCs(store, false); } catch {}
     }
     const empresas = (await store.get("empresas/lista", { type: "json" })) || {};
     const op = { ...(pidio ? { oportunidades: true } : {}), ...(negocios.length ? { negocios } : {}), ...(preguntas.length ? { preguntas } : {}), empresas, equipos: vivos };
