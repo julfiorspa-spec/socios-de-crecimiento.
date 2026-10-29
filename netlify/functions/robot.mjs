@@ -56,10 +56,22 @@ function anotar(t, estado, mensaje) {
   if (estado) t.estado = estado;
   if (mensaje !== undefined) t.mensaje = texto(mensaje, 600);
 }
+// Rapidez: leer cientos de trabajos uno por uno tardaba ~2 s en cada consulta del celular.
+// Ahora se guarda una copia (en memoria y en un blob) y solo se vuelven a leer los que cambiaron (etag distinto).
+const MEMO = { mapa: null };
 async function todos(store) {
   const { blobs } = await store.list({ prefix: "trabajo/" });
-  const lista = (await Promise.all(blobs.map((b) => store.get(b.key, { type: "json" })))).filter(Boolean);
-  return lista.sort((a, b) => (b.actualizado || "").localeCompare(a.actualizado || ""));
+  if (!MEMO.mapa) MEMO.mapa = (await store.get("cache/todos", { type: "json" }).catch(() => null)) || {};
+  const m = MEMO.mapa, vivos = new Set();
+  const cambiados = blobs.filter((b) => { vivos.add(b.key); return !m[b.key] || m[b.key].e !== b.etag; });
+  await Promise.all(cambiados.map(async (b) => {
+    const d = await store.get(b.key, { type: "json" }).catch(() => null);
+    if (d) m[b.key] = { e: b.etag, d }; else delete m[b.key];
+  }));
+  let borrados = 0;
+  for (const k of Object.keys(m)) if (!vivos.has(k)) { delete m[k]; borrados++; }
+  if (cambiados.length || borrados) await store.setJSON("cache/todos", m).catch(() => {});
+  return Object.values(m).map((x) => x.d).sort((a, b) => (b.actualizado || "").localeCompare(a.actualizado || ""));
 }
 async function cuerpo(req) {
   try { return await req.json(); } catch { return {}; }
@@ -182,13 +194,22 @@ async function atender(req) {
     const robot = (await store.get("robot/latido", { type: "json" })) || null;
     const lista = await todos(store);
     const mpl = (await store.get("mp/latido", { type: "json" })) || null;
-    return json({
+    const ligero = url.searchParams.get("ligero") === "1";      // el celular: sin el detalle pesado de las ya enviadas
+    const hecha = (t) => t.estado === "enviada" || t.estado === "confirmada";
+    const cuerpoE = {
       robot: robot && { ...robot, conectado: Date.now() - Date.parse(robot.visto) < ROBOT_INACTIVO_MS },
       mp: mpl && { ...mpl, conectado: !!mpl.logueado && Date.now() - Date.parse(mpl.visto) < MP_INACTIVO_MS },
       // las 60 más recientes + todas las enviadas (para las cajas «Enviadas» y «Ganadas»)
-      trabajos: [...lista.slice(0, 60), ...lista.slice(60).filter((t) => t.estado === "enviada" || t.estado === "confirmada").slice(0, 300)]
-        .map(({ historial, ...t }) => ({ ...t, historial: (historial || []).slice(-6) })),
-    });
+      trabajos: [...lista.slice(0, 60), ...lista.slice(60).filter(hecha).slice(0, 300)]
+        .map(({ historial, ...t }) => ligero && hecha(t)
+          ? (({ items, detalle, firma, envios, ...r }) => ({ ...r, historial: (historial || []).slice(-2) }))(t)
+          : { ...t, historial: (historial || []).slice(-6) }),
+    };
+    // si nada cambió desde la última consulta, responde 304 sin cuerpo (el celular no repinta nada)
+    const firma = createHash("sha1").update(JSON.stringify({ ...cuerpoE, robot: robot && { ...robot, visto: undefined, conectado: cuerpoE.robot.conectado },
+      mp: mpl && { ...mpl, visto: undefined, conectado: cuerpoE.mp.conectado } })).digest("base64url").slice(0, 20);
+    if (ligero && req.headers.get("x-ya-tengo") === firma) return new Response(null, { status: 204, headers: { "x-version": firma, "cache-control": "no-store" } });
+    const r = json(cuerpoE); r.headers.set("x-version", firma); return r;
   }
 
   // ---------- oportunidades (el robot sube el ranking; la app lo muestra) ----------
@@ -294,7 +315,7 @@ async function atender(req) {
     pendientes.sort((a, b) => (cache[a.codigo]?.visto || "").localeCompare(cache[b.codigo]?.visto || ""));   // lo más viejo primero
     let i = 0, limitado = false;
     await Promise.all(Array.from({ length: 4 }, async () => {
-      while (i < pendientes.length && !limitado && Date.now() - inicio < 8000) {
+      while (i < pendientes.length && !limitado && Date.now() - inicio < (forzar ? 8000 : 2500)) {
         const t = pendientes[i++];
         await uno(t);
         if (String(res[t.codigo]?.error || "").includes("429")) limitado = true;
