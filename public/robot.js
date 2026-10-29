@@ -323,6 +323,10 @@
   .rb-prod{padding:8px 10px;margin:6px 0;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);font-size:.8rem}
   .rb-prod .rb-row{font-size:.7rem;color:#a9b8d9}
   .rb-ejrow{margin:10px 0 4px;padding:8px 10px;border-radius:12px;background:rgba(120,180,255,.08);border:1px solid rgba(120,180,255,.25);font-size:.78rem}
+  #rbAtras{position:fixed;left:0;top:50%;z-index:2147483646;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font:700 30px/1 system-ui;color:#1a1300;background:linear-gradient(180deg,#ffe9a8,#f5cf6b);box-shadow:0 6px 22px rgba(0,0,0,.45);opacity:0;pointer-events:none;
+    transform:translate3d(-40px,-50%,0) scale(.7);transition:opacity .15s}
+  #rbAtras.listo{box-shadow:0 0 0 4px rgba(245,207,107,.35),0 6px 22px rgba(0,0,0,.45)}
   #rbSheet .rb-nav{left:10px;right:10px;bottom:calc(8px + env(safe-area-inset-bottom,0px));padding:6px;border-radius:22px;border:1px solid rgba(245,207,107,.28);
     background:linear-gradient(180deg,rgba(14,28,60,.92),rgba(4,12,32,.94));box-shadow:0 10px 30px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08)}
   #rbSheet .rb-nav button.on{background:linear-gradient(180deg,rgba(245,207,107,.22),rgba(245,207,107,.08));box-shadow:inset 0 0 0 1px rgba(245,207,107,.35)}
@@ -1468,6 +1472,7 @@
     if (!el) pintarHoja(true);
   }
   // deslizar con el dedo (como Tinder): → sí, ← no. Sigue al dedo con rAF y acepta un «golpe» rápido.
+  const BORDE = 28;
   (function swipe() {
     let el = null, x0 = 0, y0 = 0, dx = 0, horiz = null, t0 = 0, xs = [], raf = 0;
     const fin = () => { R.arrastrando = false; el = null; horiz = null; xs = []; cancelAnimationFrame(raf); raf = 0; };
@@ -1480,6 +1485,7 @@
     };
     sheet.addEventListener("pointerdown", (ev) => {
       R.toque = Date.now();
+      if (ev.pointerType !== "mouse" && ev.clientX < BORDE) return;          // borde izquierdo = gesto «atrás»
       const c = ev.target.closest?.(".rb-swipe");
       if (!c || ev.target.closest("button,a,input,select,label,details,textarea")) return;
       el = c; x0 = ev.clientX; y0 = ev.clientY; dx = 0; horiz = null; t0 = performance.now(); xs = [[t0, x0]];
@@ -1528,6 +1534,41 @@
     sheet.addEventListener("pointerup", soltar, { passive: true });
     sheet.addEventListener("pointercancel", soltar, { passive: true });
     sheet.addEventListener("scroll", () => { R.toque = Date.now(); }, { passive: true });
+  })();
+  // ⟵ deslizar desde el borde izquierdo = volver (la app del inicio del iPhone no tiene botón atrás)
+  function atras() {
+    if (R.detalle) R.detalle = null;
+    else if (R.conf) R.conf = null;
+    else if (R.pantalla) R.pantalla = null;
+    else if (leer().portal === "ejecuta") guardar({ portal: "juego" });
+    else {
+      const tab = R.oportTab || "nuevas";
+      if (tab === "nuevas") return false;
+      let prev = (R.tabHist || []).pop(); while (prev === tab) prev = (R.tabHist || []).pop();
+      R.oportTab = prev || "nuevas"; guardar({ oportTab: R.oportTab }); R.oportN = 40;
+    }
+    sheet.scrollTop = 0; pintarHoja(true); return true;
+  }
+  (function bordeAtras() {
+    let x0 = null, y0 = 0, dx = 0, ok = null, flecha = null;
+    const pinta = (k) => {
+      if (!flecha) { flecha = document.createElement("div"); flecha.id = "rbAtras"; flecha.textContent = "‹"; document.body.appendChild(flecha); }
+      flecha.style.opacity = Math.min(1, k * 1.4); flecha.style.transform = `translate3d(${Math.min(70, dx * 0.55) - 40}px,-50%,0) scale(${0.7 + Math.min(1, k) * 0.4})`;
+      flecha.classList.toggle("listo", k >= 1);
+    };
+    const quita = () => { if (flecha) { flecha.style.opacity = 0; flecha.style.transform = "translate3d(-40px,-50%,0) scale(.7)"; } x0 = null; ok = null; dx = 0; };
+    sheet.addEventListener("touchstart", (e) => {
+      const t = e.touches[0]; if (e.touches.length !== 1 || t.clientX > BORDE) return quita();
+      x0 = t.clientX; y0 = t.clientY; dx = 0; ok = null;
+    }, { passive: true });
+    sheet.addEventListener("touchmove", (e) => {
+      if (x0 === null) return; const t = e.touches[0]; dx = t.clientX - x0; const dy = t.clientY - y0;
+      if (ok === null && Math.abs(dx) + Math.abs(dy) > 10) ok = dx > Math.abs(dy);
+      if (ok) { R.toque = Date.now(); pinta(dx / 80); } else if (ok === false) quita();
+    }, { passive: true });
+    const fin = () => { const ir = ok && dx > 80; quita(); if (ir && !atras()) toast("Ya estás en el inicio del juego"); };
+    sheet.addEventListener("touchend", fin, { passive: true });
+    sheet.addEventListener("touchcancel", quita, { passive: true });
   })();
   async function cargarOport() {
     if (R._cargandoOport) return; R._cargandoOport = true;
@@ -1941,7 +1982,7 @@
       return pintarHoja(true);
     }
     if (a === "oport-filtro") { R.oportFiltro = b.dataset.f; R.oportN = 40; return pintarHoja(); }
-    if (a === "oport-tab") { R.oportTab = b.dataset.t; guardar({ oportTab: R.oportTab }); R.oportN = 40; sheet.scrollTop = 0; return pintarHoja(true); }
+    if (a === "oport-tab") { if ((R.oportTab || "nuevas") !== b.dataset.t) R.tabHist = [...(R.tabHist || []), R.oportTab || "nuevas"].slice(-12); R.oportTab = b.dataset.t; guardar({ oportTab: R.oportTab }); R.oportN = 40; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "oport-mas") { R.oportN = (R.oportN || 40) + 40; return pintarHoja(); }
     if (a === "oport-sel") { if (esSel(cod)) await quitarSel(cod); else { toast("⭐ A Seleccionadas"); await ponerSel(cod); } return pintarHoja(); }
     if (a === "sel-quitar") { await quitarSel(cod); toast("↩ De vuelta en Por preparar"); return pintarHoja(); }
