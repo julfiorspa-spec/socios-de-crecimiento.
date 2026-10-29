@@ -73,6 +73,14 @@ async function todos(store) {
   if (cambiados.length || borrados) await store.setJSON("cache/todos", m).catch(() => {});
   return Object.values(m).map((x) => x.d).sort((a, b) => (b.actualizado || "").localeCompare(a.actualizado || ""));
 }
+// 🎮 cada celular juega su propio juego: sus seleccionadas y descartes van en su propio cajón
+const jug = (v) => String(v || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
+const cajon = (base, j) => (j ? base + "/j/" + j : base);
+async function leerCajon(store, base, j, legado) {
+  const propio = (await store.get(cajon(base, j), { type: "json" })) || {};
+  if (!j || !legado) return propio;
+  return { ...((await store.get(base, { type: "json" })) || {}), ...propio };
+}
 async function cuerpo(req) {
   try { return await req.json(); } catch { return {}; }
 }
@@ -235,22 +243,27 @@ async function atender(req) {
   }
   if (ruta === "oportunidades" && req.method === "GET") {
     const o = (await store.get("oportunidades/lista", { type: "json" })) || { lista: [] };
-    o.descartes = (await store.get("oportunidades/descartes", { type: "json" })) || {};
+    o.descartes = await leerCajon(store, "oportunidades/descartes", jug(url.searchParams.get("jugador")), url.searchParams.get("legado") === "1");
     return json(o);
   }
   // «No deseadas» (deslizar a la izquierda): se guardan para todos tus dispositivos y el robot no las prepara
   if (ruta === "oport-descartes" && req.method === "GET") {
-    return json({ descartes: (await store.get("oportunidades/descartes", { type: "json" })) || {} });
+    return json({ descartes: await leerCajon(store, "oportunidades/descartes", jug(url.searchParams.get("jugador")), url.searchParams.get("legado") === "1") });
   }
   if (ruta === "oport-descartar" && req.method === "POST") {
     const b = await cuerpo(req);
     const codigo = limpiaCodigo(b.codigo);
     if (!/^\d{1,8}-\d{1,8}-[A-Z0-9]{3,6}$/.test(codigo)) return json({ error: "Código inválido" }, 400);
-    const d = (await store.get("oportunidades/descartes", { type: "json" })) || {};
+    const clave = cajon("oportunidades/descartes", jug(b.jugador));
+    const d = (await store.get(clave, { type: "json" })) || {};
     if (b.descartar === false) delete d[codigo]; else d[codigo] = ahora();
     const claves = Object.keys(d);
     if (claves.length > 3000) for (const k of claves.sort((a, b) => d[a].localeCompare(d[b])).slice(0, claves.length - 3000)) delete d[k];
-    await store.setJSON("oportunidades/descartes", d);
+    await store.setJSON(clave, d);
+    if (b.descartar === false && b.legado && jug(b.jugador)) {
+      const L = (await store.get("oportunidades/descartes", { type: "json" })) || {};
+      if (L[codigo]) { delete L[codigo]; await store.setJSON("oportunidades/descartes", L); }
+    }
     return json({ ok: true, n: Object.keys(d).length });
   }
   if (ruta === "oportunidades-actualizar" && req.method === "POST") {
@@ -260,13 +273,14 @@ async function atender(req) {
 
   // ---------- ⭐ Seleccionadas (compartidas entre tus celulares) ----------
   if (ruta === "seleccionadas" && req.method === "GET") {
-    return json({ sel: (await store.get("oportunidades/seleccionadas", { type: "json" })) || {} });
+    return json({ sel: await leerCajon(store, "oportunidades/seleccionadas", jug(url.searchParams.get("jugador")), url.searchParams.get("legado") === "1") });
   }
   if (ruta === "seleccionar" && req.method === "POST") {
     const b = await cuerpo(req);
     const codigo = limpiaCodigo(b.codigo);
     if (!/^\d{1,8}-\d{1,8}-COT\d{2}$/.test(codigo)) return json({ error: "Código inválido" }, 400);
-    const s = (await store.get("oportunidades/seleccionadas", { type: "json" })) || {};
+    const claveS = cajon("oportunidades/seleccionadas", jug(b.jugador));
+    const s = (await store.get(claveS, { type: "json" })) || {};
     if (b.quitar) delete s[codigo];
     else {
       const prev = s[codigo] || { desde: ahora() };
@@ -275,8 +289,12 @@ async function atender(req) {
         monto: num(b.monto) ?? prev.monto, cierre: texto(b.cierre, 40) ?? prev.cierre, margen: b.margen != null ? Number(b.margen) || 0 : prev.margen,
         precio: num(b.precio) ?? prev.precio, costo: b.costo === null ? undefined : num(b.costo) ?? prev.costo, empresa: texto(b.empresa, 40) ?? prev.empresa, actualizado: ahora() };
     }
-    await store.setJSON("oportunidades/seleccionadas", s);
-    return json({ ok: true, sel: s });
+    await store.setJSON(claveS, s);
+    if (b.quitar && b.legado && jug(b.jugador)) {            // las antiguas (antes de separar los juegos) también se sueltan
+      const L = (await store.get("oportunidades/seleccionadas", { type: "json" })) || {};
+      if (L[codigo]) { delete L[codigo]; await store.setJSON("oportunidades/seleccionadas", L); }
+    }
+    return json({ ok: true, sel: b.legado ? await leerCajon(store, "oportunidades/seleccionadas", jug(b.jugador), true) : s });
   }
 
   // ---------- 📨 seguimiento en vivo de las enviadas (estado en Mercado Público, ganador y orden de compra) ----------
@@ -477,6 +495,7 @@ async function atender(req) {
       total: null, neto: null, plazo: null, detalle: null, items: null, pdf: false,
       envios: previo?.envios || 0, // cuántas veces quedó enviada antes (para editar)
       empresa: texto(b.empresa, 40) || previo?.empresa || null,   // con qué empresa (RUT y datos) se arma la oferta
+      jugador: jug(b.jugador) || previo?.jugador || null,         // qué celular (qué juego) la pidió
       dispositivo: texto(b.dispositivo, 60) || previo?.dispositivo || null,
     };
     if (esLic) t.tipo = "licitacion";
