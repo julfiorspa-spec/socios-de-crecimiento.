@@ -337,6 +337,30 @@
   .rb-prod{padding:8px 10px;margin:6px 0;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);font-size:.8rem}
   .rb-prod .rb-row{font-size:.7rem;color:#a9b8d9}
   .rb-ejrow{margin:10px 0 4px;padding:8px 10px;border-radius:12px;background:rgba(120,180,255,.08);border:1px solid rgba(120,180,255,.25);font-size:.78rem}
+  #rbSheet .rb-portada{position:relative;overflow:hidden;margin:-6px -4px 0;padding:22px 16px 26px;border-radius:24px;min-height:82vh;
+    background:radial-gradient(120% 80% at 80% -10%,rgba(245,207,107,.35),transparent 55%),radial-gradient(90% 60% at -10% 110%,rgba(94,140,255,.25),transparent 60%),linear-gradient(170deg,#0b1430,#05070f 70%)}
+  #rbSheet .rb-p-brillo{position:absolute;right:-60px;top:-60px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,#fff6d6 0,#f5cf6b 35%,transparent 70%);opacity:.55;filter:blur(6px);animation:rbLatido 4s ease-in-out infinite}
+  @keyframes rbLatido{50%{opacity:.8;transform:scale(1.06)}}
+  #rbSheet .rb-p-top{position:relative;display:flex;justify-content:space-between;align-items:center;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:#cbb67a}
+  #rbSheet .rb-p-logo{font-weight:900;color:#ffe9a8;letter-spacing:.12em}
+  #rbSheet .rb-p-h{position:relative;margin:26px 0 10px;font-size:2.05rem;line-height:1.08;font-weight:900;color:#fff}
+  #rbSheet .rb-p-h span{background:linear-gradient(90deg,#ffe9a8,#f5cf6b 45%,#c48f17);-webkit-background-clip:text;background-clip:text;color:transparent}
+  #rbSheet .rb-p-sub{position:relative;color:#c6cde3;font-size:.9rem;line-height:1.45}
+  #rbSheet .rb-p-stats{position:relative;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:18px 0}
+  #rbSheet .rb-p-stats div{padding:10px 6px;border-radius:16px;text-align:center;background:rgba(255,255,255,.06);border:1px solid rgba(245,207,107,.28)}
+  #rbSheet .rb-p-stats b{display:block;font-size:1.2rem;color:#ffe9a8}#rbSheet .rb-p-stats small{font-size:.64rem;color:#aab3cc}
+  #rbSheet .rb-p-rut{position:relative;display:block;font-size:.74rem;color:#cbb67a;letter-spacing:.06em;text-transform:uppercase}
+  #rbSheet .rb-p-rut input{display:block;width:100%;margin-top:6px;padding:16px;border-radius:18px;border:1px solid rgba(245,207,107,.55);background:rgba(0,0,0,.35);color:#fff;font:inherit;font-size:1.3rem;font-weight:800;letter-spacing:.06em;text-align:center}
+  #rbSheet .rb-p-jugar{position:relative;width:100%;margin-top:12px;padding:18px;font-size:1.25rem;font-weight:900;letter-spacing:.14em;border-radius:20px;box-shadow:0 10px 40px rgba(245,207,107,.35)}
+  #rbSheet .rb-p-nota{position:relative;margin-top:8px;font-size:.72rem;color:#9aa3bd;text-align:center}
+  #rbSheet .rb-p-con-t{position:relative;margin:22px 0 8px;font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:#8f9cba}
+  #rbSheet .rb-p-con{position:relative;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  #rbSheet .rb-con{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 4px;border-radius:16px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);color:#e6e9f5;font:inherit;cursor:pointer;text-align:center}
+  #rbSheet .rb-con .i{font-size:1.5rem}#rbSheet .rb-con b{display:block;font-size:.8rem}#rbSheet .rb-con small{display:block;font-size:.6rem;color:#9aa3bd}
+  #rbSheet .rb-con.on{border-color:rgba(94,240,176,.6);background:rgba(94,240,176,.1)}#rbSheet .rb-con.on small{color:#9ff0c9}
+  #rbSheet .rb-p-form{position:relative;display:flex;gap:8px;margin-top:8px}#rbSheet .rb-p-form input{flex:1;padding:12px;border-radius:14px;border:1px solid rgba(255,255,255,.2);background:rgba(0,0,0,.35);color:#fff;font:inherit}
+  #rbSheet .rb-p-desc{margin:6px 0 8px;padding:10px 12px;border-radius:16px;background:rgba(120,180,255,.08);border:1px solid rgba(120,180,255,.3);font-size:.78rem}
+  #rbSheet .rb-p-desc summary{cursor:pointer;list-style:none}
   #rbSheet .rb-libro{margin:10px 0;padding:10px 12px;border-radius:16px;background:linear-gradient(160deg,rgba(245,207,107,.14),rgba(255,255,255,.03));border:1px solid rgba(245,207,107,.38)}
   #rbSheet .rb-libro summary{display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-weight:800;font-size:.86rem;color:#ffe9a8;list-style:none}
   #rbSheet .rb-libro summary b{font-size:.78rem;padding:3px 10px;border-radius:99px;background:rgba(245,207,107,.18);border:1px solid rgba(245,207,107,.45)}
@@ -1473,7 +1497,7 @@
         <a class="btn small" href="${portalDe(t.codigo)}" target="_blank" rel="noopener noreferrer">Mercado Público ↗</a></div></div>`;
     };
     let cuerpo;
-    if (tab === "nuevas") cuerpo = `<div class="rb-filtro-ganador">
+    if (tab === "nuevas") cuerpo = `${bannerEmpresa()}${!persona()?.nombre ? `<div class="rb-p-desc">👤 ¿Quién juega en este celular? <span class="rb-row" style="margin-top:4px"><input id="rbPerNom" class="rb-in" placeholder="Tu nombre" style="flex:1"><button class="btn small rb-oro" type="button" data-rb="persona-guardar">OK</button></span></div>` : ""}<div class="rb-filtro-ganador">
         <div class="rb-env"><b>🏆 Pre-filtro ganador</b><span>✅ <b>${okV.length}</b> dan · ⏳ ${Math.min(8, porV.length)} verificando</span></div>
         <div class="muted" style="font-size:.7rem;margin-top:3px">Solo pasan las que se pueden ganar <b>y</b> dejan ≥${Math.round(MARGEN_MIN * 100)}%: sin guerra de precios, monto que soporta el despacho, abastecible y con tiempo. El PC verifica el costo real de las mejores en tiendas${esperan ? ` (${esperan} candidatas más en cola)` : ""}.</div>
         ${descartadas.length ? `<button class="btn small rb-link" type="button" data-rb="oport-filtro" data-f="${filtro === "fuera" ? "real" : "fuera"}" style="margin-top:4px">${filtro === "fuera" ? "← Volver a las reales" : `🚫 ${descartadas.length} fuera: ${Object.entries(motivos).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${esc(k)} (${v})`).join(" · ")}`}</button>` : ""}</div>
@@ -1761,6 +1785,73 @@
 
   // ---------- 🏢 ¿con qué empresa ofertas? (cada persona, sus datos: RUT, contacto, ficha técnica) ----------
   const corta = (n) => String(n || "").replace(/^(sociedad (de )?(inversiones )?(y gesti[oó]n )?|comercial(izadora)? |empresa )/i, "").replace(/\s+(spa|ltda\.?|s\.a\.|eirl|limitada)\.?$/i, "").slice(0, 26);
+  // ================= 🏆 PORTADA: deseo de jugar · RUT de la empresa · conexiones (Gmail, WhatsApp, Marketplace) =================
+  const PORT = "sdc:portada", CONEX = "sdc:conex";
+  const portadaVista = () => { try { return sessionStorage.getItem(PORT) === "1"; } catch { return true; } };
+  const conex = () => { try { return JSON.parse(localStorage.getItem(CONEX)) || {}; } catch { return {}; } };
+  const rutLimpio = (r) => String(r || "").replace(/[^0-9kK]/g, "").toUpperCase();
+  const rutOk = (r) => { const c = rutLimpio(r); if (c.length < 8) return false; const cuerpo = c.slice(0, -1), dv = c.slice(-1);
+    let s2 = 0, m = 2; for (let i = cuerpo.length - 1; i >= 0; i--) { s2 += +cuerpo[i] * m; m = m === 7 ? 2 : m + 1; }
+    const r2 = 11 - (s2 % 11), esp = r2 === 11 ? "0" : r2 === 10 ? "K" : String(r2); return esp === dv; };
+  const rutFmt = (r) => { const c = rutLimpio(r); if (c.length < 2) return c; return c.slice(0, -1).replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "-" + c.slice(-1); };
+  function pantallaPortada() {
+    const L = (R.oport?.lista || []).filter((x) => x.fuente !== "licitacion" && Date.parse(x.cierre) - Date.now() > 3600000 && !x.ya_ofertada);
+    const total = L.reduce((a, x) => a + (Number(x.monto) || 0), 0), seg = L.filter((x) => /^segundo/i.test(x.llamado || "")).length;
+    const emp = empresaActual(), c = conex(), rut = R.rutTmp ?? (emp?.rut || "");
+    const fmt = (n) => n >= 1e9 ? "$" + (n / 1e9).toFixed(1).replace(".", ",") + " mil M" : n >= 1e6 ? "$" + Math.round(n / 1e6).toLocaleString("es-CL") + "M" : clp(n);
+    const btnC = (k, ico, nom, sub) => `<button type="button" class="rb-con ${c[k] ? "on" : ""}" data-rb="con" data-k="${k}"><span class="i">${ico}</span><span><b>${nom}</b><small>${c[k] ? "✓ " + esc(String(c[k]).slice(0, 28)) : sub}</small></span></button>`;
+    return `<div class="rb-portada">
+      <div class="rb-p-brillo"></div>
+      <div class="rb-p-top"><span class="rb-p-logo">◆ CotizÁgil</span><span class="rb-p-tag">Sala de juego</span></div>
+      <h1 class="rb-p-h">El Estado compra todos los días.<br><span>Juega y gana tu parte.</span></h1>
+      <div class="rb-p-sub">Eliges, apuestas tu precio y el robot arma la oferta, la ficha y el PDF. Tú solo firmas y cobras.</div>
+      <div class="rb-p-stats"><div><b>${L.length || "…"}</b><small>compras abiertas</small></div><div><b>${total ? fmt(total) : "…"}</b><small>en juego hoy</small></div><div><b>${seg || "…"}</b><small>🔥 2° llamado</small></div></div>
+      <label class="rb-p-rut"><span>RUT de tu empresa</span><input id="rbRut" value="${esc(rutFmt(rut))}" placeholder="76.123.456-7" autocomplete="off" autocapitalize="characters" inputmode="text"></label>
+      <button class="btn rb-oro rb-p-jugar" type="button" data-rb="portada-jugar">▶ JUGAR</button>
+      <div class="rb-p-nota">Sin formularios: con tu RUT descubro qué vende tu empresa y te muestro primero lo que puedes ganar.</div>
+      <div class="rb-p-con-t">Conecta tus herramientas</div>
+      <div class="rb-p-con">${btnC("gmail", "✉️", "Gmail", "correos a proveedores")}${btnC("whatsapp", "💬", "WhatsApp", "avisos y clientes")}${btnC("marketplace", "🛒", "Marketplace", "proveedores 2ª opción")}</div>
+      ${R.conForm ? `<div class="rb-p-form"><input id="rbConV" placeholder="${R.conForm === "gmail" ? "tucorreo@gmail.com" : "+56 9 1234 5678"}" inputmode="${R.conForm === "gmail" ? "email" : "tel"}" autocapitalize="off" value="${esc(c[R.conForm] || "")}"><button class="btn small rb-oro" type="button" data-rb="con-ok">Conectar</button></div>` : ""}
+    </div>`;
+  }
+  async function descubrirEmpresa(rut, nombre) {
+    try {
+      const r = await api("preguntar", { method: "POST", body: JSON.stringify({ tipo: "empresa", rut: rutFmt(rut), texto: nombre || "" }) });
+      R.descubre = { id: r.id, desde: Date.now() }; pintarHoja(true);
+      const espera = async () => {
+        if (!R.descubre || R.descubre.id !== r.id) return;
+        if (Date.now() - R.descubre.desde > 240000) { R.descubre = { ...R.descubre, error: "El PC no respondió a tiempo." }; return pintarHoja(true); }
+        try { const q = (await api("respuesta?id=" + r.id)).pregunta;
+          if (q?.estado === "lista" && q.respuesta) return aplicarDescubrimiento(q.respuesta);
+          if (q?.estado === "error") { R.descubre = { ...R.descubre, error: q.error }; return pintarHoja(true); } } catch {}
+        setTimeout(espera, 4000);
+      };
+      setTimeout(espera, 5000);
+    } catch (e) { R.descubre = { error: e.message }; }
+  }
+  async function aplicarDescubrimiento(d) {
+    R.descubre = null;
+    const emp = empresaActual(); if (!emp) return;
+    const nuevo = { id: emp.id, rut: emp.rut, perfil: { rubros: d.rubros, subrubros: d.subrubros, aperturas: d.aperturas, palabras: d.palabras, actividades: d.actividades, confianza: d.confianza },
+      ...(d.giro ? { giro: d.giro } : {}), ...(d.descripcion ? { descripcion: d.descripcion } : {}), ...(d.web ? { web: d.web } : {}), ...(d.region ? { region: d.region } : {}) };
+    if (d.razon_social && /^Empresa \d/.test(emp.razon_social || "")) nuevo.razon_social = d.razon_social;
+    try { const r = await api("empresa", { method: "POST", body: JSON.stringify(nuevo) }); R.empresas = r.empresas; } catch {}
+    if ((d.rubros || []).length) guardar({ rubros: d.rubros, palabras: (d.palabras || []).join(", "), rubroListo: 1 });
+    toast((d.rubros || []).length ? "🔎 Listo: tu empresa juega en " + d.rubros.slice(0, 3).join(", ") : "🔎 No encontré bien el rubro: elígelo tú en ✏️");
+    pintarHoja(true);
+  }
+  function bannerEmpresa() {
+    const emp = empresaActual(), pf = emp?.perfil;
+    if (R.descubre && !R.descubre.error) return `<div class="rb-p-desc"><span class="spinner"></span> 🔎 <b>Descubriendo qué hace tu empresa</b> con su RUT (giros del SII, web, sus ventas)… mientras, juega con las mejores de todos los rubros.</div>`;
+    if (R.descubre?.error) return `<div class="rb-p-desc">⚠ ${esc(R.descubre.error)} <button class="btn small" type="button" data-rb="rubro-editar">Elegir rubros</button></div>`;
+    if (!pf || R.ocultarPerfil) return "";
+    const mios = new Set(leer().rubros || []);
+    return `<details class="rb-p-desc" ${R.perfilAbierto ? "open" : ""}><summary>🏢 <b>${esc(corta(emp.razon_social))}</b> · ${esc((emp.descripcion || emp.giro || "").slice(0, 70))}</summary>
+      <div class="rb-sec" style="margin-top:6px">Tus rubros</div><div class="rb-row">${(pf.rubros || []).map((r) => `<button type="button" class="rb-rchip ${mios.has(r) ? "on" : ""}" data-rb="rubro-t2" data-r="${esc(r)}">${esc(r)}</button>`).join("")}</div>
+      ${(pf.subrubros || []).length ? `<div class="muted" style="font-size:.72rem;margin-top:4px">Vende: ${esc(pf.subrubros.slice(0, 10).join(" · "))}</div>` : ""}
+      ${(pf.aperturas || []).length ? `<div class="rb-sec">🚀 Puedes abrirte a</div><div class="rb-row">${pf.aperturas.map((a) => `<button type="button" class="rb-rchip" data-rb="rubro-t2" data-r="${esc(a.rubro)}" title="${esc(a.por_que || "")}">＋ ${esc(a.rubro)}</button>`).join("")}</div>` : ""}
+      <div class="rb-row" style="margin-top:6px"><button class="btn small" type="button" data-rb="rubro-editar">✏️ Afinar rubros</button><button class="btn small" type="button" data-rb="redescubrir">🔄 Volver a descubrir</button></div></details>`;
+  }
   // 👤 ¿quién usa este celular? (cada persona su nombre: aparece arriba, en «Enviados» del PC, en Ejecuta y en el guion de llamada)
   const PERS = "sdc:persona";
   const persona = () => { try { return JSON.parse(localStorage.getItem(PERS)) || null; } catch { return null; } };
@@ -1984,10 +2075,12 @@
         <button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
         <button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
         <div class="rb-portal"><button type="button" class="${leer().portal !== "ejecuta" ? "on" : ""}" data-rb="portal" data-v="juego">🎮 Juego</button><button type="button" class="${leer().portal === "ejecuta" ? "on" : ""}" data-rb="portal" data-v="ejecuta">🛠 Ejecuta</button></div>`;
+      // 🏆 portada: cada vez que abres la app (y siempre que no haya empresa). Sin formularios: RUT → jugar.
+      if (!miEmp() || !portadaVista()) { if (!R.oport) cargarOport(); return pantallaPortada(); }
       let cuerpo;
-      if (!persona()?.nombre || R.personaEditar) cuerpo = pantallaPersona();
-      else if (!miEmp() || R.empresaEditar) cuerpo = pantallaEmpresa();
-      else if (!leer().rubroListo || R.rubroEditar) { if (!R.oport) cargarOport(); cuerpo = `<div class="rb-paso-n" style="text-align:center;margin-top:10px">Paso 3 de 3</div>` + pantallaRubro(R.oport?.lista || []); }
+      if (R.personaEditar) cuerpo = pantallaPersona();
+      else if (R.empresaEditar) cuerpo = pantallaEmpresa();
+      else if (R.rubroEditar) { if (!R.oport) cargarOport(); cuerpo = `<div class="rb-paso-n" style="text-align:center;margin-top:10px">Paso 3 de 3</div>` + pantallaRubro(R.oport?.lista || []); }
       else if (R.pantalla === "llamada") cuerpo = pantallaLlamada();
       else cuerpo = (leer().portal === "ejecuta" ? portalEjecuta() : vistaOport());
       const mas = `<details class="rb-ajustes rb-mas"><summary>⚙ Más opciones</summary>
@@ -2004,7 +2097,7 @@
         <div class="rb-row" style="margin-top:8px"><button class="btn small" type="button" data-rb="copiar-marcador">Copiar marcador «Rellenar» (sin extensión)</button>
           ${R.push ? `<button class="btn small" type="button" data-rb="push-probar">Probar aviso</button>` : ""}<button class="btn small" type="button" data-rb="desenlazar">Desenlazar</button></div>
       </details>`;
-      return cab + cuerpo + (R.pantalla === "llamada" || !miEmp() || R.empresaEditar || !leer().rubroListo || R.rubroEditar ? "" : mas);
+      return cab + cuerpo + (R.pantalla === "llamada" || R.empresaEditar || R.rubroEditar || R.personaEditar ? "" : mas);
     }
     return `
       <div class="rb-sheet-head"><h2 style="margin:0">Robot de ofertas</h2><button class="rb-x" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
@@ -2254,11 +2347,42 @@
       const qs = `bcc=${encodeURIComponent(b.dataset.bcc || "")}&subject=${encodeURIComponent(q.asunto)}&body=${encodeURIComponent(q.cuerpo)}`;
       if (a === "llam-mail") { location.href = "mailto:?" + qs; return; }
       if (esIOS) { location.href = "googlegmail://co?" + qs; setTimeout(() => { if (!document.hidden) toast("¿No se abrió? Instala Gmail o usa «Otro correo»"); }, 1800); }
-      else window.open("https://mail.google.com/mail/?view=cm&fs=1&" + qs.replace("subject=", "su="), "_blank");
+      else window.open("https://mail.google.com/mail/?view=cm&fs=1&" + (conex().gmail ? "authuser=" + encodeURIComponent(conex().gmail) + "&" : "") + qs.replace("subject=", "su="), "_blank");
       return;
     }
     if (a === "llamada-ver") { const h = leerHist().find((x) => x.id === b.dataset.id); if (h) { R.llamada = { id: h.id, texto: h.texto, t: h.t, confirmado: h.codigo || null }; if (h.codigo) cargarDocs(h.codigo); esperarRespuesta(h.id); } return pintarHoja(true); }
     if (a === "recordar") return recordar(b.dataset.t, b.dataset.min, b.dataset.c);
+    if (a === "portada-jugar") {
+      const v = $("#rbRut")?.value || ""; R.rutTmp = v;
+      if (!rutOk(v)) { toast("Revisa el RUT (ej. 76.123.456-7)"); $("#rbRut")?.focus(); return; }
+      const limpio = rutLimpio(v); b.disabled = true; b.textContent = "⏳ Entrando…";
+      if (!R.empresas) await cargarEmpresas();
+      let e = Object.values(R.empresas || {}).find((x) => rutLimpio(x.rut) === limpio);
+      try {
+        if (!e) { const r = await api("empresa", { method: "POST", body: JSON.stringify({ rut: rutFmt(v), razon_social: "Empresa " + rutFmt(v) }) }); R.empresas = r.empresas; e = r.empresa; }
+        guardar({ empresa: e.id, rubroListo: 1, ...(e.perfil?.rubros?.length && !(leer().rubros || []).length ? { rubros: e.perfil.rubros } : {}) });
+        try { sessionStorage.setItem(PORT, "1"); } catch {}
+        R.oportTab = "nuevas"; R.oportFiltro = "real"; R.ver = null; R.data = null; sheet.scrollTop = 0;
+        if (!e.perfil || Date.now() - Date.parse(e.perfil.t || 0) > 30 * 86400000) descubrirEmpresa(v, /^Empresa \d/.test(e.razon_social) ? "" : e.razon_social);
+        navigator.vibrate?.(20); refrescar();
+      } catch (er) { toast(er.message); b.disabled = false; b.textContent = "▶ JUGAR"; }
+      return pintarHoja(true);
+    }
+    if (a === "con") {
+      const k = b.dataset.k;
+      if (k === "marketplace") { const c = conex(); c.marketplace = "abierto"; try { localStorage.setItem(CONEX, JSON.stringify(c)); } catch {}
+        window.open("https://www.facebook.com/marketplace/", "_blank", "noopener"); return pintarHoja(true); }
+      R.rutTmp = $("#rbRut")?.value ?? R.rutTmp; R.conForm = R.conForm === k ? null : k; pintarHoja(true); setTimeout(() => $("#rbConV")?.focus(), 50); return;
+    }
+    if (a === "con-ok") {
+      const v = ($("#rbConV")?.value || "").trim(), k = R.conForm; if (!v) return;
+      if (k === "gmail" && !/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(v)) { toast("Escribe un correo válido"); return; }
+      const c = conex(); c[k] = v; try { localStorage.setItem(CONEX, JSON.stringify(c)); } catch {}
+      if (k === "whatsapp") { const p0 = persona() || {}; try { localStorage.setItem(PERS, JSON.stringify({ ...p0, telefono: v })); } catch {} }
+      R.rutTmp = $("#rbRut")?.value ?? R.rutTmp; R.conForm = null; toast(k === "gmail" ? "✉️ Gmail vinculado: los correos a proveedores salen desde ahí" : "💬 WhatsApp vinculado"); return pintarHoja(true);
+    }
+    if (a === "rubro-t2") { const set = new Set(leer().rubros || []); const r = b.dataset.r; set.has(r) ? set.delete(r) : set.add(r); guardar({ rubros: [...set], rubroListo: 1 }); R.perfilAbierto = true; navigator.vibrate?.(8); return pintarHoja(true); }
+    if (a === "redescubrir") { const e = empresaActual(); if (e) descubrirEmpresa(e.rut, /^Empresa \d/.test(e.razon_social) ? "" : e.razon_social); return; }
     if (a === "persona-editar") { R.personaEditar = true; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "persona-cancelar") { R.personaEditar = false; return pintarHoja(true); }
     if (a === "persona-guardar") {
@@ -2471,7 +2595,8 @@
     const q = R.llamada; q.provSel = { ...(q.provSel || Object.fromEntries($$("[data-prov]", sheet).map((x) => [x.dataset.prov, x.checked]))), [ev.target.dataset.prov]: ev.target.checked };
     q.asunto = $("#rbAsunto")?.value; q.cuerpo = $("#rbCuerpo")?.value; pintarHoja(true);
   });
-  sheet.addEventListener("toggle", (ev) => { if (ev.target?.dataset && "libro" in ev.target.dataset) R.libroAbierto = ev.target.open; }, true);
+  sheet.addEventListener("toggle", (ev) => { if (ev.target?.dataset && "libro" in ev.target.dataset) R.libroAbierto = ev.target.open;
+    if (ev.target?.classList?.contains("rb-p-desc")) R.perfilAbierto = ev.target.open; }, true);
   sheet.addEventListener("focusin", (ev) => { if (ev.target.classList?.contains("rb-costo") || ev.target.classList?.contains("rb-neg-in")) R.barra = true; });
   sheet.addEventListener("focusout", (ev) => { if (ev.target.classList?.contains("rb-costo") || ev.target.classList?.contains("rb-neg-in")) setTimeout(() => { R.barra = false; }, 300); });
   // fotos grandes se achican antes de subir (máx. ~1600 px, JPEG), los PDF van tal cual
