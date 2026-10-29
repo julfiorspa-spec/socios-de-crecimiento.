@@ -115,6 +115,25 @@
   .rb-mini{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}.rb-mini div{background:rgba(255,255,255,.04);border:1px solid var(--line-soft);border-radius:10px;padding:7px 9px}
   .rb-mini small{display:block;opacity:.7;font-size:.7rem}.rb-mini b{font-size:.95rem}
   .rb-env{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+  .rb-marcador{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 10px}
+  .rb-m{border-radius:14px;padding:10px 12px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.08)}
+  .rb-m b{display:block;font-size:1.32rem;letter-spacing:-.01em;line-height:1.15}.rb-m span{font-size:.7rem;opacity:.85;text-transform:uppercase;letter-spacing:.04em}
+  .rb-m small{display:block;font-size:.68rem;opacity:.8;margin-top:2px}
+  .rb-m.oro{background:linear-gradient(135deg,#f8d56b,#c8900f);color:#2b1d00}.rb-m.verde{background:linear-gradient(135deg,#22c55e,#0f7a3a);color:#fff}
+  .rb-m.azul{background:linear-gradient(135deg,#3b82f6,#1e3a8a);color:#fff}.rb-m.violeta{background:linear-gradient(135deg,#8b5cf6,#5b21b6);color:#fff}
+  .rb-sug{background:rgba(255,201,60,.12);border:1px dashed rgba(255,201,60,.6);border-radius:10px;padding:8px 10px;margin:8px 0;font-size:.78rem}
+  .rb-sug b{color:#ffd88a}
+  .rb-etapas{display:flex;gap:4px;overflow-x:auto;margin:6px 0 8px}.rb-etapas button{flex:0 0 auto;border:1px solid var(--line-soft);background:transparent;color:inherit;border-radius:999px;padding:5px 10px;font:inherit;font-size:.74rem;cursor:pointer}
+  .rb-etapas button.on{background:linear-gradient(100deg,#f8d56b,#c8900f);color:#2b1d00;border-color:transparent;font-weight:800}
+  .rb-neg{border:1px solid #c8900f;border-radius:16px;padding:12px;margin:8px 0;background:linear-gradient(180deg,rgba(248,213,107,.10),rgba(255,255,255,.02))}
+  .rb-neg.cerrado{background:linear-gradient(160deg,#f8d56b,#b8860b);color:#2b1d00;border-color:#f8d56b}
+  .rb-neg .rb-big{font-size:1.6rem;font-weight:900;color:#7ee2a0;letter-spacing:-.02em}.rb-neg.cerrado .rb-big{color:#1a3d12}
+  .rb-neg.cerrado .rb-sug{background:rgba(0,0,0,.10);border-color:rgba(60,40,0,.35);color:#2b1d00}.rb-neg.cerrado .rb-sug b{color:#3d2a00}
+  .rb-neg.cerrado .muted{color:#4a3a10}.rb-neg.cerrado .btn{background:rgba(255,255,255,.55);color:#2b1d00;border-color:rgba(60,40,0,.25)}
+  .rb-prog{display:flex;gap:3px;margin:8px 0}.rb-prog i{flex:1;height:5px;border-radius:9px;background:rgba(255,255,255,.12)}.rb-prog i.ok{background:linear-gradient(90deg,#f8d56b,#c8900f)}
+  .rb-op{border:1px solid var(--line-soft);border-radius:12px;padding:9px 10px;margin:6px 0}.rb-op.on{border-color:#f8d56b;background:rgba(248,213,107,.08)}
+  .rb-acc{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.rb-acc .btn{flex:1 0 auto}
+  .rb-chip{display:inline-block;font-size:.7rem;font-weight:800;padding:2px 8px;border-radius:999px;background:rgba(255,179,71,.18);color:#ffb347;margin-left:4px}
   .rb-card{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--radius);padding:14px;margin-top:10px}
   .rb-card.ambar{border-color:rgba(240,180,60,.6)}
   .rb-card.oro{border-color:#c8900f}
@@ -669,8 +688,11 @@
     const hechas = [...trabajos.filter((t) => HECHA.includes(t.estado)),
       ...lista.filter((x) => (x.ya_ofertada || x.trabajada) && !trabajo(x.codigo)).map((x) => ({ ...x, _oport: true }))];
     const papelera = lista.filter((x) => descartada(x.codigo));
-    const verN = nuevas.filter((x) => filtro === "lic" ? lic(x) : !lic(x) && (filtro === "seg" ? /^segundo/i.test(x.llamado || "") && x.tipo !== "esp"
-      : filtro === "exp" ? x.tipo === "exp" : x.tipo !== "esp"));
+    const esSeg = (x) => /^segundo/i.test(x.llamado || "");
+    const verN = nuevas.filter((x) => filtro === "lic" ? lic(x) : !lic(x) && (filtro === "seg" ? esSeg(x) && x.tipo !== "esp"
+      : filtro === "exp" ? x.tipo === "exp" : x.tipo !== "esp"))
+      .sort((a, b) => { const poca = (x) => esSeg(x) && (x.ofertas ?? 9) <= 2;   // 2° llamado primero; los casi sin competencia, más arriba
+        return (poca(b) - poca(a)) || (esSeg(b) - esSeg(a)) || (b.ganancia || 0) - (a.ganancia || 0); });
     const n = R.oportN || 40;
     const color = { exp: "#ffd88a", rev: "#9cc3ff", srv: "#d9c9ff", esp: "#999" };
     const fila = (x, modo) => {
@@ -683,7 +705,7 @@
           <div style="flex:1;min-width:0">
             <div style="font-size:.78rem"><b>${esc(x.codigo)}</b> · ${lic(x) ? "📑 " : ""}<span style="color:${color[x.tipo] || "#999"}">${esc(x.etiqueta || "")}</span> · ${esc(x.rubro || "")}</div>
             <div style="margin:2px 0">${esc(x.nombre)}</div>
-            <div class="muted" style="font-size:.75rem">${/^segundo/i.test(x.llamado || "") ? '<b style="color:#ffb347">🔥 2° llamado</b> · ' : ""}${esc(x.organismo)}${x.region ? " · " + esc(x.region.replace(/^Región (de |del |de la )?/i, "")) : ""}${x.ofertas != null && !lic(x) ? ` · ${x.ofertas ? x.ofertas + " cotizaciones" : "sin cotizaciones aún"}` : ""}</div>
+            <div class="muted" style="font-size:.75rem">${/^segundo/i.test(x.llamado || "") ? `<b style="color:#ffb347">🔥 2° llamado</b>${(x.ofertas ?? 9) <= 2 ? '<span class="rb-chip">🎯 casi sin competencia</span>' : ""} · ` : ""}${esc(x.organismo)}${x.region ? " · " + esc(x.region.replace(/^Región (de |del |de la )?/i, "")) : ""}${x.ofertas != null && !lic(x) ? ` · ${x.ofertas ? x.ofertas + " cotizaciones" : "sin cotizaciones aún"}` : ""}</div>
             <div style="font-size:.8rem;margin-top:3px">Gana ≈ <b>${clp(x.ganancia)}</b> · Ppto. ${clp(x.monto)}${x.monto_estimado ? " (estimado)" : ""} · <span style="${h < 12 ? "color:#ff8a80;font-weight:700" : ""}">cierra en ${h} h</span></div>
           </div></div>
         <div class="row" style="margin-top:6px;gap:6px">${modo === "papelera"
@@ -723,6 +745,8 @@
         ${pres ? `<div style="margin-top:10px"><span class="muted" style="font-size:.74rem">Tu precio con IVA</span><br><span class="rb-precio">${clp(precio0)}</span><span class="rb-pct"></span></div>
         <input type="range" class="rb-range" min="${Math.round(pres * 0.5)}" max="${Math.round(pres * 1.5)}" step="${Math.max(10, Math.round(pres / 2000 / 10) * 10)}" value="${precio0}">
         <div class="rb-escala"><span>−50%</span><span>Presupuesto ${clp(pres)}</span><span>+50%</span></div>
+        ${(() => { const sg = sugerido(x); const v = Math.round(pres * (1 - sg.d)); return `<div class="rb-sug">💡 <b>Sugerido ${clp(v)}</b> (${sg.d ? "−" + Math.round(sg.d * 100) + "%" : "presupuesto completo"}) · ${esc(sg.por)}
+          <button class="btn small" type="button" data-fijo="${v}" style="margin-left:6px">Usar</button></div>`; })()}
         <div class="rb-pasos2"><button class="btn small" type="button" data-paso="-10">−10%</button><button class="btn small" type="button" data-paso="-5">−5%</button><button class="btn small" type="button" data-paso="-1">−1%</button>
           <button class="btn small" type="button" data-paso="1">+1%</button><button class="btn small" type="button" data-paso="5">+5%</button><button class="btn small" type="button" data-paso="10">+10%</button></div>
         <div class="rb-mini"><div><small>Ganancia</small><b class="rb-gan">—</b></div><div><small>Margen</small><b class="rb-mar">—</b></div>
@@ -734,6 +758,93 @@
         <div class="muted" style="font-size:.7rem;margin-top:4px;text-align:center">el robot arma cotización y PDF y la deja en ✍ Por firmar</div>`
         : `<div class="muted" style="margin-top:8px">Sin presupuesto conocido: abre la compra para ver el monto.</div>`}
       </div>`;
+    };
+    // ---- 🎯 precio sugerido según el llamado y la competencia (lección: en 2° llamado casi nadie compite)
+    const sugerido = (x) => {
+      const seg = esSeg(x), of = x.ofertas ?? null;
+      const d = seg ? (of === 0 ? 0 : of === 1 ? 0.02 : of != null && of <= 3 ? 0.04 : 0.07) : (of != null && of <= 1 ? 0.04 : of != null && of <= 3 ? 0.06 : 0.09);
+      const por = seg ? (of === 0 ? "2° llamado y nadie ha cotizado: oferta el presupuesto completo"
+        : of != null && of <= 3 ? `2° llamado con solo ${of} cotización${of === 1 ? "" : "es"}: pocos compiten, no regales margen`
+        : "2° llamado: menos competencia que en el primero") : (of != null && of <= 3 ? `Primer llamado con ${of} cotizaciones` : "Primer llamado: más competencia, baja un poco más");
+      return { d, por };
+    };
+    // ---- marcador: lo que motiva (ganado, utilidad, tasa de éxito, en juego)
+    const decididas = enviadosAll.filter((t) => { const g = segDe(t.codigo); return g && (g.ganada || g.estado === "proveedor_seleccionado"); });
+    const ganadoMonto = ganadasT.reduce((s, t) => s + (Number(t.total) || 0), 0);
+    const utilidadG = ganadasT.reduce((s, t) => s + (Number(t.op?.informe?.final) || Math.round((Number(t.total) || 0) * 0.13)), 0);
+    const enJuego = enviadosAll.filter((t) => ["publicada", "cerrada"].includes(segDe(t.codigo)?.estado)).reduce((s, t) => s + (Number(t.total) || 0), 0);
+    const tasa = decididas.length ? Math.round(ganadasT.length / decididas.length * 100) : null;
+    const corto = (n) => n >= 1e6 ? "$" + (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace(".", ",") + "M" : clp(n);
+    const marcador = `<div class="rb-marcador">
+      <div class="rb-m oro"><span>🏆 Ganado</span><b>${corto(ganadoMonto)}</b><small>${ganadasT.length} adjudicada${ganadasT.length === 1 ? "" : "s"}</small></div>
+      <div class="rb-m verde"><span>💰 Utilidad</span><b>${corto(utilidadG)}</b><small>${ganadasT.some((t) => t.op?.informe?.final != null) ? "según informes" : "estimada"}</small></div>
+      <div class="rb-m azul"><span>🎯 Tasa de éxito</span><b>${tasa == null ? "—" : tasa + "%"}</b><small>${ganadasT.length} de ${decididas.length} resueltas</small></div>
+      <div class="rb-m violeta"><span>⏳ En juego</span><b>${corto(enJuego)}</b><small>${enviadosAll.length - decididas.length} esperando resultado</small></div></div>`;
+    // ---- 🏆 negocios ganados por etapa
+    const ETAPAS = [["ganada", "🏆 Nuevas"], ["inversionista", "💼 Inversionista"], ["operacion", "🛠 Operación"], ["despacho", "🚚 Despacho"], ["entrega", "📸 Entrega"], ["cerrado", "🥇 Cerrados"]];
+    const etapaDe = (t) => t.op?.etapa || "ganada";
+    const netapa = R.netapa || "ganada";
+    const tel = (n) => String(n || "").replace(/[^\d+]/g, "");
+    const wa = (n) => { let d = String(n || "").replace(/\D/g, ""); if (d.length === 9 && d[0] === "9") d = "56" + d; if (d.length === 8) d = "569" + d; return d.length >= 10 ? d : ""; };
+    const correo = (t, o) => {
+      const inf = t.op?.informe || {};
+      const lineas = (inf.productos || []).map((x) => `- ${x.cantidad} x ${x.nombre}${x.descripcion ? " (" + x.descripcion.slice(0, 90) + ")" : ""}`).join("\n");
+      const cuerpo = `Hola${o.contacto ? " " + o.contacto : ""},\n\nNecesito cotización con factura de:\n${lineas}\n\nEntrega en: ${inf.direccion || ""} en ${inf.plazo_dias || "pocos"} días.\n` +
+        `¿Me puedes indicar precio unitario, descuento por volumen o pago contado, plazo y costo de despacho?\n\nGracias,\n${R.data?.robot?.empresa || ""}`;
+      return `mailto:${encodeURIComponent(o.email || "")}?subject=${encodeURIComponent("Cotización " + (t.nombre || t.codigo))}&body=${encodeURIComponent(cuerpo)}`;
+    };
+    const negocioCard = (t) => {
+      const g = segDe(t.codigo) || {}, op = t.op || {}, inf = op.informe || {}, et = etapaDe(t);
+      const idx = ETAPAS.findIndex(([k]) => k === et);
+      const docs = (op.docs || []).map((d) => `<button class="btn small" type="button" data-rb="neg-doc" data-c="${esc(t.codigo)}" data-id="${esc(d.id)}">${d.tipo === "foto" ? "📸" : d.tipo === "guia" ? "🚚" : d.tipo === "factura" ? "🧾" : "📎"} ${esc(d.nombre).slice(0, 22)}</button>`).join("");
+      const dejado = g.dejado ?? inf.dejado;
+      const num = (v) => v == null ? "—" : clp(v);
+      let cuerpoE = "";
+      const btnInf = op.pedido_informe ? `<span class="muted" style="font-size:.74rem">⟳ el PC está armando el informe (proveedores y utilidad)…</span>`
+        : `<button class="btn small" type="button" data-rb="neg-informe" data-c="${esc(t.codigo)}">${inf.final != null ? "↻ Recalcular" : "🧮 Armar informe"}</button>`;
+      const archivos = inf.final != null ? `<button class="btn small rb-firmar" type="button" data-rb="neg-archivo" data-t="informe" data-c="${esc(t.codigo)}">📄 Informe PDF</button>
+        <button class="btn small" type="button" data-rb="neg-archivo" data-t="excel" data-c="${esc(t.codigo)}">📊 Excel utilidad</button>` : "";
+      if (et === "ganada") cuerpoE = `<div class="rb-acc">${archivos}${btnInf}</div>
+        <button class="btn rb-firmar" type="button" style="width:100%;margin-top:8px" data-rb="neg-etapa" data-e="inversionista" data-c="${esc(t.codigo)}">💼 Pasar a Inversionista</button>`;
+      else if (et === "inversionista") cuerpoE = `<div class="rb-mini"><div><small>Capital a invertir (90%)</small><b>${num(inf.anticipo)}</b></div><div><small>Gana inversionista (15,6%)</small><b style="color:#7ee2a0">${num(inf.inversionista)}</b></div>
+          <div><small>JULFIOR (84,4%)</small><b>${num(inf.julfior)}</b></div><div><small>Rentabilidad</small><b>${inf.rentabilidad != null ? (inf.rentabilidad * 100).toFixed(1).replace(".", ",") + "%" : "—"}</b></div></div>
+        <label class="muted" style="font-size:.74rem;display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" data-rb-com="aplica" data-c="${esc(t.codigo)}" ${op.aplica_comision !== false ? "checked" : ""}> Comisión del ingresador
+          <select data-rb-com="pct" data-c="${esc(t.codigo)}" style="margin-left:auto;background:transparent;color:inherit;border:1px solid var(--line-soft);border-radius:8px;padding:3px">${[1,2,3,4,5,6,7,8,9,10].map((v) => `<option value="${v / 100}" ${Math.round((op.comision ?? 0.04) * 100) === v ? "selected" : ""}>${v}%</option>`).join("")}</select></label>
+        <div class="rb-acc">${archivos}${btnInf}</div>
+        <button class="btn rb-firmar" type="button" style="width:100%;margin-top:8px" data-rb="neg-etapa" data-e="operacion" data-c="${esc(t.codigo)}">✅ Inversión aprobada → Operación</button>`;
+      else if (et === "operacion") cuerpoE = `${(inf.opciones || []).map((o, k) => `<div class="rb-op ${(op.opcion ?? inf.elegida ?? 0) === k ? "on" : ""}">
+          <div class="rb-env"><b>Opción ${"AB"[k]} · ${esc(o.proveedor || "")}</b><b>${num(o.total_con_iva)}</b></div>
+          <div class="muted" style="font-size:.72rem">${esc(o.cubre || "")}${o.despacho ? " · despacho " + esc(o.despacho) : ""}${o.plazo ? " · " + esc(o.plazo) : ""}</div>
+          <div class="rb-acc">${tel(o.telefono) ? `<a class="btn small" href="tel:${esc(tel(o.telefono))}">📞 Llamar</a>` : ""}${wa(o.telefono) ? `<a class="btn small" href="https://wa.me/${wa(o.telefono)}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ""}
+            <a class="btn small" href="${correo(t, o)}">✉ Pedir precio y descuento</a>${o.web ? `<a class="btn small" href="${esc(o.web)}" target="_blank" rel="noopener">🌐 Web</a>` : ""}
+            ${(op.opcion ?? inf.elegida ?? 0) === k ? "" : `<button class="btn small" type="button" data-rb="neg-opcion" data-k="${k}" data-c="${esc(t.codigo)}">Elegir esta</button>`}</div></div>`).join("") || `<div class="muted" style="font-size:.78rem">Sin proveedores aún: toca «Armar informe».</div>`}
+        ${inf.comprador?.email || inf.comprador?.telefono ? `<div class="muted" style="font-size:.74rem;margin-top:6px">Contacto del comprador: <b>${esc(inf.comprador.nombre || "")}</b> ${inf.comprador.telefono ? `· <a href="tel:${esc(tel(inf.comprador.telefono))}">${esc(inf.comprador.telefono)}</a>` : ""} ${inf.comprador.email ? `· <a href="mailto:${esc(inf.comprador.email)}">${esc(inf.comprador.email)}</a>` : ""}</div>` : ""}
+        <label class="muted" style="font-size:.74rem;display:block;margin-top:8px">Precio final acordado con el proveedor (con IVA)
+          <input class="rb-neg-in" data-campo="precio_acordado" data-c="${esc(t.codigo)}" inputmode="numeric" value="${op.precio_acordado ? Number(op.precio_acordado).toLocaleString("es-CL") : ""}" placeholder="${inf.compras ? Number(inf.compras).toLocaleString("es-CL") : ""}" style="width:100%;margin-top:3px;padding:8px;border-radius:10px;border:1px solid var(--line-soft);background:rgba(255,255,255,.05);color:inherit;font:inherit"></label>
+        <div class="rb-acc">${archivos}${btnInf}</div>
+        <button class="btn rb-firmar" type="button" style="width:100%;margin-top:8px" data-rb="neg-etapa" data-e="despacho" data-c="${esc(t.codigo)}">✅ Compra hecha → Despacho</button>`;
+      else if (et === "despacho") cuerpoE = `<label class="muted" style="font-size:.74rem;display:block">Transporte (empresa / chofer)
+          <input class="rb-neg-in" data-campo="transporte" data-c="${esc(t.codigo)}" value="${esc(op.transporte || "")}" placeholder="ej. Starken, camión propio" style="width:100%;margin-top:3px;padding:8px;border-radius:10px;border:1px solid var(--line-soft);background:rgba(255,255,255,.05);color:inherit;font:inherit"></label>
+        <label class="muted" style="font-size:.74rem;display:block;margin-top:6px">Costo del transporte
+          <input class="rb-neg-in" data-campo="costo_transporte" data-c="${esc(t.codigo)}" inputmode="numeric" value="${op.costo_transporte ? Number(op.costo_transporte).toLocaleString("es-CL") : ""}" style="width:100%;margin-top:3px;padding:8px;border-radius:10px;border:1px solid var(--line-soft);background:rgba(255,255,255,.05);color:inherit;font:inherit"></label>
+        <div class="rb-acc"><button class="btn small" type="button" data-rb="neg-subir" data-tipo="guia" data-c="${esc(t.codigo)}">🚚 Subir guía de despacho</button><button class="btn small" type="button" data-rb="neg-subir" data-tipo="factura" data-c="${esc(t.codigo)}">🧾 Subir factura</button></div>
+        <label class="muted" style="font-size:.76rem;display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" data-rb-chk="guia_firmada" data-c="${esc(t.codigo)}" ${op.guia_firmada ? "checked" : ""}> Guía de despacho firmada por el cliente</label>
+        <label class="muted" style="font-size:.76rem;display:flex;gap:6px;align-items:center"><input type="checkbox" data-rb-chk="factura_firmada" data-c="${esc(t.codigo)}" ${op.factura_firmada ? "checked" : ""}> Factura recibida conforme</label>
+        <button class="btn rb-firmar" type="button" style="width:100%;margin-top:8px" data-rb="neg-etapa" data-e="entrega" data-c="${esc(t.codigo)}">🚚 Despachado → Entrega</button>`;
+      else if (et === "entrega") cuerpoE = `<div class="muted" style="font-size:.78rem">Cuando el cliente reciba, sube la foto de la entrega (con la guía firmada si puedes): el negocio queda <b>cerrado en oro</b>.</div>
+        <button class="btn rb-firmar" type="button" style="width:100%;margin-top:8px;font-size:1rem" data-rb="neg-subir" data-tipo="foto" data-cerrar="1" data-c="${esc(t.codigo)}">📸 Subir foto de la entrega y cerrar</button>`;
+      else cuerpoE = `<div style="font-weight:900;font-size:1.05rem;margin-top:6px">🥇 Negocio cerrado${op.cerrado ? " · " + esc(new Date(op.cerrado).toLocaleDateString("es-CL")) : ""}</div>`;
+      return `<div class="rb-neg ${et === "cerrado" ? "cerrado" : ""}">
+        <div class="rb-env"><div style="min-width:0"><div style="font-size:.76rem"><b>${esc(t.codigo)}</b> · OC <b>${esc(g.oc || inf.oc || op.oc || "—")}</b></div>
+          <div style="margin:2px 0;font-weight:700">${esc(t.nombre || "Compra Ágil")}</div><div class="muted" style="font-size:.72rem">${esc(t.organismo || "")}</div></div>
+          <div style="text-align:right"><div style="font-size:.66rem;opacity:.8">VENTA</div><b>${clp(t.total)}</b></div></div>
+        <div class="rb-prog">${ETAPAS.map((e, i) => `<i class="${i <= idx ? "ok" : ""}"></i>`).join("")}</div>
+        <div class="rb-env" style="align-items:flex-end"><div><div style="font-size:.66rem;opacity:.8">UTILIDAD FINAL</div><div class="rb-big">${inf.final != null ? clp(inf.final) : "—"}</div></div>
+          <div style="text-align:right;font-size:.74rem">${inf.rentabilidad != null ? `rentabilidad <b>${(inf.rentabilidad * 100).toFixed(1).replace(".", ",")}%</b>` : ""}${inf.margen != null ? `<br>margen <b>${(inf.margen * 100).toFixed(1).replace(".", ",")}%</b>` : ""}</div></div>
+        ${dejado ? `<div class="rb-sug">💸 Podías cobrar hasta <b>${clp((t.total || 0) + dejado)}</b> y seguir ganando: quedaron <b>${clp(dejado)}</b> en la mesa. La barra ya sugiere precios más altos en segundos llamados.</div>` : ""}
+        ${inf.error ? `<div class="muted" style="color:#ff9a9a;font-size:.74rem">Informe: ${esc(inf.error)}</div>` : ""}
+        ${cuerpoE}
+        ${docs ? `<div class="rb-acc">${docs}</div>` : ""}</div>`;
     };
     const chipSeg = (t) => {
       const g = segDe(t.codigo);
@@ -777,11 +888,13 @@
     else if (tab === "hechas") cuerpo = enviadosT.length ? `<div class="row" style="justify-content:space-between;align-items:center;margin:6px 0"><span class="muted" style="font-size:.74rem">${enviadosT.length} enviadas · ${clp(enviadosT.reduce((s, t) => s + (Number(t.total) || 0), 0))} · estado en vivo de Mercado Público${R.segT ? " (" + esc(hace(new Date(R.segT).toISOString())) + ")" : ""}</span>
         <button class="btn small" type="button" data-rb="seg-actualizar">↻</button></div>${enviadosT.map(enviado).join("")}`
       : `<div class="empty">Aún no hay ofertas enviadas.</div>`;
-    else if (tab === "ganadas") cuerpo = ganadasT.length ? `<div class="muted" style="font-size:.74rem;margin:6px 0">${ganadasT.length} ganadas · ${clp(ganadasT.reduce((s, t) => s + (Number(t.total) || 0), 0))} adjudicado</div>${ganadasT.map(enviado).join("")}`
+    else if (tab === "ganadas") cuerpo = ganadasT.length ? `<div class="rb-etapas">${ETAPAS.map(([k, n]) => `<button type="button" class="${netapa === k ? "on" : ""}" data-rb="neg-tab" data-e="${k}">${n} ${ganadasT.filter((t) => etapaDe(t) === k).length}</button>`).join("")}</div>
+      ${ganadasT.filter((t) => etapaDe(t) === netapa).map(negocioCard).join("") || `<div class="empty">Nada en esta etapa.</div>`}`
       : `<div class="empty">${R._cargandoSeg ? "Revisando en Mercado Público…" : "Todavía no hay ganadas. Cuando el organismo te elija aparecen aquí con su orden de compra."}</div>`;
     else cuerpo = papelera.length ? `<div class="muted" style="font-size:.74rem;margin:6px 0">Desliza → o toca «Recuperar» para devolverla a Por preparar.</div>${papelera.map((x) => fila(x, "papelera")).join("")}`
       : `<div class="empty">La papelera está vacía.</div>`;
     return `<div class="muted" style="font-size:.78rem;margin:6px 0">Ordenadas por ganancia estimada · ${o.fecha ? "actualizado " + esc(hace(o.fecha)) : "sin datos aún"}${o.resumen ? ` · ${o.resumen.total} vigentes en el portal` : ""}</div>
+      ${marcador}
       <div class="rb-otabs">${tabs.map(([k, t, c]) => `<button type="button" class="${tab === k ? "on" : ""}" data-rb="oport-tab" data-t="${k}">${t}<i>${c}</i></button>`).join("")}</div>
       ${cuerpo}`;
   }
@@ -1001,6 +1114,39 @@
     if (a === "oport-sel") { if (esSel(cod)) await quitarSel(cod); else { toast("⭐ A Seleccionadas"); await ponerSel(cod); } return pintarHoja(); }
     if (a === "sel-quitar") { await quitarSel(cod); toast("↩ De vuelta en Por preparar"); return pintarHoja(); }
     if (a === "seg-actualizar") { toast("Consultando Mercado Público…"); return cargarSeg(true); }
+    if (a === "neg-tab") { R.netapa = b.dataset.e; return pintarHoja(); }
+    if (a === "neg-etapa" || a === "neg-opcion" || a === "neg-informe") {
+      const cuerpo = { codigo: cod, dispositivo: dispositivo(false) };
+      if (a === "neg-etapa") cuerpo.etapa = b.dataset.e;
+      if (a === "neg-opcion") { cuerpo.datos = { opcion: +b.dataset.k }; cuerpo.pedir_informe = true; }
+      if (a === "neg-informe") cuerpo.pedir_informe = true;
+      try { await api("operacion", { method: "POST", body: JSON.stringify(cuerpo) });
+        if (a === "neg-etapa") { R.netapa = b.dataset.e; toast("✓ Avanzó a " + (b.textContent.split("→")[1] || b.dataset.e).trim()); } else toast("El PC recalcula el informe (1–2 min)");
+        await refrescar(); pintarHoja(); } catch (e) { toast(e.message); }
+      return;
+    }
+    if (a === "neg-archivo" || a === "neg-doc") {
+      const w = window.open("", "_blank");
+      try { const r = await api(`archivo?codigo=${encodeURIComponent(cod)}&tipo=${a === "neg-doc" ? "doc&id=" + encodeURIComponent(b.dataset.id) : b.dataset.t}`);
+        const u = URL.createObjectURL(await r.blob()); if (w) w.location = u; else location.href = u; } catch (e) { w?.close(); toast(e.message); }
+      return;
+    }
+    if (a === "neg-subir") {
+      const inp = document.createElement("input"); inp.type = "file"; inp.accept = b.dataset.tipo === "foto" ? "image/*" : "image/*,application/pdf";
+      if (b.dataset.tipo === "foto") inp.setAttribute("capture", "environment");
+      inp.onchange = async () => {
+        const f = inp.files[0]; if (!f) return;
+        toast("Subiendo…");
+        try {
+          const b64 = await achicar(f);
+          await api("subir", { method: "POST", body: JSON.stringify({ codigo: cod, tipo: b.dataset.tipo, nombre: f.name, mime: b64.mime, b64: b64.data, cerrar: !!b.dataset.cerrar, dispositivo: dispositivo(false) }) });
+          if (b.dataset.cerrar) { R.netapa = "cerrado"; toast("🥇 ¡Negocio cerrado en oro!"); } else toast("✓ Archivo guardado");
+          await refrescar(); pintarHoja();
+        } catch (e) { toast(e.message); }
+      };
+      inp.click();
+      return;
+    }
     if (a === "comprobante") {
       const w = window.open("", "_blank");
       try { const r = await api("comprobante?codigo=" + encodeURIComponent(cod)); const u = URL.createObjectURL(await r.blob()); if (w) w.location = u; else location.href = u; }
@@ -1151,16 +1297,37 @@
     const e = c.querySelector(".rb-cest"); if (e) e.textContent = "";
     pintarSel(c, false); guardarSelLuego(c.dataset.c, { costo: +n || null });
   });
-  sheet.addEventListener("focusin", (ev) => { if (ev.target.classList?.contains("rb-costo")) R.barra = true; });
-  sheet.addEventListener("focusout", (ev) => { if (ev.target.classList?.contains("rb-costo")) setTimeout(() => { R.barra = false; }, 300); });
+  sheet.addEventListener("change", async (ev) => {
+    const el = ev.target, cod = el.dataset?.c; if (!cod) return;
+    let datos = null, informe = false;
+    if (el.classList.contains("rb-neg-in")) { const v = el.dataset.campo === "transporte" ? el.value : +(el.value || "").replace(/\D/g, "") || null; datos = { [el.dataset.campo]: v }; informe = el.dataset.campo !== "transporte"; }
+    if (el.dataset.rbChk) datos = { [el.dataset.rbChk]: el.checked };
+    if (el.dataset.rbCom === "aplica") { datos = { aplica_comision: el.checked }; informe = true; }
+    if (el.dataset.rbCom === "pct") { datos = { comision: +el.value, aplica_comision: true }; informe = true; }
+    if (!datos) return;
+    try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos, pedir_informe: informe }) }); toast(informe ? "Guardado · el PC recalcula la utilidad" : "Guardado"); await refrescar(); }
+    catch (e) { toast(e.message); }
+  });
+  sheet.addEventListener("focusin", (ev) => { if (ev.target.classList?.contains("rb-costo") || ev.target.classList?.contains("rb-neg-in")) R.barra = true; });
+  sheet.addEventListener("focusout", (ev) => { if (ev.target.classList?.contains("rb-costo") || ev.target.classList?.contains("rb-neg-in")) setTimeout(() => { R.barra = false; }, 300); });
+  // fotos grandes se achican antes de subir (máx. ~1600 px, JPEG), los PDF van tal cual
+  async function achicar(f) {
+    const leerB64 = (blob) => new Promise((ok, mal) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = mal; r.readAsDataURL(blob); });
+    if (!f.type.startsWith("image/") || f.size < 900_000) { if (f.size > 4_400_000) throw new Error("El archivo pesa más de 4 MB"); return { data: await leerB64(f), mime: f.type || "application/pdf" }; }
+    const img = await createImageBitmap(f); const k = Math.min(1, 1600 / Math.max(img.width, img.height));
+    const cv = document.createElement("canvas"); cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
+    cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+    const blob = await new Promise((ok) => cv.toBlob(ok, "image/jpeg", 0.82));
+    return { data: await leerB64(blob), mime: "image/jpeg" };
+  }
   // mientras mueves la barra no se repinta la pantalla (si no, la barra «salta»)
   sheet.addEventListener("pointerdown", (ev) => { if (ev.target.classList?.contains("rb-range")) R.barra = true; });
   ["pointerup", "pointercancel"].forEach((n) => document.addEventListener(n, () => { if (R.barra) setTimeout(() => { R.barra = false; }, 400); }));
   sheet.addEventListener("input", (ev) => { const c = ev.target.closest?.(".rb-sel"); if (c && ev.target.classList.contains("rb-range")) pintarSel(c, true); });
   sheet.addEventListener("click", (ev) => {
-    const b = ev.target.closest?.("[data-paso]"); if (!b) return;
-    const c = b.closest(".rb-sel"), r = c.querySelector(".rb-range");
-    r.value = Math.max(+r.min, Math.min(+r.max, Math.round(+r.value * (1 + b.dataset.paso / 100)))); pintarSel(c, true);
+    const b = ev.target.closest?.("[data-paso],[data-fijo]"); if (!b) return;
+    const c = b.closest(".rb-sel"); if (!c) return; const r = c.querySelector(".rb-range");
+    r.value = b.dataset.fijo ? Math.max(+r.min, Math.min(+r.max, +b.dataset.fijo)) : Math.max(+r.min, Math.min(+r.max, Math.round(+r.value * (1 + b.dataset.paso / 100)))); pintarSel(c, true);
   });
   new MutationObserver(() => sheet.querySelectorAll(".rb-sel").forEach((c) => { if (!c.dataset.ok) { c.dataset.ok = 1; pintarSel(c, false); } }))
     .observe(sheet, { childList: true, subtree: true });
