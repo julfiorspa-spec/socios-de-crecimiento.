@@ -334,6 +334,7 @@
   .rb-prod{padding:8px 10px;margin:6px 0;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);font-size:.8rem}
   .rb-prod .rb-row{font-size:.7rem;color:#a9b8d9}
   .rb-ejrow{margin:10px 0 4px;padding:8px 10px;border-radius:12px;background:rgba(120,180,255,.08);border:1px solid rgba(120,180,255,.25);font-size:.78rem}
+  #rbSheet .rb-yo{flex:none;background:rgba(94,240,176,.12);border:1px solid rgba(94,240,176,.4);color:#dfffee;border-radius:99px;padding:6px 10px;font:inherit;font-size:.74rem;font-weight:700;cursor:pointer;white-space:nowrap}
   #rbAtras{position:fixed;left:0;top:50%;z-index:2147483646;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;
     font:700 30px/1 system-ui;color:#1a1300;background:linear-gradient(180deg,#ffe9a8,#f5cf6b);box-shadow:0 6px 22px rgba(0,0,0,.45);opacity:0;pointer-events:none;
     transform:translate3d(-40px,-50%,0) scale(.7);transition:opacity .15s}
@@ -1060,8 +1061,8 @@
     if (!R.ejecutores) cargarEjecutores();
     if (!yo) return `<div class="rb-paso"><div class="rb-paso-n">🛠 Ejecuta</div><h2 class="rb-h">Hazte socio ejecutador</h2>
       <div class="muted rb-sub">Aquí llegan los negocios ganados que te asignen: negocias con proveedores, fijas el precio de compra, pides la transferencia, entregas y cierras con la guía y la factura firmadas.</div>
-      <label class="rb-lab">Tu nombre<input class="rb-in" id="rbEjNom" value="${esc(dispositivo(false) === "iPhone" ? "" : dispositivo(false))}" placeholder="Ej: Cristopher"></label>
-      <label class="rb-lab">Tu WhatsApp<input class="rb-in" id="rbEjTel" inputmode="tel" placeholder="+56 9 ..."></label>
+      <label class="rb-lab">Tu nombre<input class="rb-in" id="rbEjNom" value="${esc(persona()?.nombre || (dispositivo(false) === "iPhone" ? "" : dispositivo(false)))}" placeholder="Ej: Cristopher"></label>
+      <label class="rb-lab">Tu WhatsApp<input class="rb-in" id="rbEjTel" inputmode="tel" value="${esc(persona()?.telefono || "")}" placeholder="+56 9 ..."></label>
       <button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-registro">Entrar a Ejecuta</button></div>`;
     if (!R.ejec || Date.now() - (R.ejecT || 0) > 15000) setTimeout(cargarEjecuta, 0);
     const L = R.ejec || [], et = (t) => (["previa", "ganada", "inversionista"].includes(t.op?.etapa) ? "operacion" : t.op?.etapa === "documentos" ? "pago" : t.op?.etapa || "operacion");
@@ -1257,7 +1258,7 @@
         const emp = empresaActual() || {}, F = (R.fichas || {})[t.codigo];
         if (!F && !(R._pidiendo || {})[t.codigo]) setTimeout(() => cargarDocs(t.codigo), 0);
         const plazo = t.plazo || (F?.plazo_dias ? F.plazo_dias + " días" : "el plazo ofertado");
-        const guion = `Hola, sí, le habla ${emp.contacto || ""} de ${emp.razon_social || "nuestra empresa"}${emp.rut ? " (RUT " + emp.rut + ")" : ""}. Cotizamos la Compra Ágil ${t.codigo}${t.nombre ? " «" + t.nombre + "»" : ""} por ${clp(t.total)} con IVA, con entrega en ${plazo}${F?.direccion ? " en " + F.direccion : ""}. Confirmamos que tenemos disponibilidad y podemos cumplir. ¿Necesita algún dato o documento adicional para seleccionarnos?`;
+        const guion = `Hola, sí, le habla ${persona()?.nombre || emp.contacto || ""} de ${emp.razon_social || "nuestra empresa"}${emp.rut ? " (RUT " + emp.rut + ")" : ""}. Cotizamos la Compra Ágil ${t.codigo}${t.nombre ? " «" + t.nombre + "»" : ""} por ${clp(t.total)} con IVA, con entrega en ${plazo}${F?.direccion ? " en " + F.direccion : ""}. Confirmamos que tenemos disponibilidad y podemos cumplir. ¿Necesita algún dato o documento adicional para seleccionarnos?`;
         const ventaja = g.siguiente && g.mi_total ? g.siguiente - g.mi_total : null;
         cuerpoE = `<div class="rb-sug" style="border-color:#5ef0b0">📞 <b>Vas 1° en el portal${g.competidores ? ` de ${g.competidores}` : ""}</b>: el organismo te puede llamar o seleccionar en cualquier momento. Todo está preparado de antes.</div>
           <div class="rb-mini"><div><small>Tu oferta</small><b>${clp(g.mi_total || t.total)}</b></div><div><small>Presupuesto</small><b>${clp(g.presupuesto)}</b></div>
@@ -1651,11 +1652,25 @@
 
   // ---------- 🏢 ¿con qué empresa ofertas? (cada persona, sus datos: RUT, contacto, ficha técnica) ----------
   const corta = (n) => String(n || "").replace(/^(sociedad (de )?(inversiones )?(y gesti[oó]n )?|comercial(izadora)? |empresa )/i, "").replace(/\s+(spa|ltda\.?|s\.a\.|eirl|limitada)\.?$/i, "").slice(0, 26);
+  // 👤 ¿quién usa este celular? (cada persona su nombre: aparece arriba, en «Enviados» del PC, en Ejecuta y en el guion de llamada)
+  const PERS = "sdc:persona";
+  const persona = () => { try { return JSON.parse(localStorage.getItem(PERS)) || null; } catch { return null; } };
+  function pantallaPersona() {
+    const p = persona() || {}, d = (localStorage.getItem(DISP) || "").trim();
+    const nom = p.nombre || (/^(iphone|ipad|android|celular)$/i.test(d) ? "" : d);
+    return `<div class="rb-paso"><div class="rb-paso-n">Paso 1 de 3</div>
+      <h2 class="rb-h">¿Quién usa este celular?</h2>
+      <div class="muted rb-sub">Este dispositivo queda a <b>tu</b> nombre: tu juego, tus firmas y tus negocios. Otra persona en otro celular pone el suyo.</div>
+      <label class="rb-lab">Tu nombre<input class="rb-in" id="rbPerNom" value="${esc(nom)}" placeholder="Ej: Nicolás" autocomplete="name"></label>
+      <label class="rb-lab">Tu WhatsApp (opcional)<input class="rb-in" id="rbPerTel" value="${esc(p.telefono || "")}" inputmode="tel" placeholder="+56 9 ..."></label>
+      <button class="btn rb-oro rb-big-btn" type="button" data-rb="persona-guardar">Este celular es mío →</button>
+      ${p.nombre ? `<button class="btn small rb-link" type="button" data-rb="persona-cancelar">Cancelar</button>` : ""}</div>`;
+  }
   function pantallaEmpresa() {
     if (!R.empresas) cargarEmpresas();
     const L = Object.values(R.empresas || {}), yo = miEmp(), f = R.empForm;
     const campo = (k, lab, ph, tipo) => `<label class="rb-lab">${lab}<input data-emp="${k}" value="${esc((f || {})[k] || "")}" placeholder="${esc(ph || "")}" ${tipo || ""}></label>`;
-    return `<div class="rb-paso"><div class="rb-paso-n">Paso 1 de 2</div>
+    return `<div class="rb-paso"><div class="rb-paso-n">Paso 2 de 3 · 👤 ${esc(persona()?.nombre || "")}</div>
       <h2 class="rb-h">¿Con qué empresa ofertas?</h2>
       <div class="muted rb-sub">La cotización, la ficha técnica y el PDF salen con <b>sus</b> datos. Cada celular elige la suya.</div>
       ${!R.empresas ? `<div class="empty"><span class="spinner"></span></div>` : ""}
@@ -1669,7 +1684,7 @@
           <input type="hidden" data-emp="id" value="${esc((f || {}).id || "")}">
           <button class="btn rb-oro rb-big-btn" type="button" data-rb="empresa-guardar">Guardar y usar esta empresa</button>
           <button class="btn small rb-link" type="button" data-rb="empresa-cancelar">Cancelar</button></div>`
-      : `${L.map((e) => `<div class="rb-card rb-emp-c ${e.id === yo ? "on" : ""}"><div style="min-width:0"><b>${esc(e.razon_social)}</b><div class="muted" style="font-size:.74rem">RUT ${esc(e.rut || "")}${e.contacto ? " · " + esc(e.contacto) : ""}</div></div>
+      : `${L.map((e) => `<div class="rb-card rb-emp-c ${e.id === yo ? "on" : ""}"><div style="min-width:0"><b>${esc(e.razon_social)}</b><div class="muted" style="font-size:.74rem">RUT ${esc(e.rut || "")}${e.contacto ? " · contacto de la empresa: " + esc(e.contacto) : ""}</div></div>
           <div class="rb-row"><button class="btn small" type="button" data-rb="empresa-form" data-id="${esc(e.id)}">Editar</button><button class="btn small rb-oro" type="button" data-rb="empresa-usar" data-id="${esc(e.id)}">${e.id === yo ? "✓ En uso" : "Usar"}</button></div></div>`).join("")}
         <button class="btn rb-big-btn" type="button" data-rb="empresa-form">＋ Agregar otra empresa</button>`}
     </div>`;
@@ -1855,13 +1870,15 @@
       if (!R.empresas) cargarEmpresas();
       const cab = `<div class="rb-top2">
         <button class="rb-emp" type="button" data-rb="empresa-editar">🏢 <span>${esc(corta(emp?.razon_social) || "Mi empresa")}</span> ▾</button>
+        <button class="rb-yo" type="button" data-rb="persona-editar" title="Quién usa este celular">👤 ${esc((persona()?.nombre || "¿quién?").split(" ")[0].slice(0, 12))}</button>
         <span class="rb-pcs" title="${conectado ? "PC conectado" : "PC desconectado"}"><i class="${conectado ? "on" : ""}"></i>PC<i class="${mp?.conectado ? "on" : ""}"></i>MP</span>
         <button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
         <button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
         <div class="rb-portal"><button type="button" class="${leer().portal !== "ejecuta" ? "on" : ""}" data-rb="portal" data-v="juego">🎮 Juego</button><button type="button" class="${leer().portal === "ejecuta" ? "on" : ""}" data-rb="portal" data-v="ejecuta">🛠 Ejecuta</button></div>`;
       let cuerpo;
-      if (!miEmp() || R.empresaEditar) cuerpo = pantallaEmpresa();
-      else if (!leer().rubroListo || R.rubroEditar) { if (!R.oport) cargarOport(); cuerpo = `<div class="rb-paso-n" style="text-align:center;margin-top:10px">Paso 2 de 2</div>` + pantallaRubro(R.oport?.lista || []); }
+      if (!persona()?.nombre || R.personaEditar) cuerpo = pantallaPersona();
+      else if (!miEmp() || R.empresaEditar) cuerpo = pantallaEmpresa();
+      else if (!leer().rubroListo || R.rubroEditar) { if (!R.oport) cargarOport(); cuerpo = `<div class="rb-paso-n" style="text-align:center;margin-top:10px">Paso 3 de 3</div>` + pantallaRubro(R.oport?.lista || []); }
       else if (R.pantalla === "llamada") cuerpo = pantallaLlamada();
       else cuerpo = (leer().portal === "ejecuta" ? portalEjecuta() : vistaOport());
       const mas = `<details class="rb-ajustes rb-mas"><summary>⚙ Más opciones</summary>
@@ -2126,6 +2143,16 @@
     }
     if (a === "llamada-ver") { const h = leerHist().find((x) => x.id === b.dataset.id); if (h) { R.llamada = { id: h.id, texto: h.texto, t: h.t, confirmado: h.codigo || null }; if (h.codigo) cargarDocs(h.codigo); esperarRespuesta(h.id); } return pintarHoja(true); }
     if (a === "recordar") return recordar(b.dataset.t, b.dataset.min, b.dataset.c);
+    if (a === "persona-editar") { R.personaEditar = true; sheet.scrollTop = 0; return pintarHoja(true); }
+    if (a === "persona-cancelar") { R.personaEditar = false; return pintarHoja(true); }
+    if (a === "persona-guardar") {
+      const nombre = ($("#rbPerNom")?.value || "").trim().slice(0, 40); if (!nombre) { toast("Escribe tu nombre"); return; }
+      const telefono = ($("#rbPerTel")?.value || "").trim().slice(0, 30);
+      try { localStorage.setItem(PERS, JSON.stringify({ nombre, telefono, desde: new Date().toISOString() })); localStorage.setItem(DISP, nombre); } catch {}
+      R.personaEditar = false; toast("👤 Listo: este celular es de " + nombre.split(" ")[0]);
+      if ((R.ejecutores || {})[miJug()]) api("ejecutor", { method: "POST", body: JSON.stringify({ id: miJug(), nombre, telefono }) }).then((r) => { R.ejecutores = r.ejecutores; }).catch(() => {});
+      sheet.scrollTop = 0; return pintarHoja(true);
+    }
     if (a === "empresa-editar") { R.empresaEditar = true; R.empForm = null; R.empresas = null; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "empresa-form") { R.empForm = b.dataset.id ? { ...(R.empresas || {})[b.dataset.id] } : {}; return pintarHoja(true); }
     if (a === "empresa-cancelar") { R.empForm = null; return pintarHoja(true); }
