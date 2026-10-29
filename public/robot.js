@@ -1014,7 +1014,7 @@
             ${comp.email ? `<a class="btn small" href="mailto:${esc(comp.email)}?subject=${encodeURIComponent("OC " + (inf.oc || "") + " · plazo de entrega")}&body=${encodeURIComponent(msgCli)}">✉ Correo</a>` : ""}
             <button class="btn small" type="button" data-rb="cp" data-v="${esc(msgCli)}">Copiar mensaje</button></div>
           ${!comp.telefono && !comp.email ? `<div class="muted" style="font-size:.7rem">Sin contacto del comprador en el informe: búscalo en la OC.</div>` : ""}</details></div>`;
-    if (et === "operacion" || et === "ganada" || et === "inversionista") cuerpo = plazoBox + `
+    if (et === "operacion" || et === "ganada" || et === "inversionista" || et === "previa") cuerpo = (et === "previa" ? `<div class="rb-sug" style="border-color:#5ef0b0">📞 <b>Aún sin OC:</b> vamos 1° en el portal. Adelanta: confirma stock y plazo con proveedores, sin comprar todavía.</div>` : "") + plazoBox + `
       <div class="rb-sec">📦 Qué hay que comprar</div>
       ${prods.map((x) => `<div class="rb-prod"><b>${esc(x.cantidad ?? "")} × ${esc(x.nombre)}</b>${x.descripcion || x.detalle ? `<div class="muted" style="font-size:.7rem">${esc(String(x.descripcion || x.detalle).slice(0, 140))}</div>` : ""}<div class="rb-row">🔎 ${buscarEn(x.nombre)}</div></div>`).join("") || `<div class="muted" style="font-size:.74rem"><span class="spinner"></span> Trayendo productos…</div>`}
       <div class="rb-sec">📞 Proveedores para negociar</div>
@@ -1064,7 +1064,7 @@
       <label class="rb-lab">Tu WhatsApp<input class="rb-in" id="rbEjTel" inputmode="tel" placeholder="+56 9 ..."></label>
       <button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-registro">Entrar a Ejecuta</button></div>`;
     if (!R.ejec || Date.now() - (R.ejecT || 0) > 15000) setTimeout(cargarEjecuta, 0);
-    const L = R.ejec || [], et = (t) => (["ganada", "inversionista"].includes(t.op?.etapa) ? "operacion" : t.op?.etapa === "documentos" ? "pago" : t.op?.etapa || "operacion");
+    const L = R.ejec || [], et = (t) => (["previa", "ganada", "inversionista"].includes(t.op?.etapa) ? "operacion" : t.op?.etapa === "documentos" ? "pago" : t.op?.etapa || "operacion");
     const tab = R.ejTab || "operacion";
     const cumplidos = L.filter((t) => et(t) === "cerrado" && t.op?.plazo_fecha && t.op?.cerrado && Date.parse(t.op.cerrado) <= Date.parse(t.op.plazo_fecha + "T23:59")).length;
     const atrasados = L.filter((t) => et(t) !== "cerrado" && t.op?.plazo_fecha && diasPlazo(t.op.plazo_fecha) < 0).length;
@@ -1140,7 +1140,7 @@
     if (!R.sel && !R._selPedido) { R._selPedido = true; cargarSel().then(pintarHoja); }
     const enviadosAll = trabajos.filter((t) => HECHA.includes(t.estado)).sort((a, b) => (b.actualizado || "").localeCompare(a.actualizado || ""));
     if ((tab === "hechas" || tab === "ganadas" || !R.seg) && enviadosAll.length && (!R.segT || Date.now() - R.segT > 60_000)) cargarSeg(false);
-    const ganadasT = enviadosAll.filter((t) => segDe(t.codigo)?.ganada);
+    const ganadasT = enviadosAll.filter((t) => segDe(t.codigo)?.ganada || t.op?.etapa === "previa");   // 📞 previa: vas 1°, antes de la OC
     const enviadosT = enviadosAll.filter((t) => !segDe(t.codigo)?.ganada);
     const tabs = [["nuevas", "👆 Por preparar", nuevas.length], ["sel", "⭐ Seleccionadas", sel.length], ["firmar", "✍ Por firmar", enFirma.length],
       ["hechas", "📨 Enviadas", enviadosT.length], ["ganadas", "🏆 Ganadas", ganadasT.length], ["papelera", "🗑 No deseadas", papelera.length]];
@@ -1227,12 +1227,12 @@
       <div class="rb-m azul"><span>🎯 Tasa de éxito</span><b data-cnt="${tasa ?? 0}" data-k="tasa" data-fmt="pct">${tasa == null ? "—" : tasa + "%"}</b><small>${ganadasT.length} de ${decididas.length} resueltas</small></div>
       <div class="rb-m violeta"><span>⏳ En juego</span><b data-cnt="${enJuego}" data-k="juego" data-fmt="corto">${corto(enJuego)}</b><small>${enviadosAll.length - decididas.length} esperando resultado</small></div></div>`;
     // ---- 🏆 negocios ganados por etapa
-    const ETAPAS = [["ganada", "🆕 OC ¿nos da?"], ["inversionista", "💼 Inversión"], ["operacion", "🛠 Proveedor"], ["pago", "💳 Pagar"], ["documentos", "🧾 Guía y factura"],
+    const ETAPAS = [["previa", "📞 Vas 1°"], ["ganada", "🆕 OC ¿nos da?"], ["inversionista", "💼 Inversión"], ["operacion", "🛠 Proveedor"], ["pago", "💳 Pagar"], ["documentos", "🧾 Guía y factura"],
       ["despacho", "🚚 Despacho"], ["entrega", "📸 Entrega"], ["cerrado", "🥇 Cerrados"], ["rechazada", "❌ No dio"]];
     const etapaDe = (t) => t.op?.etapa || "ganada";
     // 🧾 datos listos para el Sistema de Facturación Gratuito del SII (guía de despacho 52 y factura 33)
     const docsSII = docsSIIg;
-    const netapa = R.netapa || "ganada";
+    const netapa = R.netapa || (ganadasT.some((t) => t.op?.etapa === "previa") ? "previa" : "ganada");
     const tel = (n) => String(n || "").replace(/[^\d+]/g, "");
     const wa = (n) => { let d = String(n || "").replace(/\D/g, ""); if (d.length === 9 && d[0] === "9") d = "56" + d; if (d.length === 8) d = "569" + d; return d.length >= 10 ? d : ""; };
     const correo = (t, o) => {
@@ -1253,7 +1253,28 @@
         : `<button class="btn small" type="button" data-rb="neg-informe" data-c="${esc(t.codigo)}">${inf.final != null ? "↻ Recalcular" : "🧮 Armar informe"}</button>`;
       const archivos = inf.final != null ? `<button class="btn small rb-firmar" type="button" data-rb="neg-archivo" data-t="informe" data-c="${esc(t.codigo)}">📄 Informe PDF</button>
         <button class="btn small" type="button" data-rb="neg-archivo" data-t="excel" data-c="${esc(t.codigo)}">📊 Excel utilidad</button>` : "";
-      if (et === "ganada") cuerpoE = (R.ocNo || {})[t.codigo] ? `<div class="rb-sec">¿Por qué no da?</div>
+      if (et === "previa") {
+        const emp = empresaActual() || {}, F = (R.fichas || {})[t.codigo];
+        if (!F && !(R._pidiendo || {})[t.codigo]) setTimeout(() => cargarDocs(t.codigo), 0);
+        const plazo = t.plazo || (F?.plazo_dias ? F.plazo_dias + " días" : "el plazo ofertado");
+        const guion = `Hola, sí, le habla ${emp.contacto || ""} de ${emp.razon_social || "nuestra empresa"}${emp.rut ? " (RUT " + emp.rut + ")" : ""}. Cotizamos la Compra Ágil ${t.codigo}${t.nombre ? " «" + t.nombre + "»" : ""} por ${clp(t.total)} con IVA, con entrega en ${plazo}${F?.direccion ? " en " + F.direccion : ""}. Confirmamos que tenemos disponibilidad y podemos cumplir. ¿Necesita algún dato o documento adicional para seleccionarnos?`;
+        const ventaja = g.siguiente && g.mi_total ? g.siguiente - g.mi_total : null;
+        cuerpoE = `<div class="rb-sug" style="border-color:#5ef0b0">📞 <b>Vas 1° en el portal${g.competidores ? ` de ${g.competidores}` : ""}</b>: el organismo te puede llamar o seleccionar en cualquier momento. Todo está preparado de antes.</div>
+          <div class="rb-mini"><div><small>Tu oferta</small><b>${clp(g.mi_total || t.total)}</b></div><div><small>Presupuesto</small><b>${clp(g.presupuesto)}</b></div>
+            <div><small>2° más barato</small><b>${clp(g.siguiente)}</b></div><div><small>Ventaja</small><b style="color:#7ee2a0">${ventaja != null ? clp(ventaja) : "—"}</b></div></div>
+          <div class="rb-sec">🗣 Qué decir si te llaman</div><div class="rb-wa">${esc(guion)}</div>
+          <div class="rb-row"><button class="btn small" type="button" data-rb="cp" data-v="${esc(guion)}">Copiar</button><button class="btn small rb-oro" type="button" data-rb="llamada-cod" data-c="${esc(t.codigo)}">📞 Me están llamando de esta</button></div>
+          <details class="rb-det"><summary>💡 Si te preguntan…</summary><div class="muted" style="font-size:.74rem;line-height:1.5">
+            • <b>¿Pueden bajar el precio?</b> No se cambia lo ofertado en el portal; ofrece mejor plazo o despacho incluido.<br>
+            • <b>¿Cumplen la marca / especificación?</b> Revisa la ficha técnica que enviaste (📄 abajo) antes de responder.<br>
+            • <b>¿Cuándo entregan?</b> ${esc(plazo)} desde que llegue la orden de compra.<br>
+            • <b>Te seleccionan:</b> el robot te avisa y pasa a «🆕 OC ¿nos da?»; acepta la OC en Mercado Público cuando llegue.</div></details>
+          ${(inf.opciones || []).length ? `<div class="rb-sec">🛒 Proveedores ya cotizados</div>${inf.opciones.map((o) => `<div class="rb-op"><div class="rb-env"><b>${esc(o.proveedor || "")}</b><b>${num(o.total_con_iva)}</b></div>
+            <div class="rb-acc">${tel(o.telefono) ? `<a class="btn small" href="tel:${esc(tel(o.telefono))}">📞</a>` : ""}${wa(o.telefono) ? `<a class="btn small" href="https://wa.me/${wa(o.telefono)}" target="_blank" rel="noopener">💬</a>` : ""}<a class="btn small" href="${correo(t, o)}">✉ Confirmar stock</a></div></div>`).join("")}` : ""}
+          ${bloqueMarket((inf.productos || []).length ? inf.productos : (F?.productos || []))}
+          <div class="rb-acc">${archivos}${btnInf}${t.pdf ? `<button class="btn small" type="button" data-rb="pdf" data-c="${esc(t.codigo)}">📄 Mi oferta (PDF)</button>` : ""}${t.comprobante ? `<button class="btn small" type="button" data-rb="comprobante" data-c="${esc(t.codigo)}">🧾 Comprobante</button>` : ""}</div>`;
+      }
+      else if (et === "ganada") cuerpoE = (R.ocNo || {})[t.codigo] ? `<div class="rb-sec">¿Por qué no da?</div>
           <textarea class="rb-in" id="rbNo-${esc(t.codigo)}" rows="2" placeholder="Ej: el proveedor subió el precio, no hay stock, plazo imposible">${esc(op.motivo_no || "")}</textarea>
           <div class="muted" style="font-size:.7rem;margin-top:4px">Ojo: rechazar una orden de compra aceptada en el portal puede traer reclamos o sanciones; revisa las condiciones antes.</div>
           <div class="rb-row"><button class="btn small" type="button" data-rb="oc-volver" data-c="${esc(t.codigo)}">← Volver</button><button class="btn small" type="button" data-rb="oc-no" data-c="${esc(t.codigo)}" style="border-color:#ff8a80;color:#ffb3b9">Confirmar: no da</button></div>`
@@ -1304,13 +1325,13 @@
       const desl = et === "ganada" && !(R.ocNo || {})[t.codigo];
       return `<div class="rb-neg ${et === "cerrado" ? "cerrado" : ""} ${desl ? "rb-swipe" : ""}" ${desl ? `data-modo="oc" data-c="${esc(t.codigo)}"` : ""}>
         ${desl ? '<span class="rb-sello si">NOS DA</span><span class="rb-sello no">NO DA</span>' : ""}
-        <div class="rb-env"><div style="min-width:0"><div style="font-size:.76rem"><b>${esc(t.codigo)}</b> · OC <b>${esc(g.oc || inf.oc || op.oc || "—")}</b></div>
+        <div class="rb-env"><div style="min-width:0"><div style="font-size:.76rem"><b>${esc(t.codigo)}</b> · ${et === "previa" ? `<b style="color:#5ef0b0">📞 vas 1°, antes de la OC</b>` : `OC <b>${esc(g.oc || inf.oc || op.oc || "—")}</b>`}</div>
           <div style="margin:2px 0;font-weight:700">${esc(t.nombre || "Compra Ágil")}</div><div class="muted" style="font-size:.72rem">${esc(t.organismo || "")}</div></div>
           <div style="text-align:right"><div style="font-size:.66rem;opacity:.8">VENTA</div><b>${clp(t.total)}</b></div></div>
         <div class="rb-prog">${ETAPAS.map((e, i) => `<i class="${i <= idx ? "ok" : ""}"></i>`).join("")}</div>
         <div class="rb-env" style="align-items:flex-end"><div><div style="font-size:.66rem;opacity:.8">UTILIDAD FINAL</div><div class="rb-big" style="${inf.incompleto ? "color:#ffd88a;font-size:1.1rem" : inf.final < 0 ? "color:#ff6b6b" : ""}">${inf.final == null ? "—" : inf.incompleto ? "⚠ por confirmar" : clp(inf.final)}</div></div>
           <div style="text-align:right;font-size:.74rem">${inf.rentabilidad != null ? `rentabilidad <b>${(inf.rentabilidad * 100).toFixed(1).replace(".", ",")}%</b>` : ""}${inf.margen != null ? `<br>margen <b>${(inf.margen * 100).toFixed(1).replace(".", ",")}%</b>` : ""}</div></div>
-        ${dejado ? `<div class="rb-sug">💸 Podías cobrar hasta <b>${clp((t.total || 0) + dejado)}</b> y seguir ganando: quedaron <b>${clp(dejado)}</b> en la mesa. La barra ya sugiere precios más altos en segundos llamados.</div>` : ""}
+        ${dejado && et !== "previa" ? `<div class="rb-sug">💸 Podías cobrar hasta <b>${clp((t.total || 0) + dejado)}</b> y seguir ganando: quedaron <b>${clp(dejado)}</b> en la mesa. La barra ya sugiere precios más altos en segundos llamados.</div>` : ""}
         ${inf.error ? `<div class="muted" style="color:#ff9a9a;font-size:.74rem">Informe: ${esc(inf.error)}</div>` : ""}
         ${inf.incompleto ? `<div class="rb-sug" style="border-color:#ffb347">⚠ <b>Faltan precios de ${inf.faltan_precios || "algunos"} producto(s)</b>: la utilidad no es confiable. En 🛠 Operación pide cotización y escribe el precio acordado.</div>`
           : inf.final < 0 ? `<div class="rb-sug" style="border-color:#ff6b6b;background:rgba(255,90,90,.12)">🔴 <b>Con estos precios pierdes ${clp(-inf.final)}.</b> Negocia con el proveedor o busca otro antes de comprar.</div>` : ""}
@@ -2087,6 +2108,7 @@
     }
     if (a === "legado") { guardar({ legado: b.dataset.v === "1" }); R.ver = null; R.sel = null; R._selPedido = false; R.oport = null; toast(b.dataset.v === "1" ? "Este celular ve también lo anterior" : "🎮 Juego nuevo en este celular"); refrescar(); return pintarHoja(true); }
     if (a === "llamada") { R.pantalla = "llamada"; sheet.scrollTop = 0; return pintarHoja(true); }
+    if (a === "llamada-cod") { R.pantalla = "llamada"; R.llamada = { texto: "Me están llamando por la compra " + b.dataset.c }; sheet.scrollTop = 0; confirmarLlamada(b.dataset.c); return pintarHoja(true); }
     if (a === "llamada-cerrar") { R.pantalla = null; return pintarHoja(true); }
     if (a === "llamada-preguntar") return preguntarRobot(($("#rbLlamada")?.value || "").trim());
     if (a === "llamada-buscar") return buscarLlamada(($("#rbLlamada")?.value || "").trim());
