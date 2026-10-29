@@ -474,25 +474,48 @@ async function atender(req) {
   }
 
   // ---------- 🏆 negocio ganado: etapas Inversionista → Operación → Despacho → Entrega → Cerrado ----------
-  const ETAPAS = ["ganada", "inversionista", "operacion", "pago", "documentos", "despacho", "entrega", "cerrado", "rechazada"];
+  const ETAPAS = ["ganada", "inversionista", "operacion", "transporte", "pago", "documentos", "despacho", "entrega", "cerrado", "rechazada"];
+  // 💼 lo que se le avisa al inversionista en cada paso del negocio (y el PC le rehace su Excel con los costos reales)
+  const AVISO_INV = { transporte: "🤝 Proveedor acordado", pago: "💸 Pide transferencia", despacho: "🛣 Pedido en trayecto", entrega: "📦 Entregado: falta la recepción firmada", cerrado: "🥇 Negocio cerrado OK" };
   if (ruta === "operacion" && req.method === "POST") {
     const b = await cuerpo(req);
     const t = await leer(store, limpiaCodigo(b.codigo));
     if (!t) return json({ error: "No existe." }, 404);
     const op = t.op || { etapa: "ganada", historial: [] };
+    let cambioEtapa = false;
     if (b.etapa && ETAPAS.includes(b.etapa) && b.etapa !== op.etapa) {
       op.historial = [...(op.historial || []), { t: ahora(), etapa: b.etapa, por: texto(b.dispositivo, 60) }].slice(-30);
-      op.etapa = b.etapa;
+      op.etapa = b.etapa; cambioEtapa = true;
+      if (b.etapa === "cerrado") op.cerrado = op.cerrado || ahora();
     }
     const d = b.datos && typeof b.datos === "object" ? b.datos : {};
     for (const k of ["proveedor", "contacto", "telefono", "email", "transporte", "notas", "medio_pago", "guia", "factura", "motivo_no", "folio_guia", "folio_factura",
-      "ejecutor", "ejecutor_nombre", "plazo_proveedor", "fecha_entrega", "banco_proveedor", "negociacion", "plazo_fecha", "plazo_nota", "incidencia"]) if (d[k] !== undefined) op[k] = texto(d[k], 400);
-    for (const k of ["precio_acordado", "costo_transporte", "opcion"]) if (d[k] !== undefined) op[k] = d[k] === null ? null : Math.max(0, Math.round(Number(d[k]) || 0));
+      "ejecutor", "ejecutor_nombre", "plazo_proveedor", "fecha_entrega", "banco_proveedor", "negociacion", "plazo_fecha", "plazo_nota", "incidencia",
+      "transportista", "transportista_tel", "origen_flete", "patente", "recibio_nombre", "recibio_rut", "fecha_cobro", "inversionista_nombre", "inversionista_tel"]) if (d[k] !== undefined) op[k] = texto(d[k], 400);
+    for (const k of ["precio_acordado", "costo_transporte", "opcion", "km", "cobrado"]) if (d[k] !== undefined) op[k] = d[k] === null ? null : Math.max(0, Math.round(Number(d[k]) || 0));
     for (const k of ["inversion_ok", "compra_ok", "despacho_ok", "guia_firmada", "factura_firmada", "aplica_comision", "nos_da", "proveedor_pagado", "guia_hecha", "factura_hecha", "oc_aceptada", "pedido_transferencia", "transferido"]) if (d[k] !== undefined) op[k] = !!d[k];
     if (d.comision !== undefined) op.comision = Math.min(0.10, Math.max(0.01, Number(d.comision) || 0.04));
-    if (b.pedir_informe) op.pedido_informe = { t: ahora(), rebuscar: !!b.rebuscar };
+    // 📨 el juego de los proveedores: a quién le escribiste/llamaste y qué precio te dio cada uno
+    if (d.contactado && typeof d.contactado === "object") {
+      const k = texto(d.contactado.k, 80); if (k) op.contactados = { ...(op.contactados || {}), [k]: { via: texto(d.contactado.via, 20), t: ahora(), nombre: texto(d.contactado.nombre, 120) } };
+    }
+    if (d.cotizacion && typeof d.cotizacion === "object") {
+      const k = texto(d.cotizacion.k, 80), v = Math.max(0, Math.round(Number(d.cotizacion.v) || 0));
+      if (k) { op.cotizaciones = { ...(op.cotizaciones || {}) }; if (v) op.cotizaciones[k] = { v, nombre: texto(d.cotizacion.nombre, 120), t: ahora() }; else delete op.cotizaciones[k]; }
+    }
+    if (d.proveedor_extra && typeof d.proveedor_extra === "object" && d.proveedor_extra.proveedor) {
+      const x = d.proveedor_extra;
+      op.extras = [...(op.extras || []), { proveedor: texto(x.proveedor, 120), telefono: texto(x.telefono, 40), email: texto(x.email, 120), fuente: texto(x.fuente, 30) || "manual" }].slice(-6);
+    }
+    if (b.pedir_informe || (cambioEtapa && AVISO_INV[op.etapa]) || d.precio_acordado !== undefined || d.costo_transporte !== undefined) op.pedido_informe = { t: ahora(), rebuscar: !!b.rebuscar };
     t.op = op;
-    return json({ trabajo: await escribir(store, t) });
+    const r = await escribir(store, t);
+    if (cambioEtapa && AVISO_INV[op.etapa]) {        // 💼 aviso al inversionista (push) con el resumen del negocio
+      const util = op.informe?.final != null ? " · utilidad " + "$" + Math.round(op.informe.final).toLocaleString("es-CL") : "";
+      await avisarTexto(store, "💼 " + AVISO_INV[op.etapa] + " · " + t.codigo, `${(t.nombre || "").slice(0, 60)} · venta $${Math.round(t.total || 0).toLocaleString("es-CL")}${op.precio_acordado ? " · compra $" + Math.round(op.precio_acordado).toLocaleString("es-CL") : ""}${op.costo_transporte ? " · flete $" + Math.round(op.costo_transporte).toLocaleString("es-CL") : ""}${util}. Excel actualizado en Negocios.`,
+        "inv-" + t.codigo, "/#robot").catch(() => {});
+    }
+    return json({ trabajo: r });
   }
   // archivos del negocio: informe PDF y Excel (los sube el PC), fotos / guías / facturas (las sube el celular)
   if (ruta === "subir" && req.method === "POST") {
@@ -509,7 +532,10 @@ async function atender(req) {
       kb: Math.round(bytes.length / 1024), fecha: ahora(), por: texto(b.dispositivo, 60) }].slice(-40);
     if (tipo === "foto" && b.cerrar) {                 // la foto de la entrega cierra el negocio (en oro)
       op.historial = [...(op.historial || []), { t: ahora(), etapa: "cerrado", por: texto(b.dispositivo, 60) }].slice(-30);
-      op.etapa = "cerrado"; op.cerrado = ahora();
+      op.etapa = "cerrado"; op.cerrado = ahora(); op.pedido_informe = { t: ahora() };     // el PC rehace el Excel final del inversionista
+      t.op = op; const r = await escribir(store, t);
+      await avisarTexto(store, "💼 🥇 Negocio cerrado OK · " + t.codigo, `${(t.nombre || "").slice(0, 60)} · entregado con recepción conforme. Excel del inversionista actualizado en Negocios.`, "inv-" + t.codigo, "/#robot").catch(() => {});
+      return json({ trabajo: r });
     }
     t.op = op;
     return json({ trabajo: await escribir(store, t) });
@@ -699,7 +725,8 @@ async function atender(req) {
   }
   if (ruta === "ejecuta" && req.method === "GET") {      // los negocios que te asignaron para ejecutar
     const id = jug(url.searchParams.get("ejecutor"));
-    const lista = (await todos(store)).filter((t) => t.op && id && t.op.ejecutor === id)
+    const todas = url.searchParams.get("todos") === "1";     // ⚓ todas las OC y «vas 1°» quedan ancladas en Ejecuta
+    const lista = (await todos(store)).filter((t) => t.op && t.op.etapa !== "rechazada" && (todas ? (t.op.oc_codigo || t.op.oc || t.op.etapa === "previa" || (id && t.op.ejecutor === id)) : id && t.op.ejecutor === id))
       .map(({ firma, historial, envios, ...t }) => t);
     return json({ negocios: lista });
   }
