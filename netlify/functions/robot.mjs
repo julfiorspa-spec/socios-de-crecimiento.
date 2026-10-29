@@ -169,6 +169,20 @@ async function avisar(store, t) {
   }));
 }
 
+// aviso libre (recordatorios, asistente): a todos los teléfonos suscritos
+async function avisarTexto(store, title, body, tag, url, urgente) {
+  const { blobs } = await store.list({ prefix: "push/sub/" });
+  if (!blobs.length) return;
+  const v = await vapid(store);
+  const payload = JSON.stringify({ title, body, tag, url: url || "/#robot", urgente: !!urgente });
+  await Promise.all(blobs.map(async (b) => {
+    const sub = await store.get(b.key, { type: "json" });
+    if (!sub) return;
+    try { const st = await enviarPush(v, sub, payload, urgente); if (st === 404 || st === 410) await store.delete(b.key); } catch {}
+  }));
+}
+const idCorto = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
 // La página de la cotización en Mercado Público puede pedir tus datos de firma y el PDF (con tu código de enlace)
 const ORIGEN_MP = "https://compra-agil.mercadopublico.cl";
 const ORIGENES_MP = new Set([ORIGEN_MP, "https://www.mercadopublico.cl"]);
@@ -259,7 +273,7 @@ async function atender(req) {
       const num = (v) => (v == null || v === "" ? undefined : Math.max(0, Math.round(Number(v) || 0)));
       s[codigo] = { ...prev, nombre: texto(b.nombre, 200) ?? prev.nombre, organismo: texto(b.organismo, 120) ?? prev.organismo,
         monto: num(b.monto) ?? prev.monto, cierre: texto(b.cierre, 40) ?? prev.cierre, margen: b.margen != null ? Number(b.margen) || 0 : prev.margen,
-        precio: num(b.precio) ?? prev.precio, costo: b.costo === null ? undefined : num(b.costo) ?? prev.costo, actualizado: ahora() };
+        precio: num(b.precio) ?? prev.precio, costo: b.costo === null ? undefined : num(b.costo) ?? prev.costo, empresa: texto(b.empresa, 40) ?? prev.empresa, actualizado: ahora() };
     }
     await store.setJSON("oportunidades/seleccionadas", s);
     return json({ ok: true, sel: s });
@@ -335,7 +349,7 @@ async function atender(req) {
   }
 
   // ---------- 🏆 negocio ganado: etapas Inversionista → Operación → Despacho → Entrega → Cerrado ----------
-  const ETAPAS = ["ganada", "inversionista", "operacion", "despacho", "entrega", "cerrado"];
+  const ETAPAS = ["ganada", "inversionista", "operacion", "pago", "documentos", "despacho", "entrega", "cerrado", "rechazada"];
   if (ruta === "operacion" && req.method === "POST") {
     const b = await cuerpo(req);
     const t = await leer(store, limpiaCodigo(b.codigo));
@@ -346,9 +360,9 @@ async function atender(req) {
       op.etapa = b.etapa;
     }
     const d = b.datos && typeof b.datos === "object" ? b.datos : {};
-    for (const k of ["proveedor", "contacto", "telefono", "email", "transporte", "notas", "medio_pago", "guia", "factura"]) if (d[k] !== undefined) op[k] = texto(d[k], 300);
+    for (const k of ["proveedor", "contacto", "telefono", "email", "transporte", "notas", "medio_pago", "guia", "factura", "motivo_no", "folio_guia", "folio_factura"]) if (d[k] !== undefined) op[k] = texto(d[k], 300);
     for (const k of ["precio_acordado", "costo_transporte", "opcion"]) if (d[k] !== undefined) op[k] = d[k] === null ? null : Math.max(0, Math.round(Number(d[k]) || 0));
-    for (const k of ["inversion_ok", "compra_ok", "despacho_ok", "guia_firmada", "factura_firmada", "aplica_comision"]) if (d[k] !== undefined) op[k] = !!d[k];
+    for (const k of ["inversion_ok", "compra_ok", "despacho_ok", "guia_firmada", "factura_firmada", "aplica_comision", "nos_da", "proveedor_pagado", "guia_hecha", "factura_hecha", "oc_aceptada"]) if (d[k] !== undefined) op[k] = !!d[k];
     if (d.comision !== undefined) op.comision = Math.min(0.10, Math.max(0.01, Number(d.comision) || 0.04));
     if (b.pedir_informe) op.pedido_informe = { t: ahora(), rebuscar: !!b.rebuscar };
     t.op = op;
@@ -462,6 +476,8 @@ async function atender(req) {
       creado: ahora(), estado: null, mensaje: null, historial: [],
       total: null, neto: null, plazo: null, detalle: null, items: null, pdf: false,
       envios: previo?.envios || 0, // cuántas veces quedó enviada antes (para editar)
+      empresa: texto(b.empresa, 40) || previo?.empresa || null,   // con qué empresa (RUT y datos) se arma la oferta
+      dispositivo: texto(b.dispositivo, 60) || previo?.dispositivo || null,
     };
     if (esLic) t.tipo = "licitacion";
     anotar(t, "en_cola", accion === "probar" ? "Prueba sin enviar: el robot la tomará en segundos." : esLic ? "Licitación: el robot bajará la ficha, las bases y los anexos." : "Esperando que el robot del PC la tome.");
@@ -535,6 +551,102 @@ async function atender(req) {
     return new Response(data, { headers: { "content-type": "application/zip", "content-disposition": `attachment; filename="PJANIC_${codigo}.zip"`, "cache-control": "no-store" } });
   }
 
+  if (ruta === "trabajo" && req.method === "GET") {       // una oferta completa (ítems y precios) para guía y factura
+    const t = await leer(store, limpiaCodigo(url.searchParams.get("codigo")));
+    if (!t) return json({ error: "No existe." }, 404);
+    const { firma, historial, ...r } = t;
+    return json({ trabajo: r });
+  }
+  // ---------- 🏢 empresas: cada celular oferta con su RUT y sus datos ----------
+  if (ruta === "empresas" && req.method === "GET") {
+    return json({ empresas: (await store.get("empresas/lista", { type: "json" })) || {} });
+  }
+  if (ruta === "empresa" && req.method === "POST") {
+    const b = await cuerpo(req);
+    const rut = String(b.rut || "").replace(/[^0-9kK]/g, "").toUpperCase();
+    if (rut.length < 7) return json({ error: "RUT inválido" }, 400);
+    const id = (texto(b.id, 40) || "e" + rut).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
+    const L = (await store.get("empresas/lista", { type: "json" })) || {};
+    if (b.borrar) { delete L[id]; await store.setJSON("empresas/lista", L); return json({ ok: true, empresas: L }); }
+    const campos = ["razon_social", "rut", "giro", "contacto", "email", "telefono", "direccion", "comuna", "ciudad", "representante", "rut_representante", "despacho", "banco"];
+    const e = { ...(L[id] || {}), id, actualizado: ahora() };
+    for (const k of campos) if (b[k] !== undefined) e[k] = texto(b[k], 200);
+    if (!e.razon_social) return json({ error: "Falta la razón social" }, 400);
+    L[id] = e; await store.setJSON("empresas/lista", L);
+    return json({ ok: true, empresa: e, empresas: L });
+  }
+
+  // ---------- 🔎 ficha de una Compra Ágil cualquiera (para «Me llamaron»: el cliente te da el ID) ----------
+  if (ruta === "ficha" && req.method === "GET") {
+    const codigo = limpiaCodigo(url.searchParams.get("codigo"));
+    if (!/^\d{1,8}-\d{1,8}-COT\d{2}$/.test(codigo)) return json({ error: "Código de Compra Ágil inválido (ej. 1234-56-COT26)" }, 400);
+    try {
+      const r = await fetch(RADAR_CA + "/" + encodeURIComponent(codigo), { headers: { "user-agent": "CotizAgil/1.0", accept: "application/json" }, signal: AbortSignal.timeout(7000) });
+      if (!r.ok) return json({ error: "Mercado Público no respondió (" + r.status + ")" }, 502);
+      const p = (await r.json()).payload || {};
+      const pc = Array.isArray(p.proveedores_cotizando) ? p.proveedores_cotizando : [];
+      const ins = p.institucion || {}, ent = p.entrega || {};
+      const montos = pc.filter((x) => x.activo !== 0).map((x) => x.monto_total || 0).filter(Boolean).sort((a, b) => a - b);
+      return json({ ficha: {
+        codigo, nombre: texto(String(p.nombre || "").trim(), 300), estado: (p.estado || {}).codigo || null, glosa: (p.estado || {}).glosa || null,
+        organismo: texto(ins.organismo_comprador, 200), rut_organismo: texto(ins.rut, 20), unidad: texto(ins.unidad_compra, 200), region: texto(ins.nombre_region, 80),
+        presupuesto: (p.presupuesto || {}).monto_disponible_clp || null, llamado: (p.convocatoria || {}).descripcion || null, cierre: (p.fechas || {}).fecha_cierre || null,
+        direccion: texto(String(ent.direccion_entrega || "").trim(), 200), plazo_dias: ent.plazo_entrega_dias ?? null, descripcion: texto(p.descripcion, 1500),
+        productos: (p.productos_solicitados || []).slice(0, 30).map((x) => ({ nombre: texto(x.nombre, 200), detalle: texto(x.descripcion, 300), cantidad: x.cantidad, unidad: texto(x.unidad_medida, 20) })),
+        ofertas: pc.length, mas_baja: montos[0] ?? null, mas_alta: montos[montos.length - 1] ?? null,
+        proveedores: pc.slice(0, 12).map((x) => ({ nombre: texto(x.razon_social, 120), total: x.monto_total || null, seleccionado: !!x.proveedor_seleccionado })),
+        ganador: texto((pc.find((x) => x.proveedor_seleccionado) || {}).razon_social, 120), oc: p.id_orden_compra || null,
+      } });
+    } catch (e) { return json({ error: "No pude consultar Mercado Público: " + String(e.message || e).slice(0, 100) }, 502); }
+  }
+
+  // ---------- ⏰ recordatorios (llegan como aviso al teléfono) ----------
+  if (ruta === "recordar" && req.method === "POST") {
+    const b = await cuerpo(req);
+    const L = (await store.get("recordatorios", { type: "json" })) || [];
+    if (b.quitar) { const n = L.filter((x) => x.id !== b.quitar); await store.setJSON("recordatorios", n); return json({ ok: true, recordatorios: n }); }
+    const cuando = Date.parse(b.cuando) || Date.now() + (Number(b.minutos) || 60) * 60000;
+    const r = { id: idCorto(), codigo: limpiaCodigo(b.codigo) || null, texto: texto(b.texto, 300) || "Recordatorio", cuando: new Date(cuando).toISOString(), creado: ahora() };
+    L.push(r); await store.setJSON("recordatorios", L.slice(-200));
+    return json({ ok: true, recordatorio: r, recordatorios: L });
+  }
+  if (ruta === "recordatorios" && req.method === "GET") return json({ recordatorios: (await store.get("recordatorios", { type: "json" })) || [] });
+
+  // ---------- 📞 «Me llamaron»: el celular pregunta (texto o audio) y el robot del PC responde con IA ----------
+  if (ruta === "preguntar" && req.method === "POST") {
+    const b = await cuerpo(req);
+    const id = idCorto();
+    const audio = typeof b.audio_b64 === "string" && b.audio_b64.length < 5_500_000 ? b.audio_b64 : null;
+    await store.setJSON("asistente/" + id, { id, creado: ahora(), estado: "pendiente", texto: texto(b.texto, 2000), codigo: limpiaCodigo(b.codigo) || null,
+      empresa: texto(b.empresa, 40), dispositivo: texto(b.dispositivo, 60), audio: !!audio, mime: texto(b.mime, 40) });
+    if (audio) await store.set("asistente-audio/" + id, audio);
+    const cola = (await store.get("asistente-cola", { type: "json" })) || [];
+    await store.setJSON("asistente-cola", [...cola, id].slice(-30));
+    return json({ ok: true, id });
+  }
+  if (ruta === "respuesta" && req.method === "GET") {
+    const x = await store.get("asistente/" + String(url.searchParams.get("id") || "").replace(/[^a-z0-9]/g, ""), { type: "json" });
+    return x ? json({ pregunta: x }) : json({ error: "No existe" }, 404);
+  }
+  if (ruta === "audio" && req.method === "GET") {        // el PC baja el audio para transcribirlo
+    const a = await store.get("asistente-audio/" + String(url.searchParams.get("id") || "").replace(/[^a-z0-9]/g, ""));
+    return a ? json({ b64: a }) : json({ error: "Sin audio" }, 404);
+  }
+  if (ruta === "responder" && req.method === "POST") {   // el PC entrega la respuesta
+    const b = await cuerpo(req);
+    const id = String(b.id || "").replace(/[^a-z0-9]/g, "");
+    const x = await store.get("asistente/" + id, { type: "json" });
+    if (!x) return json({ error: "No existe" }, 404);
+    Object.assign(x, { estado: b.error ? "error" : "lista", respondido: ahora(), error: texto(b.error, 300), transcripcion: texto(b.transcripcion, 2000),
+      respuesta: b.respuesta && typeof b.respuesta === "object" ? b.respuesta : null });
+    await store.setJSON("asistente/" + id, x);
+    await store.delete("asistente-audio/" + id).catch(() => {});
+    const cola = (await store.get("asistente-cola", { type: "json" })) || [];
+    await store.setJSON("asistente-cola", cola.filter((k) => k !== id));
+    if (!b.error) await avisarTexto(store, "📞 Respuesta lista", texto((b.respuesta || {}).titular || x.texto || "Tu consulta", 120), "asis-" + id, "/#robot");
+    return json({ ok: true });
+  }
+
   // ---------- robot del PC ----------
   if (ruta === "latido" && req.method === "POST") {
     const b = await cuerpo(req);
@@ -546,7 +658,25 @@ async function atender(req) {
     if (pidio) await store.delete("oportunidades/pedido");
     const lista = await todos(store);
     const negocios = lista.filter((t) => t.op?.pedido_informe).map((t) => ({ codigo: t.codigo, total: t.total, op: t.op })).slice(0, 5);
-    const op = { ...(pidio ? { oportunidades: true } : {}), ...(negocios.length ? { negocios } : {}) };
+    // preguntas del asistente que esperan al PC (las tomadas hace más de 3 min se reintentan)
+    const cola = (await store.get("asistente-cola", { type: "json" })) || [];
+    const preguntas = [];
+    for (const id of cola) {
+      const x = await store.get("asistente/" + id, { type: "json" });
+      if (x && (x.estado === "pendiente" || (x.estado === "tomada" && Date.now() - Date.parse(x.tomada) > 180_000))) {
+        x.estado = "tomada"; x.tomada = ahora(); await store.setJSON("asistente/" + id, x); preguntas.push(x);
+        if (preguntas.length >= 2) break;
+      }
+    }
+    // recordatorios vencidos: aviso al teléfono
+    const rec = (await store.get("recordatorios", { type: "json" })) || [];
+    const vencidos = rec.filter((r) => !r.avisado && Date.parse(r.cuando) <= Date.now());
+    if (vencidos.length) {
+      for (const r of vencidos) { r.avisado = ahora(); await avisarTexto(store, "⏰ " + (r.codigo || "Recordatorio"), r.texto, "rec-" + r.id, r.codigo ? "/#robot=" + r.codigo : "/#robot", true); }
+      await store.setJSON("recordatorios", rec);
+    }
+    const empresas = (await store.get("empresas/lista", { type: "json" })) || {};
+    const op = { ...(pidio ? { oportunidades: true } : {}), ...(negocios.length ? { negocios } : {}), ...(preguntas.length ? { preguntas } : {}), empresas };
     if (b.ocupado) return json({ siguiente: null, ...op });
     // un pedido tomado que quedó colgado (PC apagado a mitad de camino) vuelve a la cola
     for (const t of lista) {
