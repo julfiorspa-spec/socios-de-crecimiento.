@@ -771,13 +771,14 @@
     // ---- marcador: lo que motiva (ganado, utilidad, tasa de éxito, en juego)
     const decididas = enviadosAll.filter((t) => { const g = segDe(t.codigo); return g && (g.ganada || g.estado === "proveedor_seleccionado"); });
     const ganadoMonto = ganadasT.reduce((s, t) => s + (Number(t.total) || 0), 0);
-    const utilidadG = ganadasT.reduce((s, t) => s + (Number(t.op?.informe?.final) || Math.round((Number(t.total) || 0) * 0.13)), 0);
+    const utilOk = (t) => t.op?.informe && !t.op.informe.incompleto && t.op.informe.final != null;
+    const utilidadG = ganadasT.reduce((s, t) => s + (utilOk(t) ? Number(t.op.informe.final) : Math.round((Number(t.total) || 0) * 0.13)), 0);
     const enJuego = enviadosAll.filter((t) => ["publicada", "cerrada"].includes(segDe(t.codigo)?.estado)).reduce((s, t) => s + (Number(t.total) || 0), 0);
     const tasa = decididas.length ? Math.round(ganadasT.length / decididas.length * 100) : null;
     const corto = (n) => n >= 1e6 ? "$" + (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace(".", ",") + "M" : clp(n);
     const marcador = `<div class="rb-marcador">
       <div class="rb-m oro"><span>🏆 Ganado</span><b>${corto(ganadoMonto)}</b><small>${ganadasT.length} adjudicada${ganadasT.length === 1 ? "" : "s"}</small></div>
-      <div class="rb-m verde"><span>💰 Utilidad</span><b>${corto(utilidadG)}</b><small>${ganadasT.some((t) => t.op?.informe?.final != null) ? "según informes" : "estimada"}</small></div>
+      <div class="rb-m verde"><span>💰 Utilidad</span><b>${corto(utilidadG)}</b><small>${ganadasT.length && ganadasT.every(utilOk) ? "según informes" : "estimada · faltan precios"}</small></div>
       <div class="rb-m azul"><span>🎯 Tasa de éxito</span><b>${tasa == null ? "—" : tasa + "%"}</b><small>${ganadasT.length} de ${decididas.length} resueltas</small></div>
       <div class="rb-m violeta"><span>⏳ En juego</span><b>${corto(enJuego)}</b><small>${enviadosAll.length - decididas.length} esperando resultado</small></div></div>`;
     // ---- 🏆 negocios ganados por etapa
@@ -839,10 +840,12 @@
           <div style="margin:2px 0;font-weight:700">${esc(t.nombre || "Compra Ágil")}</div><div class="muted" style="font-size:.72rem">${esc(t.organismo || "")}</div></div>
           <div style="text-align:right"><div style="font-size:.66rem;opacity:.8">VENTA</div><b>${clp(t.total)}</b></div></div>
         <div class="rb-prog">${ETAPAS.map((e, i) => `<i class="${i <= idx ? "ok" : ""}"></i>`).join("")}</div>
-        <div class="rb-env" style="align-items:flex-end"><div><div style="font-size:.66rem;opacity:.8">UTILIDAD FINAL</div><div class="rb-big">${inf.final != null ? clp(inf.final) : "—"}</div></div>
+        <div class="rb-env" style="align-items:flex-end"><div><div style="font-size:.66rem;opacity:.8">UTILIDAD FINAL</div><div class="rb-big" style="${inf.incompleto ? "color:#ffd88a;font-size:1.1rem" : inf.final < 0 ? "color:#ff6b6b" : ""}">${inf.final == null ? "—" : inf.incompleto ? "⚠ por confirmar" : clp(inf.final)}</div></div>
           <div style="text-align:right;font-size:.74rem">${inf.rentabilidad != null ? `rentabilidad <b>${(inf.rentabilidad * 100).toFixed(1).replace(".", ",")}%</b>` : ""}${inf.margen != null ? `<br>margen <b>${(inf.margen * 100).toFixed(1).replace(".", ",")}%</b>` : ""}</div></div>
         ${dejado ? `<div class="rb-sug">💸 Podías cobrar hasta <b>${clp((t.total || 0) + dejado)}</b> y seguir ganando: quedaron <b>${clp(dejado)}</b> en la mesa. La barra ya sugiere precios más altos en segundos llamados.</div>` : ""}
         ${inf.error ? `<div class="muted" style="color:#ff9a9a;font-size:.74rem">Informe: ${esc(inf.error)}</div>` : ""}
+        ${inf.incompleto ? `<div class="rb-sug" style="border-color:#ffb347">⚠ <b>Faltan precios de ${inf.faltan_precios || "algunos"} producto(s)</b>: la utilidad no es confiable. En 🛠 Operación pide cotización y escribe el precio acordado.</div>`
+          : inf.final < 0 ? `<div class="rb-sug" style="border-color:#ff6b6b;background:rgba(255,90,90,.12)">🔴 <b>Con estos precios pierdes ${clp(-inf.final)}.</b> Negocia con el proveedor o busca otro antes de comprar.</div>` : ""}
         ${cuerpoE}
         ${docs ? `<div class="rb-acc">${docs}</div>` : ""}</div>`;
     };
