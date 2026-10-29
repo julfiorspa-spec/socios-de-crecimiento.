@@ -488,7 +488,8 @@ async function atender(req) {
       anotar(previo, "en_cola", "El robot revisará en Mercado Público si ya quedó enviada.");
       return json({ trabajo: await escribir(store, previo) });
     }
-    const descuento = Math.min(0.6, Math.max(0, b.descuento != null ? Number(b.descuento) || 0 : esLic ? 0.17 : 0.08));
+    // Compra Ágil: se puede ofertar sobre el presupuesto (descuento negativo) hasta el tope de 100 UTM que controla la app
+    const descuento = Math.min(0.6, Math.max(esLic ? 0 : -9, b.descuento != null ? Number(b.descuento) || 0 : esLic ? 0.17 : 0.08));
     const t = {
       codigo, accion, descuento,
       nombre: texto(b.nombre, 200), organismo: texto(b.organismo, 200), monto: Number(b.monto) || null,
