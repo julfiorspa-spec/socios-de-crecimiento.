@@ -194,6 +194,96 @@ const idCorto = () => Date.now().toString(36) + Math.random().toString(36).slice
 // La página de la cotización en Mercado Público puede pedir tus datos de firma y el PDF (con tu código de enlace)
 const ORIGEN_MP = "https://compra-agil.mercadopublico.cl";
 const ORIGENES_MP = new Set([ORIGEN_MP, "https://www.mercadopublico.cl"]);
+// 🔎 estado en vivo de las ofertas enviadas (RadarPúblico) + avisos «vas 1°» / «te seleccionaron»
+async function revisarSeguimiento(store, forzar) {
+  const robot = (await store.get("robot/latido", { type: "json" })) || {};
+  const miRut = String(robot.rut || process.env.PROVEEDOR_RUT || "").replace(/[.\s]/g, "").toUpperCase();
+  const lista = (await todos(store)).filter((t) => t.estado === "enviada" || t.estado === "confirmada");
+  const cache = (await store.get("seguimiento/cache", { type: "json" })) || {};
+  const res = {};
+  // de a 4 consultas a la vez: RadarPúblico corta (429) si recibe muchas juntas; lo que no alcance queda para la próxima
+  const fila = lista.slice(0, 300), inicio = Date.now();
+  const uno = async (t) => {
+    const c = cache[t.codigo];
+    try {
+      const r = await fetch(RADAR_CA + "/" + encodeURIComponent(t.codigo), { headers: { "user-agent": "CotizAgil/1.0", accept: "application/json" }, signal: AbortSignal.timeout(forzar ? 6000 : 3500) });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const p = (await r.json()).payload || {};
+      const pc = Array.isArray(p.proveedores_cotizando) ? p.proveedores_cotizando : [];
+      const rut = (x) => String(x.rut_proveedor || "").replace(/[.\s]/g, "").toUpperCase();
+      const yo = pc.find((x) => miRut && rut(x) === miRut) || pc.find((x) => t.total && Math.abs((x.monto_total || 0) - t.total) <= 50);
+      const sel = pc.find((x) => x.proveedor_seleccionado);
+      const orden = pc.filter((x) => x.activo !== 0).map((x) => x.monto_total || 0).sort((a, b) => a - b);
+      const e = p.estado || {};
+      res[t.codigo] = cache[t.codigo] = {
+        visto: ahora(), estado: e.codigo || null, glosa: e.glosa || null,
+        ofertas: (p.resumen || {}).total_ofertas_recibidas ?? pc.length, competidores: pc.length,
+        mi_total: yo?.monto_total ?? null, mi_lugar: yo ? orden.indexOf(yo.monto_total) + 1 : null,
+        mas_baja: orden[0] ?? null, ganada: !!(yo && yo.proveedor_seleccionado),
+        ganador: sel ? texto(sel.razon_social, 120) : null, ganador_total: sel?.monto_total ?? null,
+        oc: (yo && yo.proveedor_seleccionado ? yo.id_oc : null) || (yo && yo.proveedor_seleccionado ? p.id_orden_compra : null) || null,
+        oc_compra: p.id_orden_compra || null, inadmisible: texto(yo?.justificacion_inadmisibilidad, 200),
+        cierre: (p.fechas || {}).fecha_cierre || null, motivo: texto((p.motivos || {}).motivo_cancelacion || (p.motivos || {}).motivo_desierta, 200),
+        presupuesto: (p.presupuesto || {}).monto_disponible_clp || null, llamado: (p.convocatoria || {}).descripcion || null,
+        siguiente: pc.filter((x) => x !== yo && x.activo !== 0).map((x) => x.monto_total || 0).sort((a, b) => a - b)[0] ?? null,
+      };
+      const g = res[t.codigo];          // lo que se pudo cobrar: hasta el presupuesto o justo bajo el siguiente competidor
+      const techo = Math.min(...[g.presupuesto, g.siguiente ? g.siguiente - 1 : null].filter(Boolean));
+      g.dejado = g.ganada && isFinite(techo) && g.mi_total ? Math.max(0, Math.round(techo - g.mi_total)) : null;
+    } catch (err) {
+      res[t.codigo] = cache[t.codigo] = { ...(c || {}), error: String(err.message || err).slice(0, 120), visto: ahora() };
+    }
+  };
+  const pendientes = [];
+  for (const t of fila) {            // primero lo que ya está en caché (instantáneo), luego consultas reales
+    const c = cache[t.codigo];
+    const final = c && (c.ganada || ["cancelada", "desierta"].includes(c.estado) || (c.estado === "proveedor_seleccionado" && c.ganador));
+    const edad = c ? Date.now() - Date.parse(c.visto) : Infinity;
+    if (c && !forzar && (c.error ? edad < 3 * 60_000 : edad < (final ? 6 * 3600_000 : 10 * 60_000))) res[t.codigo] = c; else pendientes.push(t);
+  }
+  pendientes.sort((a, b) => (cache[a.codigo]?.visto || "").localeCompare(cache[b.codigo]?.visto || ""));   // lo más viejo primero
+  let i = 0, limitado = false;
+  // nunca hacer esperar al celular: a los 3 s (9 s si pidió «actualizar») responde con lo que haya
+  await Promise.race([Promise.all(Array.from({ length: 4 }, async () => {
+    while (i < pendientes.length && !limitado && Date.now() - inicio < (forzar ? 8000 : 2500)) {
+      const t = pendientes[i++];
+      await uno(t);
+      if (String(res[t.codigo]?.error || "").includes("429")) limitado = true;
+    }
+  })), new Promise((ok) => setTimeout(ok, forzar ? 9000 : 3000))]);
+  for (const t of pendientes) if (!res[t.codigo]) res[t.codigo] = cache[t.codigo] || { pendiente: true };
+  await store.setJSON("seguimiento/cache", cache);
+  for (const t of fila) await transicion(store, t, res[t.codigo]);
+  return { res, miRut };
+}
+// 📞 antes de la OC: si vas 1° (cerrada, en evaluación) se abre el negocio «previa», se pide el informe al PC y se avisa
+//    al celular («te pueden llamar»). Si te seleccionan pasa a «ganada» con aviso. Si eligen a otro, se cierra solo.
+async function transicion(store, t, g) {
+  if (!g || g.pendiente || (g.error && !g.estado)) return;
+  const op = t.op, nom = (t.nombre || "").slice(0, 80);
+  if (g.ganada) {
+    if (!op || op.etapa === "previa") {
+      t.op = { ...(op || {}), etapa: "ganada", historial: [...((op || {}).historial || []), { t: ahora(), etapa: "ganada" }],
+        pedido_informe: (op || {}).pedido_informe || { t: ahora() }, oc: g.oc || (op || {}).oc || null };
+      await escribir(store, t);
+      await avisarTexto(store, "🏆 ¡Te seleccionaron! " + t.codigo, `${nom} · ${g.oc ? "OC " + g.oc : "proveedor seleccionado (la OC viene en camino)"}. Abre Negocios: proveedores, utilidad y ejecutor listos.`, "sel-" + t.codigo, "/#robot", true).catch(() => {});
+    } else if (g.oc && !op.oc) { op.oc = g.oc; await escribir(store, t); }
+    return;
+  }
+  const final = ["cancelada", "desierta"].includes(g.estado) || !!g.ganador;
+  if (!op && g.mi_lugar === 1 && g.estado && g.estado !== "publicada" && !final) {
+    t.op = { etapa: "previa", historial: [{ t: ahora(), etapa: "previa" }], pedido_informe: { t: ahora() }, primero: ahora() };
+    await escribir(store, t);
+    const ventaja = g.siguiente && g.mi_total ? " · " + Math.round(g.siguiente - g.mi_total).toLocaleString("es-CL") + " bajo el 2°" : "";
+    await avisarTexto(store, "📞 Te pueden llamar: vas 1° · " + t.codigo, `${nom} · tu oferta $${Math.round(g.mi_total || t.total || 0).toLocaleString("es-CL")}${ventaja}. Abre la app: qué decir, proveedores y utilidad ya están listos.`, "pri-" + t.codigo, "/#robot", true).catch(() => {});
+    return;
+  }
+  if (op?.etapa === "previa" && (final || (g.mi_lugar && g.mi_lugar > 1))) {
+    delete t.op; t.previa_fin = { t: ahora(), motivo: g.ganador ? "Seleccionaron a " + g.ganador : g.estado || "ya no vas 1°" };
+    await escribir(store, t);
+  }
+}
+
 export default async (req) => {
   const origen = req.headers.get("origin") || "";
   const mp = ORIGENES_MP.has(origen);
@@ -299,70 +389,7 @@ async function atender(req) {
 
   // ---------- 📨 seguimiento en vivo de las enviadas (estado en Mercado Público, ganador y orden de compra) ----------
   if (ruta === "seguimiento" && req.method === "GET") {
-    const robot = (await store.get("robot/latido", { type: "json" })) || {};
-    const miRut = String(robot.rut || process.env.PROVEEDOR_RUT || "").replace(/[.\s]/g, "").toUpperCase();
-    const lista = (await todos(store)).filter((t) => t.estado === "enviada" || t.estado === "confirmada");
-    const cache = (await store.get("seguimiento/cache", { type: "json" })) || {};
-    const forzar = url.searchParams.get("forzar") === "1";
-    const res = {};
-    // de a 4 consultas a la vez: RadarPúblico corta (429) si recibe muchas juntas; lo que no alcance queda para la próxima
-    const fila = lista.slice(0, 300), inicio = Date.now();
-    const uno = async (t) => {
-      const c = cache[t.codigo];
-      try {
-        const r = await fetch(RADAR_CA + "/" + encodeURIComponent(t.codigo), { headers: { "user-agent": "CotizAgil/1.0", accept: "application/json" }, signal: AbortSignal.timeout(forzar ? 6000 : 3500) });
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        const p = (await r.json()).payload || {};
-        const pc = Array.isArray(p.proveedores_cotizando) ? p.proveedores_cotizando : [];
-        const rut = (x) => String(x.rut_proveedor || "").replace(/[.\s]/g, "").toUpperCase();
-        const yo = pc.find((x) => miRut && rut(x) === miRut) || pc.find((x) => t.total && Math.abs((x.monto_total || 0) - t.total) <= 50);
-        const sel = pc.find((x) => x.proveedor_seleccionado);
-        const orden = pc.filter((x) => x.activo !== 0).map((x) => x.monto_total || 0).sort((a, b) => a - b);
-        const e = p.estado || {};
-        res[t.codigo] = cache[t.codigo] = {
-          visto: ahora(), estado: e.codigo || null, glosa: e.glosa || null,
-          ofertas: (p.resumen || {}).total_ofertas_recibidas ?? pc.length, competidores: pc.length,
-          mi_total: yo?.monto_total ?? null, mi_lugar: yo ? orden.indexOf(yo.monto_total) + 1 : null,
-          mas_baja: orden[0] ?? null, ganada: !!(yo && yo.proveedor_seleccionado),
-          ganador: sel ? texto(sel.razon_social, 120) : null, ganador_total: sel?.monto_total ?? null,
-          oc: (yo && yo.proveedor_seleccionado ? yo.id_oc : null) || (yo && yo.proveedor_seleccionado ? p.id_orden_compra : null) || null,
-          oc_compra: p.id_orden_compra || null, inadmisible: texto(yo?.justificacion_inadmisibilidad, 200),
-          cierre: (p.fechas || {}).fecha_cierre || null, motivo: texto((p.motivos || {}).motivo_cancelacion || (p.motivos || {}).motivo_desierta, 200),
-          presupuesto: (p.presupuesto || {}).monto_disponible_clp || null, llamado: (p.convocatoria || {}).descripcion || null,
-          siguiente: pc.filter((x) => x !== yo && x.activo !== 0).map((x) => x.monto_total || 0).sort((a, b) => a - b)[0] ?? null,
-        };
-        const g = res[t.codigo];          // lo que se pudo cobrar: hasta el presupuesto o justo bajo el siguiente competidor
-        const techo = Math.min(...[g.presupuesto, g.siguiente ? g.siguiente - 1 : null].filter(Boolean));
-        g.dejado = g.ganada && isFinite(techo) && g.mi_total ? Math.max(0, Math.round(techo - g.mi_total)) : null;
-      } catch (err) {
-        res[t.codigo] = cache[t.codigo] = { ...(c || {}), error: String(err.message || err).slice(0, 120), visto: ahora() };
-      }
-    };
-    const pendientes = [];
-    for (const t of fila) {            // primero lo que ya está en caché (instantáneo), luego consultas reales
-      const c = cache[t.codigo];
-      const final = c && (c.ganada || ["cancelada", "desierta"].includes(c.estado) || (c.estado === "proveedor_seleccionado" && c.ganador));
-      const edad = c ? Date.now() - Date.parse(c.visto) : Infinity;
-      if (c && !forzar && (c.error ? edad < 3 * 60_000 : edad < (final ? 6 * 3600_000 : 10 * 60_000))) res[t.codigo] = c; else pendientes.push(t);
-    }
-    pendientes.sort((a, b) => (cache[a.codigo]?.visto || "").localeCompare(cache[b.codigo]?.visto || ""));   // lo más viejo primero
-    let i = 0, limitado = false;
-    // nunca hacer esperar al celular: a los 3 s (9 s si pidió «actualizar») responde con lo que haya
-    await Promise.race([Promise.all(Array.from({ length: 4 }, async () => {
-      while (i < pendientes.length && !limitado && Date.now() - inicio < (forzar ? 8000 : 2500)) {
-        const t = pendientes[i++];
-        await uno(t);
-        if (String(res[t.codigo]?.error || "").includes("429")) limitado = true;
-      }
-    })), new Promise((ok) => setTimeout(ok, forzar ? 9000 : 3000))]);
-    for (const t of pendientes) if (!res[t.codigo]) res[t.codigo] = cache[t.codigo] || { pendiente: true };
-    await store.setJSON("seguimiento/cache", cache);
-    for (const t of fila) {               // recién ganada: abre su negocio y pide el informe al PC
-      if (res[t.codigo]?.ganada && !t.op) {
-        t.op = { etapa: "ganada", historial: [{ t: ahora(), etapa: "ganada" }], pedido_informe: { t: ahora() }, oc: res[t.codigo].oc };
-        await escribir(store, t);
-      }
-    }
+    const { res, miRut } = await revisarSeguimiento(store, url.searchParams.get("forzar") === "1");
     return json({ seguimiento: res, rut: miRut || null });
   }
 
@@ -712,6 +739,12 @@ async function atender(req) {
     if (vencidos.length) {
       for (const r of vencidos) { r.avisado = ahora(); await avisarTexto(store, "⏰ " + (r.codigo || "Recordatorio"), r.texto, "rec-" + r.id, r.codigo ? "/#robot=" + r.codigo : "/#robot", true); }
       await store.setJSON("recordatorios", rec);
+    }
+    // 🔎 cada 5 min el latido del PC revisa el portal: así llegan los avisos «vas 1°» aunque nadie tenga la app abierta
+    const segAuto = (await store.get("seguimiento/auto", { type: "json" })) || {};
+    if (Date.now() - Date.parse(segAuto.t || 0) > 5 * 60_000) {
+      await store.setJSON("seguimiento/auto", { t: ahora() });
+      try { await revisarSeguimiento(store, false); } catch {}
     }
     const empresas = (await store.get("empresas/lista", { type: "json" })) || {};
     const op = { ...(pidio ? { oportunidades: true } : {}), ...(negocios.length ? { negocios } : {}), ...(preguntas.length ? { preguntas } : {}), empresas };
