@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      1.7
+// @version      1.8
 // @description  Al abrir una Compra Ágil desde «Ir a firmar», carga sola los precios, el detalle y el PDF de tu oferta. NO envía, NO declara y NO firma: eso lo haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -173,9 +173,10 @@
       if (!token) return;
       const ua = navigator.userAgent;
       const disp = (await gmGet("dispositivo")) || (/iphone/i.test(ua) ? "iPhone" : /android/i.test(ua) ? "Android" : "Celular");
-      try { await pedir("pedir", "json", { codigo: lista.toUpperCase(), accion: "verificar", dispositivo: disp }); decir("✓ Cotización enviada correctamente. El robot la confirma y queda en «Enviados». Cerrando esta pestaña…"); }
-      catch (e) { decir("Enviada. Abre la app y toca «Ya la firmé» para confirmarla."); return; }
-      setTimeout(() => { try { window.close(); } catch (e) {} setTimeout(() => { if (!document.hidden) location.replace(APP + "/#robot"); }, 600); }, 2500);
+      // ⚡ vuelta inmediata a la app: el aviso al robot sale ya (y la app lo repite al abrir, por si se corta)
+      decir("✓ Cotización enviada. Volviendo a la app…");
+      await Promise.race([pedir("pedir", "json", { codigo: lista.toUpperCase(), accion: "verificar", dispositivo: disp }).catch(() => {}), espera(500)]);
+      location.replace(APP + "/#firmada=" + encodeURIComponent(lista.toUpperCase()));
       return;
     }
     if (!cod && !publicada && !hechas.has("ir")) {          // en otra página de Compra Ágil (p. ej. después del login)
@@ -190,7 +191,9 @@
     if (!token) { decir("Abre una vez la app <b>cotizagil.netlify.app</b> en este navegador (ya enlazada con el robot) y vuelve a esta página."); return; }
     await rellenar(cod);
   }
-  gmGet("token").then((t) => { token = t || null; setInterval(revisar, 1000); revisar(); });
+  gmGet("token").then((t) => { token = t || null; setInterval(revisar, 1000); revisar();
+    // detecta «enviada correctamente» apenas aparece en pantalla (sin esperar el siguiente segundo)
+    let pend = 0; new MutationObserver(() => { if (!pend) pend = setTimeout(() => { pend = 0; revisar(); }, 120); }).observe(document.body, { childList: true, subtree: true, characterData: true }); });
 
   async function rellenar(cod) {
     let t;
