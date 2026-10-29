@@ -668,9 +668,8 @@
       const cod = decodeURIComponent(f[1]).toUpperCase();
       history.replaceState(null, "", location.pathname + "#inicio");
       try { sessionStorage.setItem("sdc:portada", "1"); } catch {}
-      R.oportTab = "firmar"; R.firIdx = 0;
-      if (R.token) api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "verificar", dispositivo: dispositivo(false) }) }).catch(() => {});
-      setTimeout(() => { abrir(); toast("✅ " + cod + " enviada · el robot la confirma. ¡Sigue con la próxima!"); }, 30);
+      marcarFirmada(cod, false);
+      setTimeout(() => { abrir(); toast("✅ " + cod + " firmada · ya no está en Firmar. ¡Va la próxima!"); }, 30);
       return;
     }
     const m = location.hash.match(/enlazar=([A-Za-z0-9_-]{16,})/);
@@ -928,6 +927,24 @@
   const EN_FIRMA = ["en_cola", "tomado", "preparando", "lista", "firmar", "probada", "requiere", "error",
     "lic_bajando", "lic_captcha", "lic_analizando", "lic_revisar", "lic_lista", "lic_ingresando"];
   const HECHA = ["enviada", "confirmada"];
+  // ✅ ya firmada: Mercado Público dijo «enviada correctamente» (aviso de Firma rápida o de otro celular). No vuelve a Firmar
+  //    aunque el robot del PC todavía la esté confirmando; pasa directo a Enviadas.
+  const FIRMADAS = "sdc:firmadas";
+  const leerFirmadas = () => { try { const o = JSON.parse(localStorage.getItem(FIRMADAS)) || {}; for (const k in o) if (Date.now() - o[k] > 12 * 3600e3) delete o[k]; return o; } catch { return {}; } };
+  const yaFirmada = (t) => { if (!t || HECHA.includes(t.estado)) return false;
+    const c = Date.parse(t.creado || 0) || 0, l = leerFirmadas()[t.codigo], v = Date.parse(t.enviada_vista || 0) || 0;
+    return (l && l >= c) || (v && v >= c); };
+  function marcarFirmada(cod, avisar) {
+    cod = String(cod || "").toUpperCase(); if (!cod) return;
+    const o = leerFirmadas(); const nueva = !o[cod]; o[cod] = Date.now(); try { localStorage.setItem(FIRMADAS, JSON.stringify(o)); } catch {}
+    if (R.token && nueva) api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "verificar", vista: true, dispositivo: dispositivo(false) }) }).catch(() => {});
+    try { ABIERTAS[cod]?.w?.close(); } catch {}          // la pestaña de Mercado Público que abrió la app se cierra sola
+    delete ABIERTAS[cod];
+    R.oportTab = "firmar"; R.firIdx = 0;
+    if (avisar && nueva) toast("✅ " + cod + " firmada · ya no está en Firmar. ¡Va la próxima!");
+    if ($("#rbSheet")?.classList.contains("on")) pintarHoja(true);
+  }
+  window.addEventListener("cotizagil-firmada", (e) => marcarFirmada(e.detail, true));     // aviso de Firma rápida (pestaña de Mercado Público)
   /* ---------- ⭐ Seleccionadas (compartidas entre tus celulares, guardadas en la nube) ---------- */
   const SELK = "sdc:sel-juego";
   const leerSel = () => R.sel || (() => { try { return JSON.parse(localStorage.getItem(SELK)) || {}; } catch { return {}; } })();
@@ -1213,12 +1230,12 @@
     const cierreDe = (t) => t.cierre || (lista.find((x) => x.codigo === t.codigo) || {}).cierre || (leerSel()[t.codigo] || {}).cierre;
     const cerrada = (t) => /\bCERRADA\b/.test(t.mensaje || "") || /(compra|cotizaci[oó]n|convocatoria)[^.]{0,30}cerrad|ya no (recibe|acepta) (cotizaciones|ofertas)|fuera de plazo/i.test(t.mensaje || "")
       || (cierreDe(t) && Date.parse(cierreDe(t)) < ahora);
-    const enFirma = trabajos.filter((t) => EN_FIRMA.includes(t.estado) && !ocultas[t.codigo] && !(cerrada(t) && !["tomado", "preparando"].includes(t.estado)));
-    const aLimpiar = trabajos.filter((t) => EN_FIRMA.includes(t.estado) && !ocultas[t.codigo] && cerrada(t) && !["tomado", "preparando"].includes(t.estado));
+    const enFirma = trabajos.filter((t) => EN_FIRMA.includes(t.estado) && !ocultas[t.codigo] && !yaFirmada(t) && !(cerrada(t) && !["tomado", "preparando"].includes(t.estado)));
+    const aLimpiar = trabajos.filter((t) => EN_FIRMA.includes(t.estado) && !ocultas[t.codigo] && !yaFirmada(t) && cerrada(t) && !["tomado", "preparando"].includes(t.estado));
     if (aLimpiar.length && !R._limpiando) { R._limpiando = true;
       setTimeout(async () => { for (const t of aLimpiar) await quitarFirma(t.codigo, null, "cerrada");
         toast(`🗑 Quité ${aLimpiar.length} compra${aLimpiar.length > 1 ? "s" : ""} ya cerrada${aLimpiar.length > 1 ? "s" : ""} de Firmar`); R._limpiando = false; }, 0); }
-    const hechas = [...trabajos.filter((t) => HECHA.includes(t.estado)),
+    const hechas = [...trabajos.filter((t) => HECHA.includes(t.estado) || yaFirmada(t)),
       ...lista.filter((x) => (x.ya_ofertada || x.trabajada) && !trabajo(x.codigo)).map((x) => ({ ...x, _oport: true }))];
     const papelera = lista.filter((x) => descartada(x.codigo));
     const esSeg = (x) => /^segundo/i.test(x.llamado || "");
@@ -1286,13 +1303,13 @@
       : caja(x);
     const ordenF = (t) => ["firmar", "lic_revisar", "lic_lista", "lista"].includes(t.estado) ? 0 : ["requiere", "error"].includes(t.estado) ? 1 : 2;
     const selObj = leerSel();
-    const enviadasCods = new Set(trabajos.filter((t) => HECHA.includes(t.estado)).map((t) => t.codigo));
+    const enviadasCods = new Set(trabajos.filter((t) => HECHA.includes(t.estado) || yaFirmada(t)).map((t) => t.codigo));
     // Seleccionadas: las que elegiste y todavía no van al robot (cuando las mandas a firmar pasan a «Por firmar»)
     const sel = Object.keys(selObj).filter((c) => deMiEmpresa(selObj[c]) && !(R.selFuera || {})[c] && !enviadasCods.has(c) && !trabajo(c) && !lista.find((x) => x.codigo === c && x.ya_ofertada))
       .map((c) => ({ ...selObj[c], ...(lista.find((x) => x.codigo === c) || {}), codigo: c, _sel: selObj[c] }))
       .sort((a, b) => (b._sel.desde || "").localeCompare(a._sel.desde || ""));        // la última que elegiste, primero
     if (!R.sel && !R._selPedido) { R._selPedido = true; cargarSel().then(pintarHoja); }
-    const enviadosAll = trabajos.filter((t) => HECHA.includes(t.estado)).sort((a, b) => (b.actualizado || "").localeCompare(a.actualizado || ""));
+    const enviadosAll = trabajos.filter((t) => HECHA.includes(t.estado) || yaFirmada(t)).sort((a, b) => (b.actualizado || "").localeCompare(a.actualizado || ""));
     if ((tab === "hechas" || tab === "ganadas" || !R.seg) && enviadosAll.length && (!R.segT || Date.now() - R.segT > 60_000)) cargarSeg(false);
     const ganadasT = enviadosAll.filter((t) => segDe(t.codigo)?.ganada || t.op?.etapa === "previa" || t.op?.oc_codigo || t.externa);   // 📞 previa: vas 1°, antes de la OC
     const enviadosT = enviadosAll.filter((t) => !segDe(t.codigo)?.ganada);
