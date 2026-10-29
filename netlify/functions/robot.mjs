@@ -275,7 +275,12 @@ async function atender(req) {
           oc: (yo && yo.proveedor_seleccionado ? yo.id_oc : null) || (yo && yo.proveedor_seleccionado ? p.id_orden_compra : null) || null,
           oc_compra: p.id_orden_compra || null, inadmisible: texto(yo?.justificacion_inadmisibilidad, 200),
           cierre: (p.fechas || {}).fecha_cierre || null, motivo: texto((p.motivos || {}).motivo_cancelacion || (p.motivos || {}).motivo_desierta, 200),
+          presupuesto: (p.presupuesto || {}).monto_disponible_clp || null, llamado: (p.convocatoria || {}).descripcion || null,
+          siguiente: pc.filter((x) => x !== yo && x.activo !== 0).map((x) => x.monto_total || 0).sort((a, b) => a - b)[0] ?? null,
         };
+        const g = res[t.codigo];          // lo que se pudo cobrar: hasta el presupuesto o justo bajo el siguiente competidor
+        const techo = Math.min(...[g.presupuesto, g.siguiente ? g.siguiente - 1 : null].filter(Boolean));
+        g.dejado = g.ganada && isFinite(techo) && g.mi_total ? Math.max(0, Math.round(techo - g.mi_total)) : null;
       } catch (err) {
         res[t.codigo] = { ...(c || {}), error: String(err.message || err).slice(0, 120), visto: c?.visto || ahora() };
       }
@@ -297,7 +302,79 @@ async function atender(req) {
     }));
     for (const t of pendientes) if (!res[t.codigo]) res[t.codigo] = cache[t.codigo] || { pendiente: true };
     await store.setJSON("seguimiento/cache", cache);
+    for (const t of fila) {               // recién ganada: abre su negocio y pide el informe al PC
+      if (res[t.codigo]?.ganada && !t.op) {
+        t.op = { etapa: "ganada", historial: [{ t: ahora(), etapa: "ganada" }], pedido_informe: { t: ahora() }, oc: res[t.codigo].oc };
+        await escribir(store, t);
+      }
+    }
     return json({ seguimiento: res, rut: miRut || null });
+  }
+
+  // ---------- 🏆 negocio ganado: etapas Inversionista → Operación → Despacho → Entrega → Cerrado ----------
+  const ETAPAS = ["ganada", "inversionista", "operacion", "despacho", "entrega", "cerrado"];
+  if (ruta === "operacion" && req.method === "POST") {
+    const b = await cuerpo(req);
+    const t = await leer(store, limpiaCodigo(b.codigo));
+    if (!t) return json({ error: "No existe." }, 404);
+    const op = t.op || { etapa: "ganada", historial: [] };
+    if (b.etapa && ETAPAS.includes(b.etapa) && b.etapa !== op.etapa) {
+      op.historial = [...(op.historial || []), { t: ahora(), etapa: b.etapa, por: texto(b.dispositivo, 60) }].slice(-30);
+      op.etapa = b.etapa;
+    }
+    const d = b.datos && typeof b.datos === "object" ? b.datos : {};
+    for (const k of ["proveedor", "contacto", "telefono", "email", "transporte", "notas", "medio_pago", "guia", "factura"]) if (d[k] !== undefined) op[k] = texto(d[k], 300);
+    for (const k of ["precio_acordado", "costo_transporte", "opcion"]) if (d[k] !== undefined) op[k] = d[k] === null ? null : Math.max(0, Math.round(Number(d[k]) || 0));
+    for (const k of ["inversion_ok", "compra_ok", "despacho_ok", "guia_firmada", "factura_firmada", "aplica_comision"]) if (d[k] !== undefined) op[k] = !!d[k];
+    if (d.comision !== undefined) op.comision = Math.min(0.10, Math.max(0.01, Number(d.comision) || 0.04));
+    if (b.pedir_informe) op.pedido_informe = { t: ahora(), rebuscar: !!b.rebuscar };
+    t.op = op;
+    return json({ trabajo: await escribir(store, t) });
+  }
+  // archivos del negocio: informe PDF y Excel (los sube el PC), fotos / guías / facturas (las sube el celular)
+  if (ruta === "subir" && req.method === "POST") {
+    const b = await cuerpo(req);
+    const t = await leer(store, limpiaCodigo(b.codigo));
+    if (!t) return json({ error: "No existe." }, 404);
+    const tipo = ["foto", "guia", "factura", "otro"].includes(b.tipo) ? b.tipo : "otro";
+    const bytes = Buffer.from(String(b.b64 || ""), "base64");
+    if (!bytes.length || bytes.length > MAX_PDF) return json({ error: "Archivo vacío o de más de 4,5 MB." }, 400);
+    const op = t.op || { etapa: "ganada", historial: [] };
+    const id = Date.now().toString(36);
+    await store.set(`doc/${t.codigo}/${id}`, bytes);
+    op.docs = [...(op.docs || []), { id, tipo, nombre: texto(b.nombre, 120) || tipo, mime: texto(b.mime, 60) || "application/octet-stream",
+      kb: Math.round(bytes.length / 1024), fecha: ahora(), por: texto(b.dispositivo, 60) }].slice(-40);
+    if (tipo === "foto" && b.cerrar) {                 // la foto de la entrega cierra el negocio (en oro)
+      op.historial = [...(op.historial || []), { t: ahora(), etapa: "cerrado", por: texto(b.dispositivo, 60) }].slice(-30);
+      op.etapa = "cerrado"; op.cerrado = ahora();
+    }
+    t.op = op;
+    return json({ trabajo: await escribir(store, t) });
+  }
+  if (ruta === "archivo" && req.method === "GET") {
+    const codigo = limpiaCodigo(url.searchParams.get("codigo"));
+    const tipo = url.searchParams.get("tipo");
+    const llave = tipo === "informe" ? "inf/" + codigo : tipo === "excel" ? "xls/" + codigo : "doc/" + codigo + "/" + String(url.searchParams.get("id") || "").replace(/[^a-z0-9]/gi, "");
+    const data = await store.get(llave, { type: "arrayBuffer" });
+    if (!data) return json({ error: "No está ese archivo." }, 404);
+    const t = await leer(store, codigo);
+    const meta = (t?.op?.docs || []).find((x) => x.id === url.searchParams.get("id"));
+    const mime = tipo === "informe" ? "application/pdf" : tipo === "excel" ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : meta?.mime || "application/octet-stream";
+    const nombre = tipo === "informe" ? `Informe_negocio_${codigo}.pdf` : tipo === "excel" ? `Negocio_${codigo}.xlsx` : (meta?.nombre || "archivo").replace(/[^\w.\- ]/g, "_");
+    return new Response(data, { headers: { "content-type": mime, "content-disposition": `${tipo === "excel" ? "attachment" : "inline"}; filename="${nombre}"`, "cache-control": "no-store" } });
+  }
+  // el PC sube el informe de negocio (PDF + Excel + resumen)
+  if (ruta === "negocio-subir" && req.method === "POST") {
+    const b = await cuerpo(req);
+    const t = await leer(store, limpiaCodigo(b.codigo));
+    if (!t) return json({ error: "No existe." }, 404);
+    const op = t.op || { etapa: "ganada", historial: [{ t: ahora(), etapa: "ganada" }] };
+    if (b.informe_b64) { const x = Buffer.from(String(b.informe_b64), "base64"); if (x.length <= MAX_PDF && x.subarray(0, 4).toString() === "%PDF") await store.set("inf/" + t.codigo, x); }
+    if (b.xlsx_b64) { const x = Buffer.from(String(b.xlsx_b64), "base64"); if (x.length <= MAX_PDF && x.subarray(0, 2).toString() === "PK") await store.set("xls/" + t.codigo, x); }
+    if (b.resumen && typeof b.resumen === "object") op.informe = { ...b.resumen, fecha: ahora() };
+    op.pedido_informe = null;
+    t.op = op;
+    return json({ trabajo: await escribir(store, t) });
   }
 
   // ---------- comprobante PDF del envío (lo sube el PC al confirmar) ----------
@@ -444,9 +521,10 @@ async function atender(req) {
     });
     const pidio = await store.get("oportunidades/pedido", { type: "json" });   // la app pidió actualizar oportunidades
     if (pidio) await store.delete("oportunidades/pedido");
-    const op = pidio ? { oportunidades: true } : {};
-    if (b.ocupado) return json({ siguiente: null, ...op });
     const lista = await todos(store);
+    const negocios = lista.filter((t) => t.op?.pedido_informe).map((t) => ({ codigo: t.codigo, total: t.total, op: t.op })).slice(0, 5);
+    const op = { ...(pidio ? { oportunidades: true } : {}), ...(negocios.length ? { negocios } : {}) };
+    if (b.ocupado) return json({ siguiente: null, ...op });
     // un pedido tomado que quedó colgado (PC apagado a mitad de camino) vuelve a la cola
     for (const t of lista) {
       if (t.estado === "tomado" && Date.now() - Date.parse(t.actualizado) > TOMADO_VENCE_MS) {
