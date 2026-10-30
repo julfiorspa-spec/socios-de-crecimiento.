@@ -758,7 +758,7 @@ async function atender(req) {
     const d = b.datos && typeof b.datos === "object" ? b.datos : {};
     for (const k of ["proveedor", "contacto", "telefono", "email", "transporte", "notas", "medio_pago", "guia", "factura", "motivo_no", "folio_guia", "folio_factura",
       "ejecutor", "ejecutor_nombre", "plazo_proveedor", "fecha_entrega", "banco_proveedor", "negociacion", "plazo_fecha", "plazo_nota", "incidencia",
-      "transportista", "transportista_tel", "origen_flete", "patente", "recibio_nombre", "recibio_rut", "fecha_cobro", "inversionista_nombre", "inversionista_tel", "despacho_modo", "proveedor_k", "proveedor_email", "proveedor_tel", "entrega_contacto", "entrega_tel", "vehiculo", "factoring", "nota_cierre"]) if (d[k] !== undefined) op[k] = texto(d[k], 400);
+      "transportista", "transportista_tel", "origen_flete", "patente", "recibio_nombre", "recibio_rut", "fecha_cobro", "inversionista_nombre", "inversionista_tel", "despacho_modo", "proveedor_k", "proveedor_email", "proveedor_tel", "entrega_contacto", "entrega_tel", "vehiculo", "factoring", "nota_cierre", "twitch_canal", "video_prueba"]) if (d[k] !== undefined) op[k] = texto(d[k], 400);
     for (const k of ["precio_acordado", "costo_transporte", "opcion", "km", "cobrado"]) if (d[k] !== undefined) op[k] = d[k] === null ? null : Math.max(0, Math.round(Number(d[k]) || 0));
     const yaPedido = !!op.pedido_transferencia;
     for (const k of ["inversion_ok", "compra_ok", "despacho_ok", "guia_firmada", "factura_firmada", "aplica_comision", "nos_da", "proveedor_pagado", "guia_hecha", "factura_hecha", "oc_aceptada", "pedido_transferencia", "transferido"]) if (d[k] !== undefined) op[k] = !!d[k];
@@ -778,6 +778,8 @@ async function atender(req) {
       if (x) { op.docs = op.docs.filter((y) => y.id !== id); await store.delete(`doc/${t.codigo}/${id}`).catch(() => {}); if (x.tipo === "oc") op.oc_pdf_intento = null; }
     }
     const avisarPago = d.pedido_transferencia === true && !yaPedido;
+    const avisarVivo = d.en_vivo === true && !op.en_vivo;      // 🔴 transmisión en vivo de la entrega (lentes Meta → Twitch)
+    if (d.en_vivo !== undefined) { op.en_vivo = !!d.en_vivo; if (d.en_vivo) op.vivo_desde = ahora(); else op.vivo_hasta = ahora(); }
     if (d.proveedor_extra && typeof d.proveedor_extra === "object" && d.proveedor_extra.proveedor) {
       const x = d.proveedor_extra;
       op.extras = [...(op.extras || []), { proveedor: texto(x.proveedor, 120), telefono: texto(x.telefono, 40), email: texto(x.email, 120), fuente: texto(x.fuente, 30) || "manual" }].slice(-6);
@@ -785,6 +787,7 @@ async function atender(req) {
     if (b.pedir_informe || (cambioEtapa && AVISO_INV[op.etapa]) || d.precio_acordado !== undefined || d.costo_transporte !== undefined) op.pedido_informe = { t: ahora(), rebuscar: !!b.rebuscar };
     t.op = op;
     const r = await escribir(store, t);
+    if (avisarVivo && op.twitch_canal) await avisarTexto(store, "🔴 En vivo: " + String(t.nombre || t.codigo).slice(0, 50), `${t.codigo} · mira la entrega en directo: twitch.tv/${op.twitch_canal}`, "vivo-" + t.codigo, "https://www.twitch.tv/" + encodeURIComponent(op.twitch_canal), true).catch(() => {});
     if (avisarPago) await avisarTexto(store, "💸 Inversionista: paga a " + String(op.proveedor || "proveedor").slice(0, 40), `${t.codigo} · ${"$" + Math.round(op.precio_acordado || 0).toLocaleString("es-CL")}${op.banco_proveedor ? " · " + texto(op.banco_proveedor, 140) : ""}. Sube el comprobante en Ejecuta para que avance.`, "pago-" + t.codigo, "/#robot", true).catch(() => {});
     if (cambioEtapa && AVISO_INV[op.etapa]) {        // 💼 aviso al inversionista (push) con el resumen del negocio
       const util = op.informe?.final != null ? " · utilidad " + "$" + Math.round(op.informe.final).toLocaleString("es-CL") : "";
@@ -963,6 +966,7 @@ async function atender(req) {
       empresa: texto(b.empresa, 40) || previo?.empresa || null,   // con qué empresa (RUT y datos) se arma la oferta
       jugador: jug(b.jugador) || previo?.jugador || null,         // qué celular (qué juego) la pidió
       dispositivo: texto(b.dispositivo, 60) || previo?.dispositivo || null,
+      persona: texto(b.persona, 60) || previo?.persona || null,               // quién la pidió (nombre que puso en la app)
     };
     if (esLic) t.tipo = "licitacion";
     anotar(t, "en_cola", accion === "probar" ? "Prueba sin enviar: el robot la tomará en segundos." : esLic ? "Licitación: el robot bajará la ficha, las bases y los anexos." : "Esperando que el robot del PC la tome.");
@@ -1043,6 +1047,50 @@ async function atender(req) {
     return json({ trabajo: r });
   }
   // ---------- 🛠 Ejecuta: socios ejecutadores (compran, negocian, entregan y cierran con guía y factura firmadas) ----------
+  // 💎 planes de suscripción (USD/mes): cada celular/juego tiene el suyo; el dueño los activa cuando llega el pago
+  const PLANES = { basico: { usd: 20, nombre: "Básico" }, medio: { usd: 100, nombre: "Medio" }, premium: { usd: 1000, nombre: "Premium" } };
+  if (ruta === "plan" && req.method === "GET") {
+    const L = (await store.get("planes/lista", { type: "json" })) || {};
+    const j = jug(url.searchParams.get("jugador"));
+    const links = Object.fromEntries(Object.keys(PLANES).map((k) => [k, process.env["PAGO_" + k.toUpperCase()] || null]));
+    return json({ plan: (j && L[j]) || null, planes: PLANES, links, todos: url.searchParams.get("admin") === "1" ? L : undefined });
+  }
+  if (ruta === "plan" && req.method === "POST") {
+    const b = await cuerpo(req);
+    const L = (await store.get("planes/lista", { type: "json" })) || {};
+    const j = jug(b.jugador); if (!j) return json({ error: "Falta el juego." }, 400);
+    const plan = PLANES[b.plan] ? b.plan : null; if (!plan) return json({ error: "Plan desconocido." }, 400);
+    const previo = L[j] || {};
+    if (b.activar) {                                           // lo hace el dueño (desde el informe global) al confirmar el pago
+      L[j] = { ...previo, plan, estado: "activo", desde: previo.desde || ahora(), activado: ahora(), hasta: texto(b.hasta, 20) || null, nombre: previo.nombre || texto(b.nombre, 60) };
+    } else {
+      L[j] = { ...previo, plan_pedido: plan, estado: previo.estado === "activo" ? "activo" : "pendiente_pago", pedido: ahora(), nombre: texto(b.nombre, 60) || previo.nombre || null, telefono: texto(b.telefono, 30) || previo.telefono || null };
+      await avisarTexto(store, "💎 Pidieron el plan " + PLANES[plan].nombre, `${L[j].nombre || "Un jugador"} quiere el plan ${PLANES[plan].nombre} (USD ${PLANES[plan].usd}/mes). Actívalo en 🌍 Informe global cuando llegue el pago.`, "plan-" + j, "/#robot").catch(() => {});
+    }
+    await store.setJSON("planes/lista", L);
+    return json({ ok: true, plan: L[j] });
+  }
+  // 🌍 informe global: todo lo que se ha hecho en la app, en todos los juegos, y quién lo hizo
+  if (ruta === "global" && req.method === "GET") {
+    const lista = await todos(store);
+    const corto = (x, n) => (x == null ? null : String(x).slice(0, n));
+    return json({
+      jugadores: (await store.get("ejecutores/lista", { type: "json" })) || {},
+      trabajos: lista.slice(0, 700).map((t) => ({
+        codigo: t.codigo, nombre: corto(t.nombre, 160), organismo: corto(t.organismo, 120), estado: t.estado, accion: t.accion, tipo: t.tipo || null,
+        total: t.total, jugador: t.jugador || null, persona: t.persona || null, dispositivo: t.dispositivo || null, empresa: t.empresa || null,
+        creado: t.creado, actualizado: t.actualizado, fecha_envio: t.fecha_envio || null, externa: !!t.externa, detalle: corto(t.detalle, 240),
+        items: (t.items || []).slice(0, 6),
+        oc_compra: t.oc_compra ? { organismo: corto(t.oc_compra.organismo, 120), unidad: corto(t.oc_compra.unidad, 120), direccion: corto(t.oc_compra.direccion, 160),
+          mail: t.oc_compra.mail || null, fono: t.oc_compra.fono || null, nombre: corto(t.oc_compra.nombre, 160),
+          items: (t.oc_compra.items || []).slice(0, 6).map((i) => ({ nombre: corto(i.nombre, 80), especificacion: corto(i.especificacion, 100) })) } : null,
+        op: t.op ? { etapa: t.op.etapa, oc_codigo: t.op.oc_codigo || null, precio_acordado: t.op.precio_acordado || null, proveedor: corto(t.op.proveedor, 80),
+          docs: (t.op.docs || []).filter((d) => d.tipo === "oc"),
+          informe: t.op.informe ? { final: t.op.informe.final ?? null, direccion: corto(t.op.informe.direccion, 160), comprador: t.op.informe.comprador || null,
+            que_comprar: (t.op.informe.que_comprar || []).slice(0, 4).map((x) => ({ que: corto(x.que, 100) })) } : null } : null,
+      })),
+    });
+  }
   if (ruta === "ejecutores" && req.method === "GET") return json({ ejecutores: (await store.get("ejecutores/lista", { type: "json" })) || {} });
   if (ruta === "ejecutor" && req.method === "POST") {
     const b = await cuerpo(req);
