@@ -2575,15 +2575,18 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   // ☁️ robot en la nube 24/7: funciona aunque el PC esté apagado
   async function cargarNube() {
     if (R._cargNube) return; R._cargNube = true;
-    try { R.nube = await api("nube-estado"); R.nubeT = Date.now(); pintarHojaSiAbierta(); } catch {} finally { R._cargNube = false; }
+    try { const [n, so] = await Promise.all([api("nube-estado"), api("nube-solicitudes").catch(() => ({}))]); R.nube = { ...n, solicitudes: so.solicitudes || [] }; R.nubeT = Date.now(); pintarHojaSiAbierta(); } catch {} finally { R._cargNube = false; }
   }
   function bloqueNube() {
-    if (!R.nubeT || Date.now() - R.nubeT > 30000) setTimeout(cargarNube, 0);
+    if (!R.nubeT || Date.now() - R.nubeT > 10000) setTimeout(cargarNube, 0);
     const N = R.nube || {}, e = N.nube, lat = N.latido, pq = N.paquete;
-    const cmd = `curl -fsSL ${location.origin}/nube/instalar.sh | bash -s -- ${R.token || leer().token || "TU_CODIGO"}`;
+    const cmd = `curl -fsSL ${location.origin}/nube/instalar.sh | bash`;
+    const pend = (N.solicitudes || []).filter((x) => x.estado === "pendiente");
+    const solic = pend.map((x) => `<div class="rb-resp nueva" style="margin:6px 0"><b>☁️ Un servidor pide conectarse</b><div style="font-size:.74rem;margin:3px 0">IP <b>${esc(x.ip || "?")}</b>${x.nombre ? " · " + esc(x.nombre) : ""} · ${esc(hace(x.t))}<br>Apruébalo solo si esa IP es la de tu servidor en DigitalOcean.</div>
+      <div class="rb-row"><button class="btn rb-oro" type="button" data-rb="nube-aprobar" data-v="${esc(x.id)}" style="flex:1">✅ Aprobar</button><button class="btn small" type="button" data-rb="nube-rechazar" data-v="${esc(x.id)}">✕</button></div></div>`).join("");
     const vivo = lat?.visto && Date.now() - Date.parse(lat.visto) < 120000, enNube = /nube/i.test(lat?.equipo || "");
     return `<div class="rb-sec">☁️ Robot en la nube 24/7</div>
-      <div class="rb-op"><div class="rb-env"><b>${vivo ? (enNube ? "🟢 Funcionando en la nube" : "🟡 Funcionando en tu PC") : "⚪ Robot apagado"}</b><span class="muted" style="font-size:.7rem">${esc(lat?.equipo || "")}${lat?.visto ? " · " + esc(hace(lat.visto)) : ""}</span></div>
+      ${solic}<div class="rb-op"><div class="rb-env"><b>${vivo ? (enNube ? "🟢 Funcionando en la nube" : "🟡 Funcionando en tu PC") : "⚪ Robot apagado"}</b><span class="muted" style="font-size:.7rem">${esc(lat?.equipo || "")}${lat?.visto ? " · " + esc(hace(lat.visto)) : ""}</span></div>
       ${e ? `<div class="muted" style="font-size:.74rem;margin:4px 0">Servidor ${esc(e.host)} · instalado ${esc(hace(e.t))}</div>
         <div class="rb-row"><a class="btn rb-oro" href="${esc(e.vista)}" target="_blank" rel="noopener" style="flex:1">🖥 Abrir vista remota</a><a class="btn small" href="${esc(e.panel)}" target="_blank" rel="noopener">Panel</a></div>
         <div class="rb-kv"><span>Usuario <b>${esc(e.usuario)}</b></span><span>Clave <b>${esc(e.clave)}</b></span><button class="btn small" type="button" data-rb="nube-copiar" data-v="${esc(e.clave)}">📋</button></div>
@@ -2591,7 +2594,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       : `<ol class="rb-ul" style="font-size:.76rem;line-height:1.5;padding-left:18px">
           <li>Crea un servidor Ubuntu 24.04 de 2–4 GB (DigitalOcean, Hetzner, Vultr…: ~USD 12–24/mes).</li>
           <li>En el PC: doble clic en <b>SUBIR_A_LA_NUBE</b> ${pq?.t ? `<span class="rb-pill verde">✓ subido ${esc(hace(pq.t))}</span>` : pq?.bajado ? `<span class="rb-pill verde">✓ descargado</span>` : ""}</li>
-          <li>Abre la consola del servidor y pega este comando:</li></ol>
+          <li>Pega este comando en «Startup scripts» al crear el servidor (o en su consola). Luego aprueba aquí la conexión:</li></ol>
         <div class="rb-cmd">${esc(cmd)}</div>
         <div class="rb-row"><button class="btn rb-oro" type="button" data-rb="nube-copiar" data-v="${esc(cmd)}" style="flex:1">📋 Copiar comando</button></div>
         <div class="muted" style="font-size:.68rem">Al terminar te llega un aviso y aquí aparece la vista remota con su clave.</div>`}</div>`;
@@ -3169,6 +3172,8 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       try { const r = await api("plan", { method: "POST", body: JSON.stringify({ jugador: miJug(), plan: k, nombre: persona()?.nombre || "", telefono: persona()?.telefono || "" }) }); R.plan = r.plan; } catch (e) { toast(e.message); return; }
       if (link) window.open(link, "_blank"); else toast("💎 Plan pedido: te contactamos para el pago y se activa al confirmarlo");
       return pintarHoja(true); }
+    if (a === "nube-aprobar" || a === "nube-rechazar") {
+      try { await api("nube-aprobar", { method: "POST", body: JSON.stringify({ id: b.dataset.v, rechazar: a === "nube-rechazar" }) }); toast(a === "nube-aprobar" ? "✅ Servidor aprobado: se está instalando" : "Solicitud rechazada"); R.nubeT = 0; await cargarNube(); } catch (e) { toast(e.message); } return; }
     if (a === "nube-copiar") { const ok = await copiar(b.dataset.v || ""); toast(ok ? "📋 Copiado" : "No se pudo copiar"); return; }
     if (a === "plan-links") { const links = Object.fromEntries(PLANES_INFO.map(([k]) => [k, ($("#rbPago-" + k)?.value || "").trim()]));
       try { const r = await api("plan-links", { method: "POST", body: JSON.stringify({ links }) }); R.planLinks = r.links; toast("💳 Links de pago guardados"); pintarHoja(true); } catch (e) { toast(e.message); } return; }
