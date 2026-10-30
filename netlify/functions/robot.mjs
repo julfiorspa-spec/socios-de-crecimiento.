@@ -178,6 +178,97 @@ async function avisar(store, t) {
 }
 
 // aviso libre (recordatorios, asistente): a todos los teléfonos suscritos
+// 💬 WhatsApp Business (API oficial de Meta): si está configurado, el robot escribe y conversa solo
+const WA = () => (process.env.WA_TOKEN && process.env.WA_PHONE_ID ? { token: process.env.WA_TOKEN, id: process.env.WA_PHONE_ID } : null);
+const waTel = (n) => { let d = String(n || "").replace(/\D/g, ""); if (d.length === 9 && d[0] === "9") d = "56" + d; if (d.length === 8) d = "569" + d; return d.length >= 10 ? d : ""; };
+const EMPRESA = () => process.env.EMPRESA_NOMBRE || "PJANIC SpA";
+async function waEnviar(tel, txt, plantilla) {
+  const w = WA(); if (!w || !tel) return { ok: false, error: "sin WhatsApp Business" };
+  if (plantilla && !process.env.WA_TEMPLATE) return { ok: false, error: "falta la plantilla aprobada (WA_TEMPLATE)" };
+  const body = plantilla
+    ? { messaging_product: "whatsapp", to: tel, type: "template", template: { name: process.env.WA_TEMPLATE, language: { code: process.env.WA_LANG || "es" },
+        components: [{ type: "body", parameters: [{ type: "text", text: String(txt).replace(/\s+/g, " ").slice(0, 900) }] }] } }
+    : { messaging_product: "whatsapp", to: tel, type: "text", text: { body: String(txt).slice(0, 4000) } };
+  try {
+    const r = await fetch(`https://graph.facebook.com/v21.0/${w.id}/messages`, { method: "POST", headers: { authorization: "Bearer " + w.token, "content-type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    return r.ok ? { ok: true, id: j.messages?.[0]?.id || null } : { ok: false, error: j.error?.message || "HTTP " + r.status };
+  } catch (e) { return { ok: false, error: String(e.message || e) }; }
+}
+// conversación con un proveedor (WhatsApp / Marketplace): mensajes, lo que sugiere la IA y el precio que sacó
+function chatDe(op, k, base = {}) {
+  op.chats = op.chats || {};
+  const c = op.chats[k] || (op.chats[k] = { canal: "wa", nombre: "", tel: "", msgs: [], creado: ahora() });
+  for (const x of ["canal", "nombre", "tel", "link", "motivo"]) if (base[x]) c[x] = texto(base[x], 300);
+  if (c.tel) c.tel = waTel(c.tel) || c.tel;
+  return c;
+}
+async function chatEncolar(store, codigo, k) {
+  const q = (await store.get("chat/cola", { type: "json" })) || [];
+  if (!q.some((x) => x.codigo === codigo && x.k === k)) q.push({ codigo, k, t: ahora() });
+  await store.setJSON("chat/cola", q.slice(-100));
+}
+// manda (si hay WhatsApp Business y teléfono) y anota el mensaje; si no, queda listo para enviarlo con un toque
+async function chatMandar(store, codigo, k, c, txt, ia) {
+  const m = { de: "yo", txt: texto(txt, 3000), t: ahora(), ia: !!ia, enviado: false };
+  if (c.canal === "wa" && WA() && c.tel) {
+    const dentro24 = c.ult_entrante && Date.now() - Date.parse(c.ult_entrante) < 23.5 * 3600_000;
+    const r = await waEnviar(c.tel, txt, !dentro24);
+    m.enviado = r.ok; m.auto = r.ok; if (!r.ok) m.error = texto(r.error, 200);
+    if (r.ok) { const mp = (await store.get("chat/tel", { type: "json" })) || {}; mp[c.tel] = { codigo, k, t: ahora() }; await store.setJSON("chat/tel", mp); }
+  }
+  c.msgs = [...(c.msgs || []), m].slice(-40);
+  c.sugerido = null;
+  return m;
+}
+// lo que la IA (en el PC) entendió de la conversación → precio, correo, cuenta; y responde sola si va por WhatsApp Business
+async function chatAplicar(store, t, k, a) {
+  const op = t.op || (t.op = { etapa: "previa", historial: [] }), c = chatDe(op, k);
+  const precio = Math.max(0, Math.round(Number(a.precio_total_con_iva) || 0)) || null;
+  c.pendiente = false; c.resumen = texto(a.resumen, 300) || c.resumen;
+  if (precio) { c.precio = precio; const v = a.incluye_iva === false ? Math.round(precio * 1.19) : precio;
+    op.cotizaciones = { ...(op.cotizaciones || {}), [k]: { v, nombre: c.nombre || k, t: ahora(), auto: true, via: c.canal } }; }
+  const ult = [...(c.msgs || [])].reverse().find((m) => m.de === "el");
+  const r = { id: idCorto(), t: ahora(), k, quien: "proveedor", via: c.canal, de: c.tel || c.canal, de_nombre: c.nombre, asunto: c.canal === "wa" ? "WhatsApp" : "Marketplace",
+    texto: texto(ult?.txt, 1500), resumen: texto(a.resumen, 300), tipo: "cotizacion", precio, incluye_iva: a.incluye_iva !== false, plazo: texto(a.plazo, 120), stock: texto(a.stock, 120),
+    despacha: a.despacha ?? null, costo_despacho: Math.round(Number(a.costo_despacho) || 0) || null,
+    cuenta: a.cuenta && typeof a.cuenta === "object" && (a.cuenta.numero || a.cuenta.banco) ? Object.fromEntries(["banco", "tipo", "numero", "rut", "titular", "email"].map((x) => [x, texto(a.cuenta[x], 80)])) : null,
+    message_id: "chat-" + k + "-" + (c.msgs || []).length, visto: false };
+  if (r.resumen || r.precio) { op.respuestas = [...(op.respuestas || []).filter((x) => x.message_id !== r.message_id), r].slice(-40);
+    op.contactados = { ...(op.contactados || {}), [k]: { ...((op.contactados || {})[k] || {}), respondio: r.t, nombre: c.nombre || (op.contactados || {})[k]?.nombre } }; }
+  // 📧 rescató el correo: si el anterior rebotó, se reenvía la solicitud de cotización al correo nuevo
+  const mail = String(a.email || "").trim().toLowerCase();
+  const cont = (op.contactados || {})[k] || {};
+  if (/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(mail) && mail !== c.email) {
+    c.email = mail;
+    op.extras = (op.extras || []).map((x) => (x.proveedor && kProvS(x.proveedor) === k ? { ...x, email: mail } : x));
+    if (!(op.extras || []).some((x) => kProvS(x.proveedor) === k) && c.nombre) op.extras = [...(op.extras || []), { proveedor: c.nombre, telefono: c.tel, email: mail, fuente: c.canal }].slice(-8);
+    const prev = (op.cuerpos || {})[k];
+    if (cont.estado === "rebotó" && prev) {
+      const cola = (await store.get("correo/cola", { type: "json" })) || [];
+      cola.push({ id: idCorto(), codigo: t.codigo, to: mail, asunto: prev.asunto, cuerpo: prev.cuerpo, k, nombre: c.nombre, tipo: "cotizacion", adjunto_doc: null, responder_a: null, creado: ahora() });
+      await store.setJSON("correo/cola", cola.slice(-200));
+      op.contactados = { ...(op.contactados || {}), [k]: { ...cont, via: "correo", estado: "en_cola", error: null, t: ahora(), rescatado: mail } };
+    }
+  }
+  if (r.cuenta && !op.banco_proveedor && (!op.proveedor || k === (op.proveedor_k || ""))) op.banco_proveedor = [r.cuenta.banco, r.cuenta.tipo, r.cuenta.numero, r.cuenta.rut && "RUT " + r.cuenta.rut, r.cuenta.titular, r.cuenta.email].filter(Boolean).join(" · ");
+  let enviado = null;
+  const resp = texto(a.respuesta, 1500);
+  if (resp) {
+    if (c.canal === "wa" && WA() && c.tel && c.auto !== false) enviado = await chatMandar(store, t.codigo, k, c, resp, true);
+    else c.sugerido = resp;
+  }
+  return { c, r, enviado, mail };
+}
+const kProvS = (n) => String(n || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60);
+function contextoChat(t, k) {
+  const op = t.op || {}, inf = op.informe || {}, c = (op.chats || {})[k] || {};
+  return { codigo: t.codigo, k, canal: c.canal, nombre: c.nombre, empresa: EMPRESA(), motivo: c.motivo || "",
+    que: (inf.que_comprar || inf.productos || []).slice(0, 8).map((x) => `${x.cantidad ?? ""} ${x.unidad || ""} ${x.que || x.nombre || ""}${x.detalle ? " (" + String(x.detalle).slice(0, 160) + ")" : ""}`.trim()).join("; "),
+    lugar: t.oc_compra?.direccion || inf.direccion || "", plazo: op.plazo_fecha || "", msgs: (c.msgs || []).slice(-20).map((m) => ({ de: m.de, txt: m.txt })),
+    ya: { precio: c.precio || null, email: c.email || null } };
+}
+
 async function avisarTexto(store, title, body, tag, url, urgente) {
   const { blobs } = await store.list({ prefix: "push/sub/" });
   if (!blobs.length) return;
@@ -368,7 +459,39 @@ export default async (req) => {
   return res;
 };
 
+// 📲 WhatsApp Business → aquí llegan las respuestas de los proveedores (Meta firma cada aviso con el secreto de la app)
+async function waWebhook(req) {
+  const url = new URL(req.url);
+  if (req.method === "GET") {
+    const ok = process.env.WA_VERIFY && url.searchParams.get("hub.mode") === "subscribe" && url.searchParams.get("hub.verify_token") === process.env.WA_VERIFY;
+    return new Response(ok ? url.searchParams.get("hub.challenge") || "" : "no", { status: ok ? 200 : 403 });
+  }
+  if (req.method !== "POST" || !WA()) return new Response("no", { status: 404 });
+  const crudo = await req.text();
+  const sec = process.env.WA_APP_SECRET || "";
+  const firma = req.headers.get("x-hub-signature-256") || "";
+  if (sec.length < 8) return new Response("falta WA_APP_SECRET", { status: 403 });
+  const esp = "sha256=" + createHmac("sha256", sec).update(crudo).digest("hex");
+  if (firma.length !== esp.length || !timingSafeEqual(Buffer.from(firma), Buffer.from(esp))) return new Response("firma", { status: 403 });
+  let j = {}; try { j = JSON.parse(crudo); } catch {}
+  const store = getStore({ name: "robot", consistency: "strong" });
+  const mapa = (await store.get("chat/tel", { type: "json" })) || {};
+  for (const e of j.entry || []) for (const ch of e.changes || []) for (const m of ch.value?.messages || []) {
+    const de = waTel(m.from), dest = mapa[de];
+    if (!dest) continue;                                 // solo números a los que les escribimos por una compra
+    const txt = m.text?.body || m.button?.text || m.interactive?.button_reply?.title || (m.type ? "[" + m.type + "]" : "");
+    const t = await leer(store, dest.codigo); if (!t) continue;
+    const op = t.op || (t.op = { etapa: "previa", historial: [] }), c = chatDe(op, dest.k);
+    if ((c.msgs || []).some((x) => x.wid === m.id)) continue;
+    c.msgs = [...(c.msgs || []), { de: "el", txt: texto(txt, 3000), t: ahora(), wid: texto(m.id, 120) }].slice(-40);
+    c.ult_entrante = ahora(); c.pendiente = true; c.sugerido = null;
+    await escribir(store, t); await chatEncolar(store, t.codigo, dest.k);
+  }
+  return new Response("ok");
+}
+
 async function atender(req) {
+  if (/^\/bot\/wa\/?$/.test(new URL(req.url).pathname)) return waWebhook(req);
   if (!autorizado(req)) return json({ error: "Código de enlace inválido o no configurado." }, 401);
   const store = getStore({ name: "robot", consistency: "strong" });
   const url = new URL(req.url);
@@ -483,6 +606,7 @@ async function atender(req) {
         tipo: texto(x.tipo, 30) || "cotizacion", adjunto_doc: x.adjunto_doc && typeof x.adjunto_doc === "object" ? { id: texto(x.adjunto_doc.id, 40), nombre: texto(x.adjunto_doc.nombre, 120), mime: texto(x.adjunto_doc.mime, 60) } : null,
         responder_a: texto(x.responder_a, 300), creado: ahora() });
       if (x.k) op.contactados = { ...(op.contactados || {}), [texto(x.k, 80)]: { via: "correo", t: ahora(), nombre: texto(x.nombre, 120), estado: "en_cola", tipo: texto(x.tipo, 30) || "cotizacion" } };
+      if (x.k && (texto(x.tipo, 30) || "cotizacion") === "cotizacion") op.cuerpos = { ...(op.cuerpos || {}), [texto(x.k, 80)]: { asunto: texto(x.asunto, 200), cuerpo: texto(x.cuerpo, 3000), to: texto(x.to, 160) } };
     }
     await store.setJSON("correo/cola", cola.slice(-200));
     await escribir(store, t);
@@ -511,6 +635,28 @@ async function atender(req) {
     if (!t) return json({ ok: false });
     const a = b.analisis && typeof b.analisis === "object" ? b.analisis : {};
     const op = t.op || (t.op = { etapa: "previa", historial: [] });
+    if (b.rebote) {        // 📛 el correo rebotó → se le pide el correo por WhatsApp y de paso se le cotiza por ahí
+      const k = texto(b.k, 80), mail = texto(b.email, 160) || "";
+      if (!k) return json({ ok: true, sin_k: true });
+      if ((op.rebotes || []).some((x) => x.k === k && x.email === mail)) return json({ ok: true, repetido: true });
+      op.rebotes = [...(op.rebotes || []), { k, email: mail, t: ahora() }].slice(-20);
+      const cont = (op.contactados || {})[k] || {};
+      op.contactados = { ...(op.contactados || {}), [k]: { ...cont, via: "correo", estado: "rebotó", error: "el correo " + mail + " rebotó", t: ahora() } };
+      const inf = op.informe || {};
+      const o = [...(inf.opciones || []), ...(op.extras || [])].find((x) => x.proveedor && kProvS(x.proveedor) === k) || {};
+      const nombre = o.proveedor || cont.nombre || "";
+      const c = chatDe(op, k, { canal: "wa", nombre, tel: o.telefono || "", motivo: "rebote" });
+      const ctx = contextoChat(t, k);
+      const txt = `Hola${o.contacto ? " " + o.contacto : ""}, le escribo de ${EMPRESA()}. Le enviamos una solicitud de cotización a ${mail || "su correo"} pero nos rebotó. ¿Nos podría indicar un correo vigente? Y de paso, ¿nos puede cotizar por aquí?${ctx.que || t.nombre ? " Necesitamos: " + (ctx.que || t.nombre) + "." : ""}${ctx.lugar ? " Entrega en " + ctx.lugar + "." : ""} Precio total con IVA, plazo y si despacha. ¡Muchas gracias!`;
+      let m = null;
+      if (c.tel) m = await chatMandar(store, t.codigo, k, c, txt, true);
+      if (!m || !m.enviado) c.sugerido = txt;
+      await escribir(store, t);
+      await avisarTexto(store, "📛 Rebotó el correo de " + String(nombre || mail).slice(0, 40),
+        m?.enviado ? `${t.codigo} · ya le escribí por WhatsApp pidiendo su correo y el precio.` : c.tel ? `${t.codigo} · toca para pedírselo por WhatsApp (mensaje listo).` : `${t.codigo} · no tiene teléfono: búscalo o agrega otro proveedor.`,
+        "rebote-" + t.codigo + "-" + k, "/#robot", true).catch(() => {});
+      return json({ ok: true, rebote: true, whatsapp: !!m?.enviado });
+    }
     const r = { id: idCorto(), t: ahora(), k: texto(b.k, 80), quien: texto(b.quien, 20), de: texto(b.de, 160), de_nombre: texto(b.de_nombre, 120), asunto: texto(b.asunto, 200),
       texto: texto(b.texto, 1500), resumen: texto(a.resumen, 300), tipo: texto(a.tipo, 30), precio: Math.max(0, Math.round(Number(a.precio_total_con_iva) || 0)) || null,
       incluye_iva: a.incluye_iva !== false, plazo: texto(a.plazo, 120), stock: texto(a.stock, 120), despacha: a.despacha ?? null, costo_despacho: Math.round(Number(a.costo_despacho) || 0) || null,
@@ -532,9 +678,45 @@ async function atender(req) {
     await avisarTexto(store, tit, `${t.codigo} · ${(r.resumen || r.asunto || "").slice(0, 120)}${r.precio ? " · $" + r.precio.toLocaleString("es-CL") : ""}`, "mail-" + r.id, "/#robot", true).catch(() => {});
     return json({ ok: true });
   }
+  // 💬 conversación con un proveedor por WhatsApp / Marketplace (la app pega lo que respondió; la IA del PC contesta)
+  if (ruta === "chat" && req.method === "POST") {
+    const b = await cuerpo(req);
+    const t = await leer(store, limpiaCodigo(b.codigo));
+    if (!t) return json({ error: "No existe." }, 404);
+    const k = texto(b.k, 80) || kProvS(b.nombre); if (!k) return json({ error: "Falta el proveedor." }, 400);
+    const op = t.op || (t.op = { etapa: "previa", historial: [] });
+    const c = chatDe(op, k, { canal: texto(b.canal, 10), nombre: texto(b.nombre, 120), tel: texto(b.tel, 40), link: texto(b.link, 300) });
+    if (b.auto !== undefined) c.auto = !!b.auto;
+    if (c.canal === "mk" && c.nombre && !(op.extras || []).some((x) => kProvS(x.proveedor) === k))
+      op.extras = [...(op.extras || []), { proveedor: c.nombre, telefono: c.tel || "", email: "", fuente: "marketplace", link: c.link || "" }].slice(-8);
+    let m = null;
+    if (b.saliente) { m = await chatMandar(store, t.codigo, k, c, b.saliente, !!b.ia);
+      if (!m.enviado && b.manual) m.enviado = true;               // lo envió la persona con el botón (copiar / WhatsApp / Messenger)
+      op.contactados = { ...(op.contactados || {}), [k]: { ...((op.contactados || {})[k] || {}), via: c.canal === "mk" ? "marketplace" : "whatsapp", t: ahora(), nombre: c.nombre } }; }
+    if (b.entrante) { c.msgs = [...(c.msgs || []), { de: "el", txt: texto(b.entrante, 3000), t: ahora() }].slice(-40); c.ult_entrante = ahora(); c.pendiente = true; c.sugerido = null; await chatEncolar(store, t.codigo, k); }
+    if (b.borrar_sugerido) c.sugerido = null;
+    const r = await escribir(store, t);
+    return json({ ok: true, enviado: !!m?.enviado, wa: !!WA(), trabajo: r });
+  }
+  if (ruta === "chat-ia" && req.method === "POST") {          // el PC devuelve lo que entendió y qué contestar
+    const b = await cuerpo(req);
+    const q = (await store.get("chat/cola", { type: "json" })) || [];
+    await store.setJSON("chat/cola", q.filter((x) => !(x.codigo === b.codigo && x.k === b.k)));
+    const t = await leer(store, limpiaCodigo(b.codigo));
+    if (!t) return json({ ok: false });
+    const { c, r, enviado, mail } = await chatAplicar(store, t, texto(b.k, 80), b.analisis && typeof b.analisis === "object" ? b.analisis : {});
+    await escribir(store, t);
+    const al = (await store.get("correo/alertas", { type: "json" })) || [];
+    al.unshift({ id: r.id, codigo: t.codigo, t: r.t, quien: "proveedor", de: c.nombre || c.tel, resumen: (c.canal === "wa" ? "💬 " : "🛒 ") + (r.resumen || "respondió"), precio: r.precio, visto: false });
+    await store.setJSON("correo/alertas", al.slice(0, 60));
+    await avisarTexto(store, (c.canal === "wa" ? "💬 " : "🛒 ") + "Respondió " + String(c.nombre || c.tel || "proveedor").slice(0, 40),
+      `${t.codigo} · ${(r.resumen || "").slice(0, 100)}${r.precio ? " · $" + r.precio.toLocaleString("es-CL") : ""}${mail ? " · 📧 rescaté su correo" : ""}${enviado?.enviado ? " · 🤖 ya le contesté" : c.sugerido ? " · respuesta lista para enviar" : ""}`,
+      "chat-" + t.codigo + "-" + b.k, "/#robot", !!r.precio).catch(() => {});
+    return json({ ok: true });
+  }
   if (ruta === "correo-alertas" && req.method === "GET") {
     const robot = (await store.get("robot/latido", { type: "json" })) || {};
-    return json({ alertas: (await store.get("correo/alertas", { type: "json" })) || [], correo_pc: !!robot.correo, cola: ((await store.get("correo/cola", { type: "json" })) || []).length });
+    return json({ alertas: (await store.get("correo/alertas", { type: "json" })) || [], correo_pc: !!robot.correo, wa: !!WA(), cola: ((await store.get("correo/cola", { type: "json" })) || []).length });
   }
   if (ruta === "correo-visto" && req.method === "POST") {
     const b = await cuerpo(req);
@@ -602,7 +784,7 @@ async function atender(req) {
     const b = await cuerpo(req);
     const t = await leer(store, limpiaCodigo(b.codigo));
     if (!t) return json({ error: "No existe." }, 404);
-    const tipo = ["foto", "guia", "factura", "comprobante", "otro"].includes(b.tipo) ? b.tipo : "otro";
+    const tipo = ["foto", "guia", "factura", "comprobante", "oc", "otro"].includes(b.tipo) ? b.tipo : "otro";
     const bytes = Buffer.from(String(b.b64 || ""), "base64");
     if (!bytes.length || bytes.length > MAX_PDF) return json({ error: "Archivo vacío o de más de 4,5 MB." }, 400);
     const op = t.op || { etapa: "ganada", historial: [] };
@@ -992,8 +1174,27 @@ async function atender(req) {
             que: (inf.que_comprar || inf.productos || []).slice(0, 6).map((x) => `${x.cantidad ?? ""} ${x.unidad || ""} ${x.que || x.nombre || ""}`.trim()).join("; ") };
         });
     }
+    // 📄 OC sin su PDF oficial: el PC lo baja del portal (reintenta cada 6 h)
+    const ocs_pdf = [];
+    for (const tt of lista) {
+      const o = tt.op; if (!o?.oc_codigo || ["rechazada"].includes(o.etapa) || (o.docs || []).some((d) => d.tipo === "oc")) continue;
+      if (o.oc_pdf_intento && Date.now() - Date.parse(o.oc_pdf_intento) < 6 * 3600_000) continue;
+      if (!mio(tt.codigo) || ocs_pdf.length >= 3) continue;
+      o.oc_pdf_intento = ahora(); await escribir(store, tt); ocs_pdf.push({ codigo: tt.codigo, oc: o.oc_codigo });
+    }
+    // 💬 conversaciones que esperan que la IA del PC las lea y conteste
+    const chats = [];
+    const cq = (await store.get("chat/cola", { type: "json" })) || [];
+    for (const x of cq) {
+      if (chats.length >= 4) break;
+      if (x.tomado && Date.now() - Date.parse(x.tomado) < 180_000) continue;
+      const tt = lista.find((y) => y.codigo === x.codigo);
+      if (!tt) continue;
+      x.tomado = ahora(); chats.push(contextoChat(tt, x.k));
+    }
+    if (chats.length) await store.setJSON("chat/cola", cq.filter((x) => lista.some((y) => y.codigo === x.codigo)));
     const op = { ...(pidio ? { oportunidades: true } : {}), ...(negocios.length ? { negocios } : {}), ...(preguntas.length ? { preguntas } : {}), empresas, equipos: vivos,
-      ...(correos.length ? { correos } : {}), ...(vigilar ? { vigilar } : {}) };
+      ...(correos.length ? { correos } : {}), ...(vigilar ? { vigilar } : {}), ...(chats.length ? { chats } : {}), ...(ocs_pdf.length ? { ocs_pdf } : {}) };
     // ⚡ lo que pide una persona desde el celular va antes que el autopiloto del PC
     const humano = (t) => !!(t.jugador || t.dispositivo);
     // un pedido es de este equipo si le toca por reparto, o si al dueño lo tienen ocupado y es de una persona (no se hace esperar)
