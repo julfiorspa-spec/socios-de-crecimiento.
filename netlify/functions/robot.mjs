@@ -1206,6 +1206,9 @@ async function atender(req) {
       if (t.estado === "tomado" && Date.now() - Date.parse(t.actualizado) > TOMADO_VENCE_MS) {
         anotar(t, "en_cola", "El robot no alcanzó a empezarla; vuelve a la cola.");
         await escribir(store, t);
+      } else if (t.estado === "preparando" && Date.now() - Date.parse(t.actualizado) > 30 * 60_000) {
+        anotar(t, "en_cola", "Se cortó mientras se preparaba (el robot se reinició); vuelve a la cola.");   // 🔁 preparación colgada
+        await escribir(store, t);
       }
     }
     const siguiente = lista.filter((t) => t.estado === "en_cola" && mioT(t)).sort((a, b) => (humano(b) - humano(a)) || a.creado.localeCompare(b.creado))[0];
