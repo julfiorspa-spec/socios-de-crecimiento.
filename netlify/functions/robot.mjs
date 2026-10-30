@@ -1187,6 +1187,8 @@ async function atender(req) {
       if (!mio(tt.codigo) || ocs_pdf.length >= 3) continue;
       o.oc_pdf_intento = ahora(); await escribir(store, tt); ocs_pdf.push({ codigo: tt.codigo, oc: o.oc_codigo });
     }
+    // 📥 todas las OC que aún no tienen su PDF: si la persona lo descarga en el PC, el robot lo sube solo
+    const oc_sin_pdf = lista.filter((tt) => tt.op?.oc_codigo && tt.op.etapa !== "rechazada" && !(tt.op.docs || []).some((d) => d.tipo === "oc")).slice(0, 40).map((tt) => ({ codigo: tt.codigo, oc: tt.op.oc_codigo }));
     // 💬 conversaciones que esperan que la IA del PC las lea y conteste
     const chats = [];
     const cq = (await store.get("chat/cola", { type: "json" })) || [];
@@ -1199,7 +1201,7 @@ async function atender(req) {
     }
     if (chats.length) await store.setJSON("chat/cola", cq.filter((x) => lista.some((y) => y.codigo === x.codigo)));
     const op = { ...(pidio ? { oportunidades: true } : {}), ...(negocios.length ? { negocios } : {}), ...(preguntas.length ? { preguntas } : {}), empresas, equipos: vivos,
-      ...(correos.length ? { correos } : {}), ...(vigilar ? { vigilar } : {}), ...(chats.length ? { chats } : {}), ...(ocs_pdf.length ? { ocs_pdf } : {}) };
+      ...(correos.length ? { correos } : {}), ...(vigilar ? { vigilar } : {}), ...(chats.length ? { chats } : {}), ...(ocs_pdf.length ? { ocs_pdf } : {}), ...(oc_sin_pdf.length ? { oc_sin_pdf } : {}) };
     // ⚡ lo que pide una persona desde el celular va antes que el autopiloto del PC
     const humano = (t) => !!(t.jugador || t.dispositivo);
     // un pedido es de este equipo si le toca por reparto, o si al dueño lo tienen ocupado y es de una persona (no se hace esperar)
