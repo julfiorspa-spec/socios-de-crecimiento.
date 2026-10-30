@@ -190,7 +190,7 @@ paso "7/8 Acceso seguro (HTTPS + clave) para iniciar sesión en Mercado Público
 IP=$(curl -fsS https://api.ipify.org || hostname -I | awk '{print $1}')
 DOM="$(echo "$IP" | tr . -).sslip.io"
 CLAVE_F="$DIR/.clave_vista"
-[ -s "$CLAVE_F" ] || (tr -dc 'A-Za-z0-9' </dev/urandom | head -c 14 > "$CLAVE_F")
+[ -s "$CLAVE_F" ] || python3 -c "import secrets;print(secrets.token_urlsafe(10),end='')" > "$CLAVE_F"
 chmod 600 "$CLAVE_F"; CLAVE=$(cat "$CLAVE_F")
 HASH=$(caddy hash-password --plaintext "$CLAVE")
 cat > /etc/caddy/Caddyfile <<EOF
