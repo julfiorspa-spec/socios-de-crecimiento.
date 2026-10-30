@@ -170,6 +170,14 @@
   .rb-modos button{flex:1}
   .rb-eerr{margin-top:8px}.rb-hitos{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.rb-hito{font-size:.66rem;padding:3px 7px;border-radius:9px;background:rgba(255,255,255,.07)}.rb-hito span{opacity:.7;margin-right:4px}
   .rb-pill.verde{border-color:#5ef0b0;color:#c9ffe8}
+  .rb-foco{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:4px 0 6px;position:sticky;top:0;z-index:3;padding:6px 0;background:rgba(10,14,30,.97);border-radius:0 0 14px 14px}
+  .rb-cola{display:flex;gap:6px;overflow-x:auto;padding:4px 0 8px}.rb-cola-i{flex:none;font-size:.7rem;padding:6px 10px;border-radius:12px;border:1px solid rgba(245,207,107,.35);background:rgba(255,255,255,.04);color:inherit;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rb-proy{font-size:.8rem;margin:6px 0 2px;padding:8px 10px;border-radius:12px;background:rgba(0,0,0,.22)}.rb-proy .muted{font-size:.68rem;margin-top:2px}
+  .rb-chat{margin-top:6px}.rb-burb{font-size:.74rem;padding:6px 9px;border-radius:12px;margin:4px 0;max-width:88%;white-space:pre-wrap;word-break:break-word}
+  .rb-burb.yo{margin-left:auto;background:rgba(245,207,107,.16);border:1px solid rgba(245,207,107,.3)}.rb-burb.el{background:rgba(94,240,176,.12);border:1px solid rgba(94,240,176,.3)}
+  .rb-burb small{display:block;font-size:.6rem;opacity:.7;margin-top:2px;text-align:right}
+  .rb-rebote{font-size:.74rem;padding:6px 8px;border-radius:10px;background:rgba(255,90,90,.12);border:1px solid rgba(255,90,90,.4);margin:4px 0}
+  .rb-sugerido{padding:8px;border-radius:12px;border:1px dashed rgba(245,207,107,.6);margin:6px 0;font-size:.76rem}.rb-sugerido small{opacity:.8}.rb-sugerido>div{margin:4px 0;white-space:pre-wrap}
   .rb-mail{position:relative}.rb-mail b{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;border-radius:8px;background:#ff5a5a;color:#fff;font-size:.6rem;display:flex;align-items:center;justify-content:center;padding:0 3px}
   .rb-mision{margin:10px 0 6px;padding:10px 12px;border-radius:14px;border:1px solid rgba(245,207,107,.45);background:rgba(245,207,107,.07)}
   .rb-barra{height:8px;border-radius:8px;background:rgba(255,255,255,.08);margin:6px 0;overflow:hidden}.rb-barra i{display:block;height:100%;background:linear-gradient(90deg,#f5cf6b,#5ef0b0);transition:width .4s}
@@ -1044,7 +1052,7 @@
   async function cargarMail() {
     if (R._cargMail || (R.mailT && Date.now() - R.mailT < 45_000)) return; R._cargMail = true;
     try { const r = await api("correo-alertas"); const antes = (R.mailAl || []).filter((x) => !x.visto).length;
-      R.mailAl = r.alertas || []; R.mailPC = !!r.correo_pc; R.mailT = Date.now();
+      R.mailAl = r.alertas || []; R.mailPC = !!r.correo_pc; R.waAuto = !!r.wa; R.mailT = Date.now();
       if (R.mailAl.filter((x) => !x.visto).length !== antes) pintarHojaSiAbierta(); } catch {} finally { R._cargMail = false; }
   }
   const mailChip = () => { setTimeout(cargarMail, 0); const n = (R.mailAl || []).filter((x) => !x.visto && Date.now() - Date.parse(x.t) < 3 * 864e5).length;
@@ -1287,6 +1295,40 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     + (o && o.senales ? `<div class="muted" style="font-size:.68rem;font-weight:400">${esc(String(o.senales).slice(0, 160))}</div>` : "");
   const diasPlazo = (f) => { if (!f) return 99; const h = new Date(); h.setHours(12, 0, 0, 0); return Math.round((Date.parse(f + "T12:00") - h) / 86400000); };
   const textoPlazo = (f) => { const d = diasPlazo(f); return d < 0 ? `🔴 atrasado ${-d} día${d === -1 ? "" : "s"}` : d === 0 ? "🟠 es hoy" : d === 1 ? "🟡 mañana" : `🟢 quedan ${d} días`; };
+  // 💬 conversación con el proveedor (WhatsApp / Marketplace): la IA saca el precio y escribe la siguiente respuesta
+  const msgMk = (t) => `Hola! Vi tu publicación. Somos ${(empresaActual() || {}).razon_social || "una empresa"} y necesitamos con factura: ${queComprar(t).map((x) => `${x.cantidad ?? ""} ${x.unidad || ""} ${x.que}`.replace(/\s+/g, " ").trim()).join("; ")}. Entrega en ${lugarDe(t) || "(a confirmar)"}. ¿Precio total con IVA, plazo y si despachas? Gracias!`;
+  function chatBox(t, o) {
+    const cod = t.codigo, c = (t.op?.chats || {})[o.k]; const cont = (t.op?.contactados || {})[o.k] || {};
+    const mk = c?.canal === "mk" || o.fuente === "marketplace";
+    const abrir = mk ? (c?.link || o.link || urlMk(queComprar(t)[0]?.que || t.nombre || "", lugarDe(t))) : waNum(c?.tel || o.telefono) ? "https://wa.me/" + waNum(c?.tel || o.telefono) : "";
+    const reb = cont.estado === "rebotó";
+    if (!c && !reb && !mk) return "";
+    const msgs = (c?.msgs || []).slice(-4).map((m) => `<div class="rb-burb ${m.de === "yo" ? "yo" : "el"}">${esc(String(m.txt || "").slice(0, 400))}${m.de === "yo" ? `<small>${m.auto ? "🤖 enviado solo" : m.enviado ? "✓ enviado" : "sin enviar"}</small>` : ""}</div>`).join("");
+    const sug = c?.sugerido || (!c && (reb || mk) ? (mk ? msgMk(t) : "") : "");
+    const urlSug = mk ? abrir : abrir ? abrir + "?text=" + encodeURIComponent(sug) : "";
+    return `<div class="rb-chat">${reb ? `<div class="rb-rebote">📛 Rebotó su correo${cont.error ? ` <span class="muted">(${esc(String(cont.error).replace(/^el correo /, "").replace(/ rebotó$/, ""))})</span>` : ""} → ${R.waAuto && waNum(c?.tel || o.telefono) ? "🤖 ya le pedí el correo y el precio por WhatsApp" : waNum(c?.tel || o.telefono) ? "pídeselo por WhatsApp y de paso cotízale 👇" : "no tiene teléfono: búscalo o agrega otro proveedor"}</div>` : ""}
+      ${cont.rescatado ? `<div class="rb-resp nueva">📧 Rescaté su correo <b>${esc(cont.rescatado)}</b> · la solicitud ${cont.estado === "en_cola" ? "está saliendo" : "salió"} de nuevo</div>` : ""}
+      ${msgs}
+      ${c?.pendiente ? `<div class="muted" style="font-size:.7rem">🤖 Leyendo su respuesta y preparando la siguiente…</div>` : ""}
+      ${c?.precio ? `<div class="rb-resp nueva">💲 Precio que sacó la IA: <b>${clp(c.precio)}</b></div>` : ""}
+      ${sug ? `<div class="rb-sugerido"><small>${c?.sugerido ? "🤖 La IA propone responder:" : "Mensaje listo:"}</small><div>${esc(sug)}</div>
+        <div class="rb-row">${urlSug ? `<a class="btn small rb-oro" href="${esc(urlSug)}" target="_blank" rel="noopener" data-rb="chat-envie" data-c="${esc(cod)}" data-k="${esc(o.k)}" data-n="${esc(o.proveedor)}" data-canal="${mk ? "mk" : "wa"}" data-tel="${esc(c?.tel || o.telefono || "")}" data-v="${esc(sug)}">${mk ? "🛒 Copiar y abrir Marketplace" : "💬 Enviar por WhatsApp"}</a>` : ""}
+          <button class="btn small" type="button" data-rb="cp" data-v="${esc(sug)}">Copiar</button></div></div>` : ""}
+      <details class="rb-det" ${c && !c.pendiente && !c.sugerido && (c.msgs || []).length && c.msgs[c.msgs.length - 1].de === "yo" ? "open" : ""}><summary>📥 ¿Te respondió? Pega su mensaje y la IA le contesta</summary>
+        <textarea class="rb-in" id="rbChat-${esc(cod)}-${esc(o.k)}" rows="3" placeholder="Pega aquí lo que te escribió ${esc(o.proveedor || "")}"></textarea>
+        <button class="btn small rb-oro" type="button" data-rb="chat-pegar" data-c="${esc(cod)}" data-k="${esc(o.k)}" data-n="${esc(o.proveedor)}" data-canal="${mk ? "mk" : "wa"}" data-tel="${esc(c?.tel || o.telefono || "")}">🤖 Leer y responder</button></details></div>`;
+  }
+  const busqProyecto = (t) => { const p = t.op?.informe?.proyecto || {}; if (p.busqueda) return String(p.busqueda);
+    const q = queComprar(t); return q.length === 1 ? String(q[0].que).split(/[,.(]/)[0].split(" ").slice(0, 6).join(" ") : String(t.nombre || q[0]?.que || "").split(/[,.(]/)[0].split(" ").slice(0, 6).join(" "); };
+  function bloqueMk4(t) {
+    const cod = t.codigo, ex = (t.op?.extras || []).filter((x) => x.fuente === "marketplace"), dir = lugarDe(t);
+    return `<div class="rb-mision rb-mk4"><div class="rb-env"><b>🛒 Marketplace: conversa con 4 vendedores</b><b>${Math.min(ex.length, 4)}/4</b></div>
+      <div class="muted" style="font-size:.7rem">1) Abre Marketplace ya filtrado por la zona de entrega · 2) elige 4 vendedores confiables (perfil antiguo, buenas calificaciones, que den factura) · 3) anótalos aquí: te dejo el mensaje listo y, cuando respondan, pegas su respuesta y la IA conversa hasta sacarle el precio.</div>
+      <div class="rb-row"><a class="btn small" href="${urlMk(busqProyecto(t), dir)}" target="_blank" rel="noopener">🔎 Buscar «${esc(busqProyecto(t).slice(0, 34))}»${zonaMk(dir).ciudad ? " en " + esc(zonaMk(dir).ciudad) : ""}</a></div>
+      <div class="muted" style="font-size:.66rem">Buscamos a <b>uno que haga todo el proyecto</b>${t.op?.informe?.proyecto?.rubro ? " (" + esc(t.op.informe.proyecto.rubro) + ")" : ""}: un solo pago y lo ejecuta completo. <b>¿Confiable?</b> perfil antiguo con foto real, buenas calificaciones, que dé RUT y factura; nunca adelantar todo.</div>
+      ${ex.length < 6 ? `<div class="rb-row"><input class="rb-in" id="rbMkN-${esc(cod)}" placeholder="Nombre del vendedor" style="flex:1"><input class="rb-in" id="rbMkL-${esc(cod)}" placeholder="Link de la publicación (opcional)" style="flex:1"></div>
+      <button class="btn small rb-oro" type="button" data-rb="mk-add" data-c="${esc(cod)}">➕ Agregar vendedor</button>` : ""}</div>`;
+  }
   function tarjetaEj(t) {
     const op = t.op || {}, inf = op.informe || {}, et = op.etapa || "operacion", cod = t.codigo;
     const F = (R.fichas || {})[cod]; if (!F && !(R._pidiendo || {})[cod]) setTimeout(() => cargarDocs(cod), 0);
@@ -1320,12 +1362,15 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const empN = (empresaActual() || {}).razon_social || "nuestra empresa";
     const lineas = queComprar(t).map((x) => `- ${x.cantidad ?? ""} ${x.unidad || ""} ${x.que}${x.detalle ? " (" + String(x.detalle).slice(0, 140) + ")" : ""}`).join("\n");
     const ocN = op.oc_codigo || (String(op.oc || "").includes("-") ? op.oc : "");
-    const verOC = ocN ? `<a class="btn small" href="https://www.mercadopublico.cl/PurchaseOrder/Modules/PO/DetailsPurchaseOrder.aspx?codigoOC=${encodeURIComponent(ocN)}" target="_blank" rel="noopener">📄 Ver OC ${esc(ocN)}</a>`
+    const docOC = (op.docs || []).filter((d) => d.tipo === "oc").pop();
+    const verOC = docOC ? `<button class="btn small rb-oro" type="button" data-rb="neg-doc" data-c="${esc(cod)}" data-id="${esc(docOC.id)}">📄 OC ${esc(ocN)} en PDF</button>`
+      : ocN ? `<a class="btn small" href="https://www.mercadopublico.cl/PurchaseOrder/Modules/PO/DetailsPurchaseOrder.aspx?codigoOC=${encodeURIComponent(ocN)}" target="_blank" rel="noopener">📄 Ver OC ${esc(ocN)}</a><span class="muted" style="font-size:.6rem;display:block">⟳ el robot está bajando el PDF</span>`
       : `<a class="btn small" href="${portalDe(cod)}" target="_blank" rel="noopener">📄 Ver la compra</a>`;
     const resp = op.respuestas || [];
     const cliResp = resp.filter((r) => r.quien !== "proveedor");
     const bloqueCliente = cliResp.length ? `<div class="rb-sec">📨 El comprador escribió</div>${cliResp.slice(-3).reverse().map((r) => `<div class="rb-resp ${r.visto ? "" : "nueva"}"><b>${esc(r.de_nombre || r.de)}</b> · ${esc(hace(r.t))}<div>${esc(r.resumen || r.asunto || "")}</div>${r.pide ? `<div class="muted">Pide: ${esc(r.pide)}</div>` : ""}</div>`).join("")}` : "";
     const lista = `<div class="rb-comprar"><div class="rb-env"><b>🛒 LO QUE HAY QUE ${queComprar(t).some((x) => x.tipo === "servicio") ? "CONTRATAR" : "COMPRAR"}</b>${verOC}</div>
+      ${inf.proyecto?.resumen ? `<div class="rb-proy">🎯 <b>El proyecto:</b> ${esc(inf.proyecto.resumen)}${inf.proyecto.rubro ? `<div class="muted">Lo hace todo: ${esc(inf.proyecto.rubro)} · un solo proveedor, un solo pago</div>` : ""}</div>` : ""}
       ${queComprar(t).map((x) => `<div class="rb-qc"><span class="n">${esc(x.cantidad ?? "")}<small>${esc(x.unidad || "")}</small></span><div><b>${esc(x.que)}</b>${x.tipo ? ` <span class="rb-cp">${x.tipo === "servicio" ? "🛠 servicio" : "📦 producto"}</span>` : ""}
         ${x.detalle ? `<div class="muted">${esc(String(x.detalle).slice(0, 180))}</div>` : ""}${x.ojo ? `<div class="rb-ojo">👁 ${esc(x.ojo)}</div>` : ""}</div></div>`).join("")}
       ${!(inf.que_comprar || []).length ? `<div class="muted" style="font-size:.66rem">⟳ El robot está interpretando la OC como experto del rubro…</div>` : ""}</div>`;
@@ -1343,7 +1388,8 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
             ${telNum(o.telefono) ? `<a class="btn small" href="tel:${esc(telNum(o.telefono))}" data-rb="ej-contacto" data-c="${esc(cod)}" data-k="${esc(o.k)}" data-n="${esc(o.proveedor)}" data-via="llamada">📞</a>` : ""}
             ${waNum(o.telefono) ? `<a class="btn small" href="https://wa.me/${waNum(o.telefono)}?text=${encodeURIComponent(cuerpoCot(t, o))}" target="_blank" rel="noopener" data-rb="ej-contacto" data-c="${esc(cod)}" data-k="${esc(o.k)}" data-n="${esc(o.proveedor)}" data-via="whatsapp">💬</a>` : ""}
             ${o.web ? `<a class="btn small" href="${esc(o.web)}" target="_blank" rel="noopener">🌐</a>` : ""}</div>
-          ${c && !r ? `<div class="muted" style="font-size:.68rem">${c.via === "correo" ? (c.estado === "en_cola" ? "📤 saliendo por tu Gmail…" : c.estado === "error" ? "⚠ no salió: " + esc(c.error || "") : "📤 correo enviado") : c.via === "llamada" ? "📞 llamado" : "💬 WhatsApp"} ${esc(hace(c.t))} · esperando respuesta</div>` : ""}
+          ${c && !r && c.estado !== "rebotó" ? `<div class="muted" style="font-size:.68rem">${c.via === "correo" ? (c.estado === "en_cola" ? "📤 saliendo por tu Gmail…" : c.estado === "error" ? "⚠ no salió: " + esc(/ascii|codec/.test(c.error || "") ? "el correo del PC está mal configurado (panel → 📧 Correo)" : c.error || "") : "📤 correo enviado") : c.via === "llamada" ? "📞 llamado" : c.via === "marketplace" ? "🛒 Marketplace" : "💬 WhatsApp"} ${esc(hace(c.t))} · esperando respuesta</div>` : ""}
+          ${chatBox(t, o)}
           <label class="rb-lab" style="margin-top:4px">💲 Precio que te dio (total con IVA)<input class="rb-cot-in" inputmode="numeric" data-c="${esc(cod)}" data-k="${esc(o.k)}" data-n="${esc(o.proveedor)}" value="${q ? Number(q.v).toLocaleString("es-CL") : ""}" placeholder="${o.total_con_iva ? Number(o.total_con_iva).toLocaleString("es-CL") : "Ej: 850.000"}"></label>
           ${(q || r) && !desc[o.k] ? `<div class="rb-cerraste"><span>🤝 ¿Cerraste con ${esc(o.proveedor.split(" ")[0])}?</span><button class="btn small rb-oro" type="button" data-rb="ej-cerre" data-c="${esc(cod)}" data-k="${esc(o.k)}">Sí, cerré</button><button class="btn small" type="button" data-rb="ej-descartar" data-c="${esc(cod)}" data-k="${esc(o.k)}">No</button></div>` : ""}</div>`; };
       cuerpoS = (op.etapa === "previa" ? `<div class="rb-sug" style="border-color:#5ef0b0">📞 <b>Aún sin OC:</b> vas 1°. Adelanta precios y stock con un toque, sin comprar todavía.</div>` : "") + lista + bloqueCliente + plazoBox + `
@@ -1356,7 +1402,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         <label class="rb-lab">Nombre<input class="rb-in" id="rbPxN-${esc(cod)}" placeholder="Ej: Ferretería Castro"></label>
         <div class="rb-row"><label class="rb-lab" style="flex:1">Teléfono<input class="rb-in" id="rbPxT-${esc(cod)}" inputmode="tel" placeholder="+56 9 ..."></label><label class="rb-lab" style="flex:1">Correo<input class="rb-in" id="rbPxE-${esc(cod)}" inputmode="email" placeholder="ventas@..."></label></div>
         <button class="btn small rb-oro" type="button" data-rb="ej-prov-extra" data-c="${esc(cod)}">➕ Agregar a la misión</button></details>
-      ${bloqueMarket(queComprar(t).map((x) => ({ nombre: x.que, cantidad: x.cantidad })), dir)}
+      ${bloqueMk4(t)}
       <div class="rb-row"><button class="btn small" type="button" data-rb="cp" data-v="${esc(cuerpoCot(t, {}))}">📋 Copiar mensaje para Marketplace / WhatsApp</button></div>`;
     } else if (E === "pago") {
       const monto = (Number(op.precio_acordado) || 0);
@@ -1470,6 +1516,16 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const atrasados = L.filter((t) => et(t) !== "cerrado" && t.op?.plazo_fecha && diasPlazo(t.op.plazo_fecha) < 0).length;
     const ahorro = L.reduce((s2, t) => s2 + (t.op?.informe?.compras && t.op?.precio_acordado ? t.op.informe.compras - t.op.precio_acordado : 0), 0);
     const cerr = L.filter((t) => et(t) === "cerrado").length;
+    // 🎯 de a un negocio: abierto = solo ese (cada uno independiente); cerrado = una sola tarjeta para deslizar
+    const abierto = R.ejec && L.find((t) => t.codigo === R.ejAbierto);
+    if (abierto) {
+      const mismos = L.filter((t) => et(t) === et(abierto)), i = mismos.indexOf(abierto);
+      const ant = mismos[(i - 1 + mismos.length) % mismos.length], sig = mismos[(i + 1) % mismos.length];
+      return `<div class="rb-foco"><button class="btn small" type="button" data-rb="ej-cerrar-card">← Todos</button>
+        <span class="muted" style="font-size:.72rem">${(ETAPAS_EJ.find(([k]) => k === et(abierto)) || [])[1] || ""} · ${i + 1} de ${mismos.length}</span>
+        ${mismos.length > 1 ? `<span><button class="btn small" type="button" data-rb="ej-ver" data-c="${esc(ant.codigo)}">◀</button> <button class="btn small" type="button" data-rb="ej-ver" data-c="${esc(sig.codigo)}">▶</button></span>` : "<span></span>"}</div>`
+        + tarjetaEj(abierto);
+    }
     return `<div class="rb-tira"><span>🛠 <b>${esc(yo.nombre)}</b></span><span>💰 <b class="${ahorro >= 0 ? "rb-vivo-t" : "rb-neg-t"}">${cortoG(ahorro)}</b> ahorro</span><span>🥇 <b>${cerr}</b>${cerr ? ` · ${cumplidos} a tiempo` : ""}</span><span>${atrasados ? `🔴 <b>${atrasados}</b> atrasado${atrasados > 1 ? "s" : ""}` : `⏳ <b>${L.length - cerr}</b>`}</span></div>
       ${libroERP(L)}
       <div class="rb-etapas">${ETAPAS_EJ.map(([k, n]) => `<button type="button" class="${tab === k ? "on" : ""}" data-rb="ej-tab" data-e="${k}">${n} ${L.filter((t) => et(t) === k).length}</button>`).join("")}</div>
@@ -1477,10 +1533,11 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         const luego = leerLuego(), resp = (t) => (t.op?.respuestas || []).filter((r) => !r.visto).length;
         const enTab = L.filter((t) => et(t) === tab).sort((a, b) => resp(b) - resp(a) || diasPlazo(a.op?.plazo_fecha) - diasPlazo(b.op?.plazo_fecha));
         if (!enTab.length) return `<div class="empty">${L.length ? "Nada en esta etapa." : "Aún no hay órdenes de compra. Cuando llegue una (o vayas 1°), queda anclada aquí sola."}</div>`;
-        const ab = enTab.find((t) => t.codigo === R.ejAbierto);
-        const ahora_ = enTab.filter((t) => t !== ab && !luego[t.codigo]), despues = enTab.filter((t) => t !== ab && luego[t.codigo]);
-        return (ab ? tarjetaEj(ab) : "") + (ahora_.length ? `<div class="muted" style="font-size:.72rem;text-align:center;margin:6px 0">👉 desliza a la derecha = <b>ver ahora</b> · 👈 izquierda = <b>en otro momento</b></div>` : "")
-          + ahora_.map(portadaEj).join("")
+        const ahora_ = enTab.filter((t) => !luego[t.codigo]), despues = enTab.filter((t) => luego[t.codigo]);
+        const top = ahora_[0];
+        return (top ? `<div class="muted" style="font-size:.72rem;text-align:center;margin:6px 0">Negocio <b>1 de ${ahora_.length}</b> · 👉 derecha = <b>ver ahora</b> · 👈 izquierda = <b>en otro momento</b></div>` + portadaEj(top)
+            + (ahora_.length > 1 ? `<div class="rb-cola">${ahora_.slice(1).map((t) => `<button type="button" class="rb-cola-i" data-rb="ej-ver" data-c="${esc(t.codigo)}">${resp(t) ? '<i class="rb-luz"></i>' : ""}${esc((t.nombre || t.codigo).slice(0, 34))}</button>`).join("")}</div>` : "")
+          : `<div class="empty">✅ Viste todos los de esta etapa.</div>`)
           + (despues.length ? `<details class="rb-det"><summary>⏰ Para después (${despues.length})</summary>${despues.map(portadaEj).join("")}</details>` : "");
       })()}`;
   }
@@ -2673,15 +2730,26 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos, ...(etapa ? { etapa } : {}), dispositivo: dispositivo(false) }) });
         if (msg) toast(msg); if (etapa) R.ejTab = etapa; R.ejecT = 0; await cargarEjecuta(); pintarHoja(true); } catch (e) { toast(e.message); }
     };
+    if (a === "chat-envie" || a === "chat-pegar" || a === "mk-add") {
+      const chatApi = async (x, msg) => { try { const r = await api("chat", { method: "POST", body: JSON.stringify({ codigo: cod, ...x }) }); if (msg) toast(r.enviado ? "🤖 Enviado por WhatsApp" : msg); R.ejecT = 0; await cargarEjecuta(); pintarHoja(true); } catch (e) { toast(e.message); } };
+      if (a === "chat-envie") { if (b.dataset.canal === "mk") copiar(b.dataset.v); navigator.vibrate?.(10);
+        setTimeout(() => chatApi({ k: b.dataset.k, nombre: b.dataset.n, canal: b.dataset.canal, tel: b.dataset.tel, saliente: b.dataset.v, manual: true }, b.dataset.canal === "mk" ? "📋 Copiado: pégalo en el chat del vendedor" : "💬 Anotado"), 400); return; }
+      if (a === "chat-pegar") { const v = ($("#rbChat-" + cod + "-" + b.dataset.k)?.value || "").trim(); if (!v) { toast("Pega primero lo que te respondió"); return; }
+        return chatApi({ k: b.dataset.k, nombre: b.dataset.n, canal: b.dataset.canal, tel: b.dataset.tel, entrante: v }, "🤖 La IA lo está leyendo…"); }
+      const n = ($("#rbMkN-" + cod)?.value || "").trim(); if (!n) { toast("Escribe el nombre del vendedor"); return; }
+      return chatApi({ k: kProv(n), nombre: n, canal: "mk", link: ($("#rbMkL-" + cod)?.value || "").trim() }, "🛒 Vendedor agregado · mensaje listo");
+    }
     if (a === "ej-contacto") {          // el enlace abre el correo / la llamada / WhatsApp; aquí se anota el punto de la misión
       const t = (R.ejec || []).find((x) => x.codigo === cod);
       if (t) { t.op = t.op || {}; t.op.contactados = { ...(t.op.contactados || {}), [b.dataset.k]: { via: b.dataset.via, t: new Date().toISOString(), nombre: b.dataset.n } }; }
       navigator.vibrate?.(10);
+      if (b.dataset.via === "whatsapp") { const tt = (R.ejec || []).find((x) => x.codigo === cod), oo = tt && candsDe(tt).find((x) => x.k === b.dataset.k);
+        if (tt && oo) api("chat", { method: "POST", body: JSON.stringify({ codigo: cod, k: oo.k, nombre: oo.proveedor, canal: "wa", tel: oo.telefono, saliente: cuerpoCot(tt, oo), manual: true }) }).catch(() => {}); }
       setTimeout(() => ejOp({ contactado: { k: b.dataset.k, via: b.dataset.via, nombre: b.dataset.n } }, null, b.dataset.via === "correo" ? "✉ +1 · correo listo para enviar" : "+1 a la misión"), 400);
       return;
     }
     const tEj = () => (R.ejec || []).find((x) => x.codigo === cod);
-    if (a === "ej-ver") { R.ejAbierto = cod; const l = leerLuego(); delete l[cod]; try { localStorage.setItem(EJ_LUEGO, JSON.stringify(l)); } catch {}
+    if (a === "ej-ver") { R.ejAbierto = cod; sheet.scrollTop = 0; { const tt = (R.ejec || []).find((x) => x.codigo === cod); if (tt) R.ejTab = etEj(tt); } const l = leerLuego(); delete l[cod]; try { localStorage.setItem(EJ_LUEGO, JSON.stringify(l)); } catch {}
       api("correo-visto", { method: "POST", body: JSON.stringify({ codigo: cod }) }).catch(() => {}); return pintarHoja(true); }
     if (a === "ej-luego") { const l = leerLuego(); l[cod] = Date.now(); try { localStorage.setItem(EJ_LUEGO, JSON.stringify(l)); } catch {} if (R.ejAbierto === cod) R.ejAbierto = null; toast("⏰ Queda para después"); return pintarHoja(true); }
     if (a === "ej-cerrar-card") { R.ejAbierto = null; return pintarHoja(true); }
