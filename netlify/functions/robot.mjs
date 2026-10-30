@@ -499,8 +499,32 @@ async function waWebhook(req) {
   return new Response("ok");
 }
 
+// ☁️ un servidor nuevo pide conectarse SIN conocer el código: el dueño lo aprueba con un toque en la app
+async function nubePedir(req) {
+  const store = getStore({ name: "robot", consistency: "strong" });
+  const url = new URL(req.url);
+  const L = ((await store.get("nube/solicitudes", { type: "json" })) || []).filter((x) => Date.now() - Date.parse(x.t) < 3 * 3600_000);
+  if (req.method === "POST") {
+    if (L.filter((x) => x.estado === "pendiente").length >= 5) return json({ error: "Demasiadas solicitudes pendientes." }, 429);
+    const sol = { id: randomBytes(18).toString("base64url"), t: ahora(), estado: "pendiente",
+      ip: (req.headers.get("x-nf-client-connection-ip") || req.headers.get("x-forwarded-for") || "").split(",")[0].trim().slice(0, 60),
+      nombre: texto(url.searchParams.get("nombre"), 60) };
+    L.push(sol); await store.setJSON("nube/solicitudes", L);
+    await avisarTexto(store, "☁️ Un servidor pide conectarse", `IP ${sol.ip}. Si es el tuyo (DigitalOcean), apruébalo en 💎 Planes → Robot en la nube.`, "nube-pedir", "/#robot").catch(() => {});
+    return json({ id: sol.id, ip: sol.ip });
+  }
+  const sol = L.find((x) => x.id === url.searchParams.get("id"));
+  if (!sol) return json({ estado: "no_existe" }, 404);
+  if (sol.estado === "aprobado") {
+    sol.estado = "entregado"; sol.entregado = ahora(); await store.setJSON("nube/solicitudes", L);
+    return json({ estado: "aprobado", token: process.env.ROBOT_TOKEN || "" });
+  }
+  return json({ estado: sol.estado });
+}
+
 async function atender(req) {
   if (/^\/bot\/wa\/?$/.test(new URL(req.url).pathname)) return waWebhook(req);
+  if (/^\/bot\/nube-pedir\/?$/.test(new URL(req.url).pathname)) return nubePedir(req);
   if (!autorizado(req)) return json({ error: "Código de enlace inválido o no configurado." }, 401);
   const store = getStore({ name: "robot", consistency: "strong" });
   const url = new URL(req.url);
@@ -1067,6 +1091,20 @@ async function atender(req) {
     await store.setJSON("nube/estado", e);
     await avisarTexto(store, "☁️ Tu robot ya vive en la nube", "Funciona 24/7 sin tu PC. Abre 💎 Planes → Robot en la nube para iniciar sesión en Mercado Público una vez.", "nube", "/#robot").catch(() => {});
     return json({ ok: true });
+  }
+  if (ruta === "nube-solicitudes" && req.method === "GET") {
+    const L = ((await store.get("nube/solicitudes", { type: "json" })) || []).filter((x) => Date.now() - Date.parse(x.t) < 3 * 3600_000);
+    return json({ solicitudes: L.map(({ id, t, estado, ip, nombre }) => ({ id, t, estado, ip, nombre })) });
+  }
+  if (ruta === "nube-aprobar" && req.method === "POST") {
+    const b = await cuerpo(req);
+    if (!b.legado) return json({ error: "Solo el dueño puede aprobar servidores." }, 403);
+    const L = (await store.get("nube/solicitudes", { type: "json" })) || [];
+    const sol = L.find((x) => x.id === b.id && x.estado === "pendiente");
+    if (!sol) return json({ error: "La solicitud ya no está pendiente." }, 404);
+    sol.estado = b.rechazar ? "rechazado" : "aprobado"; sol.resuelto = ahora();
+    await store.setJSON("nube/solicitudes", L);
+    return json({ ok: true, estado: sol.estado });
   }
   if (ruta === "nube-estado" && req.method === "GET") {
     const e = (await store.get("nube/estado", { type: "json" })) || null;
