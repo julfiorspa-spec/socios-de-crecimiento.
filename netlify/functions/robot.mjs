@@ -467,6 +467,82 @@ async function atender(req) {
   }
 
   // ---------- 📨 seguimiento en vivo de las enviadas (estado en Mercado Público, ganador y orden de compra) ----------
+  // ---------- 📧 correos reales (los envía y lee el PC con el Gmail de la empresa) ----------
+  if (ruta === "correo-enviar" && req.method === "POST") {
+    const b = await cuerpo(req);
+    const t = await leer(store, limpiaCodigo(b.codigo));
+    if (!t) return json({ error: "No existe." }, 404);
+    const lista = (Array.isArray(b.lista) ? b.lista : [b]).filter((x) => /@/.test(String(x.to || ""))).slice(0, 8);
+    if (!lista.length) return json({ error: "Falta el correo del destinatario." }, 400);
+    const robot = (await store.get("robot/latido", { type: "json" })) || {};
+    const cola = (await store.get("correo/cola", { type: "json" })) || [];
+    const op = t.op || (t.op = { etapa: "previa", historial: [] });
+    for (const x of lista) {
+      const id = idCorto();
+      cola.push({ id, codigo: t.codigo, to: texto(x.to, 160), asunto: texto(x.asunto, 200), cuerpo: texto(x.cuerpo, 6000), k: texto(x.k, 80), nombre: texto(x.nombre, 120),
+        tipo: texto(x.tipo, 30) || "cotizacion", adjunto_doc: x.adjunto_doc && typeof x.adjunto_doc === "object" ? { id: texto(x.adjunto_doc.id, 40), nombre: texto(x.adjunto_doc.nombre, 120), mime: texto(x.adjunto_doc.mime, 60) } : null,
+        responder_a: texto(x.responder_a, 300), creado: ahora() });
+      if (x.k) op.contactados = { ...(op.contactados || {}), [texto(x.k, 80)]: { via: "correo", t: ahora(), nombre: texto(x.nombre, 120), estado: "en_cola", tipo: texto(x.tipo, 30) || "cotizacion" } };
+    }
+    await store.setJSON("correo/cola", cola.slice(-200));
+    await escribir(store, t);
+    const vivo = robot.visto && Date.now() - Date.parse(robot.visto) < ROBOT_INACTIVO_MS;
+    return json({ ok: true, en_cola: lista.length, pc: !!(vivo && robot.correo), trabajo: t });
+  }
+  if (ruta === "correo-hecho" && req.method === "POST") {
+    const b = await cuerpo(req);
+    const cola = (await store.get("correo/cola", { type: "json" })) || [];
+    const x = cola.find((c) => c.id === b.id);
+    if (!x) return json({ ok: true });
+    await store.setJSON("correo/cola", cola.filter((c) => c.id !== b.id));
+    const t = await leer(store, x.codigo);
+    if (t) {
+      const op = t.op || (t.op = { etapa: "previa", historial: [] });
+      op.correos = [...(op.correos || []), { k: x.k, to: x.to, asunto: x.asunto, tipo: x.tipo, t: ahora(), mid: texto(b.message_id, 300), ok: !!b.ok, error: texto(b.error, 200) }].slice(-60);
+      if (x.k) op.contactados = { ...(op.contactados || {}), [x.k]: { ...((op.contactados || {})[x.k] || {}), via: "correo", t: ahora(), estado: b.ok ? "enviado" : "error", error: texto(b.error, 200) } };
+      await escribir(store, t);
+      if (!b.ok) await avisarTexto(store, "⚠ No se envió un correo · " + x.codigo, `${x.to}: ${texto(b.error, 120)}`, "cerr-" + x.id, "/#robot").catch(() => {});
+    }
+    return json({ ok: true });
+  }
+  if (ruta === "correo-entrante" && req.method === "POST") {
+    const b = await cuerpo(req);
+    const t = await leer(store, limpiaCodigo(b.codigo));
+    if (!t) return json({ ok: false });
+    const a = b.analisis && typeof b.analisis === "object" ? b.analisis : {};
+    const op = t.op || (t.op = { etapa: "previa", historial: [] });
+    const r = { id: idCorto(), t: ahora(), k: texto(b.k, 80), quien: texto(b.quien, 20), de: texto(b.de, 160), de_nombre: texto(b.de_nombre, 120), asunto: texto(b.asunto, 200),
+      texto: texto(b.texto, 1500), resumen: texto(a.resumen, 300), tipo: texto(a.tipo, 30), precio: Math.max(0, Math.round(Number(a.precio_total_con_iva) || 0)) || null,
+      incluye_iva: a.incluye_iva !== false, plazo: texto(a.plazo, 120), stock: texto(a.stock, 120), despacha: a.despacha ?? null, costo_despacho: Math.round(Number(a.costo_despacho) || 0) || null,
+      cuenta: a.cuenta && typeof a.cuenta === "object" && (a.cuenta.numero || a.cuenta.banco) ? Object.fromEntries(["banco", "tipo", "numero", "rut", "titular", "email"].map((k) => [k, texto(a.cuenta[k], 80)])) : null,
+      pide: texto(a.pide, 300), message_id: texto(b.message_id, 300), visto: false };
+    if (op.respuestas?.some((x) => x.message_id && x.message_id === r.message_id)) return json({ ok: true, repetido: true });
+    op.respuestas = [...(op.respuestas || []), r].slice(-40);
+    const nombre = r.de_nombre || r.de;
+    if (r.k) {
+      op.contactados = { ...(op.contactados || {}), [r.k]: { ...((op.contactados || {})[r.k] || {}), respondio: r.t, nombre: (op.contactados || {})[r.k]?.nombre || nombre } };
+      if (r.precio) { const v = r.incluye_iva ? r.precio : Math.round(r.precio * 1.19); op.cotizaciones = { ...(op.cotizaciones || {}), [r.k]: { v, nombre: (op.contactados || {})[r.k]?.nombre || nombre, t: ahora(), auto: true } }; }
+    }
+    if (r.cuenta && !op.banco_proveedor && (!op.proveedor || r.k === (op.proveedor_k || ""))) op.banco_proveedor = [r.cuenta.banco, r.cuenta.tipo, r.cuenta.numero, r.cuenta.rut && "RUT " + r.cuenta.rut, r.cuenta.titular, r.cuenta.email].filter(Boolean).join(" · ");
+    await escribir(store, t);
+    const al = (await store.get("correo/alertas", { type: "json" })) || [];
+    al.unshift({ id: r.id, codigo: t.codigo, t: r.t, quien: r.quien, de: nombre, resumen: r.resumen || r.asunto, precio: r.precio, visto: false });
+    await store.setJSON("correo/alertas", al.slice(0, 60));
+    const tit = r.quien === "proveedor" ? "📩 Respondió " + String(nombre).slice(0, 40) : "📨 Te escriben por " + t.codigo;
+    await avisarTexto(store, tit, `${t.codigo} · ${(r.resumen || r.asunto || "").slice(0, 120)}${r.precio ? " · $" + r.precio.toLocaleString("es-CL") : ""}`, "mail-" + r.id, "/#robot", true).catch(() => {});
+    return json({ ok: true });
+  }
+  if (ruta === "correo-alertas" && req.method === "GET") {
+    const robot = (await store.get("robot/latido", { type: "json" })) || {};
+    return json({ alertas: (await store.get("correo/alertas", { type: "json" })) || [], correo_pc: !!robot.correo, cola: ((await store.get("correo/cola", { type: "json" })) || []).length });
+  }
+  if (ruta === "correo-visto" && req.method === "POST") {
+    const b = await cuerpo(req);
+    const al = (await store.get("correo/alertas", { type: "json" })) || [];
+    for (const x of al) if (!b.codigo || x.codigo === b.codigo) x.visto = true;
+    await store.setJSON("correo/alertas", al);
+    return json({ ok: true });
+  }
   if (ruta === "ocs" && req.method === "GET") return json(await revisarOCs(store, url.searchParams.get("forzar") === "1"));
   if (ruta === "seguimiento" && req.method === "GET") {
     const { res, miRut } = await revisarSeguimiento(store, url.searchParams.get("forzar") === "1");
@@ -474,9 +550,9 @@ async function atender(req) {
   }
 
   // ---------- 🏆 negocio ganado: etapas Inversionista → Operación → Despacho → Entrega → Cerrado ----------
-  const ETAPAS = ["ganada", "inversionista", "operacion", "transporte", "pago", "documentos", "despacho", "entrega", "cerrado", "rechazada"];
+  const ETAPAS = ["previa", "ganada", "inversionista", "operacion", "transporte", "pago", "documentos", "despacho", "entrega", "cerrado", "rechazada"];
   // 💼 lo que se le avisa al inversionista en cada paso del negocio (y el PC le rehace su Excel con los costos reales)
-  const AVISO_INV = { transporte: "🤝 Proveedor acordado", pago: "💸 Pide transferencia", despacho: "🛣 Pedido en trayecto", entrega: "📦 Entregado: falta la recepción firmada", cerrado: "🥇 Negocio cerrado OK" };
+  const AVISO_INV = { transporte: "🤝 Proveedor acordado", pago: "💸 Paga al proveedor", despacho: "🛣 Pedido en trayecto", entrega: "📦 Entregado: falta la recepción firmada", cerrado: "🥇 Negocio cerrado OK" };
   if (ruta === "operacion" && req.method === "POST") {
     const b = await cuerpo(req);
     const t = await leer(store, limpiaCodigo(b.codigo));
@@ -491,8 +567,9 @@ async function atender(req) {
     const d = b.datos && typeof b.datos === "object" ? b.datos : {};
     for (const k of ["proveedor", "contacto", "telefono", "email", "transporte", "notas", "medio_pago", "guia", "factura", "motivo_no", "folio_guia", "folio_factura",
       "ejecutor", "ejecutor_nombre", "plazo_proveedor", "fecha_entrega", "banco_proveedor", "negociacion", "plazo_fecha", "plazo_nota", "incidencia",
-      "transportista", "transportista_tel", "origen_flete", "patente", "recibio_nombre", "recibio_rut", "fecha_cobro", "inversionista_nombre", "inversionista_tel"]) if (d[k] !== undefined) op[k] = texto(d[k], 400);
+      "transportista", "transportista_tel", "origen_flete", "patente", "recibio_nombre", "recibio_rut", "fecha_cobro", "inversionista_nombre", "inversionista_tel", "despacho_modo", "proveedor_k", "proveedor_email", "proveedor_tel", "entrega_contacto", "entrega_tel", "vehiculo", "factoring", "nota_cierre"]) if (d[k] !== undefined) op[k] = texto(d[k], 400);
     for (const k of ["precio_acordado", "costo_transporte", "opcion", "km", "cobrado"]) if (d[k] !== undefined) op[k] = d[k] === null ? null : Math.max(0, Math.round(Number(d[k]) || 0));
+    const yaPedido = !!op.pedido_transferencia;
     for (const k of ["inversion_ok", "compra_ok", "despacho_ok", "guia_firmada", "factura_firmada", "aplica_comision", "nos_da", "proveedor_pagado", "guia_hecha", "factura_hecha", "oc_aceptada", "pedido_transferencia", "transferido"]) if (d[k] !== undefined) op[k] = !!d[k];
     if (d.comision !== undefined) op.comision = Math.min(0.10, Math.max(0.01, Number(d.comision) || 0.04));
     // 📨 el juego de los proveedores: a quién le escribiste/llamaste y qué precio te dio cada uno
@@ -503,6 +580,8 @@ async function atender(req) {
       const k = texto(d.cotizacion.k, 80), v = Math.max(0, Math.round(Number(d.cotizacion.v) || 0));
       if (k) { op.cotizaciones = { ...(op.cotizaciones || {}) }; if (v) op.cotizaciones[k] = { v, nombre: texto(d.cotizacion.nombre, 120), t: ahora() }; else delete op.cotizaciones[k]; }
     }
+    if (d.descartar_k) op.descartados = { ...(op.descartados || {}), [texto(d.descartar_k, 80)]: ahora() };
+    const avisarPago = d.pedido_transferencia === true && !yaPedido;
     if (d.proveedor_extra && typeof d.proveedor_extra === "object" && d.proveedor_extra.proveedor) {
       const x = d.proveedor_extra;
       op.extras = [...(op.extras || []), { proveedor: texto(x.proveedor, 120), telefono: texto(x.telefono, 40), email: texto(x.email, 120), fuente: texto(x.fuente, 30) || "manual" }].slice(-6);
@@ -510,6 +589,7 @@ async function atender(req) {
     if (b.pedir_informe || (cambioEtapa && AVISO_INV[op.etapa]) || d.precio_acordado !== undefined || d.costo_transporte !== undefined) op.pedido_informe = { t: ahora(), rebuscar: !!b.rebuscar };
     t.op = op;
     const r = await escribir(store, t);
+    if (avisarPago) await avisarTexto(store, "💸 Inversionista: paga a " + String(op.proveedor || "proveedor").slice(0, 40), `${t.codigo} · ${"$" + Math.round(op.precio_acordado || 0).toLocaleString("es-CL")}${op.banco_proveedor ? " · " + texto(op.banco_proveedor, 140) : ""}. Sube el comprobante en Ejecuta para que avance.`, "pago-" + t.codigo, "/#robot", true).catch(() => {});
     if (cambioEtapa && AVISO_INV[op.etapa]) {        // 💼 aviso al inversionista (push) con el resumen del negocio
       const util = op.informe?.final != null ? " · utilidad " + "$" + Math.round(op.informe.final).toLocaleString("es-CL") : "";
       await avisarTexto(store, "💼 " + AVISO_INV[op.etapa] + " · " + t.codigo, `${(t.nombre || "").slice(0, 60)} · venta $${Math.round(t.total || 0).toLocaleString("es-CL")}${op.precio_acordado ? " · compra $" + Math.round(op.precio_acordado).toLocaleString("es-CL") : ""}${op.costo_transporte ? " · flete $" + Math.round(op.costo_transporte).toLocaleString("es-CL") : ""}${util}. Excel actualizado en Negocios.`,
@@ -522,7 +602,7 @@ async function atender(req) {
     const b = await cuerpo(req);
     const t = await leer(store, limpiaCodigo(b.codigo));
     if (!t) return json({ error: "No existe." }, 404);
-    const tipo = ["foto", "guia", "factura", "otro"].includes(b.tipo) ? b.tipo : "otro";
+    const tipo = ["foto", "guia", "factura", "comprobante", "otro"].includes(b.tipo) ? b.tipo : "otro";
     const bytes = Buffer.from(String(b.b64 || ""), "base64");
     if (!bytes.length || bytes.length > MAX_PDF) return json({ error: "Archivo vacío o de más de 4,5 MB." }, 400);
     const op = t.op || { etapa: "ganada", historial: [] };
@@ -846,7 +926,7 @@ async function atender(req) {
     const b = await cuerpo(req);
     await store.setJSON("robot/latido", {
       visto: ahora(), ocupado: !!b.ocupado, tarea: texto(b.tarea, 200), equipo: texto(b.equipo, 60), version: texto(b.version, 20),
-      rut: texto(b.rut, 20),
+      rut: texto(b.rut, 20), correo: !!b.correo,
     });
     // 🖥🖥 varios robots (PC de escritorio + notebook): cada uno se registra y la cola se reparte sin duplicar
     const eq = texto(b.equipo, 60) || "pc";
@@ -893,7 +973,27 @@ async function atender(req) {
       try { await revisarOCs(store, false); } catch {}
     }
     const empresas = (await store.get("empresas/lista", { type: "json" })) || {};
-    const op = { ...(pidio ? { oportunidades: true } : {}), ...(negocios.length ? { negocios } : {}), ...(preguntas.length ? { preguntas } : {}), empresas, equipos: vivos };
+    // 📧 correo: este PC envía la cola y vigila la bandeja (qué compras, proveedores y mensajes esperar)
+    let correos = [], vigilar = null;
+    if (b.correo) {
+      const cola = (await store.get("correo/cola", { type: "json" })) || [];
+      const yo = texto(b.equipo, 60) || "pc";
+      correos = cola.filter((x) => !x.tomado || Date.now() - Date.parse(x.tomado) > 5 * 60_000).slice(0, 10);
+      if (correos.length) { for (const x of correos) { x.tomado = ahora(); x.por = yo; } await store.setJSON("correo/cola", cola); }
+      const hace15 = Date.now() - 15 * 864e5;
+      vigilar = lista.filter((t) => (t.op && !["cerrado", "rechazada"].includes(t.op.etapa)) || ((t.estado === "enviada" || t.estado === "confirmada") && Date.parse(t.actualizado || t.creado || 0) > hace15))
+        .slice(0, 120).map((t) => {
+          const op = t.op || {}, inf = op.informe || {}, emails = {}, msgids = {};
+          const kk = (n) => String(n || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60);
+          for (const o of [...(inf.opciones || []), ...(op.extras || [])]) if (o.email && o.proveedor) emails[String(o.email).toLowerCase()] = kk(o.proveedor);
+          for (const c of op.correos || []) { if (c.mid) msgids[c.mid] = c.k || null; if (c.to && c.k) emails[String(c.to).toLowerCase()] = c.k; }
+          return { codigo: t.codigo, nombre: texto(t.nombre, 120), oc: op.oc_codigo || null, palabras: [t.codigo, op.oc_codigo].filter(Boolean),
+            emails, msgids, mail_cliente: t.oc_compra?.mail || inf.comprador?.email || null,
+            que: (inf.que_comprar || inf.productos || []).slice(0, 6).map((x) => `${x.cantidad ?? ""} ${x.unidad || ""} ${x.que || x.nombre || ""}`.trim()).join("; ") };
+        });
+    }
+    const op = { ...(pidio ? { oportunidades: true } : {}), ...(negocios.length ? { negocios } : {}), ...(preguntas.length ? { preguntas } : {}), empresas, equipos: vivos,
+      ...(correos.length ? { correos } : {}), ...(vigilar ? { vigilar } : {}) };
     // ⚡ lo que pide una persona desde el celular va antes que el autopiloto del PC
     const humano = (t) => !!(t.jugador || t.dispositivo);
     // un pedido es de este equipo si le toca por reparto, o si al dueño lo tienen ocupado y es de una persona (no se hace esperar)
