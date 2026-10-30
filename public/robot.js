@@ -170,6 +170,13 @@
   .rb-modos button{flex:1}
   .rb-eerr{margin-top:8px}.rb-hitos{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.rb-hito{font-size:.66rem;padding:3px 7px;border-radius:9px;background:rgba(255,255,255,.07)}.rb-hito span{opacity:.7;margin-right:4px}
   .rb-pill.verde{border-color:#5ef0b0;color:#c9ffe8}
+  .rb-firma-ok{display:flex;gap:10px;align-items:center;padding:10px;border-radius:14px;border:1px solid rgba(183,140,255,.45);background:rgba(183,140,255,.08);margin:6px 0}
+  .rb-firma-ok img{height:46px;max-width:120px;object-fit:contain;background:#fff;border-radius:8px;padding:3px}
+  .rb-licmatch{border-color:#b78cff}.rb-mesa{border-color:rgba(183,140,255,.6)}
+  .rb-vision{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}.rb-vision figure{margin:0;flex:1;min-width:140px}.rb-vision img{width:100%;border-radius:12px;display:block;cursor:pointer}
+  .rb-vision figcaption{font-size:.66rem;text-align:center;opacity:.8;margin-top:2px}.rb-vision-ph{height:110px;border-radius:12px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center}
+  .rb-rango{width:100%;accent-color:#f5cf6b;margin:8px 0}.rb-ul{margin:4px 0;padding-left:18px;font-size:.76rem}.rb-ul li{margin:2px 0}
+  .rb-plan{display:flex;flex-direction:column;gap:6px;margin:6px 0}.rb-plan-p{display:flex;gap:8px;align-items:flex-start;font-size:.78rem}.rb-plan-p>span{min-width:22px;height:22px;border-radius:50%;background:#b78cff;color:#1a1033;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:.7rem}
   .rb-foco{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:4px 0 6px;position:sticky;top:0;z-index:3;padding:6px 0;background:rgba(10,14,30,.97);border-radius:0 0 14px 14px}
   .rb-cola{display:flex;gap:6px;overflow-x:auto;padding:4px 0 8px}.rb-cola-i{flex:none;font-size:.7rem;padding:6px 10px;border-radius:12px;border:1px solid rgba(245,207,107,.35);background:rgba(255,255,255,.04);color:inherit;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .rb-proy{font-size:.8rem;margin:6px 0 2px;padding:8px 10px;border-radius:12px;background:rgba(0,0,0,.22)}.rb-proy .muted{font-size:.68rem;margin-top:2px}
@@ -738,6 +745,119 @@
   function badge(t) {
     const e = est(t.estado);
     return `<span class="rb-badge ${e.cls}">${e.cls === "azul" && e.activo ? '<span class="spinner"></span>' : ""}${esc(e.txt)}</span>`;
+  }
+
+  /* ---------- 📑 portal Licitaciones: match → mesa de juego (bases, precio, garantías, visión) → lista → ofertada ---------- */
+  const LIC_NO = "sdc:licNo";
+  const licNo = () => { try { return JSON.parse(localStorage.getItem(LIC_NO) || "{}"); } catch { return {}; } };
+  const tipoPorMonto = (m) => { const u = (Number(m) || 0) / utmHoy(); return u < 100 ? "L1" : u < 1000 ? "LE" : u < 5000 ? "LP" : "LR"; };
+  async function cargarFirma() {
+    if (R._cargFirma) return; R._cargFirma = true;
+    try { const r = await api("firma"); R.firma = r.firma || null; R.firmaT = Date.now();
+      if (R.firma?.procesada) { const b = await api("firma?img=lista"); if (b && b.blob) { if (R.firmaUrl) URL.revokeObjectURL(R.firmaUrl); R.firmaUrl = URL.createObjectURL(await b.blob()); } }
+      pintarHojaSiAbierta(); } catch {} finally { R._cargFirma = false; }
+  }
+  async function cargarImgsLic(t) {
+    R.licImgs = R.licImgs || {};
+    for (const d of (t.lic_docs || []).filter((x) => x.tipo === "render")) {
+      if (R.licImgs[d.id]) continue; R.licImgs[d.id] = "…";
+      try { const r = await api(`archivo?codigo=${encodeURIComponent(t.codigo)}&tipo=doc&id=${encodeURIComponent(d.id)}`); R.licImgs[d.id] = URL.createObjectURL(await r.blob()); pintarHojaSiAbierta(); } catch { delete R.licImgs[d.id]; }
+    }
+  }
+  function cajaFirma() {
+    if (!R.firmaT || Date.now() - R.firmaT > 120000) setTimeout(cargarFirma, 0);
+    const F = R.firma;
+    if (F && !R.firmaEditar) return `<div class="rb-firma-ok"><div>${R.firmaUrl ? `<img src="${R.firmaUrl}" alt="Firma">` : `<span class="spinner"></span>`}</div>
+      <div style="flex:1;min-width:0"><b>✍️ ${esc(F.nombre || "Representante legal")}</b><div class="muted" style="font-size:.7rem">${esc(F.rut || "")} · ${esc(F.cargo || "")} · ${F.procesada ? (F.error ? "⚠ " + esc(F.error) : "lista para estampar en los anexos") : "⟳ el robot la está limpiando…"}</div></div>
+      <button class="btn small" type="button" data-rb="firma-editar">Cambiar</button></div>`;
+    return `<div class="rb-mision" style="border-color:#b78cff"><div class="rb-env"><b>✍️ Firma de la representante legal de PJANIC</b></div>
+      <div class="muted" style="font-size:.72rem">Firma con lápiz negro o azul en una hoja blanca, sácale una foto de cerca con buena luz y súbela. El robot borra el fondo y la estampa en todos los anexos y en el programa de integridad.</div>
+      <label class="rb-lab">Nombre completo (como en los anexos)<input class="rb-in" id="rbFirN" value="${esc(F?.nombre || "")}" placeholder="Ej: María José Pérez Soto"></label>
+      <div class="rb-row"><label class="rb-lab" style="flex:1">RUT<input class="rb-in" id="rbFirR" value="${esc(F?.rut || "")}" placeholder="12.345.678-9"></label>
+        <label class="rb-lab" style="flex:1">Cargo<input class="rb-in" id="rbFirC" value="${esc(F?.cargo || "Representante legal")}"></label></div>
+      <div class="rb-row"><button class="btn rb-oro rb-big-btn" type="button" data-rb="firma-subir">📷 Subir foto de la firma</button>${F ? `<button class="btn small" type="button" data-rb="firma-editar">Cancelar</button>` : ""}</div></div>`;
+  }
+  function cartaMatch(x) {
+    const dias = Math.max(0, Math.round((Date.parse(x.cierre) - Date.now()) / 864e5));
+    const tipo = x.tipo_lic || tipoPorMonto(x.monto);
+    return `<div class="rb-ejcard rb-licmatch"><div class="rb-env"><span class="rb-cp">📑 ${esc(tipo)}</span><span class="${dias <= 3 ? "rb-neg-t" : "muted"}" style="font-size:.74rem">cierra en ${dias} día${dias === 1 ? "" : "s"}</span></div>
+      <div class="rb-fnom" style="margin:6px 0 2px;font-size:1.02rem">${esc(x.nombre || "")}</div>
+      <div class="muted" style="font-size:.74rem">${esc(x.organismo || "")}${x.region ? " · 📍 " + esc(x.region) : ""}</div>
+      <div class="rb-kv" style="margin:8px 0"><span>Presupuesto <b>${clp(x.monto)}</b>${x.monto_estimado ? " <span class='muted'>(estimado)</span>" : ""}</span>${x.ganancia ? `<span class="rb-vivo-t">Gana ≈ <b>${clp(x.ganancia)}</b></span>` : ""}</div>
+      <div class="muted" style="font-size:.68rem">${(Number(x.monto) || 0) / utmHoy() > 1000 ? "🛡 Sobre 1.000 UTM: pide garantía de fiel cumplimiento (5 % neto) al adjudicar." : "Bajo 1.000 UTM: normalmente sin garantía."} El robot lee las bases completas antes de que pongas un peso.</div>
+      <div class="rb-row" style="margin-top:8px"><button class="btn" type="button" data-rb="lic-no" data-c="${esc(x.codigo)}" style="flex:1">✖ No vamos</button>
+        <a class="btn small" href="https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion=${encodeURIComponent(x.codigo)}" target="_blank" rel="noopener">Ficha ↗</a>
+        <button class="btn rb-oro" type="button" data-rb="lic-vamos" data-c="${esc(x.codigo)}" style="flex:1">💚 Vamos</button></div></div>`;
+  }
+  function mesaLic(t) {
+    const L = t.lic || {}, X = L.experto || {}, c = esc(t.codigo), cod = t.codigo;
+    if ((t.lic_docs || []).some((d) => d.tipo === "render")) setTimeout(() => cargarImgsLic(t), 0);
+    const V = X.veredicto || {}, Rg = X.riesgo || {}, G = X.garantias || {}, K = X.contrato || {}, Fe = X.fechas || {}, Oe = X.oferta_economica || {};
+    const li = (arr, f) => (arr || []).length ? `<ul class="rb-ul">${arr.map(f).join("")}</ul>` : "";
+    const sec = (tit, cuerpo, abierto) => cuerpo ? `<details class="rb-det" ${abierto ? "open" : ""}><summary>${tit}</summary>${cuerpo}</details>` : "";
+    const renders = (t.lic_docs || []).filter((d) => d.tipo === "render");
+    const pidiendo = t.lic_vision && (t.lic_vision.hechas || []).length < (t.lic_vision.vistas || []).length;
+    const desc = Math.round((L.descuento || 0.17) * 1000) / 10;
+    const pres = Number(L.presupuesto) || 0, cant = Number(L.cantidad) || 1;
+    const vision = `<div class="rb-vision">${renders.length ? renders.map((d) => `<figure>${R.licImgs?.[d.id] && R.licImgs[d.id] !== "…" ? `<img src="${R.licImgs[d.id]}" alt="${esc(d.vista)}" data-rb="neg-doc" data-c="${c}" data-id="${esc(d.id)}">` : `<div class="rb-vision-ph"><span class="spinner"></span></div>`}<figcaption>${d.vista === "exterior" ? "Por fuera" : d.vista === "interior" ? "Por dentro" : esc(d.vista)}</figcaption></figure>`).join("") : ""}
+      ${pidiendo ? `<div class="muted" style="font-size:.72rem">🎨 El robot está dibujando cómo quedará el proyecto…</div>` : `<button class="btn small" type="button" data-rb="lic-vision" data-c="${c}">🎨 ${renders.length ? "Volver a visualizar" : "Visualizar el proyecto terminado"}</button>`}</div>`;
+    return `<div class="rb-ejcard rb-mesa">
+      <div class="rb-env"><span class="rb-cp">📑 ${esc(X.tipo_licitacion || tipoPorMonto(pres))} · ${c}</span>${V.vamos != null ? `<b class="${V.vamos ? "rb-vivo-t" : "rb-neg-t"}">${V.vamos ? "💚 VAMOS" : "✖ NO CONVIENE"}${V.puntaje != null ? " · " + esc(V.puntaje) + "/100" : ""}</b>` : badge(t)}</div>
+      <div class="rb-fnom" style="margin:6px 0 2px;font-size:1.02rem">${esc(L.producto || t.nombre || "Licitación")}</div>
+      <div class="muted" style="font-size:.74rem">${esc(t.organismo || "")}${L.cierre ? " · cierra " + esc(L.cierre) : ""}</div>
+      ${V.por_que ? `<div class="rb-resp nueva" style="margin-top:6px">${esc(V.por_que)}</div>` : ""}
+      ${t.mensaje && !L.resumen ? `<div class="rb-msg">${esc(t.mensaje)}</div>` : ""}
+      <div class="rb-comprar"><div class="rb-env"><b>🎯 LO QUE QUIERE EL CLIENTE</b><a class="btn small" href="https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion=${encodeURIComponent(cod)}" target="_blank" rel="noopener">📄 Ficha</a></div>
+        <div style="font-size:.82rem;margin-top:6px">${esc(X.lo_que_quiere_el_cliente || L.resumen || "⟳ El robot está leyendo las bases…")}</div>
+        ${(L.items || []).map((i) => `<div class="rb-qc mini"><span class="n">${esc(i.cantidad ?? "")}<small>${esc(i.unidad || "")}</small></span><div><b>${esc(i.descripcion || "")}</b></div></div>`).join("")}
+        ${L.lugar_entrega ? `<div class="muted" style="font-size:.7rem;margin-top:4px">📍 ${esc(L.lugar_entrega)}${L.plazo_entrega ? " · ⏱ " + esc(L.plazo_entrega) : ""}</div>` : ""}</div>
+      ${vision}
+      ${L.precio_unit != null ? `<div class="rb-mision rb-precio-lic" data-pres="${pres}" data-coniva="${L.con_iva ? 1 : 0}" data-cant="${cant}">
+        <div class="rb-env"><b>💲 Juguemos con el precio</b><b><span data-v="desc">${desc}</span>% bajo el presupuesto</b></div>
+        <input type="range" class="rb-rango" id="rbDesc-${c}" min="0" max="40" step="0.5" value="${desc}">
+        <div class="rb-kv"><span>Unitario neto <b data-v="unit">${clp(L.precio_unit)}</b></span><span>Total c/IVA <b data-v="total">${clp(L.total)}</b></span></div>
+        <div class="muted" style="font-size:.68rem">Presupuesto ${clp(pres)}${L.con_iva ? " con IVA" : " neto"} · cantidad ${esc(cant)} ${esc(L.unidad || "")}${(L.comparables || []).length ? " · compras anteriores: " + esc(L.comparables.slice(0, 2).join(" | ")) : ""}</div>
+        ${X.evaluacion?.formula_precio ? `<div class="muted" style="font-size:.68rem">📐 Puntaje precio: ${esc(X.evaluacion.formula_precio)}</div>` : ""}
+        ${t.estado === "lic_revisar" ? `<button class="btn rb-oro rb-big-btn" type="button" data-rb="lic-firmar" data-c="${c}">✅ Apruebo este precio · firmar anexos</button>` : ""}</div>` : ""}
+      ${(L.alertas || []).length ? `<div class="rb-alertas"><b>⚠ Revisa antes de aprobar</b><ul style="margin:0;padding:0">${L.alertas.map((a) => `<li class="${a.nivel === "rojo" ? "rojo" : ""}">${a.nivel === "rojo" ? "⛔" : "⚠"} ${esc(a.texto)}</li>`).join("")}</ul></div>` : ""}
+      ${sec("📋 Para no quedar fuera (admisibilidad)", li(X.habilidad, (h) => `<li>✔ ${esc(h)}</li>`) + li(X.admisibilidad, (a) => `<li><b>${esc(a.requisito || "")}</b>${a.documento ? " · " + esc(a.documento) : ""}${a.firma && !/no/i.test(a.firma) ? " · ✍️ firma" : ""}${a.seccion_portal ? " · " + esc(a.seccion_portal) : ""}${a.subsanable === false ? " <b class='rb-neg-t'>· no subsanable</b>" : ""}</li>`) + li(L.documentos, (d) => `<li>📎 ${esc(d.nombre)} · ${esc(d.estado)}</li>`), true)}
+      ${sec("🛡 Garantías", G.seriedad || G.fiel_cumplimiento ? `<div style="font-size:.78rem">Seriedad: <b>${esc(G.seriedad || "—")}</b><br>Fiel cumplimiento: <b>${esc(G.fiel_cumplimiento || "—")}</b>${G.legal === false ? `<div class="rb-neg-t">⛔ ${esc(G.comentario || "Contradice el reglamento: pregúntalo en el foro")}</div>` : G.comentario ? `<div class="muted">${esc(G.comentario)}</div>` : ""}<div class="muted" style="font-size:.66rem">Puedes usar boleta, vale vista, póliza o certificado de fianza (IGR): las bases no pueden exigir uno solo.</div></div>` : "")}
+      ${sec("💵 Cómo se ingresa el precio", Oe.neto_o_iva ? `<div style="font-size:.78rem">${esc(Oe.neto_o_iva)} · ${esc(Oe.unitario_o_total || "")}${Oe.lineas ? " · " + esc(Oe.lineas) : ""}${Oe.validez ? " · validez " + esc(Oe.validez) : ""}</div><div class="muted" style="font-size:.66rem">Un error en el precio no se puede corregir después: el robot cuadra el formulario con el anexo.</div>` : "")}
+      ${sec("⚖️ Contrato y riesgos", (K.multas || Rg.nivel) ? `<div style="font-size:.78rem">${Rg.nivel ? `Riesgo <b class="${Rg.nivel === "alto" ? "rb-neg-t" : Rg.nivel === "medio" ? "" : "rb-vivo-t"}">${esc(Rg.nivel)}</b>` : ""}${li(Rg.razones, (r) => `<li>${esc(r)}</li>`)}
+        ${K.multas ? `<div>Multas: ${esc(K.multas)}${K.tope_multas ? " · tope " + esc(K.tope_multas) : ""}</div>` : ""}${K.termino_anticipado ? `<div>Término anticipado: ${esc(K.termino_anticipado)}</div>` : ""}${K.subcontratacion ? `<div>Subcontratación: ${esc(K.subcontratacion)}</div>` : ""}${K.pago ? `<div>Pago: ${esc(K.pago)}</div>` : ""}${K.plazo_contrato ? `<div>Plazo: ${esc(K.plazo_contrato)}</div>` : ""}</div>` : "")}
+      ${sec("🗓 Fechas clave", Object.values(Fe).some(Boolean) ? li(Object.entries(Fe).filter(([, v]) => v), ([k, v]) => `<li>${esc({ foro_preguntas: "Foro de preguntas", respuestas: "Respuestas", cierre: "Cierre", apertura: "Apertura", adjudicacion: "Adjudicación", visita_terreno: "Visita a terreno" }[k] || k)}: <b>${esc(v)}</b></li>`) : "")}
+      ${sec("🗺 Mapa de ejecución (así lo haremos)", (X.plan || []).length ? `<div class="rb-plan">${X.plan.map((p, i) => `<div class="rb-plan-p"><span>${i + 1}</span><div><b>${esc(p.paso || "")}</b>${p.cuando ? ` <span class="muted">· ${esc(p.cuando)}</span>` : ""}<div class="muted" style="font-size:.7rem">${esc(p.detalle || "")}</div></div></div>`).join("")}</div>${X.proveedor_ideal ? `<div class="rb-proy">🤝 <b>Proveedor ideal:</b> ${esc(X.proveedor_ideal)}</div>` : ""}` : "")}
+      ${sec("❓ Preguntas para el foro", (X.preguntas_foro || []).length ? li(X.preguntas_foro, (q) => `<li>${esc(q)}</li>`) + `<button class="btn small" type="button" data-rb="cp" data-v="${esc((X.preguntas_foro || []).join("\n\n"))}">Copiar preguntas</button>` : "")}
+      ${t.estado === "lic_lista" ? sec("🚀 Cómo ingresarla en el portal (lo haces tú)", `<ol class="rb-ul" style="padding-left:18px">
+        <li>Mercado Público → Licitaciones → buscar <b>${c}</b> → Ofertas → <b>Ingresar nueva oferta</b>.</li>
+        <li>Nombre de la oferta: «PJANIC · ${esc((L.producto || "").slice(0, 40))}» <b>sin precios</b>.</li>
+        <li>Oferta económica: <b>${clp(L.precio_unit)}</b> ${esc(Oe.neto_o_iva || "neto")} ${esc(Oe.unitario_o_total || "unitario")}.</li>
+        <li>Adjunta los anexos del ZIP en su sección (administrativo / técnico / económico) y revisa que se vean.</li>
+        <li>Declaración jurada: la firma la representante con Clave Única, revisando cada casilla.</li>
+        <li>Finalizar y enviar · descarga el comprobante. Mejor con 24 h de holgura.</li></ol>`, true) : ""}
+      <div class="rb-row" style="margin-top:8px">${t.zip ? `<button class="btn small" data-rb="lic-zip" data-c="${c}" type="button">⬇ Anexos (ZIP)</button>` : ""}
+        <button class="btn small" type="button" data-rb="lic-preguntar" data-c="${c}">💬 Pregúntale al robot por estas bases</button>
+        ${t.estado === "lic_lista" ? `<button class="btn small rb-firmar" data-rb="lic-ingresar" data-c="${c}" type="button">🚀 Ingresar al portal</button>` : ""}
+        ${["requiere", "error", "cancelada"].includes(t.estado) ? `<button class="btn small" data-rb="licitar" data-c="${c}" type="button">Reintentar</button>` : ""}</div>
+      ${t.estado === "lic_captcha" ? tarjetaLic(t) : ""}</div>`;
+  }
+  function portalLicita() {
+    if (!R.oport && !R._cargandoOport) setTimeout(cargarOport, 0);
+    const lics = (R.data?.trabajos || []).filter((t) => t.tipo === "licitacion");
+    const enP = ["en_cola", "tomado", "lic_bajando", "lic_captcha", "lic_analizando", "requiere", "error"];
+    const prep = lics.filter((t) => enP.includes(t.estado)), mesa = lics.filter((t) => t.estado === "lic_revisar"),
+      listas = lics.filter((t) => ["lic_lista", "lic_ingresando"].includes(t.estado)), ofer = lics.filter((t) => ["enviada", "confirmada"].includes(t.estado));
+    const no = licNo(), ya = new Set(lics.map((t) => t.codigo));
+    const match = (R.oport?.lista || []).filter((x) => x.fuente === "licitacion" && Date.parse(x.cierre) - Date.now() > 36 * 3600e3 && !no[x.codigo] && !ya.has(x.codigo))
+      .sort((a, b) => (b.ganancia || 0) - (a.ganancia || 0));
+    const tab = R.licTab || (mesa.length ? "mesa" : "match");
+    const TABS = [["match", "💘 Match", match.length], ["prep", "🧩 Preparando", prep.length], ["mesa", "🎯 Mesa de juego", mesa.length], ["lista", "✅ Listas", listas.length], ["ofer", "📤 Ofertadas", ofer.length]];
+    let cuerpo = "";
+    if (tab === "match") cuerpo = match.length ? `<div class="muted" style="font-size:.72rem;text-align:center;margin:6px 0">Licitación <b>1 de ${match.length}</b> · ¿vamos o no vamos?</div>` + cartaMatch(match[0])
+      : `<div class="empty">${R.oport ? "No hay licitaciones nuevas que calcen con tu rubro. El robot sigue buscando." : `<span class="spinner"></span>`}</div>`;
+    else { const L = { prep, mesa, lista: listas, ofer }[tab] || [];
+      cuerpo = L.length ? L.map((t) => tab === "prep" || tab === "ofer" ? tarjetaLic(t) : mesaLic(t)).join("") : `<div class="empty">${{ prep: "Nada preparándose. En 💘 Match elige una con «Vamos».", mesa: "Cuando el robot termine de leer las bases, aquí juegan tú y él: precio, garantías, plazos y cómo quedará el proyecto.", lista: "Aún no hay ofertas listas.", ofer: "Aún no hay ofertas ingresadas." }[tab]}</div>`; }
+    return `${cajaFirma()}<div class="rb-etapas">${TABS.map(([k, n, q]) => `<button type="button" class="${tab === k ? "on" : ""}" data-rb="lic-tab" data-e="${k}">${n} ${q}</button>`).join("")}</div>${cuerpo}`;
   }
 
   /* ---------- licitaciones ---------- */
@@ -2142,7 +2262,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     if (R.detalle) R.detalle = null;
     else if (R.conf) R.conf = null;
     else if (R.pantalla) R.pantalla = null;
-    else if (leer().portal === "ejecuta") guardar({ portal: "juego" });
+    else if (["ejecuta", "licita"].includes(leer().portal)) guardar({ portal: "juego" });
     else {
       const tab = R.oportTab || "nuevas";
       if (tab === "nuevas") return false;
@@ -2490,7 +2610,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         <span class="rb-pcs" title="${conectado ? "PC conectado" : "PC desconectado"}"><i class="${conectado ? "on" : ""}"></i>PC<i class="${mp?.conectado ? "on" : ""}"></i>MP</span>
         ${mailChip()}<button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
         <button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
-        <div class="rb-portal"><button type="button" class="${leer().portal !== "ejecuta" ? "on" : ""}" data-rb="portal" data-v="juego">🎮 Juego</button><button type="button" class="${leer().portal === "ejecuta" ? "on" : ""}" data-rb="portal" data-v="ejecuta">🛠 Ejecuta</button></div>`;
+        <div class="rb-portal"><button type="button" class="${!["ejecuta", "licita"].includes(leer().portal) ? "on" : ""}" data-rb="portal" data-v="juego">🎮 Juego</button><button type="button" class="${leer().portal === "licita" ? "on" : ""}" data-rb="portal" data-v="licita">📑 Licitaciones</button><button type="button" class="${leer().portal === "ejecuta" ? "on" : ""}" data-rb="portal" data-v="ejecuta">🛠 Ejecuta</button></div>`;
       // 🏆 portada: cada vez que abres la app (y siempre que no haya empresa). Sin formularios: RUT → jugar.
       if (!miEmp() || !portadaVista()) { if (!R.oport) cargarOport(); return pantallaPortada(); }
       let cuerpo;
@@ -2499,7 +2619,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       else if (R.rubroEditar) { if (!R.oport) cargarOport(); cuerpo = `<div class="rb-paso-n" style="text-align:center;margin-top:10px">Paso 3 de 3</div>` + pantallaRubro(R.oport?.lista || []); }
       else if (R.pantalla === "llamada") cuerpo = pantallaLlamada();
       else if (R.pantalla === "correos") cuerpo = pantallaCorreos();
-      else cuerpo = (leer().portal === "ejecuta" ? portalEjecuta() : vistaOport());
+      else cuerpo = (leer().portal === "ejecuta" ? portalEjecuta() : leer().portal === "licita" ? portalLicita() : vistaOport());
       const mas = `<details class="rb-ajustes rb-mas"><summary>⚙ Más opciones</summary>
         ${!conectado ? `<div class="rb-alertas"><b>PC desconectado</b>${r?.visto ? "Visto " + esc(hace(r.visto)) + ". " : ""}Abre el robot en el PC.</div>` : ""}
         ${mp?.conectado ? "" : `<button class="btn small rb-oro" data-rb="conectar-mp" type="button" style="margin:8px 0">Conectar tu Mercado Público</button>`}
@@ -2924,6 +3044,37 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       setTimeout(() => { R.oport = null; if (R.vista === "oport") pintarHoja(); }, 90000);
       return;
     }
+    if (a === "lic-tab") { R.licTab = b.dataset.e; return pintarHoja(true); }
+    if (a === "lic-no") { const n = licNo(); n[cod] = Date.now(); try { localStorage.setItem(LIC_NO, JSON.stringify(n)); } catch {} navigator.vibrate?.(8); return pintarHoja(true); }
+    if (a === "lic-vamos") {
+      try { const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "licitar" }) });
+        toast(r._status === 409 ? "Ya está en manos del robot" : "💚 ¡Vamos! El robot baja las bases y las lee como experto"); R.licTab = "prep"; await refrescar(); pintarHoja(true); } catch (e) { toast(e.message); }
+      return;
+    }
+    if (a === "lic-vision") {
+      try { await api("lic-vision", { method: "POST", body: JSON.stringify({ codigo: cod, vistas: ["exterior", "interior"] }) }); toast("🎨 El robot está dibujando el proyecto terminado"); await refrescar(); pintarHoja(true); } catch (e) { toast(e.message); }
+      return;
+    }
+    if (a === "lic-preguntar") { R.pantalla = "llamada"; R.llamada = { texto: "" };
+      preguntarRobot("Revisa las bases de esta licitación como experto legal y de negocio: ¿qué nos puede dejar fuera, qué garantías y multas hay, qué precio conviene y qué le preguntarías al comprador en el foro?", null, cod); return; }
+    if (a === "firma-editar") { R.firmaEditar = !R.firmaEditar; return pintarHoja(true); }
+    if (a === "firma-subir") {
+      const nombre = ($("#rbFirN")?.value || "").trim(), rut = ($("#rbFirR")?.value || "").trim(), cargo = ($("#rbFirC")?.value || "").trim();
+      if (!nombre || !rut) { toast("Escribe el nombre y el RUT de quien firma"); return; }
+      const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*";
+      inp.onchange = async () => {
+        const f = inp.files[0]; if (!f) return;
+        try {
+          const img = await new Promise((ok, mal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = mal; i.src = URL.createObjectURL(f); });
+          const k = Math.min(1, 1800 / Math.max(img.width, img.height)), cv = document.createElement("canvas");
+          cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k); cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+          const b64 = cv.toDataURL("image/jpeg", 0.92).split(",")[1];
+          await api("firma-subir", { method: "POST", body: JSON.stringify({ b64, mime: "image/jpeg", nombre, rut, cargo }) });
+          R.firmaEditar = false; R.firmaT = 0; toast("✍️ Firma subida · el robot la limpia y la guarda para los anexos"); cargarFirma(); pintarHoja(true);
+        } catch (e) { toast(e.message || "No se pudo subir la foto"); }
+      };
+      inp.click(); return;
+    }
     if (a === "licitar") {
       if (!confirm(`¿Participar en la licitación ${cod}?\n\nEl robot baja la ficha y los anexos (te pedirá el código de la imagen), analiza las bases, fija el precio (presupuesto −17%) y llena los papeles. Después te pregunta si te parece el precio.`)) return;
       try { const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "licitar" }) });
@@ -3069,6 +3220,13 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     const n = ev.target.value.replace(/\D/g, ""); ev.target.value = n ? (+n).toLocaleString("es-CL") : "";
     const e = c.querySelector(".rb-cest"); if (e) e.textContent = "";
     pintarSel(c, false); guardarSelLuego(c.dataset.c, { costo: +n || null });
+  });
+  sheet.addEventListener("input", (ev) => {           // 💲 precio de licitación en vivo
+    const el = ev.target; if (!el.classList?.contains("rb-rango")) return;
+    const box = el.closest(".rb-precio-lic"); if (!box) return;
+    const d = (+el.value || 0) / 100, pres = +box.dataset.pres || 0, cant = +box.dataset.cant || 1;
+    const neto_max = box.dataset.coniva === "1" ? pres / 1.19 : pres, unit = Math.floor(neto_max * (1 - d) / cant / 10) * 10, neto = unit * cant;
+    box.querySelector('[data-v="desc"]').textContent = (+el.value).toLocaleString("es-CL"); box.querySelector('[data-v="unit"]').textContent = clp(unit); box.querySelector('[data-v="total"]').textContent = clp(Math.round(neto * 1.19));
   });
   sheet.addEventListener("change", async (ev) => {
     const el = ev.target, cod = el.dataset?.c; if (!cod) return;
