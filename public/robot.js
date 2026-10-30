@@ -483,7 +483,7 @@
 
   async function api(ruta, opt = {}) {
     if (!R.token) throw new Error("Robot sin enlazar");
-    if (opt.body && /^(pedir|seleccionar|preguntar|oport-descartar)$/.test(ruta)) {      // cada pedido viaja con TU empresa, tu celular y tu juego
+    if (opt.body && /^(pedir|seleccionar|preguntar|oport-descartar|plan-links|nube-aprobar)$/.test(ruta)) {      // cada pedido viaja con TU empresa, tu celular y tu juego
       try { const o = JSON.parse(opt.body); if (!o.empresa && leer().empresa) o.empresa = leer().empresa; if (!o.dispositivo) o.dispositivo = dispositivo(false);
         o.jugador = miJug(); if (legado()) o.legado = true; if (!o.persona && typeof persona === "function" && persona()?.nombre) o.persona = persona().nombre; opt = { ...opt, body: JSON.stringify(o) }; } catch {}
     }
