@@ -151,6 +151,26 @@
   .rb-sug b{color:#ffd88a}
   .rb-etapas{display:flex;gap:4px;overflow-x:auto;margin:6px 0 8px}.rb-etapas button{flex:0 0 auto;border:1px solid var(--line-soft);background:transparent;color:inherit;border-radius:999px;padding:5px 10px;font:inherit;font-size:.74rem;cursor:pointer}
   .rb-etapas button.on{background:linear-gradient(100deg,#f8d56b,#c8900f);color:#2b1d00;border-color:transparent;font-weight:800}
+  .rb-comprar{margin:10px 0;padding:12px;border-radius:16px;border:2px solid #f5cf6b;background:linear-gradient(180deg,rgba(245,207,107,.16),rgba(245,207,107,.04));box-shadow:0 0 22px rgba(245,207,107,.15)}
+  .rb-comprar>.rb-env b{font-size:.86rem;letter-spacing:.04em;color:#f5cf6b}
+  .rb-qc{display:flex;gap:10px;align-items:flex-start;margin-top:8px}.rb-qc .n{min-width:52px;text-align:center;font:800 1.35rem/1 system-ui;color:#fff6d6;background:rgba(0,0,0,.25);border-radius:12px;padding:6px 4px}
+  .rb-qc .n small{display:block;font-size:.58rem;font-weight:600;opacity:.8;margin-top:2px}.rb-qc b{font-size:.92rem}.rb-qc.mini .n{min-width:42px;font-size:1.05rem}.rb-qc.mini b{font-size:.8rem}
+  .rb-ojo{font-size:.7rem;color:#ffd88a;margin-top:2px}
+  .rb-ejcard{border:1px solid rgba(245,207,107,.4);border-radius:18px;padding:12px;margin:8px 0;background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.02));position:relative;overflow:hidden}
+  .rb-ejcard.trayecto{border-color:#5ef0b0;animation:rbParpadeo 1.6s ease-in-out infinite}
+  @keyframes rbParpadeo{0%,100%{box-shadow:0 0 0 0 rgba(94,240,176,0)}50%{box-shadow:0 0 0 4px rgba(94,240,176,.35),0 0 24px rgba(94,240,176,.35)}}
+  .rb-luz{display:inline-block;width:10px;height:10px;border-radius:50%;background:#5ef0b0;box-shadow:0 0 10px #5ef0b0;margin-right:6px;vertical-align:middle;animation:rbLuz 1.1s ease-in-out infinite}
+  .rb-luz.grande{width:22px;height:22px;margin:0}
+  @keyframes rbLuz{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}
+  .rb-op.respondio{border-color:#5ef0b0!important;box-shadow:0 0 0 1px rgba(94,240,176,.4),0 0 18px rgba(94,240,176,.18)}.rb-op.fuera{opacity:.45}
+  .rb-resp{font-size:.74rem;margin:6px 0;padding:6px 8px;border-radius:10px;background:rgba(255,255,255,.05)}.rb-resp.nueva{background:rgba(94,240,176,.12);border:1px solid rgba(94,240,176,.35)}
+  .rb-cerraste{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px;padding:6px 8px;border-radius:12px;background:rgba(245,207,107,.1)}.rb-cerraste span{flex:1;font-size:.76rem;font-weight:700}
+  .rb-pagar{padding:12px;border-radius:14px;border:1px solid rgba(245,207,107,.5);background:rgba(0,0,0,.2);margin:6px 0}
+  .rb-trayecto{display:flex;gap:12px;align-items:center;padding:12px;border-radius:14px;border:1px solid #5ef0b0;background:rgba(94,240,176,.1);margin:8px 0}.rb-trayecto b{letter-spacing:.06em;color:#5ef0b0}
+  .rb-modos button{flex:1}
+  .rb-eerr{margin-top:8px}.rb-hitos{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.rb-hito{font-size:.66rem;padding:3px 7px;border-radius:9px;background:rgba(255,255,255,.07)}.rb-hito span{opacity:.7;margin-right:4px}
+  .rb-pill.verde{border-color:#5ef0b0;color:#c9ffe8}
+  .rb-mail{position:relative}.rb-mail b{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;border-radius:8px;background:#ff5a5a;color:#fff;font-size:.6rem;display:flex;align-items:center;justify-content:center;padding:0 3px}
   .rb-mision{margin:10px 0 6px;padding:10px 12px;border-radius:14px;border:1px solid rgba(245,207,107,.45);background:rgba(245,207,107,.07)}
   .rb-barra{height:8px;border-radius:8px;background:rgba(255,255,255,.08);margin:6px 0;overflow:hidden}.rb-barra i{display:block;height:100%;background:linear-gradient(90deg,#f5cf6b,#5ef0b0);transition:width .4s}
   .rb-op.on{border-color:rgba(94,240,176,.55)}
@@ -236,9 +256,7 @@
     --panel:rgba(255,255,255,.06);--panel-2:rgba(255,255,255,.10);--bg-2:rgba(255,255,255,.05);--line:rgba(255,255,255,.18);--line-soft:rgba(255,255,255,.11);
     --oro:#f5cf6b;--oro-d:#c48f17;--vivo:#5ef0b0;font-feature-settings:"tnum" 1}
   #rbSheet::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
-    background:radial-gradient(52px 52px at 86% 6%,rgba(255,251,233,.9) 0,rgba(255,241,194,.8) 38%,rgba(255,229,150,.25) 55%,transparent 72%),
-      radial-gradient(260px 200px at 84% 7%,rgba(255,226,140,.20),transparent 70%),
-      radial-gradient(1.2px 1.2px at 12% 14%,#fff 50%,transparent 51%),radial-gradient(1px 1px at 33% 6%,#fff 50%,transparent 51%),
+    background:radial-gradient(1.2px 1.2px at 12% 14%,#fff 50%,transparent 51%),radial-gradient(1px 1px at 33% 6%,#fff 50%,transparent 51%),
       radial-gradient(1.4px 1.4px at 58% 18%,#fff 50%,transparent 51%),radial-gradient(1px 1px at 72% 28%,#dfe8ff 50%,transparent 51%),
       radial-gradient(1px 1px at 22% 32%,#dfe8ff 50%,transparent 51%),radial-gradient(1.3px 1.3px at 92% 22%,#fff 50%,transparent 51%),
       radial-gradient(900px 380px at 50% 112%,rgba(18,160,190,.55),transparent 65%),
@@ -1022,6 +1040,21 @@
       api("seleccionar", { method: "POST", body: JSON.stringify({ codigo: cod, ...e }) }).catch(() => {}); }, 900);
   }
   /* ---------- 📨 seguimiento en vivo (estado en Mercado Público) ---------- */
+  // ✉ Gmail de la empresa: alertas de correos que hablan de tus compras (las lee el PC cada 2 min)
+  async function cargarMail() {
+    if (R._cargMail || (R.mailT && Date.now() - R.mailT < 45_000)) return; R._cargMail = true;
+    try { const r = await api("correo-alertas"); const antes = (R.mailAl || []).filter((x) => !x.visto).length;
+      R.mailAl = r.alertas || []; R.mailPC = !!r.correo_pc; R.mailT = Date.now();
+      if (R.mailAl.filter((x) => !x.visto).length !== antes) pintarHojaSiAbierta(); } catch {} finally { R._cargMail = false; }
+  }
+  const mailChip = () => { setTimeout(cargarMail, 0); const n = (R.mailAl || []).filter((x) => !x.visto && Date.now() - Date.parse(x.t) < 3 * 864e5).length;
+    return `<button class="rb-ico rb-mail" type="button" data-rb="mail-ver" aria-label="Correos" title="${R.mailPC ? "Gmail conectado" : "Conecta el correo en el panel del PC"}">${R.mailPC ? "✉" : "✉̸"}${n ? `<b>${n}</b>` : ""}</button>`; };
+  function pantallaCorreos() {
+    const L = R.mailAl || [];
+    return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">✉ Correos de tus compras</h2><button class="btn small" type="button" data-rb="llamada-cerrar">← Volver</button></div>
+      <div class="muted rb-sub">${R.mailPC ? "🟢 Gmail de la empresa conectado: el robot lee la bandeja cada 2 minutos y te avisa cuando un proveedor responde o el comprador pregunta por una compra." : "⚪ Falta conectar el Gmail de la empresa en el panel del PC (📧 Correo) para enviar y leer correos solos."}</div>
+      ${L.map((x) => `<button class="rb-hist" type="button" data-rb="mail-abrir" data-c="${esc(x.codigo)}"><b>${x.quien === "proveedor" ? "📩" : "📨"} ${esc(x.de || "")} · ${esc(x.codigo)}</b><span>${esc((x.resumen || "").slice(0, 120))}${x.precio ? " · " + clp(x.precio) : ""} · ${esc(hace(x.t))}</span></button>`).join("") || `<div class="empty">Aún no llegan correos de tus compras.</div>`}</div>`;
+  }
   async function cargarSeg(forzar) {
     if (R._cargandoSeg) return; R._cargandoSeg = true;
     try { const r = await api("seguimiento" + (forzar ? "?forzar=1" : "")); R.seg = { ...(R.seg || {}), ...(r.seguimiento || {}) }; R.segT = Date.now(); aCache("seg", { seg: R.seg }); } catch (e) { R.segErr = e.message; }
@@ -1076,8 +1109,8 @@
   // ======================= 🛠 EJECUTA: el portal de los socios ejecutadores =======================
   // El que ganó deriva el negocio (o lo ejecuta él). El ejecutador negocia con proveedores, fija el precio de compra,
   // pide la transferencia al inversionista, prepara la entrega y cierra con la guía y la factura firmadas.
-  const ETAPAS_EJ = [["operacion", "🤝 Proveedores"], ["transporte", "🚚 Transporte"], ["despacho", "🛣 En trayecto"], ["entrega", "📦 Recepción"], ["cerrado", "🥇 Cerrados"]];
-  const etEj = (t) => (["previa", "ganada", "inversionista"].includes(t.op?.etapa) ? "operacion" : ["pago", "documentos"].includes(t.op?.etapa) ? "transporte" : t.op?.etapa || "operacion");
+  const ETAPAS_EJ = [["operacion", "🤝 Proveedores"], ["pago", "💸 Pago"], ["transporte", "🚚 Despacho"], ["despacho", "🛣 En trayecto"], ["entrega", "📦 Recepción"], ["cerrado", "🥇 Cerrados"]];
+  const etEj = (t) => (["previa", "ganada", "inversionista"].includes(t.op?.etapa) ? "operacion" : t.op?.etapa === "documentos" ? "pago" : t.op?.etapa || "operacion");
   const TARIFA_KM_STGO = 900;            // 🚚 flete en Santiago: $900 por km
   const netoDe = (v) => (v ? Math.round(v / 1.19) : 0);
   const mailUrl = (to, su, body) => conex().gmail
@@ -1097,6 +1130,84 @@
     const ivaD = venta - ventaN, ivaC = compra - netoDe(compra);
     const bruta = ventaN - netoDe(compra) - flete;
     return { venta, ventaN, compra, flete, ivaD, ivaC, iva: ivaD - ivaC, bruta, final: inf.final, inv: inf.inversionista, estimado: inf.compras || null };
+  }
+  // 🛒 lo que de verdad hay que comprar/contratar (interpretado por la IA del PC como experto del rubro)
+  const queComprar = (t) => { const q = t.op?.informe?.que_comprar || [];
+    if (q.length) return q.map((x) => ({ que: x.que || x.item || "", cantidad: x.cantidad, unidad: x.unidad || "", tipo: x.tipo || "", detalle: x.detalle || "", ojo: x.ojo || "" }));
+    return itemsDe(t).map((x) => ({ que: String(x.d || "").slice(0, 140), cantidad: x.q, unidad: x.u || "", tipo: "", detalle: "", ojo: "" })); };
+  const kProv = (n) => sinTilde(n).replace(/[^a-z0-9]+/g, "-").slice(0, 60);
+  const candsDe = (t) => { const inf = t.op?.informe || {}, vistos = new Set();
+    return [...(inf.opciones || []), ...(t.op?.extras || [])].filter((o) => o.proveedor).map((o) => ({ ...o, k: kProv(o.proveedor) })).filter((o) => !vistos.has(o.k) && vistos.add(o.k)); };
+  // ¿da el negocio con este proveedor? venta neta − compra neta − despacho estimado
+  const daDe = (t, o) => { const op = t.op || {}, k = cuentasDe(t), q = (op.cotizaciones || {})[o.k], r = (op.respuestas || []).filter((x) => x.k === o.k && x.precio).pop();
+    const v = q?.v || (r ? (r.incluye_iva ? r.precio : Math.round(r.precio * 1.19)) : null); if (!v) return null;
+    return k.ventaN - netoDe(v) - (Number(op.costo_transporte) || (r?.costo_despacho || 0)); };
+  const firmaMail = () => `\n\nSaludos,\n${persona()?.nombre || ""}\n${(empresaActual() || {}).razon_social || ""}${(empresaActual() || {}).rut ? " · RUT " + empresaActual().rut : ""}${(empresaActual() || {}).telefono ? "\n" + empresaActual().telefono : ""}`;
+  function cuerpoCot(t, o) {
+    const op = t.op || {}, dir = lugarDe(t) || op.informe?.direccion || "";
+    const L = queComprar(t).map((x) => `- ${x.cantidad ?? ""} ${x.unidad || ""} ${x.que}${x.detalle ? ": " + String(x.detalle).slice(0, 200) : ""}`).join("\n");
+    return `Hola${o.contacto ? " " + o.contacto : ""},\n\nTenemos una orden de compra del Estado (${t.oc_compra?.organismo || t.organismo || "organismo público"}) y necesitamos cotización con factura de:\n${L}\n\nEntrega / lugar del servicio: ${dir || "(a confirmar)"}${op.plazo_fecha ? "\nFecha comprometida: " + op.plazo_fecha : ""}\n\n¿Nos puede indicar precio total con IVA, disponibilidad, plazo y si despacha o ejecuta en el lugar? Pago por transferencia al confirmar.${firmaMail()}`;
+  }
+  function textoEntrega(t, modo) {
+    const op = t.op || {}, oc = t.oc_compra || {}, dir = lugarDe(t) || op.informe?.direccion || "";
+    return `Hola, confirmamos la compra ${t.codigo}${op.oc_codigo ? " (OC " + op.oc_codigo + ")" : ""} por ${clp(op.precio_acordado)}.\n${modo === "servicio" ? "Por favor coordinemos la ejecución del servicio" : "Por favor despáchenlo directo al cliente final"}:\n• Cliente: ${oc.organismo || t.organismo || ""}${oc.unidad ? " · " + oc.unidad : ""}\n• Dirección: ${dir}\n• Recibe: ${op.entrega_contacto || [oc.contacto, oc.fono, oc.mail].filter(Boolean).join(" · ") || "(te lo confirmo)"}${op.plazo_fecha ? "\n• Fecha comprometida: " + op.plazo_fecha : ""}\n\nDetalle:\n${queComprar(t).map((x) => `- ${x.cantidad ?? ""} ${x.unidad || ""} ${x.que}`).join("\n")}\n\nNecesitamos que el receptor firme la guía de despacho (recepción conforme) y nos envíen la foto. ¿Nos confirman fecha y hora?`;
+  }
+  // 📨 correos según el paso del negocio
+  function correoTipo(t, tipo) {
+    const op = t.op || {}, oc = t.oc_compra || {}, to = tipo === "entrega" ? (oc.mail || op.informe?.comprador?.email) : op.proveedor_email;
+    const ref = `${t.codigo}${op.oc_codigo ? " · OC " + op.oc_codigo : ""}`;
+    const comp = (op.docs || []).filter((d) => d.tipo === "comprobante").pop();
+    const M = {
+      banco: [`Datos para transferir · ${ref}`, `Hola,\n\nConfirmamos la compra ${ref} por ${clp(op.precio_acordado)}. Para transferir hoy, ¿nos envía los datos de su cuenta corriente? (banco, tipo de cuenta, número, RUT, titular y correo para el aviso).${firmaMail()}`],
+      comprobante: [`Comprobante de pago · ${ref}`, `Hola,\n\nAdjuntamos el comprobante de transferencia por ${clp(op.precio_acordado)} de la compra ${ref}.\n¿Nos avisa cuándo está listo? Lo ideal es que lo despachen directo al cliente final; le enviamos los datos de entrega.${firmaMail()}`],
+      despacho: [`Despacho al cliente final · ${ref}`, textoEntrega(t, "despacho") + firmaMail()],
+      servicio: [`Coordinación del servicio · ${ref}`, textoEntrega(t, "servicio") + firmaMail()],
+      entrega: [`Datos de entrega · ${ref}`, `Estimado/a ${oc.contacto || ""},\n\nPor la orden de compra ${op.oc_codigo || ""} (${t.codigo} · ${t.nombre || ""}) necesitamos confirmar los datos de entrega: dirección exacta, nombre y teléfono de quien recibe, y horario de recepción.\nQuedamos atentos para despachar a la brevedad.${firmaMail()}`],
+    }[tipo];
+    return M ? { to, asunto: M[0], cuerpo: M[1], tipo, k: tipo === "entrega" ? "cliente" : op.proveedor_k || kProv(op.proveedor), nombre: tipo === "entrega" ? oc.contacto || oc.organismo : op.proveedor,
+      ...(tipo === "comprobante" && comp ? { adjunto_doc: { id: comp.id, nombre: comp.nombre, mime: comp.mime } } : {}) } : null;
+  }
+  async function enviarCorreos(cod, lista) {
+    lista = lista.filter((x) => x && /@/.test(x.to || ""));
+    if (!lista.length) { toast("Falta el correo del destinatario"); return false; }
+    if (!R.mailPC && lista.length === 1) { const x = lista[0]; window.open(mailUrl(x.to, x.asunto, x.cuerpo), "_blank"); }
+    try { const r = await api("correo-enviar", { method: "POST", body: JSON.stringify({ codigo: cod, lista }) });
+      toast(r.pc ? `📤 ${lista.length} correo${lista.length > 1 ? "s" : ""} saliendo desde tu Gmail` : lista.length > 1 ? "📥 En cola: salen apenas el PC tenga el correo conectado (panel → 📧 Correo)" : "✉ Revisa y envía el correo · queda anotado");
+      navigator.vibrate?.(12); R.ejecT = 0; await cargarEjecuta(); pintarHoja(true); return true; } catch (e) { toast(e.message); return false; }
+  }
+  const botonMail = (cod, o, c) => `<button class="btn small ${c ? "" : "rb-oro"}" type="button" data-rb="ej-mail" data-c="${esc(cod)}" data-k="${esc(o.k)}">${c?.via === "correo" ? "✉ Reenviar" : "✉ Enviar correo"}</button>`;
+  // 📊 EERR del negocio cerrado: todo el registro (lo mismo que el Excel del inversionista)
+  function eerrNegocio(t) {
+    const op = t.op || {}, inf = op.informe || {}, k = cuentasDe(t), compraN = netoDe(k.compra);
+    const margen = k.ventaN - compraN - k.flete, rep = ["inversionista", "comision", "julfior", "impuesto", "factoring"].filter((x) => inf[x]);
+    const fila = (a, b, c) => `<tr><td>${a}</td><td class="n">${c ? `<b class="${b >= 0 ? "rb-vivo-t" : "rb-neg-t"}">${clp(b)}</b>` : clp(b)}</td></tr>`;
+    const hist = (op.historial || []).map((h) => `<div class="rb-hito"><span>${esc(new Date(h.t).toLocaleDateString("es-CL", { day: "numeric", month: "short" }))}</span>${esc(({ previa: "📞 Vas 1°", ganada: "🏆 OC", operacion: "🤝 Proveedores", transporte: "🚚 Despacho", pago: "💸 Pago", despacho: "🛣 En trayecto", entrega: "📦 Recepción", cerrado: "🥇 Cerrado" })[h.etapa] || h.etapa)}</div>`).join("");
+    return `<div class="rb-eerr"><div class="rb-env"><b>📊 Estado de resultados</b><span class="muted">${op.cerrado ? "cerrado " + esc(new Date(op.cerrado).toLocaleDateString("es-CL")) : ""}</span></div>
+      <table class="rb-copias">${fila("Ingresos (venta neta)", k.ventaN)}${fila("− Costo de compra (neto)", -compraN)}${fila("− Despacho / flete", -k.flete)}${fila("= Margen bruto", margen, 1)}
+        ${rep.map((x) => fila("− " + ({ inversionista: "Inversionista", comision: "Comisión", julfior: "Gestión", impuesto: "Impuesto estimado", factoring: "Factoring" })[x], -Math.round(inf[x]))).join("")}
+        ${inf.final != null ? fila("= Utilidad final (Excel inversionista)", Math.round(inf.final), 1) : ""}
+        ${fila("IVA débito − crédito", k.iva)}</table>
+      <div class="rb-kv"><span>Proveedor <b>${esc(op.proveedor || "—")}</b></span><span>Despacho <b>${esc(op.transportista || (op.despacho_modo === "servicio" ? "lo hizo el proveedor" : "—"))}</b></span>${op.recibio_nombre ? `<span>Recibió <b>${esc(op.recibio_nombre)}</b></span>` : ""}</div>
+      <div class="rb-hitos">${hist}</div>
+      <div class="rb-row"><button class="btn small rb-firmar" type="button" data-rb="neg-archivo" data-t="excel" data-c="${esc(t.codigo)}">📊 Excel del inversionista</button><button class="btn small" type="button" data-rb="neg-archivo" data-t="informe" data-c="${esc(t.codigo)}">📄 Informe PDF</button>
+        <button class="btn small" type="button" data-rb="ej-factoring" data-c="${esc(t.codigo)}">💰 Pedir simulación de factoring</button></div>
+      ${(op.docs || []).length ? `<div class="rb-row">${op.docs.map((d) => `<button class="btn small" type="button" data-rb="neg-doc" data-c="${esc(t.codigo)}" data-id="${esc(d.id)}">${d.tipo === "foto" ? "📸" : d.tipo === "guia" ? "🚚" : d.tipo === "comprobante" ? "💸" : "📎"} ${esc(String(d.nombre).slice(0, 16))}</button>`).join("")}</div>` : ""}</div>`;
+  }
+  // 🃏 portada de cada negocio en Ejecuta: desliza → ver ahora · ← ver en otro momento
+  const EJ_LUEGO = "sdc:ejLuego";
+  const leerLuego = () => { try { return JSON.parse(localStorage.getItem(EJ_LUEGO)) || {}; } catch { return {}; } };
+  function portadaEj(t) {
+    const op = t.op || {}, k = cuentasDe(t), E = etEj(t), q = queComprar(t)[0], nuevas = (op.respuestas || []).filter((r) => !r.visto).length;
+    const mejor = candsDe(t).map((o) => daDe(t, o)).filter((x) => x != null).sort((a, b) => b - a)[0];
+    const dir = lugarDe(t) || op.informe?.direccion || "";
+    return `<div class="rb-ejcard rb-swipe ${E === "despacho" ? "trayecto" : ""}" data-modo="ej" data-c="${esc(t.codigo)}"><span class="rb-sello si">VER AHORA</span><span class="rb-sello no">DESPUÉS</span>
+      <div class="rb-env"><span style="font-size:.72rem"><b>${esc(t.codigo)}</b>${op.oc_codigo ? " · OC" : op.etapa === "previa" ? " · <b style='color:#5ef0b0'>vas 1°</b>" : ""}</span>
+        <span>${nuevas ? `<span class="rb-pill verde"><i class="rb-luz"></i> ${nuevas} respuesta${nuevas > 1 ? "s" : ""}</span>` : ""}${E === "despacho" ? '<span class="rb-pill"><i class="rb-luz"></i> en trayecto</span>' : ""}${op.plazo_fecha ? ` <span class="rb-pill">${textoPlazo(op.plazo_fecha)}</span>` : ""}</span></div>
+      <div class="rb-fnom" style="margin:4px 0 2px">${esc(t.nombre || "")}</div>
+      <div class="muted" style="font-size:.72rem">${esc((t.oc_compra?.organismo || t.organismo || "").slice(0, 60))}${dir ? " · 📍 " + esc(dir.slice(0, 40)) : ""}</div>
+      ${q ? `<div class="rb-qc mini"><span class="n">${esc(q.cantidad ?? "")}<small>${esc(q.unidad || "")}</small></span><div><b>${esc(q.que.slice(0, 90))}</b>${queComprar(t).length > 1 ? ` <span class="muted">+${queComprar(t).length - 1} más</span>` : ""}</div></div>` : ""}
+      <div class="rb-kv"><span>Venta <b>${clp(k.venta)}</b></span>${mejor != null ? `<span class="${mejor > 0 ? "rb-vivo-t" : "rb-neg-t"}">Mejor oferta deja <b>${clp(mejor)}</b></span>` : `<span class="muted">${candsDe(t).length} proveedores</span>`}</div>
+      <div class="rb-row"><button class="btn small" type="button" data-rb="ej-luego" data-c="${esc(t.codigo)}">⏰ Después</button><button class="btn small rb-oro" type="button" style="flex:1" data-rb="ej-ver" data-c="${esc(t.codigo)}">👀 Ver ahora</button></div></div>`;
   }
   // 📄 guía de despacho con acta de recepción conforme / factura (borrador): se abre lista para imprimir o compartir en PDF
   function docNegocio(t, tipo) {
@@ -1207,97 +1318,115 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const E = etEj(t), k = cuentasDe(t), dir = lugarDe(t) || F?.direccion || inf.direccion || "", z = zonaMk(dir);
     const enStgo = /metropolitana/i.test(sinTilde(dir)) || (z.slug === "santiagocl" && !/valparaiso|vina|quilpue|villa alemana|san antonio|quillota|los andes|rancagua|o'?higgins|machali|san fernando|santa cruz|rengo/.test(sinTilde(dir)));
     const empN = (empresaActual() || {}).razon_social || "nuestra empresa";
-    const lineas = itemsDe(t).map((x) => `- ${x.q ?? ""} ${x.u || ""} ${String(x.d || "").slice(0, 120)}`).join("\n");
+    const lineas = queComprar(t).map((x) => `- ${x.cantidad ?? ""} ${x.unidad || ""} ${x.que}${x.detalle ? " (" + String(x.detalle).slice(0, 140) + ")" : ""}`).join("\n");
+    const ocN = op.oc_codigo || (String(op.oc || "").includes("-") ? op.oc : "");
+    const verOC = ocN ? `<a class="btn small" href="https://www.mercadopublico.cl/PurchaseOrder/Modules/PO/DetailsPurchaseOrder.aspx?codigoOC=${encodeURIComponent(ocN)}" target="_blank" rel="noopener">📄 Ver OC ${esc(ocN)}</a>`
+      : `<a class="btn small" href="${portalDe(cod)}" target="_blank" rel="noopener">📄 Ver la compra</a>`;
+    const resp = op.respuestas || [];
+    const cliResp = resp.filter((r) => r.quien !== "proveedor");
+    const bloqueCliente = cliResp.length ? `<div class="rb-sec">📨 El comprador escribió</div>${cliResp.slice(-3).reverse().map((r) => `<div class="rb-resp ${r.visto ? "" : "nueva"}"><b>${esc(r.de_nombre || r.de)}</b> · ${esc(hace(r.t))}<div>${esc(r.resumen || r.asunto || "")}</div>${r.pide ? `<div class="muted">Pide: ${esc(r.pide)}</div>` : ""}</div>`).join("")}` : "";
+    const lista = `<div class="rb-comprar"><div class="rb-env"><b>🛒 LO QUE HAY QUE ${queComprar(t).some((x) => x.tipo === "servicio") ? "CONTRATAR" : "COMPRAR"}</b>${verOC}</div>
+      ${queComprar(t).map((x) => `<div class="rb-qc"><span class="n">${esc(x.cantidad ?? "")}<small>${esc(x.unidad || "")}</small></span><div><b>${esc(x.que)}</b>${x.tipo ? ` <span class="rb-cp">${x.tipo === "servicio" ? "🛠 servicio" : "📦 producto"}</span>` : ""}
+        ${x.detalle ? `<div class="muted">${esc(String(x.detalle).slice(0, 180))}</div>` : ""}${x.ojo ? `<div class="rb-ojo">👁 ${esc(x.ojo)}</div>` : ""}</div></div>`).join("")}
+      ${!(inf.que_comprar || []).length ? `<div class="muted" style="font-size:.66rem">⟳ El robot está interpretando la OC como experto del rubro…</div>` : ""}</div>`;
+    let cuerpoS = "";
     if (E === "operacion") {
-      // 🎯 misión: pedir precio a 4 proveedores (correo o llamada). Cada contacto suma; el más barato gana.
-      const cands = [...(inf.opciones || []).map((o) => ({ ...o, fuente: o.fuente || "robot" })), ...(op.extras || [])].filter((o) => o.proveedor);
-      const key = (o) => sinTilde(o.proveedor).replace(/[^a-z0-9]+/g, "-").slice(0, 60);
-      const cont = op.contactados || {}, cots = op.cotizaciones || {};
-      const hechos = cands.filter((o) => cont[key(o)]).length, meta = 4;
-      const asunto = `Cotización con factura · ${t.nombre || cod}`;
-      const cuerpoMail = (o) => `Hola${o.contacto ? " " + o.contacto : ""},\n\nLe escribo de ${empN}. Necesito cotización con factura de:\n${lineas}\n\nEntrega en: ${dir} · fecha comprometida ${op.plazo_fecha || "(a convenir)"}.\n¿Me puede indicar precio con IVA, stock, plazo y si incluye despacho? Pago contado al confirmar.\n\nGracias,\n${persona()?.nombre || ""}\n${empN}`;
-      const mejor = Object.entries(cots).sort((x, y) => x[1].v - y[1].v)[0];
-      const tarj = (o) => { const kk = key(o), c = cont[kk], q = cots[kk];
-        return `<div class="rb-op ${c ? "on" : ""}"><div class="rb-env"><b>${c ? "✅ " : ""}${esc(o.proveedor)}${chipLocal(o)}</b>${o.total_con_iva ? `<span class="muted" style="font-size:.7rem">IA ~${clp(o.total_con_iva)}</span>` : ""}</div>
-          <div class="rb-row">${o.email ? `<a class="btn small ${c?.via === "correo" ? "" : "rb-oro"}" href="${esc(mailUrl(o.email, asunto, cuerpoMail(o)))}" target="_blank" rel="noopener" data-rb="ej-contacto" data-c="${esc(cod)}" data-k="${esc(kk)}" data-n="${esc(o.proveedor)}" data-via="correo">✉ Enviar correo</a>` : ""}
-            ${telNum(o.telefono) ? `<a class="btn small" href="tel:${esc(telNum(o.telefono))}" data-rb="ej-contacto" data-c="${esc(cod)}" data-k="${esc(kk)}" data-n="${esc(o.proveedor)}" data-via="llamada">📞 Llamar</a>` : ""}
-            ${waNum(o.telefono) ? `<a class="btn small" href="https://wa.me/${waNum(o.telefono)}?text=${encodeURIComponent(cuerpoMail(o))}" target="_blank" rel="noopener" data-rb="ej-contacto" data-c="${esc(cod)}" data-k="${esc(kk)}" data-n="${esc(o.proveedor)}" data-via="whatsapp">💬</a>` : ""}
+      const C = candsDe(t), cont = op.contactados || {}, cots = op.cotizaciones || {}, desc = op.descartados || {};
+      const hechos = C.filter((o) => cont[o.k]).length, meta = 4;
+      const conMail = C.filter((o) => o.email && !cont[o.k] && !desc[o.k]);
+      const ord = [...C].sort((a, b) => (desc[a.k] ? 1 : 0) - (desc[b.k] ? 1 : 0) || (daDe(t, b) ?? -1e12) - (daDe(t, a) ?? -1e12));
+      const tarj = (o) => { const c = cont[o.k], q = cots[o.k], r = resp.filter((x) => x.k === o.k).pop(), u = daDe(t, o), pct = u != null && k.ventaN ? u / k.ventaN : null;
+        const ver = u == null ? "" : pct >= 0.08 ? `<b class="rb-vivo-t">✅ DA +${clp(u)} (${Math.round(pct * 100)}%)</b>` : u > 0 ? `<b style="color:#f5cf6b">⚠ justo +${clp(u)}</b>` : `<b class="rb-neg-t">❌ NO DA ${clp(u)}</b>`;
+        return `<div class="rb-op ${r ? "respondio" : c ? "on" : ""} ${desc[o.k] ? "fuera" : ""}"><div class="rb-env"><b>${r ? '<i class="rb-luz"></i>' : c ? "✅ " : ""}${esc(o.proveedor)}${chipLocal(o)}</b>${ver || (o.total_con_iva ? `<span class="muted" style="font-size:.7rem">IA ~${clp(o.total_con_iva)}</span>` : "")}</div>
+          ${r ? `<div class="rb-resp nueva">📩 <b>Respondió</b> ${esc(hace(r.t))}: ${esc(r.resumen || "")}${r.precio ? ` · <b>${clp(r.precio)}</b>` : ""}${r.plazo ? ` · ${esc(r.plazo)}` : ""}${r.despacha ? " · 🚚 despacha" : ""}${r.cuenta ? " · 🏦 mandó su cuenta" : ""}</div>` : ""}
+          <div class="rb-row">${o.email ? botonMail(cod, o, c) : ""}
+            ${telNum(o.telefono) ? `<a class="btn small" href="tel:${esc(telNum(o.telefono))}" data-rb="ej-contacto" data-c="${esc(cod)}" data-k="${esc(o.k)}" data-n="${esc(o.proveedor)}" data-via="llamada">📞</a>` : ""}
+            ${waNum(o.telefono) ? `<a class="btn small" href="https://wa.me/${waNum(o.telefono)}?text=${encodeURIComponent(cuerpoCot(t, o))}" target="_blank" rel="noopener" data-rb="ej-contacto" data-c="${esc(cod)}" data-k="${esc(o.k)}" data-n="${esc(o.proveedor)}" data-via="whatsapp">💬</a>` : ""}
             ${o.web ? `<a class="btn small" href="${esc(o.web)}" target="_blank" rel="noopener">🌐</a>` : ""}</div>
-          ${c ? `<div class="muted" style="font-size:.68rem">${c.via === "correo" ? "✉ correo enviado" : c.via === "llamada" ? "📞 llamado" : "💬 WhatsApp"} ${esc(hace(c.t))}</div>` : ""}
-          <label class="rb-lab" style="margin-top:4px">💲 Precio que te dio (total con IVA)<input class="rb-cot-in" inputmode="numeric" data-c="${esc(cod)}" data-k="${esc(kk)}" data-n="${esc(o.proveedor)}" value="${q ? Number(q.v).toLocaleString("es-CL") : ""}" placeholder="${o.total_con_iva ? Number(o.total_con_iva).toLocaleString("es-CL") : "Ej: 850.000"}"></label></div>`; };
-      cuerpo = (op.etapa === "previa" ? `<div class="rb-sug" style="border-color:#5ef0b0">📞 <b>Aún sin OC:</b> vas 1° en el portal. Adelanta precios y stock, sin comprar todavía.</div>` : "") + plazoBox + `
-      <details class="rb-det"><summary>📦 Qué hay que comprar (${itemsDe(t).length})</summary>${itemsDe(t).map((x) => `<div class="rb-prod"><b>${esc(x.q ?? "")} ${esc(x.u || "")} × ${esc(String(x.d || "").slice(0, 110))}</b>${x.p ? ` <span class="muted">· vendes a ${clp(x.p)} c/u neto</span>` : ""}<div class="rb-row">🔎 ${buscarEn(String(x.d || "").slice(0, 60))}</div></div>`).join("")}</details>
+          ${c && !r ? `<div class="muted" style="font-size:.68rem">${c.via === "correo" ? (c.estado === "en_cola" ? "📤 saliendo por tu Gmail…" : c.estado === "error" ? "⚠ no salió: " + esc(c.error || "") : "📤 correo enviado") : c.via === "llamada" ? "📞 llamado" : "💬 WhatsApp"} ${esc(hace(c.t))} · esperando respuesta</div>` : ""}
+          <label class="rb-lab" style="margin-top:4px">💲 Precio que te dio (total con IVA)<input class="rb-cot-in" inputmode="numeric" data-c="${esc(cod)}" data-k="${esc(o.k)}" data-n="${esc(o.proveedor)}" value="${q ? Number(q.v).toLocaleString("es-CL") : ""}" placeholder="${o.total_con_iva ? Number(o.total_con_iva).toLocaleString("es-CL") : "Ej: 850.000"}"></label>
+          ${(q || r) && !desc[o.k] ? `<div class="rb-cerraste"><span>🤝 ¿Cerraste con ${esc(o.proveedor.split(" ")[0])}?</span><button class="btn small rb-oro" type="button" data-rb="ej-cerre" data-c="${esc(cod)}" data-k="${esc(o.k)}">Sí, cerré</button><button class="btn small" type="button" data-rb="ej-descartar" data-c="${esc(cod)}" data-k="${esc(o.k)}">No</button></div>` : ""}</div>`; };
+      cuerpoS = (op.etapa === "previa" ? `<div class="rb-sug" style="border-color:#5ef0b0">📞 <b>Aún sin OC:</b> vas 1°. Adelanta precios y stock con un toque, sin comprar todavía.</div>` : "") + lista + bloqueCliente + plazoBox + `
       <div class="rb-mision"><div class="rb-env"><b>🎯 Misión: pide precio a ${meta} proveedores</b><b>${Math.min(hechos, meta)}/${meta}</b></div>
         <div class="rb-barra"><i style="width:${Math.min(100, hechos / meta * 100)}%"></i></div>
-        <div class="muted" style="font-size:.7rem">Toca «Enviar correo» (ya va escrito) o «Llamar». Cuando te respondan, anota el precio: el más barato gana.</div></div>
-      ${cands.map(tarj).join("") || `<div class="muted" style="font-size:.74rem">⟳ El robot está buscando proveedores… mientras, agrega uno abajo o búscalo en Marketplace.</div>`}
-      ${cands.length < meta ? `<details class="rb-det" ${cands.length < 2 ? "open" : ""}><summary>➕ Agregar proveedor (${meta - cands.length} por completar la misión)</summary>
+        ${conMail.length ? `<button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-mail-todos" data-c="${esc(cod)}">📨 Pedir precio a ${conMail.length} por correo · 1 toque</button>` : ""}
+        <div class="muted" style="font-size:.7rem">${R.mailPC ? "Salen desde tu Gmail con la descripción exacta. Cuando respondan se enciende la luz 🟢 y la IA lee el precio." : "Conecta el correo en el panel del PC (📧 Correo) para que salgan solos y se lean las respuestas."}</div></div>
+      ${ord.map(tarj).join("") || `<div class="muted" style="font-size:.74rem">⟳ El robot está buscando proveedores… mientras, agrega uno o búscalo en Marketplace.</div>`}
+      <details class="rb-det" ${C.length < 2 ? "open" : ""}><summary>➕ Agregar proveedor</summary>
         <label class="rb-lab">Nombre<input class="rb-in" id="rbPxN-${esc(cod)}" placeholder="Ej: Ferretería Castro"></label>
         <div class="rb-row"><label class="rb-lab" style="flex:1">Teléfono<input class="rb-in" id="rbPxT-${esc(cod)}" inputmode="tel" placeholder="+56 9 ..."></label><label class="rb-lab" style="flex:1">Correo<input class="rb-in" id="rbPxE-${esc(cod)}" inputmode="email" placeholder="ventas@..."></label></div>
-        <button class="btn small rb-oro" type="button" data-rb="ej-prov-extra" data-c="${esc(cod)}">➕ Agregar a la misión</button></details>` : ""}
-      ${bloqueMarket(itemsDe(t).map((x) => ({ nombre: String(x.d || ""), cantidad: x.q })), dir)}
-      <div class="rb-sec">🏆 Elegir proveedor</div>
-      ${mejor ? `<div class="rb-sug" style="border-color:#f5cf6b">Más barato: <b>${esc(mejor[1].nombre)}</b> · <b>${clp(mejor[1].v)}</b>${k.venta ? ` · te quedaría ~<b class="${netoDe(k.venta) - netoDe(mejor[1].v) > 0 ? "rb-vivo-t" : "rb-neg-t"}">${clp(netoDe(k.venta) - netoDe(mejor[1].v))}</b> antes del flete` : ""}
-        <button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-elegir" data-c="${esc(cod)}" data-n="${esc(mejor[1].nombre)}" data-v="${mejor[1].v}">🏆 Comprar a ${esc(mejor[1].nombre)} → Transporte</button></div>`
-        : `<div class="muted" style="font-size:.74rem">Anota al menos un precio para elegir.</div>`}
-      <details class="rb-det"><summary>✍ Datos del proveedor elegido</summary>
-        ${campo("proveedor", "Proveedor elegido", op.proveedor, "Nombre")}
-        ${campo("precio_acordado", "Precio de compra total (con IVA)", compra ? Number(compra).toLocaleString("es-CL") : "", estimado ? Number(estimado).toLocaleString("es-CL") : "", 1)}
-        ${campo("plazo_proveedor", "Plazo que da el proveedor", op.plazo_proveedor, "Ej: 3 días hábiles")}
-        ${campo("banco_proveedor", "Datos para transferir (banco, cuenta, RUT, correo)", op.banco_proveedor, "Banco Estado · Cta. Vista 123 · RUT 76… · pagos@…")}
-        ${campo("negociacion", "Cómo te fue (descuento, condiciones)", op.negociacion, "Ej: 5% por pago contado")}</details>`;
+        <button class="btn small rb-oro" type="button" data-rb="ej-prov-extra" data-c="${esc(cod)}">➕ Agregar a la misión</button></details>
+      ${bloqueMarket(queComprar(t).map((x) => ({ nombre: x.que, cantidad: x.cantidad })), dir)}
+      <div class="rb-row"><button class="btn small" type="button" data-rb="cp" data-v="${esc(cuerpoCot(t, {}))}">📋 Copiar mensaje para Marketplace / WhatsApp</button></div>`;
+    } else if (E === "pago") {
+      const monto = (Number(op.precio_acordado) || 0);
+      const datos = `Pago negocio ${cod}\nProveedor: ${op.proveedor || ""}\nMonto: ${clp(monto)}\n${op.banco_proveedor || "(faltan los datos de la cuenta)"}`;
+      const docs = op.docs || [], comp = docs.filter((d) => d.tipo === "comprobante").pop();
+      cuerpoS = plazoBox + lista + `<div class="rb-sec">💸 Pagar a ${esc(op.proveedor || "proveedor")}</div>
+      <div class="rb-pagar"><div class="rb-env"><span>Monto a transferir</span><b style="font-size:1.25rem">${clp(monto)}</b></div>
+        <div class="muted" style="font-size:.74rem;white-space:pre-line">${op.banco_proveedor ? "🏦 " + esc(op.banco_proveedor) : "🏦 Falta su cuenta corriente para transferir."}</div></div>
+      ${!op.banco_proveedor ? `<div class="rb-row">${op.proveedor_email ? `<button class="btn small rb-oro" type="button" data-rb="ej-mail-tipo" data-tipo="banco" data-c="${esc(cod)}">📨 Pedirle sus datos de transferencia</button>` : ""}
+        ${waNum(op.proveedor_tel) ? `<a class="btn small" href="https://wa.me/${waNum(op.proveedor_tel)}?text=${encodeURIComponent(`Hola, confirmamos la compra ${cod} por ${clp(monto)}. ¿Me envías los datos de tu cuenta corriente (banco, tipo, número, RUT, titular y correo) para transferir? Gracias.`)}" target="_blank" rel="noopener">💬 Pedir por WhatsApp</a>` : ""}</div>` : ""}
+      ${campo("banco_proveedor", "Datos de transferencia del proveedor", op.banco_proveedor, "Banco · tipo · N° cuenta · RUT · titular · correo")}
+      <div class="rb-row"><button class="btn small" type="button" data-rb="cp" data-v="${esc(datos)}">📋 Copiar datos para transferir</button>
+        ${op.pedido_transferencia ? `<span class="muted" style="font-size:.72rem">🔔 Inversionista avisado ${op.transferido ? "· ✅ pagado" : ""}</span>` : `<button class="btn small rb-oro" type="button" data-rb="ej-pedir-pago" data-c="${esc(cod)}">🔔 Avisar al inversionista: paga ${clp(monto)}</button>`}</div>
+      ${campo("inversionista_tel", "WhatsApp del inversionista", op.inversionista_tel, "+56 9 ...")}
+      <div class="muted" style="font-size:.68rem">🔐 El pago lo autoriza solo una persona: el dueño, desde su banco. La app deja todo listo y guarda el comprobante.</div>
+      <div class="rb-row" style="margin-top:6px"><button class="btn small ${comp ? "rb-oro" : ""}" type="button" data-rb="neg-subir" data-tipo="comprobante" data-c="${esc(cod)}">${comp ? "✓ Comprobante subido" : "📎 Subir comprobante de pago"}</button>
+        ${comp && op.proveedor_email ? `<button class="btn small" type="button" data-rb="ej-mail-tipo" data-tipo="comprobante" data-c="${esc(cod)}">📨 Enviar comprobante al proveedor</button>` : ""}</div>
+      <button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-etapa" data-e="transporte" data-d="proveedor_pagado" data-c="${esc(cod)}">✅ Pagado → Despacho</button>`;
     } else if (E === "transporte") {
+      const servicio = queComprar(t).some((x) => x.tipo === "servicio");
+      const modo = op.despacho_modo || (servicio ? "servicio" : "proveedor");
+      const oc = t.oc_compra || {}, contacto = [oc.contacto, oc.fono, oc.mail].filter(Boolean).join(" · ") || op.entrega_contacto || "";
+      const chip = (m, txt) => `<button type="button" class="${modo === m ? "on" : ""}" data-rb="ej-modo" data-m="${m}" data-c="${esc(cod)}">${txt}</button>`;
       const km = Number(op.km) || 0, tarifa = enStgo && km ? km * TARIFA_KM_STGO : null;
       const zonaFlete = z.slug ? `https://www.facebook.com/marketplace/${z.slug}/search/?query=${encodeURIComponent("fletes")}` : `https://www.facebook.com/marketplace/search/?query=${encodeURIComponent("flete " + (z.comuna || ""))}`;
-      const msgFlete = `Hola, necesito un flete para un trabajo de ${empN}:\n• Retiro: ${op.origen_flete || op.proveedor || "(dirección del proveedor)"}\n• Entrega: ${dir}${op.plazo_fecha ? "\n• Fecha: " + op.plazo_fecha : ""}\n• Carga:\n${lineas}\n¿Estás disponible y cuánto me cobras? Necesito que el receptor firme la guía de despacho y me la devuelvas firmada (foto). Gracias.`;
-      const util = k.ventaN - netoDe(k.compra) - (Number(op.costo_transporte) || tarifa || 0);
-      cuerpo = plazoBox + `<div class="rb-sec">🚚 Transporte a ${esc(z.comuna || dir || "destino")}</div>
-      <div class="rb-kv"><span>Compra <b>${clp(k.compra)}</b> a <b>${esc(op.proveedor || "—")}</b></span></div>
-      ${campo("origen_flete", "Dónde se retira (dirección del proveedor)", op.origen_flete, "Ej: Av. Matta 1234, Santiago")}
-      <div class="rb-row">${op.origen_flete && dir ? `<a class="btn small" href="https://www.google.com/maps/dir/${encodeURIComponent(op.origen_flete)}/${encodeURIComponent(dir)}" target="_blank" rel="noopener">🗺 Ver km en Maps</a>` : ""}</div>
-      ${campo("km", "Kilómetros del viaje", op.km || "", "Ej: 18", 1)}
-      ${enStgo ? `<div class="rb-sug" style="border-color:#f5cf6b">📍 Santiago: tarifa <b>${clp(TARIFA_KM_STGO)}/km</b>${km ? ` → <b>${clp(tarifa)}</b> por ${km} km` : " · escribe los km"}.
-          Llama a tu fletero de confianza o busca en Marketplace y ofrécele esa tarifa.</div>`
-        : `<div class="rb-sug" style="border-color:#7c4dff">🧭 Región: busca fletes locales en Marketplace, mándales el trabajo y compara precios.</div>`}
-      <div class="rb-row"><a class="btn small rb-oro" href="${zonaFlete}" target="_blank" rel="noopener">🛒 Fletes en Marketplace</a>
-        <a class="btn small" href="https://wa.me/?text=${encodeURIComponent(msgFlete)}" target="_blank" rel="noopener">💬 Mandar el trabajo</a>
-        <button class="btn small" type="button" data-rb="cp" data-v="${esc(msgFlete)}">📋 Copiar mensaje</button></div>
-      <div class="rb-sec">🤝 Transportista acordado</div>
-      ${campo("transportista", "Nombre del transportista", op.transportista, "Ej: Fletes Juan")}
-      <div class="rb-row"><div style="flex:1">${campo("transportista_tel", "Teléfono", op.transportista_tel, "+56 9 ...")}</div><div style="flex:1">${campo("patente", "Patente", op.patente, "AB-CD-12")}</div></div>
-      ${campo("costo_transporte", "¿Cuánto te cobró? (total)", op.costo_transporte ? Number(op.costo_transporte).toLocaleString("es-CL") : "", tarifa ? Number(tarifa).toLocaleString("es-CL") : "Ej: 45.000", 1)}
-      <div class="rb-kv"><span>Venta neta <b>${clp(k.ventaN)}</b></span><span>− compra neta <b>${clp(netoDe(k.compra))}</b></span><span>− flete <b>${clp(Number(op.costo_transporte) || tarifa || 0)}</b></span>
-        <span class="${util >= 0 ? "rb-vivo-t" : "rb-neg-t"}"><b>= ${util >= 0 ? "💰" : "🔺"} ${clp(util)}</b></span></div>
-      ${op.pedido_transferencia ? `<div class="muted" style="font-size:.72rem">💸 Transferencia pedida al inversionista${op.transferido ? " · ✅ transferido" : ""}</div>`
-        : `${campo("inversionista_tel", "WhatsApp del inversionista", op.inversionista_tel, "+56 9 ...")}<button class="btn small" type="button" data-rb="ej-pedir-pago" data-c="${esc(cod)}">💸 Pedir transferencia al inversionista (compra + flete)</button>`}
-      <button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-etapa" data-e="despacho" data-c="${esc(cod)}">🛣 Acordado → va en trayecto</button>`;
+      const msgFlete = `Hola, necesito un flete para un trabajo de ${empN}:\n• Retiro: ${op.origen_flete || op.proveedor || "(dirección del proveedor)"}\n• Entrega: ${dir}${op.plazo_fecha ? "\n• Fecha: " + op.plazo_fecha : ""}\n• Carga:\n${lineas}\n¿Estás disponible y cuánto me cobras? El receptor debe firmar la guía de despacho y me mandas la foto. Gracias.`;
+      cuerpoS = plazoBox + lista + `<div class="rb-sec">🚚 ¿Cómo llega al cliente?</div>
+      <div class="rb-etapas rb-modos">${chip("servicio", "🏭 El proveedor hace todo")}${chip("proveedor", "🚚 El proveedor despacha")}${chip("flete", "🛻 Contrato flete")}</div>
+      <div class="rb-kv"><span>📍 <b>${esc(dir || "sin dirección")}</b></span>${contacto ? `<span>👤 ${esc(contacto)}</span>` : ""}</div>
+      ${!dir || !contacto ? `<div class="rb-row">${(oc.mail || inf.comprador?.email) ? `<button class="btn small rb-oro" type="button" data-rb="ej-mail-tipo" data-tipo="entrega" data-c="${esc(cod)}">📨 Pedir datos de entrega al cliente</button>` : ""}</div>` : ""}
+      ${campo("entrega_contacto", "Quién recibe (nombre · teléfono)", op.entrega_contacto || contacto, "Ej: Juan Pérez · +56 9 …")}
+      ${modo === "flete" ? `${campo("origen_flete", "Dónde se retira", op.origen_flete, "Ej: Av. Matta 1234, Santiago")}
+        ${campo("km", "Kilómetros del viaje", op.km || "", "Ej: 18", 1)}
+        ${enStgo ? `<div class="rb-sug" style="border-color:#f5cf6b">📍 Región Metropolitana: <b>${clp(TARIFA_KM_STGO)}/km</b>${km ? ` → <b>${clp(tarifa)}</b> por ${km} km` : ""}. Ofrécele esa tarifa a tu fletero.</div>`
+          : `<div class="rb-sug" style="border-color:#7c4dff">🧭 Región: busca fletes locales en Marketplace y mándales el trabajo.</div>`}
+        <div class="rb-row"><a class="btn small rb-oro" href="${zonaFlete}" target="_blank" rel="noopener">🛒 Fletes en Marketplace</a><a class="btn small" href="https://wa.me/?text=${encodeURIComponent(msgFlete)}" target="_blank" rel="noopener">💬 Mandar el trabajo</a><button class="btn small" type="button" data-rb="cp" data-v="${esc(msgFlete)}">📋 Copiar</button></div>`
+        : `<div class="rb-row">${op.proveedor_email ? `<button class="btn small rb-oro" type="button" data-rb="ej-mail-tipo" data-tipo="${modo === "servicio" ? "servicio" : "despacho"}" data-c="${esc(cod)}">📨 ${modo === "servicio" ? "Coordinar el servicio" : "Pedirle que despache al cliente"} (con los datos de la OC)</button>` : ""}
+          ${waNum(op.proveedor_tel) ? `<a class="btn small" href="https://wa.me/${waNum(op.proveedor_tel)}?text=${encodeURIComponent(textoEntrega(t, modo))}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ""}</div>
+          <div class="muted" style="font-size:.7rem">${modo === "servicio" ? "💎 Lo mejor: le pagas al proveedor y él hace todo. Tú cobras." : "💎 Lo ideal: el proveedor despacha directo al cliente con la guía."}</div>`}
+      <div class="rb-row"><div style="flex:1">${campo("transportista", modo === "servicio" ? "Quién ejecuta" : "Transporte / empresa", op.transportista, modo === "servicio" ? op.proveedor || "" : "Ej: Starken, Fletes Juan")}</div><div style="flex:1">${campo("transportista_tel", "Teléfono", op.transportista_tel, "+56 9 ...")}</div></div>
+      ${modo !== "servicio" ? `<div class="rb-row"><div style="flex:1">${campo("vehiculo", "Vehículo", op.vehiculo, "Camión 3/4, furgón…")}</div><div style="flex:1">${campo("patente", "Patente / N° seguimiento", op.patente, "AB-CD-12")}</div></div>` : ""}
+      ${campo("costo_transporte", "Costo del despacho (0 si lo incluye el proveedor)", op.costo_transporte != null ? Number(op.costo_transporte).toLocaleString("es-CL") : "", tarifa ? Number(tarifa).toLocaleString("es-CL") : "0", 1)}
+      <button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-etapa" data-e="despacho" data-c="${esc(cod)}">${modo === "servicio" ? "▶ Servicio en curso" : "🛣 Despachado"} → En trayecto</button>`;
     } else if (E === "despacho") {
-      const msgT = `Hola ${op.transportista || ""}, te envío la guía de despacho del pedido ${cod} para ${(t.oc_compra?.organismo || t.organismo || "").slice(0, 60)} (${dir}). Por favor pide que la firmen con nombre, RUT y fecha en "Recepción conforme" y mándame la foto. ¡Gracias!`;
-      cuerpo = plazoBox + `<div class="rb-sec">🛣 En trayecto${op.transportista ? " con " + esc(op.transportista) : ""}</div>
-      <div class="rb-kv"><span>Flete <b>${clp(op.costo_transporte)}</b></span>${op.patente ? `<span>Patente <b>${esc(op.patente)}</b></span>` : ""}${op.transportista_tel ? `<span><a href="tel:${esc(telNum(op.transportista_tel))}">📞 ${esc(op.transportista_tel)}</a></span>` : ""}</div>
-      <div class="rb-row"><button class="btn rb-oro" type="button" data-rb="ej-doc" data-t="guia" data-c="${esc(cod)}">📄 Guía de despacho + recepción conforme</button>
-        <button class="btn" type="button" data-rb="ej-doc" data-t="factura" data-c="${esc(cod)}">🧾 Factura (borrador)</button></div>
-      <div class="muted" style="font-size:.7rem">Se abre lista: toca «Imprimir / Guardar PDF» → compartir. Luego mándasela al transportista.</div>
-      <div class="rb-row">${waNum(op.transportista_tel) ? `<a class="btn small" href="https://wa.me/${waNum(op.transportista_tel)}?text=${encodeURIComponent(msgT)}" target="_blank" rel="noopener">💬 Mandar guía al transportista</a>` : `<a class="btn small" href="https://wa.me/?text=${encodeURIComponent(msgT)}" target="_blank" rel="noopener">💬 Mandar guía al transportista</a>`}</div>
+      const msgT = `Hola ${op.transportista || ""}, te envío la guía de despacho del pedido ${cod} para ${(t.oc_compra?.organismo || t.organismo || "").slice(0, 60)} (${dir}). Que la firmen con nombre, RUT y fecha en "Recepción conforme" y me mandas la foto. ¡Gracias!`;
+      const servi = (op.despacho_modo || (queComprar(t).some((x) => x.tipo === "servicio") ? "servicio" : "")) === "servicio";
+      cuerpoS = `<div class="rb-trayecto"><i class="rb-luz grande"></i><div><b>${servi ? "SERVICIO EN CURSO" : "EN TRAYECTO"}</b><div class="muted">${esc(op.transportista || op.proveedor || "")}${op.vehiculo ? " · " + esc(op.vehiculo) : ""}${op.patente ? " · " + esc(op.patente) : ""}</div></div></div>
+      <div class="rb-kv"><span>Despacho <b>${clp(op.costo_transporte || 0)}</b></span>${op.transportista_tel ? `<span><a href="tel:${esc(telNum(op.transportista_tel))}">📞 ${esc(op.transportista_tel)}</a></span>` : ""}<span>📍 ${esc(dir)}</span>${op.entrega_contacto ? `<span>👤 ${esc(op.entrega_contacto)}</span>` : ""}</div>
+      ${plazoBox}${lista}
+      <div class="rb-row"><button class="btn rb-oro" type="button" data-rb="ej-doc" data-t="guia" data-c="${esc(cod)}">📄 Guía + recepción conforme</button><button class="btn" type="button" data-rb="ej-doc" data-t="factura" data-c="${esc(cod)}">🧾 Factura (borrador)</button></div>
+      <div class="rb-row"><a class="btn small" href="https://wa.me/${waNum(op.transportista_tel) || ""}?text=${encodeURIComponent(msgT)}" target="_blank" rel="noopener">💬 Mandar la guía al transportista</a></div>
       <details class="rb-det"><summary>🏛 Emitir en el SII (documento válido)</summary>${docsSIIg(t).replace(/<button class="btn rb-firmar"[^>]*data-e="despacho"[\s\S]*?<\/button>/, "")}</details>
       <button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-etapa" data-e="entrega" data-c="${esc(cod)}">📦 Llegó al cliente → Recepción</button>`;
     } else if (E === "entrega") { const docs = op.docs || [], hay = (tp) => docs.some((d) => d.tipo === tp);
-      cuerpo = `<div class="rb-sec">📦 Recepción conforme</div>
-      <div class="muted" style="font-size:.72rem">Pide al transportista la foto de la guía firmada (nombre, RUT, fecha). Con eso cobras y cierras.</div>
+      cuerpoS = `<div class="rb-sec">📦 Recepción conforme</div>
+      <div class="muted" style="font-size:.72rem">Pide la foto de la guía firmada (nombre, RUT, fecha). Con eso cobras y cierras.</div>
       <div class="rb-row"><div style="flex:1">${campo("recibio_nombre", "Recibió", op.recibio_nombre, "Nombre")}</div><div style="flex:1">${campo("recibio_rut", "RUT", op.recibio_rut, "12.345.678-9")}</div></div>
       <div class="rb-row"><button class="btn small ${hay("guia") ? "rb-oro" : ""}" type="button" data-rb="neg-subir" data-tipo="guia" data-c="${esc(cod)}">${hay("guia") ? "✓" : "📸"} Guía firmada</button>
         <button class="btn small ${hay("factura") ? "rb-oro" : ""}" type="button" data-rb="neg-subir" data-tipo="factura" data-c="${esc(cod)}">${hay("factura") ? "✓" : "🧾"} Factura emitida</button></div>
       <button class="btn rb-oro rb-big-btn" type="button" data-rb="neg-subir" data-tipo="foto" data-cerrar="1" data-c="${esc(cod)}">🥇 Foto de la entrega y cerrar en oro</button>
-      <div class="muted" style="font-size:.68rem">Al cerrar, el inversionista recibe el aviso «negocio OK» y su Excel se actualiza con los costos reales.</div>`; }
-    else cuerpo = `<div style="font-weight:900;margin-top:6px">🥇 Cerrado${op.cerrado ? " · " + esc(new Date(op.cerrado).toLocaleDateString("es-CL")) : ""}</div>`;
-    return `<div class="rb-neg ${et === "cerrado" ? "cerrado" : ""}">
-      <div class="rb-env"><div style="min-width:0"><div style="font-size:.74rem"><b>${esc(cod)}</b>${inf.oc || op.oc ? " · OC " + esc(inf.oc || op.oc) : ""}</div><div class="rb-fnom">${esc(t.nombre || "")}</div>
-        <div class="muted" style="font-size:.72rem">${esc(t.organismo || "")}${F?.direccion ? " · " + esc(F.direccion) : ""}</div></div>
-        <div style="text-align:right"><div style="font-size:.62rem;opacity:.75">VENTA</div><b>${clp(t.total)}</b></div></div>
-      <div class="rb-kv"><span>Estimado compra <b>${clp(estimado)}</b></span><span>Tu compra <b>${clp(compra)}</b></span>
-        ${dif != null ? `<span class="${dif >= 0 ? "rb-vivo-t" : "rb-neg-t"}"><b>${dif >= 0 ? "💰 ahorraste " + clp(dif) : "🔺 pagaste " + clp(-dif) + " más"}</b></span>` : ""}</div>
-      ${cuerpo}</div>`;
+      <div class="muted" style="font-size:.68rem">Al cerrar, el inversionista recibe «negocio OK» y su Excel se rehace con los costos reales.</div>`;
+    } else cuerpoS = eerrNegocio(t);
+    return `<div class="rb-neg ${E === "cerrado" ? "cerrado" : ""}">
+      <div class="rb-env" data-rb="ej-cerrar-card" data-c="${esc(cod)}" style="cursor:pointer"><div style="min-width:0"><div style="font-size:.74rem"><b>${esc(cod)}</b>${ocN ? " · OC " + esc(ocN) : ""} <span class="muted">▲ cerrar</span></div><div class="rb-fnom">${esc(t.nombre || "")}</div>
+        <div class="muted" style="font-size:.72rem">${esc(t.oc_compra?.organismo || t.organismo || "")}${dir ? " · " + esc(dir.slice(0, 60)) : ""}</div></div>
+        <div style="text-align:right"><div style="font-size:.62rem;opacity:.75">VENTA</div><b>${clp(k.venta)}</b></div></div>
+      ${cuerpoS}</div>`;
   }
+  const FACT = "sdc:factorings";
+  const factorings = () => { try { return JSON.parse(localStorage.getItem(FACT)) || []; } catch { return []; } };
   // 📒 ERP: libro de ventas y compras, IVA, flujo de caja y cómo separar la plata (3 cuentas)
   function libroERP(L) {
     const act = L.filter((t) => t.op?.oc_codigo || t.op?.oc);
@@ -1316,6 +1445,14 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       <div class="muted" style="font-size:.72rem;line-height:1.5">1️⃣ <b>Cuenta corriente operativa</b> de la empresa: aquí paga el Estado y de aquí pagas proveedores y fletes.<br>
         2️⃣ <b>Cuenta de impuestos</b> (vista o ahorro): apenas cobras, aparta el IVA (${clp(iva)} ahora) y el PPM; se usa solo para el F29.<br>
         3️⃣ <b>Cuenta de utilidades e inversionista</b>: devuelves el capital del inversionista con su parte y guardas la utilidad de la empresa.</div>
+      <div class="rb-sec">📊 Estado de resultados (todos los negocios)</div>
+      <table class="rb-copias"><tr><td>Ingresos netos</td><td class="n">${clp(S.vn)}</td></tr><tr><td>− Costo de ventas</td><td class="n">${clp(-netoDe(S.c))}</td></tr><tr><td>− Despachos</td><td class="n">${clp(-S.f)}</td></tr>
+        <tr><td><b>= Margen bruto</b></td><td class="n"><b class="${S.u >= 0 ? "rb-vivo-t" : "rb-neg-t"}">${clp(S.u)}</b></td></tr></table>
+      <div class="muted" style="font-size:.68rem;margin-top:4px">🔐 Los pagos a proveedores los autoriza solo el dueño desde su banco; la plata del factoring llega a la cuenta operativa.</div>
+      <details class="rb-det"><summary>💰 Factorings para pedir simulación (${factorings().length})</summary>
+        <div class="muted" style="font-size:.7rem">Uno por línea: <b>Nombre | correo</b>. Desde cada negocio cerrado pides la simulación a todos con un toque.</div>
+        <textarea class="rb-in" id="rbFactorings" rows="3" placeholder="Factoring Ejemplo | contacto@factoring.cl">${esc(factorings().map((f) => f.nombre + " | " + f.email).join("\n"))}</textarea>
+        <button class="btn small" type="button" data-rb="ej-fact-guardar">Guardar</button></details>
       <div class="rb-row" style="margin-top:6px"><button class="btn small" type="button" data-rb="ej-csv">📊 Exportar libro (Excel / contador)</button><a class="btn small" href="https://www.sii.cl" target="_blank" rel="noopener">🏛 SII ↗</a></div></details>`;
   }
   function portalEjecuta() {
@@ -1336,7 +1473,16 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     return `<div class="rb-tira"><span>🛠 <b>${esc(yo.nombre)}</b></span><span>💰 <b class="${ahorro >= 0 ? "rb-vivo-t" : "rb-neg-t"}">${cortoG(ahorro)}</b> ahorro</span><span>🥇 <b>${cerr}</b>${cerr ? ` · ${cumplidos} a tiempo` : ""}</span><span>${atrasados ? `🔴 <b>${atrasados}</b> atrasado${atrasados > 1 ? "s" : ""}` : `⏳ <b>${L.length - cerr}</b>`}</span></div>
       ${libroERP(L)}
       <div class="rb-etapas">${ETAPAS_EJ.map(([k, n]) => `<button type="button" class="${tab === k ? "on" : ""}" data-rb="ej-tab" data-e="${k}">${n} ${L.filter((t) => et(t) === k).length}</button>`).join("")}</div>
-      ${!R.ejec ? `<div class="empty"><span class="spinner"></span></div>` : L.filter((t) => et(t) === tab).sort((a, b) => diasPlazo(a.op?.plazo_fecha) - diasPlazo(b.op?.plazo_fecha)).map(tarjetaEj).join("") || `<div class="empty">${L.length ? "Nada en esta etapa." : "Aún no hay órdenes de compra. Cuando llegue una (o vayas 1°), queda anclada aquí sola."}</div>`}`;
+      ${!R.ejec ? `<div class="empty"><span class="spinner"></span></div>` : (() => {
+        const luego = leerLuego(), resp = (t) => (t.op?.respuestas || []).filter((r) => !r.visto).length;
+        const enTab = L.filter((t) => et(t) === tab).sort((a, b) => resp(b) - resp(a) || diasPlazo(a.op?.plazo_fecha) - diasPlazo(b.op?.plazo_fecha));
+        if (!enTab.length) return `<div class="empty">${L.length ? "Nada en esta etapa." : "Aún no hay órdenes de compra. Cuando llegue una (o vayas 1°), queda anclada aquí sola."}</div>`;
+        const ab = enTab.find((t) => t.codigo === R.ejAbierto);
+        const ahora_ = enTab.filter((t) => t !== ab && !luego[t.codigo]), despues = enTab.filter((t) => t !== ab && luego[t.codigo]);
+        return (ab ? tarjetaEj(ab) : "") + (ahora_.length ? `<div class="muted" style="font-size:.72rem;text-align:center;margin:6px 0">👉 desliza a la derecha = <b>ver ahora</b> · 👈 izquierda = <b>en otro momento</b></div>` : "")
+          + ahora_.map(portadaEj).join("")
+          + (despues.length ? `<details class="rb-det"><summary>⏰ Para después (${despues.length})</summary>${despues.map(portadaEj).join("")}</details>` : "");
+      })()}`;
   }
   function vistaOport() {
     if (!R.oport) { cargarOport(); return `<div class="empty"><span class="spinner"></span> Cargando oportunidades…</div>`; }
@@ -1432,7 +1578,10 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const selObj = leerSel();
     const enviadasCods = new Set(trabajos.filter((t) => HECHA.includes(t.estado) || yaFirmada(t)).map((t) => t.codigo));
     // Seleccionadas: las que elegiste y todavía no van al robot (cuando las mandas a firmar pasan a «Por firmar»)
-    const sel = Object.keys(selObj).filter((c) => deMiEmpresa(selObj[c]) && !(R.selFuera || {})[c] && !enviadasCods.has(c) && !trabajo(c) && !lista.find((x) => x.codigo === c && x.ya_ofertada))
+    const selCerr = Object.keys(selObj).filter((c) => { const x = { ...selObj[c], ...(lista.find((y) => y.codigo === c) || {}) }; return x.cierre && Date.parse(x.cierre) < ahora; });
+    if (selCerr.length && !R._limpSel) { R._limpSel = true;
+      setTimeout(async () => { for (const c of selCerr) await quitarSel(c).catch(() => {}); toast(`🗑 Saqué ${selCerr.length} compra${selCerr.length > 1 ? "s" : ""} ya cerrada${selCerr.length > 1 ? "s" : ""}`); R._limpSel = false; pintarHoja(); }, 0); }
+    const sel = Object.keys(selObj).filter((c) => !selCerr.includes(c) && deMiEmpresa(selObj[c]) && !(R.selFuera || {})[c] && !enviadasCods.has(c) && !trabajo(c) && !lista.find((x) => x.codigo === c && x.ya_ofertada))
       .map((c) => ({ ...selObj[c], ...(lista.find((x) => x.codigo === c) || {}), codigo: c, _sel: selObj[c] }))
       .sort((a, b) => (b._sel.desde || "").localeCompare(a._sel.desde || ""));        // la última que elegiste, primero
     if (!R.sel && !R._selPedido) { R._selPedido = true; cargarSel().then(pintarHoja); }
@@ -1672,10 +1821,17 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         <div class="muted" style="font-size:.72rem">${t.fecha_envio ? "📅 " + esc(t.fecha_envio) + " · " : ""}${t.dispositivo ? "📱 " + esc(t.dispositivo) : "equipo no registrado"}</div></div>
         <b style="white-space:nowrap">${t.total ? clp(t.total) : ""}</b></div>
       <div style="margin-top:6px">${chipSeg(t)}</div>
-      ${g?.ganada ? `<div style="margin-top:6px;font-size:.8rem">El organismo emitió la <b>orden de compra ${esc(g.oc || "")}</b>. Revísala y acéptala en Mercado Público.</div>` : ""}
+      ${g?.ganada ? `<div class="rb-sug" style="border-color:#f5cf6b;margin-top:6px">🏆 <b>¡Proveedor seleccionado!</b> ${g.oc ? "Orden de compra <b>" + esc(g.oc) + "</b>: revísala y acéptala en Mercado Público." : "La orden de compra viene en camino."}</div>`
+        : g?.mi_lugar === 1 && g?.estado && g.estado !== "publicada" ? `<div class="rb-sug" style="border-color:#5ef0b0;margin-top:6px">📞 <b>Vas 1°.</b> Te pueden llamar o seleccionar: adelanta proveedores en Ejecuta.</div>` : ""}
+      ${g?.ganada || g?.mi_lugar === 1 ? `<details class="rb-det"><summary>🧭 Si sale la OC, ¿cómo actuamos?</summary><div class="muted" style="font-size:.72rem;line-height:1.5">
+        1️⃣ Acepta la OC en Mercado Público (en 24–48 h).<br>2️⃣ En Ejecuta: pide precio a 4 proveedores con un toque y elige el que da más.<br>3️⃣ Pide su cuenta, avisa al inversionista y sube el comprobante.<br>
+        4️⃣ Que el proveedor despache directo al cliente con la guía; recepción conforme firmada.<br>5️⃣ Factura en el SII y simulación de factoring para cobrar antes.</div></details>` : ""}
       <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">${t.comprobante ? `<button class="btn small rb-firmar" data-rb="comprobante" data-c="${esc(t.codigo)}" type="button">🧾 Comprobante PDF</button>` : ""}
         ${t.pdf ? `<button class="btn small" data-rb="pdf" data-c="${esc(t.codigo)}" type="button">Oferta PDF</button>` : ""}
-        <a class="btn small" href="${portalDe(t.codigo)}" target="_blank" rel="noopener noreferrer">Mercado Público ↗</a></div></div>`;
+        <a class="btn small" href="${portalDe(t.codigo)}" target="_blank" rel="noopener noreferrer">🔎 Revisar</a>
+        <button class="btn small" type="button" data-rb="env-preguntar" data-c="${esc(t.codigo)}">🎙 Preguntar</button>
+        ${t.op && t.op.etapa !== "rechazada" ? `<button class="btn small" type="button" data-rb="mail-abrir" data-c="${esc(t.codigo)}">🛠 En Ejecuta</button>`
+          : g?.ganada || g?.mi_lugar === 1 ? `<button class="btn small rb-oro" type="button" data-rb="env-ejecutar" data-e="${g?.ganada ? "ganada" : "previa"}" data-c="${esc(t.codigo)}">➡ Pasar a Ejecuta</button>` : ""}</div></div>`;
     };
     let cuerpo;
     if (tab === "nuevas") cuerpo = `${bannerEmpresa()}${!persona()?.nombre ? `<div class="rb-p-desc">👤 ¿Quién juega en este celular? <span class="rb-row" style="margin-top:4px"><input id="rbPerNom" class="rb-in" placeholder="Tu nombre" style="flex:1"><button class="btn small rb-oro" type="button" data-rb="persona-guardar">OK</button></span></div>` : ""}<div class="rb-filtro-ganador">
@@ -1898,6 +2054,13 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       if (c.dataset.modo === "llam") {
         c.classList.add("vuela"); c.style.transform = ""; c.querySelectorAll(".rb-sello").forEach((x) => (x.style.opacity = 0));
         if (derecha) confirmarLlamada(c.dataset.c); else if (izquierda) { R.llamada.idx = (R.llamada.idx || 0) + 1; if (R.llamada.idx >= (R.llamada.cands || []).length) R.llamada.cands = []; pintarHoja(true); }
+        return fin();
+      }
+      if (c.dataset.modo === "ej") {
+        c.classList.add("vuela"); c.style.transform = ""; c.querySelectorAll(".rb-sello").forEach((x) => (x.style.opacity = 0));
+        const cc = c.dataset.c, l = leerLuego();
+        if (derecha) { R.ejAbierto = cc; delete l[cc]; try { localStorage.setItem(EJ_LUEGO, JSON.stringify(l)); } catch {} navigator.vibrate?.(10); setTimeout(() => pintarHoja(true), 120); }
+        else if (izquierda) { l[cc] = Date.now(); try { localStorage.setItem(EJ_LUEGO, JSON.stringify(l)); } catch {} sacarTarjeta(c, -1); setTimeout(() => pintarHoja(true), 360); }
         return fin();
       }
       if (modoFir) {
@@ -2268,7 +2431,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         <button class="rb-emp" type="button" data-rb="empresa-editar">🏢 <span>${esc(corta(emp?.razon_social) || "Mi empresa")}</span> ▾</button>
         <button class="rb-yo" type="button" data-rb="persona-editar" title="Quién usa este celular">👤 ${esc((persona()?.nombre || "¿quién?").split(" ")[0].slice(0, 12))}</button>
         <span class="rb-pcs" title="${conectado ? "PC conectado" : "PC desconectado"}"><i class="${conectado ? "on" : ""}"></i>PC<i class="${mp?.conectado ? "on" : ""}"></i>MP</span>
-        <button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
+        ${mailChip()}<button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
         <button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
         <div class="rb-portal"><button type="button" class="${leer().portal !== "ejecuta" ? "on" : ""}" data-rb="portal" data-v="juego">🎮 Juego</button><button type="button" class="${leer().portal === "ejecuta" ? "on" : ""}" data-rb="portal" data-v="ejecuta">🛠 Ejecuta</button></div>`;
       // 🏆 portada: cada vez que abres la app (y siempre que no haya empresa). Sin formularios: RUT → jugar.
@@ -2278,6 +2441,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       else if (R.empresaEditar) cuerpo = pantallaEmpresa();
       else if (R.rubroEditar) { if (!R.oport) cargarOport(); cuerpo = `<div class="rb-paso-n" style="text-align:center;margin-top:10px">Paso 3 de 3</div>` + pantallaRubro(R.oport?.lista || []); }
       else if (R.pantalla === "llamada") cuerpo = pantallaLlamada();
+      else if (R.pantalla === "correos") cuerpo = pantallaCorreos();
       else cuerpo = (leer().portal === "ejecuta" ? portalEjecuta() : vistaOport());
       const mas = `<details class="rb-ajustes rb-mas"><summary>⚙ Más opciones</summary>
         ${!conectado ? `<div class="rb-alertas"><b>PC desconectado</b>${r?.visto ? "Visto " + esc(hace(r.visto)) + ". " : ""}Abre el robot en el PC.</div>` : ""}
@@ -2516,6 +2680,46 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       setTimeout(() => ejOp({ contactado: { k: b.dataset.k, via: b.dataset.via, nombre: b.dataset.n } }, null, b.dataset.via === "correo" ? "✉ +1 · correo listo para enviar" : "+1 a la misión"), 400);
       return;
     }
+    const tEj = () => (R.ejec || []).find((x) => x.codigo === cod);
+    if (a === "ej-ver") { R.ejAbierto = cod; const l = leerLuego(); delete l[cod]; try { localStorage.setItem(EJ_LUEGO, JSON.stringify(l)); } catch {}
+      api("correo-visto", { method: "POST", body: JSON.stringify({ codigo: cod }) }).catch(() => {}); return pintarHoja(true); }
+    if (a === "ej-luego") { const l = leerLuego(); l[cod] = Date.now(); try { localStorage.setItem(EJ_LUEGO, JSON.stringify(l)); } catch {} if (R.ejAbierto === cod) R.ejAbierto = null; toast("⏰ Queda para después"); return pintarHoja(true); }
+    if (a === "ej-cerrar-card") { R.ejAbierto = null; return pintarHoja(true); }
+    if (a === "ej-mail") { const t = tEj(), o = t && candsDe(t).find((x) => x.k === b.dataset.k); if (!o) return;
+      return enviarCorreos(cod, [{ to: o.email, asunto: `Cotización con factura · ${t.nombre || cod}`, cuerpo: cuerpoCot(t, o), k: o.k, nombre: o.proveedor, tipo: "cotizacion" }]); }
+    if (a === "ej-mail-todos") { const t = tEj(); if (!t) return; const cont = t.op?.contactados || {};
+      return enviarCorreos(cod, candsDe(t).filter((o) => o.email && !cont[o.k]).slice(0, 6).map((o) => ({ to: o.email, asunto: `Cotización con factura · ${t.nombre || cod}`, cuerpo: cuerpoCot(t, o), k: o.k, nombre: o.proveedor, tipo: "cotizacion" }))); }
+    if (a === "ej-mail-tipo") { const t = tEj(); if (!t) return; return enviarCorreos(cod, [correoTipo(t, b.dataset.tipo)]); }
+    if (a === "ej-cerre") { const t = tEj(); if (!t) return; const o = candsDe(t).find((x) => x.k === b.dataset.k) || {}, op = t.op || {};
+      const q = (op.cotizaciones || {})[b.dataset.k], r = (op.respuestas || []).filter((x) => x.k === b.dataset.k && x.precio).pop();
+      const v = q?.v || (r ? (r.incluye_iva ? r.precio : Math.round(r.precio * 1.19)) : null);
+      if (!v) { toast("Anota primero el precio que te dio"); return; }
+      const banco = r?.cuenta ? [r.cuenta.banco, r.cuenta.tipo, r.cuenta.numero, r.cuenta.rut && "RUT " + r.cuenta.rut, r.cuenta.titular, r.cuenta.email].filter(Boolean).join(" · ") : undefined;
+      R.ejAbierto = cod;
+      return ejOp({ proveedor: o.proveedor || q?.nombre, proveedor_k: b.dataset.k, proveedor_email: o.email || "", proveedor_tel: o.telefono || "", precio_acordado: v,
+        ...(banco ? { banco_proveedor: banco } : {}), ...(r?.despacha ? { despacho_modo: "proveedor" } : {}) }, "pago", "🤝 ¡Cerraste! Ahora el pago"); }
+    if (a === "ej-descartar") return ejOp({ descartar_k: b.dataset.k }, null, "Descartado");
+    if (a === "ej-modo") return ejOp({ despacho_modo: b.dataset.m }, null, null);
+    if (a === "ej-fact-guardar") { const L = ($("#rbFactorings")?.value || "").split(/\n+/).map((l) => l.split("|").map((x) => x.trim())).filter((x) => x[0] && /@/.test(x[1] || "")).map(([nombre, email]) => ({ nombre, email }));
+      try { localStorage.setItem(FACT, JSON.stringify(L)); } catch {} toast(`💰 ${L.length} factoring guardados`); return pintarHoja(true); }
+    if (a === "ej-factoring") { const t = tEj(); if (!t) return; const F = factorings(); if (!F.length) { R.libroEj = true; toast("Agrega los factorings en 📒 Libro y caja"); return pintarHoja(true); }
+      const op = t.op || {}, e = empresaActual() || {};
+      const cuerpo = `Hola,
+
+Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos una simulación de factoring para esta factura al Estado:
+• Deudor: ${t.oc_compra?.organismo || t.organismo || ""}${t.oc_compra?.rut_organismo ? " · RUT " + t.oc_compra.rut_organismo : ""}
+• Orden de compra: ${op.oc_codigo || ""} (Compra Ágil ${t.codigo})
+• Monto factura: ${clp(cuentasDe(t).venta)} con IVA${op.folio_factura ? "\n• Factura N° " + op.folio_factura : ""}
+• Recepción conforme: ${op.recibio_nombre ? "sí, firmada por " + op.recibio_nombre : "sí"}
+
+¿Nos indican tasa, comisión, porcentaje anticipado, gastos y el monto líquido a recibir?${firmaMail()}`;
+      return enviarCorreos(cod, F.slice(0, 6).map((f) => ({ to: f.email, asunto: `Simulación factoring · ${clp(cuentasDe(t).venta)} · ${t.oc_compra?.organismo || t.organismo || ""}`, cuerpo, k: "fact-" + kProv(f.nombre), nombre: f.nombre, tipo: "factoring" }))); }
+    if (a === "env-ejecutar") { try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, etapa: b.dataset.e || "previa", pedir_informe: true, dispositivo: dispositivo(false) }) });
+        guardar({ portal: "ejecuta" }); R.ejTab = "operacion"; R.ejAbierto = cod; R.ejecT = 0; toast("🛠 Pasó a Ejecuta · el robot busca proveedores"); await cargarEjecuta(); return pintarHoja(true); } catch (e) { toast(e.message); return; } }
+    if (a === "env-preguntar") { R.pantalla = "llamada"; R.llamada = { texto: "" }; confirmarLlamada(cod);
+      preguntarRobot("¿Qué pasa con esta cotización? ¿Vamos primeros o somos proveedor seleccionado? Si sale la orden de compra, ¿cómo actuamos antes de ejecutar?", null, cod); return; }
+    if (a === "mail-ver") { R.pantalla = "correos"; api("correo-visto", { method: "POST", body: "{}" }).catch(() => {}); (R.mailAl || []).forEach((x) => (x.visto = true)); return pintarHoja(true); }
+    if (a === "mail-abrir") { R.pantalla = null; guardar({ portal: "ejecuta" }); R.ejAbierto = cod; const t = (R.ejec || []).find((x) => x.codigo === cod); if (t) R.ejTab = etEj(t); return pintarHoja(true); }
     if (a === "ej-prov-extra") {
       const n = ($("#rbPxN-" + cod)?.value || "").trim(); if (!n) { toast("Escribe el nombre del proveedor"); return; }
       return ejOp({ proveedor_extra: { proveedor: n, telefono: ($("#rbPxT-" + cod)?.value || "").trim(), email: ($("#rbPxE-" + cod)?.value || "").trim() } }, null, "➕ Agregado a la misión");
