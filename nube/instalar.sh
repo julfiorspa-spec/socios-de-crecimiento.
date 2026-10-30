@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # CotizÁgil · robot en la nube 24/7 (Ubuntu 22.04 / 24.04, como root)
-#   curl -fsSL https://cotizagil.netlify.app/nube/instalar.sh | bash -s -- TU_CODIGO_DE_ENLACE
+#   curl -fsSL https://cotizagil.netlify.app/nube/instalar.sh | bash      (pide permiso: lo apruebas en la app)
+#   curl -fsSL https://cotizagil.netlify.app/nube/instalar.sh | bash -s -- TU_CODIGO   (directo)
 # Qué hace: instala el robot, una pantalla virtual con vista remota protegida (HTTPS + clave),
 # lo deja encendido siempre (se reinicia solo si se cae o si se reinicia el servidor) y se
 # actualiza solo cuando el PC sube una versión nueva. Se puede volver a correr sin problema.
@@ -14,8 +15,23 @@ APP="$DIR/robot"
 USR=robot
 
 [ "$(id -u)" = 0 ] || { echo "Corre esto como root (o con sudo)."; exit 1; }
-[ -n "$TOKEN" ] || { echo "Falta el código de enlace: ... | bash -s -- TU_CODIGO"; exit 1; }
 paso() { echo; echo "==> $*"; }
+if [ -z "$TOKEN" ]; then
+  # sin código: el servidor pide permiso y el dueño lo aprueba con un toque en la app (💎 Planes → Robot en la nube)
+  paso "0/8 Pidiendo permiso a CotizÁgil (apruébalo en tu celular)"
+  SOL=$(curl -fsS -X POST "$NUBE/bot/nube-pedir?nombre=$(hostname)")
+  ID=$(echo "$SOL" | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
+  echo "   Solicitud enviada desde la IP $(echo "$SOL" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("ip",""))'). Esperando tu aprobación…"
+  for _ in $(seq 1 720); do
+    R=$(curl -fsS "$NUBE/bot/nube-pedir?id=$ID" || echo '{}')
+    EST=$(echo "$R" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("estado",""))' 2>/dev/null || true)
+    if [ "$EST" = aprobado ]; then TOKEN=$(echo "$R" | python3 -c 'import json,sys;print(json.load(sys.stdin)["token"])'); break; fi
+    if [ "$EST" = rechazado ] || [ "$EST" = no_existe ]; then echo "   Solicitud $EST."; exit 1; fi
+    sleep 10
+  done
+  [ -n "$TOKEN" ] || { echo "   No llegó la aprobación en 2 horas. Vuelve a correr el comando."; exit 1; }
+  echo "   ✅ Aprobado"
+fi
 export DEBIAN_FRONTEND=noninteractive
 
 paso "1/8 Sistema y zona horaria de Chile"
