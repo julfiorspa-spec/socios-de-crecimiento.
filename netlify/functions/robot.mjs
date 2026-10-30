@@ -1052,8 +1052,21 @@ async function atender(req) {
   if (ruta === "plan" && req.method === "GET") {
     const L = (await store.get("planes/lista", { type: "json" })) || {};
     const j = jug(url.searchParams.get("jugador"));
-    const links = Object.fromEntries(Object.keys(PLANES).map((k) => [k, process.env["PAGO_" + k.toUpperCase()] || null]));
+    const guardados = (await store.get("planes/links", { type: "json" })) || {};
+    const links = Object.fromEntries(Object.keys(PLANES).map((k) => [k, guardados[k] || process.env["PAGO_" + k.toUpperCase()] || null]));
     return json({ plan: (j && L[j]) || null, planes: PLANES, links, todos: url.searchParams.get("admin") === "1" ? L : undefined });
+  }
+  if (ruta === "plan-links" && req.method === "POST") {       // el dueño pega el link de pago (Mercado Pago / Flow) de cada plan
+    const b = await cuerpo(req);
+    if (!b.legado) return json({ error: "Solo el dueño puede cambiar los links de pago." }, 403);
+    const L = (await store.get("planes/links", { type: "json" })) || {};
+    for (const k of Object.keys(PLANES)) if (b.links && b.links[k] !== undefined) {
+      const v = texto(b.links[k], 300).trim();
+      if (v && !/^https:\/\/([a-z0-9-]+\.)*(mercadopago\.(cl|com)|mpago\.(la|li)|flow\.cl|paypal\.(me|com)|stripe\.com|buy\.stripe\.com|khipu\.com|webpay\.cl)\//i.test(v)) return json({ error: "El link de " + PLANES[k].nombre + " debe ser de Mercado Pago, Flow, PayPal, Stripe o Khipu (https)." }, 400);
+      L[k] = v || null;
+    }
+    await store.setJSON("planes/links", L);
+    return json({ ok: true, links: L });
   }
   if (ruta === "plan" && req.method === "POST") {
     const b = await cuerpo(req);
