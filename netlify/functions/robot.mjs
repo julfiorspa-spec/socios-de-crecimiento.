@@ -1174,11 +1174,11 @@ async function atender(req) {
             que: (inf.que_comprar || inf.productos || []).slice(0, 6).map((x) => `${x.cantidad ?? ""} ${x.unidad || ""} ${x.que || x.nombre || ""}`.trim()).join("; ") };
         });
     }
-    // 📄 OC sin su PDF oficial: el PC lo baja del portal (reintenta cada 6 h)
+    // 📄 OC sin su PDF oficial: el PC lo baja del portal (reintenta cada 30 min)
     const ocs_pdf = [];
     for (const tt of lista) {
       const o = tt.op; if (!o?.oc_codigo || ["rechazada"].includes(o.etapa) || (o.docs || []).some((d) => d.tipo === "oc")) continue;
-      if (o.oc_pdf_intento && Date.now() - Date.parse(o.oc_pdf_intento) < 6 * 3600_000) continue;
+      if (o.oc_pdf_intento && Date.now() - Date.parse(o.oc_pdf_intento) < 30 * 60_000) continue;
       if (!mio(tt.codigo) || ocs_pdf.length >= 3) continue;
       o.oc_pdf_intento = ahora(); await escribir(store, tt); ocs_pdf.push({ codigo: tt.codigo, oc: o.oc_codigo });
     }
