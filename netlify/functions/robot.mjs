@@ -763,6 +763,11 @@ async function atender(req) {
       if (k) { op.cotizaciones = { ...(op.cotizaciones || {}) }; if (v) op.cotizaciones[k] = { v, nombre: texto(d.cotizacion.nombre, 120), t: ahora() }; else delete op.cotizaciones[k]; }
     }
     if (d.descartar_k) op.descartados = { ...(op.descartados || {}), [texto(d.descartar_k, 80)]: ahora() };
+    if (d.quitar_doc) {                                   // 🗑 quitar un archivo mal subido (ej. un PDF que era una página de error)
+      const id = String(d.quitar_doc).replace(/[^a-z0-9]/gi, "");
+      const x = (op.docs || []).find((y) => y.id === id);
+      if (x) { op.docs = op.docs.filter((y) => y.id !== id); await store.delete(`doc/${t.codigo}/${id}`).catch(() => {}); if (x.tipo === "oc") op.oc_pdf_intento = null; }
+    }
     const avisarPago = d.pedido_transferencia === true && !yaPedido;
     if (d.proveedor_extra && typeof d.proveedor_extra === "object" && d.proveedor_extra.proveedor) {
       const x = d.proveedor_extra;
