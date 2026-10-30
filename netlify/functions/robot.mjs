@@ -37,6 +37,15 @@ function autorizado(req) {
   return timingSafeEqual(a, b);
 }
 
+// copia segura de un JSON libre (textos cortos, listas y objetos acotados)
+function limpiaJSON(v, d) {
+  if (v == null || d > 4) return null;
+  if (typeof v === "string") return v.slice(0, 600);
+  if (typeof v === "number" || typeof v === "boolean") return v;
+  if (Array.isArray(v)) return v.slice(0, 25).map((x) => limpiaJSON(x, d + 1));
+  if (typeof v === "object") return Object.fromEntries(Object.entries(v).slice(0, 30).map(([k, x]) => [String(k).slice(0, 40), limpiaJSON(x, d + 1)]));
+  return null;
+}
 const limpiaCodigo = (c) => String(c || "").trim().toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 40);
 const texto = (s, n = 400) => (s == null ? null : String(s).slice(0, n));
 const ahora = () => new Date().toISOString();
@@ -785,6 +794,60 @@ async function atender(req) {
     return json({ trabajo: r });
   }
   // archivos del negocio: informe PDF y Excel (los sube el PC), fotos / guías / facturas (las sube el celular)
+  // ✍️ firma de la representante legal: la sube el celular, el PC la guarda y la estampa en los anexos
+  if (ruta === "firma-subir" && req.method === "POST") {
+    const b = await cuerpo(req);
+    const bytes = Buffer.from(String(b.b64 || ""), "base64");
+    if (!bytes.length || bytes.length > 4_000_000) return json({ error: "Imagen vacía o de más de 4 MB." }, 400);
+    const meta = { id: idCorto(), t: ahora(), mime: texto(b.mime, 40) || "image/jpeg", nombre: texto(b.nombre, 120), rut: texto(b.rut, 20), cargo: texto(b.cargo, 60) || "Representante legal", procesada: false };
+    await store.set("firma/img", bytes);
+    await store.setJSON("firma/meta", meta);
+    return json({ ok: true, firma: meta });
+  }
+  if (ruta === "firma" && req.method === "GET") {
+    const meta = (await store.get("firma/meta", { type: "json" })) || null;
+    if (url.searchParams.get("img") && meta) {
+      const llave = url.searchParams.get("img") === "lista" ? "firma/lista" : "firma/img";
+      const data = await store.get(llave, { type: "arrayBuffer" });
+      if (!data) return json({ error: "Sin imagen." }, 404);
+      return new Response(data, { headers: { "content-type": llave === "firma/lista" ? "image/png" : meta.mime, "cache-control": "no-store" } });
+    }
+    return json({ firma: meta });
+  }
+  if (ruta === "firma-lista" && req.method === "POST") {          // el PC devuelve la firma limpia (fondo transparente)
+    const b = await cuerpo(req);
+    const meta = (await store.get("firma/meta", { type: "json" })) || null;
+    if (!meta || meta.id !== b.id) return json({ ok: false });
+    const bytes = Buffer.from(String(b.b64 || ""), "base64");
+    if (bytes.length) await store.set("firma/lista", bytes);
+    await store.setJSON("firma/meta", { ...meta, procesada: ahora(), error: texto(b.error, 200) });
+    return json({ ok: true });
+  }
+  // 🎨 visualizar el proyecto de una licitación (render por fuera / por dentro) y archivos del análisis
+  if (ruta === "lic-vision" && req.method === "POST") {
+    const b = await cuerpo(req);
+    const t = await leer(store, limpiaCodigo(b.codigo));
+    if (!t) return json({ error: "No existe." }, 404);
+    const vistas = (Array.isArray(b.vistas) && b.vistas.length ? b.vistas : ["exterior", "interior"]).map((v) => texto(v, 30)).slice(0, 4);
+    t.lic_vision = { t: ahora(), vistas, nota: texto(b.nota, 400), hechas: [] };
+    return json({ trabajo: await escribir(store, t) });
+  }
+  if (ruta === "lic-archivo" && req.method === "POST") {
+    const b = await cuerpo(req);
+    const t = await leer(store, limpiaCodigo(b.codigo));
+    if (!t) return json({ error: "No existe." }, 404);
+    const bytes = Buffer.from(String(b.b64 || ""), "base64");
+    if (!bytes.length || bytes.length > MAX_PDF) return json({ error: "Archivo vacío o muy grande." }, 400);
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    await store.set(`doc/${t.codigo}/${id}`, bytes);
+    t.lic_docs = [...(t.lic_docs || []).filter((d) => !(b.vista && d.vista === b.vista && d.tipo === b.tipo)),
+      { id, tipo: texto(b.tipo, 20) || "otro", vista: texto(b.vista, 30), nombre: texto(b.nombre, 120) || "archivo", mime: texto(b.mime, 60) || "image/jpeg", kb: Math.round(bytes.length / 1024), fecha: ahora() }].slice(-20);
+    if (t.lic_vision && b.vista) { t.lic_vision.hechas = [...new Set([...(t.lic_vision.hechas || []), texto(b.vista, 30)])]; if (b.error) t.lic_vision.error = texto(b.error, 200); }
+    const r = await escribir(store, t);
+    if (t.lic_vision && t.lic_vision.vistas.every((v) => t.lic_vision.hechas.includes(v)))
+      await avisarTexto(store, "🎨 Proyecto visualizado · " + t.codigo, `${(t.lic?.producto || t.nombre || "").slice(0, 80)} · mira cómo quedaría por fuera y por dentro.`, "vis-" + t.codigo, "/#robot").catch(() => {});
+    return json({ trabajo: r });
+  }
   if (ruta === "subir" && req.method === "POST") {
     const b = await cuerpo(req);
     const t = await leer(store, limpiaCodigo(b.codigo));
@@ -814,7 +877,7 @@ async function atender(req) {
     const data = await store.get(llave, { type: "arrayBuffer" });
     if (!data) return json({ error: "No está ese archivo." }, 404);
     const t = await leer(store, codigo);
-    const meta = (t?.op?.docs || []).find((x) => x.id === url.searchParams.get("id"));
+    const meta = [...(t?.op?.docs || []), ...(t?.lic_docs || [])].find((x) => x.id === url.searchParams.get("id"));
     const mime = tipo === "informe" ? "application/pdf" : tipo === "excel" ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : meta?.mime || "application/octet-stream";
     const nombre = tipo === "informe" ? `Informe_negocio_${codigo}.pdf` : tipo === "excel" ? `Negocio_${codigo}.xlsx` : (meta?.nombre || "archivo").replace(/[^\w.\- ]/g, "_");
     return new Response(data, { headers: { "content-type": mime, "content-disposition": `${tipo === "excel" ? "attachment" : "inline"}; filename="${nombre}"`, "cache-control": "no-store" } });
@@ -1187,6 +1250,17 @@ async function atender(req) {
       if (!mio(tt.codigo) || ocs_pdf.length >= 3) continue;
       o.oc_pdf_intento = ahora(); await escribir(store, tt); ocs_pdf.push({ codigo: tt.codigo, oc: o.oc_codigo });
     }
+    // ✍️ firma nueva para el PC y 🎨 visualizaciones pedidas
+    const firmaMeta = (await store.get("firma/meta", { type: "json" })) || null;
+    const visiones = [];
+    for (const tt of lista) {
+      const v = tt.lic_vision; if (!v || visiones.length >= 2) continue;
+      if ((v.hechas || []).length >= (v.vistas || []).length) continue;
+      if (v.tomada && Date.now() - Date.parse(v.tomada) < 10 * 60_000) continue;
+      v.tomada = ahora(); await escribir(store, tt);
+      visiones.push({ codigo: tt.codigo, vistas: v.vistas.filter((x) => !(v.hechas || []).includes(x)), nota: v.nota || "", producto: tt.lic?.producto || tt.nombre || "",
+        resumen: tt.lic?.resumen || "", vision: tt.lic?.experto?.vision || null, lugar: tt.lic?.lugar_entrega || "", items: (tt.lic?.items || []).slice(0, 8) });
+    }
     // 📥 todas las OC que aún no tienen su PDF: si la persona lo descarga en el PC, el robot lo sube solo
     const oc_sin_pdf = lista.filter((tt) => tt.op?.oc_codigo && tt.op.etapa !== "rechazada" && !(tt.op.docs || []).some((d) => d.tipo === "oc")).slice(0, 40).map((tt) => ({ codigo: tt.codigo, oc: tt.op.oc_codigo }));
     // 💬 conversaciones que esperan que la IA del PC las lea y conteste
@@ -1201,7 +1275,8 @@ async function atender(req) {
     }
     if (chats.length) await store.setJSON("chat/cola", cq.filter((x) => lista.some((y) => y.codigo === x.codigo)));
     const op = { ...(pidio ? { oportunidades: true } : {}), ...(negocios.length ? { negocios } : {}), ...(preguntas.length ? { preguntas } : {}), empresas, equipos: vivos,
-      ...(correos.length ? { correos } : {}), ...(vigilar ? { vigilar } : {}), ...(chats.length ? { chats } : {}), ...(ocs_pdf.length ? { ocs_pdf } : {}), ...(oc_sin_pdf.length ? { oc_sin_pdf } : {}) };
+      ...(correos.length ? { correos } : {}), ...(vigilar ? { vigilar } : {}), ...(chats.length ? { chats } : {}), ...(ocs_pdf.length ? { ocs_pdf } : {}), ...(oc_sin_pdf.length ? { oc_sin_pdf } : {}),
+      ...(firmaMeta ? { firma: firmaMeta } : {}), ...(visiones.length ? { visiones } : {}) };
     // ⚡ lo que pide una persona desde el celular va antes que el autopiloto del PC
     const humano = (t) => !!(t.jugador || t.dispositivo);
     // un pedido es de este equipo si le toca por reparto, o si al dueño lo tienen ocupado y es de una persona (no se hace esperar)
@@ -1263,6 +1338,10 @@ async function atender(req) {
         documentos: (Array.isArray(L.documentos) ? L.documentos : []).slice(0, 20).map((d) => ({
           nombre: texto(d?.nombre, 120), estado: texto(d?.estado, 120), seccion: texto(d?.seccion, 40) })),
         firmados: !!L.firmados,
+        // 🧠 lectura experta de las bases (habilidad, admisibilidad, garantías, evaluación, contrato, foro, plan y visión)
+        experto: limpiaJSON(L.experto, 0),
+        items: (Array.isArray(L.items) ? L.items : []).slice(0, 30).map((i) => ({ descripcion: texto(i?.descripcion, 240), cantidad: Number(i?.cantidad) || null, unidad: texto(i?.unidad, 30) })),
+        lugar_entrega: texto(L.lugar_entrega, 240), plazo_entrega: texto(L.plazo_entrega, 200),
       };
     }
     if (b.captcha_b64 != null) {                    // código de imagen que el robot necesita que escribas
