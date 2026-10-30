@@ -178,6 +178,24 @@
   .rb-glob{display:block!important;text-align:left;width:100%}.rb-glob b{display:block;margin-bottom:2px}.rb-glob span{display:block;font-size:.68rem;opacity:.8;white-space:normal!important;overflow-wrap:anywhere;text-overflow:clip!important;overflow:visible!important}
   .rb-link{background:none;border:0;color:inherit;padding:0;text-align:left;font:inherit;cursor:pointer}
   .rb-acciones{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .rb-caja{margin:8px 0;border-radius:16px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.035);overflow:hidden}
+  .rb-caja>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:13px 14px;cursor:pointer;-webkit-tap-highlight-color:transparent}.rb-caja>summary::-webkit-details-marker{display:none}
+  .rb-caja>summary::after{content:"›";margin-left:auto;font-size:1.3rem;opacity:.6;transition:transform .2s}.rb-caja[open]>summary::after{transform:rotate(90deg)}
+  .rb-caja-i{flex:0 0 26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:.8rem;background:rgba(255,255,255,.08)}
+  .rb-caja-t{font-weight:700;font-size:.92rem;white-space:nowrap}.rb-caja-s{font-size:.7rem;opacity:.75;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rb-caja-b{padding:0 12px 12px}
+  .rb-caja.ahora{border-color:rgba(94,240,176,.55)}.rb-caja.ahora .rb-caja-i{background:#5ef0b0;color:#06281c}
+  .rb-caja.hecho .rb-caja-i{background:rgba(94,240,176,.25);color:#5ef0b0}
+  .rb-caja.oro{border-color:#f5cf6b;background:linear-gradient(180deg,rgba(245,207,107,.14),rgba(245,207,107,.03))}.rb-caja.oro .rb-caja-i{background:#f5cf6b;color:#3a2a00}
+  .rb-caja.vivo{border-color:rgba(124,77,255,.55)}.rb-caja.vivo .rb-caja-i{background:#7c4dff;color:#fff}
+  .rb-caja.luego{opacity:.82}
+  .rb-op.respondio{border-color:#f5cf6b!important;background:linear-gradient(180deg,rgba(245,207,107,.16),rgba(245,207,107,.04))!important;box-shadow:0 0 14px rgba(245,207,107,.18)}
+  .rb-prov-oro{padding:12px;border-radius:14px;border:1px solid #f5cf6b;background:linear-gradient(135deg,rgba(245,207,107,.22),rgba(245,207,107,.05));margin:4px 0 10px}
+  .rb-xl table td small,.rb-copias td small{display:block;font-size:.62rem;opacity:.65}.rb-xl tr.t td{font-weight:700}.rb-xl tr.oro td{font-weight:800;color:#f5cf6b;border-top:1px solid rgba(245,207,107,.5)}
+  .rb-rep{display:flex;align-items:center;gap:10px;padding:8px 10px;margin:5px 0;border-radius:12px;background:rgba(255,255,255,.05)}.rb-rep>span{font-size:1.2rem}.rb-rep>div{flex:1;min-width:0}.rb-rep small{display:block;font-size:.66rem;opacity:.7}
+  .rb-inv-c{padding:10px 12px;border-radius:14px;background:rgba(94,240,176,.07);border:1px solid rgba(94,240,176,.35);margin-bottom:8px}
+  .rb-inv{padding:12px;border-radius:16px;margin:8px 0;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04)}.rb-inv.toca{border-color:#f5cf6b;box-shadow:0 0 16px rgba(245,207,107,.2)}.rb-inv.activo{border-color:rgba(94,240,176,.5)}
+  .rb-inv-flecha{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:.8rem}.rb-inv-flecha b{font-size:1.15rem;color:#5ef0b0}
   .rb-cmd{font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:8px 10px;margin:6px 0;overflow-wrap:anywhere;user-select:all}
   .rb-firma-ok{display:flex;gap:10px;align-items:center;padding:10px;border-radius:14px;border:1px solid rgba(183,140,255,.45);background:rgba(183,140,255,.08);margin:6px 0}
   .rb-firma-ok img{height:46px;max-width:120px;object-fit:contain;background:#fff;border-radius:8px;padding:3px}
@@ -379,6 +397,7 @@
   .rb-mas{margin-top:18px}
   .rb-portal{display:flex;gap:4px;margin:0 0 10px;padding:4px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1)}
   .rb-portal button{flex:1;border:0;background:none;color:#a9b8d9;font:inherit;font-size:.82rem;font-weight:800;padding:8px 0;border-radius:10px;cursor:pointer}
+  .rb-portal button{font-size:.74rem;padding:8px 2px;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
   .rb-portal button.on{background:linear-gradient(180deg,#fff0bd,#f5cf6b 45%,#c48f17);color:#2a1a00;box-shadow:0 4px 14px rgba(245,190,70,.3)}
   .rb-plazo{margin:8px 0;padding:10px;border-radius:14px;border:1px solid rgba(94,240,176,.4);background:rgba(94,240,176,.08);font-size:.8rem}
   .rb-plazo.nuevo{border-color:rgba(245,207,107,.7);background:rgba(245,207,107,.1)}.rb-plazo.pronto{border-color:rgba(255,190,80,.7);background:rgba(255,190,80,.1)}
@@ -1546,7 +1565,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       ${queComprar(t).map((x) => `<div class="rb-qc"><span class="n">${esc(x.cantidad ?? "")}<small>${esc(x.unidad || "")}</small></span><div><b>${esc(x.que)}</b>${x.tipo ? ` <span class="rb-cp">${x.tipo === "servicio" ? "🛠 servicio" : "📦 producto"}</span>` : ""}
         ${x.detalle ? `<div class="muted">${esc(String(x.detalle).slice(0, 180))}</div>` : ""}${x.ojo ? `<div class="rb-ojo">👁 ${esc(x.ojo)}</div>` : ""}</div></div>`).join("")}
       ${!(inf.que_comprar || []).length ? `<div class="muted" style="font-size:.66rem">⟳ El robot está interpretando la OC como experto del rubro…</div>` : ""}</div>`;
-    let cuerpoS = "";
+    const etapaHTML = (E) => { let cuerpoS = "";
     if (E === "operacion") {
       const C = candsDe(t), cont = op.contactados || {}, cots = op.cotizaciones || {}, desc = op.descartados || {};
       const hechos = C.filter((o) => cont[o.k]).length, meta = 4;
@@ -1564,7 +1583,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
           ${chatBox(t, o)}
           <label class="rb-lab" style="margin-top:4px">💲 Precio que te dio (total con IVA)<input class="rb-cot-in" inputmode="numeric" data-c="${esc(cod)}" data-k="${esc(o.k)}" data-n="${esc(o.proveedor)}" value="${q ? Number(q.v).toLocaleString("es-CL") : ""}" placeholder="${o.total_con_iva ? Number(o.total_con_iva).toLocaleString("es-CL") : "Ej: 850.000"}"></label>
           ${(q || r) && !desc[o.k] ? `<div class="rb-cerraste"><span>🤝 ¿Cerraste con ${esc(o.proveedor.split(" ")[0])}?</span><button class="btn small rb-oro" type="button" data-rb="ej-cerre" data-c="${esc(cod)}" data-k="${esc(o.k)}">Sí, cerré</button><button class="btn small" type="button" data-rb="ej-descartar" data-c="${esc(cod)}" data-k="${esc(o.k)}">No</button></div>` : ""}</div>`; };
-      cuerpoS = (op.etapa === "previa" ? `<div class="rb-sug" style="border-color:#5ef0b0">📞 <b>Aún sin OC:</b> vas 1°. Adelanta precios y stock con un toque, sin comprar todavía.</div>` : "") + lista + bloqueCliente + plazoBox + `
+      cuerpoS = (op.etapa === "previa" ? `<div class="rb-sug" style="border-color:#5ef0b0">📞 <b>Aún sin OC:</b> vas 1°. Adelanta precios y stock con un toque, sin comprar todavía.</div>` : "") + bloqueCliente + `
       <div class="rb-mision"><div class="rb-env"><b>🎯 Misión: pide precio a ${meta} proveedores</b><b>${Math.min(hechos, meta)}/${meta}</b></div>
         <div class="rb-barra"><i style="width:${Math.min(100, hechos / meta * 100)}%"></i></div>
         ${conMail.length ? `<button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-mail-todos" data-c="${esc(cod)}">📨 Pedir precio a ${conMail.length} por correo · 1 toque</button>` : ""}
@@ -1580,7 +1599,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       const monto = (Number(op.precio_acordado) || 0);
       const datos = `Pago negocio ${cod}\nProveedor: ${op.proveedor || ""}\nMonto: ${clp(monto)}\n${op.banco_proveedor || "(faltan los datos de la cuenta)"}`;
       const docs = op.docs || [], comp = docs.filter((d) => d.tipo === "comprobante").pop();
-      cuerpoS = plazoBox + lista + `<div class="rb-sec">💸 Pagar a ${esc(op.proveedor || "proveedor")}</div>
+      cuerpoS = `<div class="rb-sec">💸 Pagar a ${esc(op.proveedor || "proveedor")}</div>
       <div class="rb-pagar"><div class="rb-env"><span>Monto a transferir</span><b style="font-size:1.25rem">${clp(monto)}</b></div>
         <div class="muted" style="font-size:.74rem;white-space:pre-line">${op.banco_proveedor ? "🏦 " + esc(op.banco_proveedor) : "🏦 Falta su cuenta corriente para transferir."}</div></div>
       ${!op.banco_proveedor ? `<div class="rb-row">${op.proveedor_email ? `<button class="btn small rb-oro" type="button" data-rb="ej-mail-tipo" data-tipo="banco" data-c="${esc(cod)}">📨 Pedirle sus datos de transferencia</button>` : ""}
@@ -1601,7 +1620,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       const km = Number(op.km) || 0, tarifa = enStgo && km ? km * TARIFA_KM_STGO : null;
       const zonaFlete = z.slug ? `https://www.facebook.com/marketplace/${z.slug}/search/?query=${encodeURIComponent("fletes")}` : `https://www.facebook.com/marketplace/search/?query=${encodeURIComponent("flete " + (z.comuna || ""))}`;
       const msgFlete = `Hola, necesito un flete para un trabajo de ${empN}:\n• Retiro: ${op.origen_flete || op.proveedor || "(dirección del proveedor)"}\n• Entrega: ${dir}${op.plazo_fecha ? "\n• Fecha: " + op.plazo_fecha : ""}\n• Carga:\n${lineas}\n¿Estás disponible y cuánto me cobras? El receptor debe firmar la guía de despacho y me mandas la foto. Gracias.`;
-      cuerpoS = plazoBox + lista + `<div class="rb-sec">🚚 ¿Cómo llega al cliente?</div>
+      cuerpoS = `<div class="rb-sec">🚚 ¿Cómo llega al cliente?</div>
       <div class="rb-etapas rb-modos">${chip("servicio", "🏭 El proveedor hace todo")}${chip("proveedor", "🚚 El proveedor despacha")}${chip("flete", "🛻 Contrato flete")}</div>
       <div class="rb-kv"><span>📍 <b>${esc(dir || "sin dirección")}</b></span>${contacto ? `<span>👤 ${esc(contacto)}</span>` : ""}</div>
       ${!dir || !contacto ? `<div class="rb-row">${(oc.mail || inf.comprador?.email) ? `<button class="btn small rb-oro" type="button" data-rb="ej-mail-tipo" data-tipo="entrega" data-c="${esc(cod)}">📨 Pedir datos de entrega al cliente</button>` : ""}</div>` : ""}
@@ -1623,7 +1642,6 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       const servi = (op.despacho_modo || (queComprar(t).some((x) => x.tipo === "servicio") ? "servicio" : "")) === "servicio";
       cuerpoS = `<div class="rb-trayecto"><i class="rb-luz grande"></i><div><b>${servi ? "SERVICIO EN CURSO" : "EN TRAYECTO"}</b><div class="muted">${esc(op.transportista || op.proveedor || "")}${op.vehiculo ? " · " + esc(op.vehiculo) : ""}${op.patente ? " · " + esc(op.patente) : ""}</div></div></div>
       <div class="rb-kv"><span>Despacho <b>${clp(op.costo_transporte || 0)}</b></span>${op.transportista_tel ? `<span><a href="tel:${esc(telNum(op.transportista_tel))}">📞 ${esc(op.transportista_tel)}</a></span>` : ""}<span>📍 ${esc(dir)}</span>${op.entrega_contacto ? `<span>👤 ${esc(op.entrega_contacto)}</span>` : ""}</div>
-      ${plazoBox}${lista}
       <div class="rb-row"><button class="btn rb-oro" type="button" data-rb="ej-doc" data-t="guia" data-c="${esc(cod)}">📄 Guía + recepción conforme</button><button class="btn" type="button" data-rb="ej-doc" data-t="factura" data-c="${esc(cod)}">🧾 Factura (borrador)</button></div>
       <div class="rb-row"><a class="btn small" href="https://wa.me/${waNum(op.transportista_tel) || ""}?text=${encodeURIComponent(msgT)}" target="_blank" rel="noopener">💬 Mandar la guía al transportista</a></div>
       <details class="rb-det"><summary>🏛 Emitir en el SII (documento válido)</summary>${docsSIIg(t).replace(/<button class="btn rb-firmar"[^>]*data-e="despacho"[\s\S]*?<\/button>/, "")}</details>
@@ -1639,11 +1657,105 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       <div class="muted" style="font-size:.68rem">Al cerrar, el inversionista recibe «negocio OK» y su Excel se rehace con los costos reales.</div>
       ${bloqueVivo(t)}`;
     } else cuerpoS = eerrNegocio(t);
+    return cuerpoS; };
+    // 📦 el negocio en CAJAS: cada paso se abre al tocarlo; abierta solo la del paso en que vas
+    const ORDEN = ["operacion", "pago", "transporte", "despacho", "entrega", "cerrado"], iE = ORDEN.indexOf(E);
+    const est = (e) => (ORDEN.indexOf(e) < iE ? "hecho" : e === E ? "ahora" : "luego");
+    const caja = (id, titulo, sub, estado, html, def) => { const key = cod + ":" + id, ab = (R.cajaAb || {})[key] ?? def;
+      return `<details class="rb-caja ${estado}" data-caja="${esc(key)}" ${ab ? "open" : ""}><summary><span class="rb-caja-i">${estado === "hecho" || estado === "oro" ? "✓" : estado === "ahora" ? "●" : "○"}</span><span class="rb-caja-t">${titulo}</span><span class="rb-caja-s">${sub}</span></summary><div class="rb-caja-b">${html}</div></details>`; };
+    const Cn = candsDe(t), contN = Cn.filter((o) => (op.contactados || {})[o.k]).length, respN = new Set((op.respuestas || []).filter((r) => r.quien === "proveedor" || r.precio).map((r) => r.k)).size;
+    const X = calcNeg(t), elegido = op.precio_acordado && op.proveedor;
+    const oroProv = elegido ? `<div class="rb-prov-oro"><div class="rb-env"><b>🥇 ${esc(op.proveedor)}</b><b>${clp(op.precio_acordado)}</b></div>
+        <div class="muted" style="font-size:.72rem">${op.banco_proveedor ? "🏦 " + esc(op.banco_proveedor) : "🏦 falta su cuenta corriente o link de pago"}</div>
+        <div class="rb-row">${!op.pedido_transferencia ? `<button class="btn small rb-oro" type="button" data-rb="ej-pedir-pago" data-c="${esc(cod)}">💼 Pedir la inversión: ${clp(X.capital)}</button>` : `<span class="rb-pill verde">${op.transferido ? "✅ pagado" : "🔔 inversionista avisado"}</span>`}</div></div>` : "";
+    const cajas = [
+      caja("orden", "📋 La orden", `${clp(k.venta)}${op.plazo_fecha ? " · entrega " + esc(new Date(op.plazo_fecha + "T12:00").toLocaleDateString("es-CL", { day: "numeric", month: "short" })) : " · falta fecha"}`, op.plazo_fecha ? "hecho" : "ahora", lista + plazoBox, !op.plazo_fecha && E === "operacion"),
+      caja("prov", "🤝 Contacto con proveedores", elegido ? `🥇 ${esc(String(op.proveedor).slice(0, 22))} · ${clp(op.precio_acordado)}` : `${contN}/${Cn.length} contactados · ${respN} respondieron`, elegido ? "oro" : est("operacion"), oroProv + etapaHTML("operacion"), E === "operacion" && !!op.plazo_fecha),
+      caja("inv", "💼 Inversionista y pago", op.transferido || op.proveedor_pagado ? "✅ pagado" : op.pedido_transferencia ? "🔔 esperando la inversión" : elegido ? "listo para pedir" : "después de elegir proveedor", op.transferido || op.proveedor_pagado ? "oro" : est("pago"), bloqueInversion(t, X) + (elegido ? etapaHTML("pago") : ""), E === "pago"),
+      caja("excel", "📊 Excel en vivo", X.compras ? `utilidad ${clp(X.final)} · ${X.fuente}` : "esperando precio", X.compras ? "vivo" : "luego", excelVivo(t, X), false),
+      caja("terreno", "🚚 Terreno (en vivo)", E === "despacho" ? (op.en_vivo ? "🔴 transmitiendo" : "en trayecto") : iE > 3 ? "✓ entregado" : "despacho y transmisión", est(E === "despacho" ? "despacho" : "transporte"), E === "despacho" ? etapaHTML("despacho") : etapaHTML("transporte") + bloqueVivo(t), E === "transporte" || E === "despacho"),
+      caja("docs", "🧾 Guía, factura y recepción", (op.docs || []).some((d) => d.tipo === "guia") ? "✓ guía firmada" : "guía, factura y firma del cliente", est("entrega"), etapaHTML("entrega"), E === "entrega"),
+      caja("fact", "💸 Factoring y reparto", op.cerrado ? "🥇 cerrado" : "al cerrar", E === "cerrado" ? "oro" : "luego", repartoHTML(t, X) + eerrNegocio(t), E === "cerrado"),
+    ].join("");
     return `<div class="rb-neg ${E === "cerrado" ? "cerrado" : ""}">
       <div class="rb-env" data-rb="ej-cerrar-card" data-c="${esc(cod)}" style="cursor:pointer"><div style="min-width:0"><div style="font-size:.74rem"><b>${esc(cod)}</b>${ocN ? " · OC " + esc(ocN) : ""} <span class="muted">▲ cerrar</span></div><div class="rb-fnom">${esc(t.nombre || "")}</div>
         <div class="muted" style="font-size:.72rem">${esc(t.oc_compra?.organismo || t.organismo || "")}${dir ? " · " + esc(dir.slice(0, 60)) : ""}</div></div>
         <div style="text-align:right"><div style="font-size:.62rem;opacity:.75">VENTA</div><b>${clp(k.venta)}</b></div></div>
-      ${cuerpoS}</div>`;
+      ${cajas}</div>`;
+  }
+  // 🧮 el Excel del inversionista, en vivo (mismas fórmulas que la planilla: factoring, IVA, impuesto 27 %, comisión y reparto)
+  const PARAM_NEG = { factoring: 0.03, impuesto: 0.27, comision: 0.04, aplica_comision: true, julfior: 0.844, inversionista: 0.156, recargo_sin_factura: 0.25, anticipo: 0.90, transporte: 0, ejecutador: 0.10 };
+  function calcNeg(t) {
+    const op = t.op || {}, inf = op.informe || {}, p = { ...PARAM_NEG, ...(op.param || {}) };
+    const total = Number(t.oc_compra?.total || t.total) || 0;
+    const cot = candsDe(t).map((o) => (op.cotizaciones || {})[o.k]?.v).filter(Boolean).sort((a, b) => a - b)[0];
+    const compras = Number(op.precio_acordado) || cot || Number(inf.compras) || 0;
+    const fuente = op.precio_acordado ? "precio acordado" : cot ? "mejor cotización" : inf.compras ? "estimado" : "sin precio";
+    const transporte = Number(op.costo_transporte) || p.transporte || 0;
+    const neto = Math.round(total / 1.19), iva = total - neto, factoring = total * p.factoring, ingreso = total - factoring;
+    const iva_compra = compras - compras / 1.19, iva_pagar = Math.max(0, iva - iva_compra), recargo = 0;
+    const utilidad = ingreso - compras - iva_pagar - recargo - transporte, impuesto = Math.max(0, utilidad) * p.impuesto, repartir = utilidad - impuesto;
+    const comision = p.aplica_comision ? Math.max(0, repartir) * p.comision : 0, final = repartir - comision;
+    const capital = compras * p.anticipo, invGan = final * p.inversionista, ejec = Math.max(0, final) * p.ejecutador, empresa = final - invGan - ejec;
+    return { p, total, neto, iva, factoring, ingreso, compras, fuente, transporte, iva_compra, iva_pagar, recargo, utilidad, impuesto, repartir, comision, final,
+      capital, invGan, invRecibe: capital + invGan, invPct: capital ? invGan / capital : 0, ejec, empresa, jugador: comision };
+  }
+  function excelVivo(t, X) {
+    if (!X.compras) return `<div class="muted" style="font-size:.74rem">El Excel se llena solo apenas haya un precio de proveedor (cotización o acordado).</div>`;
+    const f = (a, v, cls, nota) => `<tr class="${cls || ""}"><td>${a}${nota ? `<small>${nota}</small>` : ""}</td><td class="n">${clp(Math.round(v))}</td></tr>`, pc = (x) => (x * 100).toLocaleString("es-CL", { maximumFractionDigits: 1 }) + "%";
+    return `<div class="rb-xl"><div class="rb-env"><b><i class="rb-luz"></i> NEGOCIO</b><span class="muted" style="font-size:.68rem">compras: ${esc(X.fuente)} · se recalcula con cada cambio</span></div>
+      <table class="rb-copias">${f("Venta neta", X.neto)}${f("IVA (19 %)", X.iva)}${f("Total OC", X.total, "t")}${f("− Factoring", -X.factoring, "", pc(X.p.factoring))}${f("= Ingreso final", X.ingreso, "t")}
+        ${f("− Compras (con factura)", -X.compras)}${f("− IVA a pagar al SII", -X.iva_pagar, "", "débito − crédito")}${X.transporte ? f("− Transporte", -X.transporte) : ""}${f("= Utilidad", X.utilidad, "t")}
+        ${f("− Impuesto", -X.impuesto, "", pc(X.p.impuesto))}${f("= Utilidad a repartir", X.repartir, "t")}${f("− Comisión jugador", -X.comision, "", pc(X.p.comision))}${f("= Utilidad final", X.final, "oro")}</table>
+      ${repartoHTML(t, X, true)}
+      <div class="rb-row"><button class="btn small rb-firmar" type="button" data-rb="neg-archivo" data-t="excel" data-c="${esc(t.codigo)}">📊 Descargar la planilla</button></div></div>`;
+  }
+  function repartoHTML(t, X, corto) {
+    if (!X.compras) return "";
+    const pc = (x) => Math.round(x * 1000) / 10 + "%";
+    const fila = (ico, quien, monto, det) => `<div class="rb-rep"><span>${ico}</span><div><b>${quien}</b><small>${det}</small></div><b>${clp(Math.round(monto))}</b></div>`;
+    return `<div class="rb-sec">🤝 Reparto: todos ganan</div>
+      ${fila("💼", "Inversionista", X.invRecibe, `invierte ${clp(Math.round(X.capital))} → gana ${clp(Math.round(X.invGan))} (+${pc(X.invPct)})`)}
+      ${fila("🚚", "Ejecutador", X.ejec, `${pc(X.p.ejecutador)} de la utilidad final`)}
+      ${fila("🎮", "Jugador", X.jugador, `comisión ${pc(X.p.comision)} por traer el negocio`)}
+      ${fila("🏢", "Empresa", X.empresa, "el resto de la utilidad final")}
+      ${corto ? "" : `${fila("🏛", "SII", X.iva_pagar + X.impuesto, "IVA a pagar + impuesto")}${fila("💰", "Factoring", X.factoring, pc(X.p.factoring) + " de la OC")}`}`;
+  }
+  // 💼 lo que ve el inversionista en cada negocio: cuánto pone, cuánto recibe y a quién le paga
+  function bloqueInversion(t, X) {
+    const op = t.op || {}, emp = empresaActual() || {};
+    if (!X.compras) return `<div class="muted" style="font-size:.74rem">Cuando haya precio de proveedor, aquí aparece cuánto invierte el inversionista y cuánto recibe.</div>`;
+    return `<div class="rb-inv-c"><div class="rb-env"><span>Invierte</span><b>${clp(Math.round(X.capital))}</b></div><div class="rb-env"><span>Recibe al cobrar</span><b class="rb-vivo-t">${clp(Math.round(X.invRecibe))}</b></div>
+      <div class="muted" style="font-size:.7rem">+${Math.round(X.invPct * 1000) / 10}% · el Estado paga a 30 días (o antes con factoring). Paga a ${esc(emp.razon_social || "la empresa")} y la empresa le paga al proveedor.</div>
+      ${op.pedido_transferencia && !op.transferido ? `<div class="rb-sug" style="border-color:#f5cf6b">🏦 ${emp.banco ? esc(emp.banco) : "Faltan los datos de transferencia de la empresa (🏢 empresa → banco)."}</div>` : ""}</div>`;
+  }
+  // 💼 PORTAL INVERSIONISTA: los negocios que necesitan capital, en vivo
+  function portalInversion() {
+    if (!tienePlan("premium")) return candado("premium", "💼 Inversión");
+    if (!R.ejec) { cargarEjecuta(); return `<div class="empty"><span class="spinner"></span> Cargando negocios…</div>`; }
+    const emp = empresaActual() || {};
+    const L = (R.ejec || []).filter((t) => t.op && t.op.etapa !== "rechazada").map((t) => ({ t, X: calcNeg(t) })).filter((x) => x.X.compras);
+    const toca = L.filter(({ t }) => t.op.pedido_transferencia && !t.op.transferido), activos = L.filter(({ t }) => t.op.transferido && !t.op.cerrado), abiertos = L.filter(({ t }) => !t.op.pedido_transferencia);
+    const tot = activos.reduce((a, x) => ({ c: a.c + x.X.capital, g: a.g + x.X.invGan }), { c: 0, g: 0 });
+    const card = ({ t, X }, modo) => `<div class="rb-inv ${modo}"><div class="rb-env"><div style="min-width:0"><b>${esc((t.nombre || t.codigo).slice(0, 60))}</b><div class="muted" style="font-size:.7rem">${esc((t.oc_compra?.organismo || t.organismo || "").slice(0, 50))}${t.op.oc_codigo ? " · OC " + esc(t.op.oc_codigo) : ""}</div></div>
+        <div style="text-align:right"><div class="muted" style="font-size:.6rem">INVIERTES</div><b>${clp(Math.round(X.capital))}</b></div></div>
+      <div class="rb-inv-flecha"><span>Recibes</span><b>${clp(Math.round(X.invRecibe))}</b><span class="rb-pill verde">+${Math.round(X.invPct * 1000) / 10}%</span></div>
+      <div class="muted" style="font-size:.68rem">Proveedor: ${esc(t.op.proveedor || "negociando…")} · ${esc(X.fuente)} · ${t.op.en_vivo ? "🔴 en vivo ahora" : esc(({ operacion: "🤝 proveedores", pago: "💸 pago", transporte: "🚚 despacho", despacho: "🛣 en trayecto", entrega: "📦 recepción", cerrado: "🥇 cerrado" })[etEj(t)] || "")}</div>
+      ${modo === "toca" ? `<div class="rb-sug" style="border-color:#f5cf6b">🏦 Transfiere a <b>${esc(emp.razon_social || "la empresa")}</b>${emp.banco ? "<br>" + esc(emp.banco) : ""}</div>
+        <div class="rb-row"><button class="btn small" type="button" data-rb="cp" data-v="${esc(`Inversión ${t.codigo}
+${clp(Math.round(X.capital))}
+${emp.razon_social || ""}
+${emp.banco || ""}`)}">📋 Copiar datos</button>
+          <button class="btn small" type="button" data-rb="neg-subir" data-tipo="comprobante" data-c="${esc(t.codigo)}">📎 Comprobante</button>
+          <button class="btn small rb-oro" type="button" data-rb="inv-transferi" data-c="${esc(t.codigo)}">✅ Ya transferí</button></div>` : ""}
+      ${t.op.en_vivo && t.op.twitch_canal ? `<a class="btn small" href="https://www.twitch.tv/${encodeURIComponent(t.op.twitch_canal)}" target="_blank" rel="noopener">🔴 Ver la entrega en vivo</a>` : ""}</div>`;
+    return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">💼 Inversión</h2><span class="muted" style="font-size:.7rem">en vivo</span></div>
+      <div class="rb-tira"><span>💰 <b>${cortoG(tot.c)}</b> invertido</span><span>📈 <b>+${cortoG(tot.g)}</b> por cobrar</span><span>🔔 <b>${toca.length}</b> por invertir</span></div>
+      ${toca.length ? `<div class="rb-sec">🔔 Te toca invertir</div>${toca.map((x) => card(x, "toca")).join("")}` : ""}
+      ${activos.length ? `<div class="rb-sec">🟢 Tu plata trabajando</div>${activos.map((x) => card(x, "activo")).join("")}` : ""}
+      ${abiertos.length ? `<div class="rb-sec">👀 Próximos negocios (negociando proveedor)</div>${abiertos.map((x) => card(x, "prox")).join("")}` : ""}
+      ${!L.length ? `<div class="empty">Aún no hay negocios con precio. Cuando un proveedor cotice, aparece aquí cuánto inviertes y cuánto recibes.</div>` : ""}
+      <div class="muted" style="font-size:.66rem;margin-top:8px">Montos según el Excel del negocio (factoring ${PARAM_NEG.factoring * 100}%, impuesto ${PARAM_NEG.impuesto * 100}%, inversionista ${PARAM_NEG.inversionista * 100}% de la utilidad final). Rentabilidad estimada, no garantizada.</div></div>`;
   }
   const FACT = "sdc:factorings";
   const factorings = () => { try { return JSON.parse(localStorage.getItem(FACT)) || []; } catch { return []; } };
@@ -2811,7 +2923,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         <span class="rb-pcs" title="${conectado ? "PC conectado" : "PC desconectado"}"><i class="${conectado ? "on" : ""}"></i>PC<i class="${mp?.conectado ? "on" : ""}"></i>MP</span>
         <button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
         <button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
-        <div class="rb-portal"><button type="button" class="${!["ejecuta", "licita"].includes(leer().portal) ? "on" : ""}" data-rb="portal" data-v="juego">🎮 Juego</button><button type="button" class="${leer().portal === "licita" ? "on" : ""}" data-rb="portal" data-v="licita">📑 Licitaciones</button><button type="button" class="${leer().portal === "ejecuta" ? "on" : ""}" data-rb="portal" data-v="ejecuta">🛠 Ejecuta</button></div>`;
+        <div class="rb-portal"><button type="button" class="${!["ejecuta", "licita", "inversion"].includes(leer().portal) ? "on" : ""}" data-rb="portal" data-v="juego">🎮 Juego</button><button type="button" class="${leer().portal === "licita" ? "on" : ""}" data-rb="portal" data-v="licita">📑 Licita</button><button type="button" class="${leer().portal === "ejecuta" ? "on" : ""}" data-rb="portal" data-v="ejecuta">🛠 Ejecuta</button><button type="button" class="${leer().portal === "inversion" ? "on" : ""}" data-rb="portal" data-v="inversion">💼 Inversión</button></div>`;
       // 🏆 portada: cada vez que abres la app (y siempre que no haya empresa). Sin formularios: RUT → jugar.
       if (!miEmp() || !portadaVista()) { if (!R.oport) cargarOport(); return pantallaPortada(); }
       let cuerpo;
@@ -2823,7 +2935,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       else if (R.pantalla === "global") cuerpo = pantallaGlobal();
       else if (R.pantalla === "planes") cuerpo = pantallaPlanes();
       else { if (!esDueno() && (!R.planT || Date.now() - R.planT > 300000)) setTimeout(cargarPlan, 0);
-        cuerpo = (leer().portal === "ejecuta" ? (tienePlan("medio") ? portalEjecuta() : candado("medio", "🛠 Ejecuta")) : leer().portal === "licita" ? (tienePlan("medio") ? portalLicita() : candado("medio", "📑 Licitaciones")) : vistaOport()); }
+        cuerpo = (leer().portal === "ejecuta" ? (tienePlan("medio") ? portalEjecuta() : candado("medio", "🛠 Ejecuta")) : leer().portal === "licita" ? (tienePlan("medio") ? portalLicita() : candado("medio", "📑 Licitaciones")) : leer().portal === "inversion" ? portalInversion() : vistaOport()); }
       const mas = `<details class="rb-ajustes rb-mas"><summary>⚙ Más opciones</summary>
         ${!conectado ? `<div class="rb-alertas"><b>PC desconectado</b>${r?.visto ? "Visto " + esc(hace(r.visto)) + ". " : ""}Abre el robot en el PC.</div>` : ""}
         ${mp?.conectado ? "" : `<button class="btn small rb-oro" data-rb="conectar-mp" type="button" style="margin:8px 0">Conectar tu Mercado Público</button>`}
@@ -2961,6 +3073,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const barra = ev.target.closest(".rb-top2, .rb-portal, .rb-h"); if (!barra || ev.target.closest("button:not(.rb-portal button),a,input,textarea,select")) return;
     const n = Date.now(); if (n - (R._tapT || 0) < 400) { R._tapT = 0; volverAlOrigen(); } else R._tapT = n;
   });
+  sheet.addEventListener("toggle", (ev) => { const d = ev.target; if (d?.dataset?.caja) { R.cajaAb = R.cajaAb || {}; R.cajaAb[d.dataset.caja] = d.open; } }, true);
   sheet.addEventListener("dblclick", (ev) => { if (ev.target.closest(".rb-top2, .rb-portal")) { ev.preventDefault(); volverAlOrigen(); } });
   sheet.addEventListener("click", async (ev) => {
     const b = ev.target.closest("[data-rb]"); if (!b) return;
@@ -3172,6 +3285,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       try { const r = await api("plan", { method: "POST", body: JSON.stringify({ jugador: miJug(), plan: k, nombre: persona()?.nombre || "", telefono: persona()?.telefono || "" }) }); R.plan = r.plan; } catch (e) { toast(e.message); return; }
       if (link) window.open(link, "_blank"); else toast("💎 Plan pedido: te contactamos para el pago y se activa al confirmarlo");
       return pintarHoja(true); }
+    if (a === "inv-transferi") return ejOpVivo(cod, { transferido: true }, "✅ Inversión registrada: la empresa paga al proveedor");
     if (a === "nube-aprobar" || a === "nube-rechazar") {
       try { await api("nube-aprobar", { method: "POST", body: JSON.stringify({ id: b.dataset.v, rechazar: a === "nube-rechazar" }) }); toast(a === "nube-aprobar" ? "✅ Servidor aprobado: se está instalando" : "Solicitud rechazada"); R.nubeT = 0; await cargarNube(); } catch (e) { toast(e.message); } return; }
     if (a === "nube-copiar") { const ok = await copiar(b.dataset.v || ""); toast(ok ? "📋 Copiado" : "No se pudo copiar"); return; }
