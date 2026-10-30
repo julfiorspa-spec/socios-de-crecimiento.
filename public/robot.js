@@ -170,6 +170,14 @@
   .rb-modos button{flex:1}
   .rb-eerr{margin-top:8px}.rb-hitos{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.rb-hito{font-size:.66rem;padding:3px 7px;border-radius:9px;background:rgba(255,255,255,.07)}.rb-hito span{opacity:.7;margin-right:4px}
   .rb-pill.verde{border-color:#5ef0b0;color:#c9ffe8}
+  .rb-candado{text-align:center;padding:28px 16px;border-radius:18px;border:1px dashed rgba(245,207,107,.5);margin:12px 0;display:flex;flex-direction:column;gap:8px;align-items:center}
+  .rb-plan-c{padding:14px;border-radius:18px;border:1px solid rgba(255,255,255,.14);margin:10px 0;background:rgba(255,255,255,.04)}.rb-plan-c.medio{border-color:rgba(245,207,107,.6)}.rb-plan-c.premium{border-color:#b78cff;background:linear-gradient(180deg,rgba(183,140,255,.12),rgba(245,207,107,.06))}.rb-plan-c.on{box-shadow:0 0 0 2px #5ef0b0}
+  .rb-precio{font-size:1.15rem;color:#f5cf6b}.rb-precio small{font-size:.65rem;opacity:.8;margin-left:2px}
+  .rb-vivo{margin:8px 0;padding:10px;border-radius:14px;border:1px solid rgba(255,90,90,.45);background:rgba(255,90,90,.06)}.rb-vivo.on{border-color:#ff4d4d;box-shadow:0 0 18px rgba(255,77,77,.25)}
+  .rb-luz.rojo{background:#ff4d4d;box-shadow:0 0 10px #ff4d4d}.rb-tw{position:relative;padding-top:56.25%;border-radius:12px;overflow:hidden;margin:6px 0}.rb-tw iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+  .rb-glob{display:block!important;text-align:left;width:100%}.rb-glob b{display:block;margin-bottom:2px}.rb-glob span{display:block;font-size:.68rem;opacity:.8;white-space:normal!important;overflow-wrap:anywhere;text-overflow:clip!important;overflow:visible!important}
+  .rb-link{background:none;border:0;color:inherit;padding:0;text-align:left;font:inherit;cursor:pointer}
+  .rb-acciones{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
   .rb-firma-ok{display:flex;gap:10px;align-items:center;padding:10px;border-radius:14px;border:1px solid rgba(183,140,255,.45);background:rgba(183,140,255,.08);margin:6px 0}
   .rb-firma-ok img{height:46px;max-width:120px;object-fit:contain;background:#fff;border-radius:8px;padding:3px}
   .rb-licmatch{border-color:#b78cff}.rb-mesa{border-color:rgba(183,140,255,.6)}
@@ -302,6 +310,8 @@
   #rbSheet .rb-m.azul{background:linear-gradient(160deg,rgba(120,180,255,.20),rgba(40,80,160,.10))}
   #rbSheet .rb-m.violeta{background:linear-gradient(160deg,rgba(190,160,255,.20),rgba(90,60,180,.10))}
   .rb-filtros{display:flex;gap:6px;overflow-x:auto;margin:6px -14px;padding:2px 14px 4px;scrollbar-width:none}.rb-filtros::-webkit-scrollbar{display:none}.rb-filtros .btn{flex:0 0 auto}
+  .rb-oq{flex:0 0 auto;display:flex;align-items:center;gap:4px;padding:0 8px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);font-size:.8rem}.rb-oq.on{border-color:#f5cf6b;background:rgba(245,207,107,.12)}
+  .rb-oq input{width:120px;background:transparent;border:0;outline:0;color:inherit;font-size:16px;padding:6px 0}.rb-oq input::-webkit-search-cancel-button{display:none}.rb-oq button{background:none;border:0;color:inherit;font-size:.85rem;padding:2px 4px;cursor:pointer}
   #rbSheet .rb-status{font-size:.78rem;margin:2px 0}
   #rbSheet .rb-vistas{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1)}
   #rbSheet .rb-vistas button.on{background:rgba(245,207,107,.18);color:#ffe9a8}
@@ -336,7 +346,9 @@
   .rb-paso{padding-top:4px}.rb-paso-n{font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:#f5cf6b;font-weight:800}
   #rbSheet .rb-h{font-size:1.45rem;margin:4px 0}.rb-sub{font-size:.8rem;margin-bottom:10px}
   .rb-lab{display:block;font-size:.7rem;color:#a9b8d9;margin-top:8px}
-  .rb-lab input,.rb-in,#rbSheet textarea{display:block;width:100%;margin-top:3px;padding:10px 11px;border-radius:12px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.07);color:#fff;font:inherit;font-size:.88rem;box-sizing:border-box}
+  .rb-lab input,.rb-in,#rbSheet textarea{display:block;width:100%;margin-top:3px;padding:10px 11px;border-radius:12px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.07);color:#fff;font:inherit;font-size:16px;box-sizing:border-box}
+  #rbSheet input,#rbSheet select,#rbSheet textarea{font-size:16px}  /* iPhone no hace zoom al escribir */
+  #rbSheet{touch-action:manipulation}
   .rb-big-btn{width:100%;margin-top:12px;padding:13px!important;font-size:.95rem!important}
   .rb-link{width:100%;margin-top:6px;background:none!important;border:0!important;box-shadow:none!important;opacity:.75}
   .rb-emp-c{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:8px 0}.rb-emp-c.on{border-color:rgba(245,207,107,.7)!important}
@@ -472,7 +484,7 @@
     if (!R.token) throw new Error("Robot sin enlazar");
     if (opt.body && /^(pedir|seleccionar|preguntar|oport-descartar)$/.test(ruta)) {      // cada pedido viaja con TU empresa, tu celular y tu juego
       try { const o = JSON.parse(opt.body); if (!o.empresa && leer().empresa) o.empresa = leer().empresa; if (!o.dispositivo) o.dispositivo = dispositivo(false);
-        o.jugador = miJug(); if (legado()) o.legado = true; opt = { ...opt, body: JSON.stringify(o) }; } catch {}
+        o.jugador = miJug(); if (legado()) o.legado = true; if (!o.persona && typeof persona === "function" && persona()?.nombre) o.persona = persona().nombre; opt = { ...opt, body: JSON.stringify(o) }; } catch {}
     }
     if (/^(seleccionadas|oportunidades|oport-descartes)(\?|$)/.test(ruta)) ruta += (ruta.includes("?") ? "&" : "?") + "jugador=" + miJug() + (legado() ? "&legado=1" : "");
     const r = await fetch("/bot/" + ruta, {
@@ -487,6 +499,8 @@
     return j ? { ...j, _status: r.status } : r;
   }
   const trabajo = (cod) => R.data?.trabajos?.find((t) => t.codigo === String(cod).toUpperCase());
+  // 🌍 el asistente y el informe global ven TODOS los juegos (cada juego sigue siendo independiente para jugar)
+  const trabajoG = (cod) => { const c = String(cod).toUpperCase(); return trabajo(c) || (R.todos || []).find((t) => t.codigo === c) || (R.ejec || []).find((t) => t.codigo === c) || (R.global?.trabajos || []).find((t) => t.codigo === c); };
   // 🏢 cada celular ve y oferta solo con su empresa ("principal" = la del robot del PC)
   const miEmp = () => leer().empresa || null;
   const deMiEmpresa = (x) => !miEmp() || (x?.empresa || "principal") === miEmp();
@@ -655,6 +669,18 @@
   async function estadoPush() {
     try { const reg = await swListo; R.push = !!(reg && await reg.pushManager?.getSubscription()); } catch { R.push = false; }
   }
+  // 👆👆 doble toque arriba: vuelve al inicio (sin zoom, arriba de todo, sin pantallas abiertas)
+  function volverAlOrigen() {
+    try { document.activeElement?.blur(); } catch {}
+    R.pantalla = null; R.detalle = null; R.conf = null; R.ejAbierto = null; R.llamada = null;
+    const vp = document.querySelector('meta[name="viewport"]');
+    if (vp) { const orig = vp.getAttribute("content"); vp.setAttribute("content", orig + ", maximum-scale=1"); setTimeout(() => vp.setAttribute("content", orig), 400); }
+    if (sheet) sheet.scrollTop = 0; window.scrollTo(0, 0);
+    pintarHoja(true); navigator.vibrate?.(12); toast("↩ Volviste al inicio");
+  }
+  async function ejOpVivo(cod, datos, msg) {
+    try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos, dispositivo: dispositivo(false) }) }); if (msg) toast(msg); R.ejecT = 0; await cargarEjecuta(); pintarHoja(true); } catch (e) { toast(e.message); }
+  }
   function pintarHojaSiAbierta() { if (sheet?.classList.contains("on")) pintarHoja(); }
 
   /* ---------------- ciclo de consulta ---------------- */
@@ -668,7 +694,7 @@
       if (r.status === 204) cambio = false;                       // nada nuevo: no se descarga ni se repinta nada
       else if (!r.ok) throw new Error("Error " + r.status);
       else {
-        R.data = filtrarEmpresa(await r.json()); R.ver = r.headers.get("x-version");
+        const crudo = await r.json(); R.todos = crudo.trabajos || []; R.data = filtrarEmpresa(crudo); R.ver = r.headers.get("x-version");
         revisarCambios(R.data.trabajos || []);
         cerrarEnviadas(R.data.trabajos || []);
         aCache("estado2", { data: R.data });
@@ -837,7 +863,8 @@
         <li>Finalizar y enviar · descarga el comprobante. Mejor con 24 h de holgura.</li></ol>`, true) : ""}
       <div class="rb-row" style="margin-top:8px">${t.zip ? `<button class="btn small" data-rb="lic-zip" data-c="${c}" type="button">⬇ Anexos (ZIP)</button>` : ""}
         <button class="btn small" type="button" data-rb="lic-preguntar" data-c="${c}">💬 Pregúntale al robot por estas bases</button>
-        ${t.estado === "lic_lista" ? `<button class="btn small rb-firmar" data-rb="lic-ingresar" data-c="${c}" type="button">🚀 Ingresar al portal</button>` : ""}
+        ${t.estado === "lic_lista" ? `<button class="btn small rb-firmar" data-rb="lic-ingresar" data-c="${c}" type="button">🚀 Ingresar al portal</button>
+          <button class="btn small" type="button" data-rb="lic-ir" data-c="${c}">🌐 Copiar código y abrir para ofertar</button>` : ""}
         ${["requiere", "error", "cancelada"].includes(t.estado) ? `<button class="btn small" data-rb="licitar" data-c="${c}" type="button">Reintentar</button>` : ""}</div>
       ${t.estado === "lic_captcha" ? tarjetaLic(t) : ""}</div>`;
   }
@@ -857,7 +884,12 @@
       : `<div class="empty">${R.oport ? "No hay licitaciones nuevas que calcen con tu rubro. El robot sigue buscando." : `<span class="spinner"></span>`}</div>`;
     else { const L = { prep, mesa, lista: listas, ofer }[tab] || [];
       cuerpo = L.length ? L.map((t) => tab === "prep" || tab === "ofer" ? tarjetaLic(t) : mesaLic(t)).join("") : `<div class="empty">${{ prep: "Nada preparándose. En 💘 Match elige una con «Vamos».", mesa: "Cuando el robot termine de leer las bases, aquí juegan tú y él: precio, garantías, plazos y cómo quedará el proyecto.", lista: "Aún no hay ofertas listas.", ofer: "Aún no hay ofertas ingresadas." }[tab]}</div>`; }
-    return `${cajaFirma()}<div class="rb-etapas">${TABS.map(([k, n, q]) => `<button type="button" class="${tab === k ? "on" : ""}" data-rb="lic-tab" data-e="${k}">${n} ${q}</button>`).join("")}</div>${cuerpo}`;
+    const ingreso = `<div class="rb-mision rb-licod"><div class="rb-env"><b>⚡ ¿Ya tienes el código?</b></div>
+      <div class="rb-row"><input class="rb-in" id="rbLicCod" placeholder="Ej: 2585-77-LE26" autocapitalize="characters" autocorrect="off" spellcheck="false" style="flex:1">
+        <button class="btn rb-oro" type="button" data-rb="lic-codigo">🚀 Empezar</button></div>
+      <div class="rb-row"><a class="btn small" href="https://www.mercadopublico.cl/Home/BusquedaLicitacion" target="_blank" rel="noopener">🔎 Buscar el código en Mercado Público</a>
+        <button class="btn small" type="button" data-rb="lic-pegar">📋 Pegar código</button></div></div>`;
+    return `${cajaFirma()}${ingreso}<div class="rb-etapas">${TABS.map(([k, n, q]) => `<button type="button" class="${tab === k ? "on" : ""}" data-rb="lic-tab" data-e="${k}">${n} ${q}</button>`).join("")}</div>${cuerpo}`;
   }
 
   /* ---------- licitaciones ---------- */
@@ -1449,6 +1481,25 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       ${ex.length < 6 ? `<div class="rb-row"><input class="rb-in" id="rbMkN-${esc(cod)}" placeholder="Nombre del vendedor" style="flex:1"><input class="rb-in" id="rbMkL-${esc(cod)}" placeholder="Link de la publicación (opcional)" style="flex:1"></div>
       <button class="btn small rb-oro" type="button" data-rb="mk-add" data-c="${esc(cod)}">➕ Agregar vendedor</button>` : ""}</div>`;
   }
+  // 🔴 entrega en vivo con los lentes Ray-Ban Meta → Twitch: el inversionista mira y el video queda como prueba de entrega
+  const TW = "sdc:twitch";
+  const twCanal = (t) => (t.op?.twitch_canal || (() => { try { return localStorage.getItem(TW) || ""; } catch { return ""; } })()).replace(/^@/, "").trim();
+  function bloqueVivo(t) {
+    if (!tienePlan("premium")) return `<div class="muted" style="font-size:.7rem;margin:6px 0">🔒 Entrega en vivo con lentes Meta para inversionistas: plan Premium · <button class="rb-link" type="button" data-rb="planes"><u>ver planes</u></button></div>`;
+    const op = t.op || {}, cod = t.codigo, canal = twCanal(t);
+    if (!canal) return `<details class="rb-det rb-vivo"><summary>🔴 Transmitir la entrega en vivo (lentes Meta → Twitch)</summary>
+      <div class="muted" style="font-size:.7rem">El inversionista la ve en directo y el video queda como prueba de entrega.</div>
+      <div class="rb-row"><input class="rb-in" id="rbTw-${esc(cod)}" placeholder="Tu canal de Twitch (ej: pjanic_entregas)" style="flex:1"><button class="btn small rb-oro" type="button" data-rb="tw-guardar" data-c="${esc(cod)}">Guardar</button></div></details>`;
+    const player = `https://player.twitch.tv/?channel=${encodeURIComponent(canal)}&parent=${encodeURIComponent(location.hostname)}&muted=true`;
+    return `<div class="rb-vivo ${op.en_vivo ? "on" : ""}"><div class="rb-env"><b>${op.en_vivo ? '<i class="rb-luz rojo"></i> EN VIVO' : "🔴 Entrega en vivo"}</b><a class="muted" style="font-size:.7rem" href="https://www.twitch.tv/${encodeURIComponent(canal)}" target="_blank" rel="noopener">twitch.tv/${esc(canal)}</a></div>
+      ${op.en_vivo ? `<div class="rb-tw"><iframe src="${player}" allowfullscreen loading="lazy" title="Twitch"></iframe></div>
+        <div class="rb-row"><button class="btn small" type="button" data-rb="tw-fin" data-c="${esc(cod)}">⏹ Terminé la transmisión</button></div>`
+      : `<div class="muted" style="font-size:.7rem">1) Ponte los Ray-Ban Meta · 2) en la app de Twitch: Crear → transmitir con los lentes (si tu app aún no lo tiene, transmite con la cámara del celular) · 3) toca el botón: el inversionista recibe el aviso con el link.</div>
+        <div class="rb-row"><button class="btn rb-oro" type="button" data-rb="tw-inicio" data-c="${esc(cod)}" style="flex:1">🔴 Empezar en vivo</button><button class="btn small" type="button" data-rb="tw-cambiar" data-c="${esc(cod)}">Cambiar canal</button></div>`}
+      ${!op.en_vivo && op.vivo_desde ? `<label class="rb-lab">🎞 Link del video guardado (prueba de entrega)<input class="rb-neg-in" data-campo="video_prueba" data-c="${esc(cod)}" value="${esc(op.video_prueba || "")}" placeholder="https://www.twitch.tv/videos/..."></label>
+        <a class="btn small" href="https://dashboard.twitch.tv/u/${encodeURIComponent(canal)}/content/video-producer" target="_blank" rel="noopener">Buscar el video en Twitch</a>` : ""}
+      ${op.video_prueba ? `<div class="rb-resp nueva">🎞 Prueba de entrega en video: <a href="${esc(op.video_prueba)}" target="_blank" rel="noopener">ver</a></div>` : ""}</div>`;
+  }
   function tarjetaEj(t) {
     const op = t.op || {}, inf = op.informe || {}, et = op.etapa || "operacion", cod = t.codigo;
     const F = (R.fichas || {})[cod]; if (!F && !(R._pidiendo || {})[cod]) setTimeout(() => cargarDocs(cod), 0);
@@ -1575,6 +1626,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       <div class="rb-row"><button class="btn rb-oro" type="button" data-rb="ej-doc" data-t="guia" data-c="${esc(cod)}">📄 Guía + recepción conforme</button><button class="btn" type="button" data-rb="ej-doc" data-t="factura" data-c="${esc(cod)}">🧾 Factura (borrador)</button></div>
       <div class="rb-row"><a class="btn small" href="https://wa.me/${waNum(op.transportista_tel) || ""}?text=${encodeURIComponent(msgT)}" target="_blank" rel="noopener">💬 Mandar la guía al transportista</a></div>
       <details class="rb-det"><summary>🏛 Emitir en el SII (documento válido)</summary>${docsSIIg(t).replace(/<button class="btn rb-firmar"[^>]*data-e="despacho"[\s\S]*?<\/button>/, "")}</details>
+      ${bloqueVivo(t)}
       <button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-etapa" data-e="entrega" data-c="${esc(cod)}">📦 Llegó al cliente → Recepción</button>`;
     } else if (E === "entrega") { const docs = op.docs || [], hay = (tp) => docs.some((d) => d.tipo === tp);
       cuerpoS = `<div class="rb-sec">📦 Recepción conforme</div>
@@ -1583,7 +1635,8 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       <div class="rb-row"><button class="btn small ${hay("guia") ? "rb-oro" : ""}" type="button" data-rb="neg-subir" data-tipo="guia" data-c="${esc(cod)}">${hay("guia") ? "✓" : "📸"} Guía firmada</button>
         <button class="btn small ${hay("factura") ? "rb-oro" : ""}" type="button" data-rb="neg-subir" data-tipo="factura" data-c="${esc(cod)}">${hay("factura") ? "✓" : "🧾"} Factura emitida</button></div>
       <button class="btn rb-oro rb-big-btn" type="button" data-rb="neg-subir" data-tipo="foto" data-cerrar="1" data-c="${esc(cod)}">🥇 Foto de la entrega y cerrar en oro</button>
-      <div class="muted" style="font-size:.68rem">Al cerrar, el inversionista recibe «negocio OK» y su Excel se rehace con los costos reales.</div>`;
+      <div class="muted" style="font-size:.68rem">Al cerrar, el inversionista recibe «negocio OK» y su Excel se rehace con los costos reales.</div>
+      ${bloqueVivo(t)}`;
     } else cuerpoS = eerrNegocio(t);
     return `<div class="rb-neg ${E === "cerrado" ? "cerrado" : ""}">
       <div class="rb-env" data-rb="ej-cerrar-card" data-c="${esc(cod)}" style="cursor:pointer"><div style="min-width:0"><div style="font-size:.74rem"><b>${esc(cod)}</b>${ocN ? " · OC " + esc(ocN) : ""} <span class="muted">▲ cerrar</span></div><div class="rb-fnom">${esc(t.nombre || "")}</div>
@@ -1719,7 +1772,14 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const okV = reales.filter((x) => EV[x.codigo].m != null).sort((a, b) => EV[b.codigo].util - EV[a.codigo].util);
     const porV = reales.filter((x) => EV[x.codigo].m == null).sort((a, b) => prio(b) - prio(a));
     const esperan = Math.max(0, porV.length - 8);
-    const verN = filtro === "real" ? [...okV, ...porV.slice(0, 8)]
+    // 🔎 buscador por palabras clave: busca en TODAS las oportunidades (no solo en el filtro elegido)
+    const qO = norm(R.oportQ || "").trim(), qW = qO.split(/[^a-z0-9ñ-]+/).filter((w) => w.length > 1);
+    const pajaO = (x) => norm([x.codigo, x.nombre, x.organismo, x.descripcion, x.detalle, x.region, x.comuna, x.direccion, x.rubro, x.categoria,
+      ...(Array.isArray(x.productos) ? x.productos.map((i) => i?.nombre || i?.descripcion || i) : []), ...(Array.isArray(x.items) ? x.items.map((i) => i?.nombre || i?.descripcion || i) : [])]
+      .filter((v) => typeof v === "string").join(" "));
+    const calzaO = (x) => { const h = pajaO(x); return qW.every((w) => h.includes(w) || (w.length > 4 && h.includes(w.replace(/(es|s)$/, "")))); };
+    const verN = qW.length ? nuevas.filter(calzaO).sort((a, b) => (b.ganancia || 0) - (a.ganancia || 0))
+      : filtro === "real" ? [...okV, ...porV.slice(0, 8)]
       : filtro === "fuera" ? descartadas
       : nuevas.filter((x) => (filtro === "todas" || mio(x)) && (filtro === "lic" ? lic(x) : !lic(x) && (filtro === "seg" ? esSeg(x) && x.tipo !== "esp"
       : filtro === "exp" ? x.tipo === "exp" : x.tipo !== "esp")))
@@ -2024,9 +2084,11 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         <button class="btn small ${filtro === "lic" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="lic">📑 Licitaciones</button>
         <button class="btn small" type="button" data-rb="rubro-editar">✏️ ${esc(((conf.rubros || []).length ? conf.rubros.length + " rubro" + (conf.rubros.length === 1 ? "" : "s") : "Rubro"))}</button>
         <button class="btn small" type="button" data-rb="oport-actualizar">↻ Buscar más</button>
+        <span class="rb-oq ${qW.length ? "on" : ""}">🔎<input id="rbOportQ" type="search" value="${esc(R.oportQ || "")}" placeholder="Palabra clave" enterkeyhint="search" autocomplete="off">${qW.length ? `<button type="button" data-rb="oport-q-borrar" aria-label="Borrar">✕</button>` : ""}</span>
         <button class="btn small" type="button" data-rb="oport-tab" data-t="papelera">🗑 ${papelera.length}</button></div>
+      ${qW.length ? `<div class="muted" style="font-size:.74rem;margin:-2px 0 4px;text-align:center">🔎 <b>${verN.length}</b> oportunidad${verN.length === 1 ? "" : "es"} con «${esc(R.oportQ.trim())}» en todas las vistas</div>` : ""}
       <div class="muted" style="font-size:.74rem;margin-bottom:4px;text-align:center">👉 desliza a la derecha = <b>me gusta</b> · 👈 a la izquierda = <b>no</b></div>
-      ${verN.slice(0, n).map((x) => fila(x, "nuevas")).join("") || `<div class="empty">${filtro === "real" ? "Ninguna pasa el filtro ganador ahora. Es mejor no jugar que jugar a pérdida: toca «↻ Buscar más», amplía tus rubros o revisa «2° llamado»." : "No quedan oportunidades en esta vista. Toca «↻ Buscar más»."}</div>`}
+      ${verN.slice(0, n).map((x) => fila(x, "nuevas")).join("") || `<div class="empty">${qW.length ? `Ninguna oportunidad tiene «${esc(R.oportQ.trim())}». Prueba otra palabra o toca «↻ Buscar más».` : filtro === "real" ? "Ninguna pasa el filtro ganador ahora. Es mejor no jugar que jugar a pérdida: toca «↻ Buscar más», amplía tus rubros o revisa «2° llamado»." : "No quedan oportunidades en esta vista. Toca «↻ Buscar más»."}</div>`}
       ${verN.length > n ? `<button class="btn" style="width:100%;margin-top:8px" type="button" data-rb="oport-mas">Ver más (${verN.length - n} restantes)</button>` : ""}`;
     else if (tab === "firmar") cuerpo = enFirma.length ? (() => {
         // el jugador viene a firmar: primero las listas para firmar (la más nueva arriba); las que se preparan van al final
@@ -2439,13 +2501,28 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       .filter(([p]) => p).sort((a, b) => b[0] - a[0]).slice(0, 3).map(([, t]) => t);
   }
   // las compras a las que pudo referirse quien llamó: primero las ENVIADAS (con comprobante) y ganadas
+  // 🔎 el asistente busca la compra en todos los juegos, en Ejecuta y en el informe global, por producto, organismo, ciudad u OC
+  const VACIAS = new Set("llamaron llamo llamado llamada quiere queria saber sobre oferta ofertas compra compras agil para desde esta este estos estas cliente clientes hola como tiene tienen dice dijo dijeron proveedor ganaste ganamos gane ganada ganado aceptando aceptaron aceptada acepto aceptar estan estamos ellos ellas nosotros porque donde cuando unos unas solo algo mucho muchos hace hacer necesita necesitan pregunta preguntan preguntaron llamar llame orden".split(" "));
+  const raiz = (w) => w.replace(/(es|s)$/, "").slice(0, Math.max(4, Math.min(w.length, 7)));
+  function pajar(t) {
+    const oc = t.oc_compra || {}, op = t.op || {}, inf = op.informe || {};
+    return norm([t.nombre, t.organismo, t.codigo, t.detalle, (t.items || []).map((i) => i.d).join(" "), oc.organismo, oc.unidad, oc.direccion, oc.nombre, oc.descripcion,
+      (oc.items || []).map((i) => `${i.nombre || ""} ${i.especificacion || ""}`).join(" "), op.oc_codigo, inf.direccion, (inf.que_comprar || []).map((x) => x.que).join(" "),
+      (inf.productos || []).map((x) => x.nombre).join(" ")].filter(Boolean).join(" "));
+  }
+  function poolLlamada() {
+    const m = new Map();
+    for (const t of [...(R.data?.trabajos || []), ...(R.todos || []), ...(R.ejec || []), ...(R.global?.trabajos || [])]) if (t?.codigo && !m.has(t.codigo)) m.set(t.codigo, t);
+    return [...m.values()];
+  }
   function candidatasLlamada(texto) {
-    const ts = (R.data?.trabajos || []).filter((t) => t.total || HECHA.includes(t.estado));
-    const cods = (String(texto).toUpperCase().match(COD_CA_G) || []);
-    if (cods.length) return ts.filter((t) => cods.includes(t.codigo)).map((t) => t.codigo);
-    const ws = norm(texto).split(/[^a-z0-9ñ]+/).filter((w) => w.length > 3 && !/^(llamaron|llamo|llamado|quiere|saber|sobre|oferta|compra|para|cliente|hola|como|tiene|dice|dijo|proveedor|desde|esta|este)$/.test(w));
-    const pts = (t) => { const h = norm(`${t.nombre || ""} ${t.organismo || ""} ${t.codigo} ${t.detalle || ""}`); return ws.reduce((s2, w) => s2 + (h.includes(w.length > 5 ? w.slice(0, -1) : w) ? (w.length > 6 ? 2 : 1) : 0), 0); };
-    const g = (t) => (segDe(t.codigo)?.ganada ? 3 : HECHA.includes(t.estado) ? 2 : 0);
+    const ts = poolLlamada();
+    const cods = (String(texto).toUpperCase().match(/\d{1,8}-\d{1,8}-[A-Z]{2,3}\d{2}/g) || []);
+    if (cods.length) { const x = ts.filter((t) => cods.includes(t.codigo) || cods.includes(t.op?.oc_codigo)).map((t) => t.codigo); if (x.length) return x; }
+    const ws = [...new Set(norm(texto).split(/[^a-z0-9ñ]+/).filter((w) => w.length > 3 && !VACIAS.has(w)).map(raiz))];
+    if (!ws.length) return [];
+    const pts = (t) => { const h = pajar(t); return ws.reduce((s2, w) => s2 + (h.includes(w) ? (w.length > 5 ? 2 : 1) : 0), 0); };
+    const g = (t) => (t.op?.oc_codigo || segDe(t.codigo)?.ganada ? 3 : t.op ? 2 : HECHA.includes(t.estado) ? 1 : 0);
     return ts.map((t) => [pts(t), g(t), t]).filter(([p2]) => p2 > 0).sort((a, b) => b[0] - a[0] || b[1] - a[1] || (b[2].actualizado || "").localeCompare(a[2].actualizado || "")).slice(0, 6).map(([, , t]) => t.codigo);
   }
   function correoProveedores(t, F, W) {
@@ -2459,6 +2536,81 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         `Agradeceremos indicar precio unitario neto, descuento por volumen o pago contado, stock, plazo de entrega y costo de despacho.\n\n` +
         `Saludos cordiales,\n${emp.contacto || ""}\n${emp.razon_social || ""}${emp.telefono ? "\n" + emp.telefono : ""}${emp.email ? "\n" + emp.email : ""}` };
   }
+  // 💎 planes de suscripción: Básico USD 20 · Medio USD 100 · Premium USD 1.000 al mes
+  const NIVEL = { basico: 1, medio: 2, premium: 3 };
+  const PLANES_INFO = [
+    ["basico", "Básico", 20, ["🎮 Juego de Compra Ágil: oportunidades, deslizar y firmar rápido", "📞 Asistente «Me llamaron»", "Hasta 150 cotizaciones al mes", "1 usuario"]],
+    ["medio", "Medio", 100, ["Todo lo del Básico", "🛠 Ejecuta: proveedores, correos automáticos, Marketplace, pago y despacho", "📑 Licitaciones (5 al mes) con lectura experta de bases y anexos firmados", "🌍 Informe global y 3 usuarios"]],
+    ["premium", "Premium", 1000, ["Todo lo del Medio", "📑 Licitaciones ilimitadas + visualización del proyecto", "🔴 Entregas en vivo con lentes Meta para tus inversionistas", "☁️ Robot dedicado en la nube 24/7 · soporte directo"]],
+  ];
+  const esDueno = () => legado();
+  const miPlan = () => esDueno() ? "premium" : (R.plan?.estado === "activo" ? R.plan.plan : null);
+  const tienePlan = (min) => (NIVEL[miPlan()] || 0) >= NIVEL[min];
+  async function cargarPlan() {
+    if (R._cargPlan) return; R._cargPlan = true;
+    try { const r = await api("plan?jugador=" + miJug() + (esDueno() ? "&admin=1" : "")); R.plan = r.plan; R.planLinks = r.links || {}; R.planesTodos = r.todos || null; R.planT = Date.now(); pintarHojaSiAbierta(); } catch {} finally { R._cargPlan = false; }
+  }
+  function candado(min, que) {
+    const n = PLANES_INFO.find((p) => p[0] === min);
+    return `<div class="rb-candado"><div style="font-size:2rem">🔒</div><b>${esc(que)} es parte del plan ${n[1]}</b><div class="muted" style="font-size:.74rem">Desde USD ${n[2]} al mes.</div>
+      <button class="btn rb-oro rb-big-btn" type="button" data-rb="planes">💎 Ver planes</button></div>`;
+  }
+  function pantallaPlanes() {
+    if (!R.planT || Date.now() - R.planT > 60000) setTimeout(cargarPlan, 0);
+    const actual = miPlan(), pedido = R.plan?.plan_pedido;
+    return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">💎 Planes</h2><button class="btn small" type="button" data-rb="planes-cerrar">← Volver</button></div>
+      <div class="muted rb-sub">${esDueno() ? "Eres el dueño: tienes todo activo. Así ven los planes tus clientes." : actual ? "Tu plan actual: <b>" + esc(PLANES_INFO.find((p) => p[0] === actual)[1]) + "</b>." : pedido ? "Pediste el plan <b>" + esc(pedido) + "</b>: se activa cuando se confirma el pago." : "Elige tu plan. Pago mensual en dólares (o su equivalente en pesos)."}</div>
+      ${PLANES_INFO.map(([k, nom, usd, feats]) => `<div class="rb-plan-c ${k} ${actual === k ? "on" : ""}"><div class="rb-env"><b style="font-size:1.05rem">${nom}</b><b class="rb-precio">USD ${usd.toLocaleString("es-CL")}<small>/mes</small></b></div>
+        <ul class="rb-ul">${feats.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
+        ${actual === k ? `<div class="rb-resp nueva">✅ Es tu plan</div>` : esDueno() ? "" : `<button class="btn ${k === "medio" ? "rb-oro" : ""} rb-big-btn" type="button" data-rb="plan-pedir" data-v="${k}">${pedido === k ? "⏳ Pedido · pagar" : "Quiero el " + nom}</button>`}</div>`).join("")}
+      ${esDueno() && R.planesTodos ? `<div class="rb-sec">👑 Activar planes de tus clientes</div>${Object.entries(R.planesTodos).map(([j, x]) => `<div class="rb-op"><div class="rb-env"><b>${esc(x.nombre || "Juego " + j.slice(-4))}</b><span class="rb-pill">${esc(x.estado || "")} · ${esc(x.plan || x.plan_pedido || "")}</span></div>
+        <div class="rb-row">${PLANES_INFO.map(([k, nom]) => `<button class="btn small ${x.plan === k && x.estado === "activo" ? "rb-oro" : ""}" type="button" data-rb="plan-activar" data-j="${esc(j)}" data-v="${k}">${nom}</button>`).join("")}${x.telefono ? `<a class="btn small" href="https://wa.me/${waNum(x.telefono)}" target="_blank" rel="noopener">💬</a>` : ""}</div></div>`).join("") || `<div class="muted" style="font-size:.74rem">Aún nadie ha pedido un plan.</div>`}` : ""}
+    </div>`;
+  }
+  // 🌍 informe global
+  async function cargarGlobal() {
+    if (R._cargGlobal) return R._cargGlobal;
+    R._cargGlobal = (async () => { try { const r = await api("global"); R.global = { trabajos: r.trabajos || [], jugadores: r.jugadores || {} }; R.globalT = Date.now(); pintarHojaSiAbierta(); } catch {} finally { R._cargGlobal = null; } })();
+    return R._cargGlobal;
+  }
+  function pantallaGlobal() {
+    if (!R.global || Date.now() - (R.globalT || 0) > 60000) setTimeout(cargarGlobal, 0);
+    const G = R.global; if (!G) return `<div class="empty"><span class="spinner"></span> Juntando todo lo de la app…</div>`;
+    const nom = (t) => { const e = G.jugadores[t.jugador] || (R.ejecutores || {})[t.jugador]; return e?.nombre || t.persona || t.dispositivo || (t.jugador ? "Juego " + t.jugador.slice(-4) : "Sin juego (antes)"); };
+    const ganada = (t) => !!(t.op?.oc_codigo || segDe(t.codigo)?.ganada);
+    const q = norm(R.globalQ || ""), fj = R.globalJ || "";
+    const L = G.trabajos.filter((t) => (!fj || (t.jugador || "_") === fj) && (!q || pajar(t).includes(q) || norm(nom(t)).includes(q)));
+    const por = {};
+    for (const t of G.trabajos) { const k = t.jugador || "_"; const x = por[k] || (por[k] = { nombre: nom(t), tel: (G.jugadores[t.jugador] || {}).telefono, n: 0, env: 0, gan: 0, monto: 0, ult: "" });
+      x.n++; if (HECHA.includes(t.estado)) { x.env++; x.monto += Number(t.total) || 0; } if (ganada(t)) x.gan++; if ((t.actualizado || "") > x.ult) x.ult = t.actualizado || ""; }
+    const tot = Object.values(por).reduce((a, x) => ({ n: a.n + x.n, env: a.env + x.env, gan: a.gan + x.gan, monto: a.monto + x.monto }), { n: 0, env: 0, gan: 0, monto: 0 });
+    return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">🌍 Informe global</h2><button class="btn small" type="button" data-rb="global-cerrar">← Volver</button></div>
+      <div class="muted rb-sub">Todo lo que se ha ingresado en la app, en todos los juegos, y quién lo hizo. Cada juego sigue siendo independiente para jugar.</div>
+      <div class="rb-tira"><span>📋 <b>${tot.n}</b> compras</span><span>📤 <b>${tot.env}</b> enviadas</span><span>🏆 <b>${tot.gan}</b> ganadas</span><span>💰 <b>${cortoG(tot.monto)}</b></span></div>
+      <div class="rb-sec">👥 Por jugador</div>
+      ${Object.entries(por).sort((a, b) => b[1].ult.localeCompare(a[1].ult)).map(([k, x]) => `<div class="rb-op ${fj === k ? "on" : ""}"><div class="rb-env"><button type="button" class="rb-link" data-rb="global-j" data-v="${esc(k)}"><b>${k === miJug() ? "⭐ " : ""}${esc(x.nombre)}</b></button><span class="muted" style="font-size:.7rem">${esc(hace(x.ult))}</span></div>
+        <div class="rb-kv"><span>${x.n} compras</span><span>📤 ${x.env}</span><span>🏆 ${x.gan}</span><span>${cortoG(x.monto)}</span></div>
+        ${x.tel && k !== miJug() ? `<div class="rb-row"><a class="btn small" href="tel:${esc(String(x.tel).replace(/[^\d+]/g, ""))}">📞 Llamar</a><a class="btn small" href="https://wa.me/${waNum(x.tel)}" target="_blank" rel="noopener">💬 WhatsApp</a></div>` : ""}</div>`).join("")}
+      <div class="rb-sec">🔎 Buscar en todo ${fj ? `<button class="btn small" type="button" data-rb="global-j" data-v="">Ver todos</button>` : ""}</div>
+      <input class="rb-in" id="rbGlobalQ" value="${esc(R.globalQ || "")}" placeholder="Producto, organismo, ciudad, código u OC (ej: rollos térmicos Osorno)" enterkeyhint="search">
+      <div class="muted" style="font-size:.68rem;margin:4px 0">${L.length} resultado${L.length === 1 ? "" : "s"}</div>
+      ${L.slice(0, 80).map((t) => `<button class="rb-hist rb-glob" type="button" data-rb="llam-si" data-c="${esc(t.codigo)}">
+        <b>${ganada(t) ? "🏆 " : ""}${esc((t.nombre || t.codigo).slice(0, 70))}</b>
+        <span>${esc(t.codigo)} · ${esc((t.oc_compra?.organismo || t.organismo || "").slice(0, 40))} · ${t.op?.etapa ? "🛠 " + esc(t.op.etapa) : esc(est(t.estado).txt)}${t.total ? " · " + clp(t.total) : ""} · 👤 ${esc(nom(t))} · ${esc(hace(t.actualizado))}</span></button>`).join("")}
+    </div>`;
+  }
+  // ⚡ lo que puedes hacer con esa compra, sin buscar en otra parte
+  const quienDe = (t) => { const e = (R.ejecutores || {})[t.jugador] || (R.global?.jugadores || {})[t.jugador]; return e ? e : t.persona ? { nombre: t.persona } : t.dispositivo ? { nombre: t.dispositivo } : null; };
+  function barraAcciones(t) {
+    const cod = t.codigo, op = t.op || {}, oc = t.oc_compra || {}, ocN = op.oc_codigo || "", enEj = (R.ejec || []).some((x) => x.codigo === cod) || !!op.etapa;
+    const docOC = (op.docs || []).filter((d) => d.tipo === "oc").pop(), q = quienDe(t), yo = t.jugador && t.jugador === miJug();
+    const tel = String(oc.fono || op.informe?.comprador?.telefono || "").replace(/[^\d+]/g, ""), mail = oc.mail || op.informe?.comprador?.email;
+    return `<div class="rb-acciones">
+      ${enEj ? `<button class="btn small rb-oro" type="button" data-rb="mail-abrir" data-c="${esc(cod)}">🛠 Abrir en Ejecuta</button>` : `<button class="btn small rb-oro" type="button" data-rb="env-ejecutar" data-c="${esc(cod)}" data-e="${ocN ? "ganada" : "previa"}">🛠 Pasar a Ejecuta</button>`}
+      ${docOC ? `<button class="btn small" type="button" data-rb="neg-doc" data-c="${esc(cod)}" data-id="${esc(docOC.id)}">📄 OC en PDF</button>` : ocN ? `<a class="btn small" href="https://www.mercadopublico.cl/PurchaseOrder/Modules/PO/DetailsPurchaseOrder.aspx?codigoOC=${encodeURIComponent(ocN)}" target="_blank" rel="noopener">📄 OC ${esc(ocN)}</a>` : `<a class="btn small" href="${portalDe(cod)}" target="_blank" rel="noopener">📄 Ver compra</a>`}
+      ${tel ? `<a class="btn small" href="tel:${esc(tel)}">📞 Comprador</a>` : ""}${mail ? `<a class="btn small" href="mailto:${esc(mail)}?subject=${encodeURIComponent("OC " + (ocN || cod))}">✉ Comprador</a>` : ""}
+      </div>${q ? `<div class="muted" style="font-size:.68rem;margin-top:4px">👤 La ingresó ${yo ? "tu juego" : "<b>" + esc(q.nombre || "otro juego") + "</b>"}${!yo && q.telefono ? ` · <a href="https://wa.me/${waNum(q.telefono)}?text=${encodeURIComponent("Hola " + (q.nombre || "") + ", te escribo por la compra " + cod + " (" + (t.nombre || "") + ")")}" target="_blank" rel="noopener">💬 escríbele</a>` : ""}</div>` : ""}`;
+  }
   function pantallaLlamada() {
     const q = R.llamada || {}, r = q.respuesta;
     const verd = r ? ({ si: ["✅ SÍ DA", "si"], no: ["❌ NO DA", "no"] }[r.da] || ["🤔 DEPENDE", "dep"]) : null;
@@ -2468,7 +2620,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
           <button class="btn rb-oro" type="button" data-rb="llamada-buscar" style="flex:1">🔎 Buscar la compra</button></div></div>`;
     // 1) ¿cuál compra es? (de tus enviadas con comprobante)
     if (!q.confirmado) {
-      const C = q.cands || null, k = q.idx || 0, cod = C && C[k], t = cod && trabajo(cod), g = cod ? segDe(cod) || {} : {};
+      const C = q.cands || null, k = q.idx || 0, cod = C && C[k], t = cod && trabajoG(cod), g = cod ? segDe(cod) || {} : {};
       const recientes = (R.data?.trabajos || []).filter((x) => HECHA.includes(x.estado)).slice(0, 8);
       return `<div class="rb-paso">${cab}
         <div class="muted rb-sub">Escribe o dicta quién te llamó y de qué. Busco en tus <b>ofertas enviadas</b> y te pregunto si es esa.</div>${entrada}
@@ -2477,14 +2629,15 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
             <div class="rb-env"><b style="font-size:.78rem">${esc(cod)}</b><span class="rb-pill">${g.ganada ? "🏆 ganada" : esc(g.glosa || est(t.estado).txt)}</span></div>
             <div class="rb-fnom">${esc(t.nombre || "")}</div><div class="muted" style="font-size:.74rem">${esc(t.organismo || "")}</div>
             <div class="rb-kv"><span>Ofertamos <b>${clp(t.total)}</b></span>${t.fecha_envio ? `<span>Enviada ${esc(t.fecha_envio)}</span>` : ""}${t.comprobante ? "<span>🧾 con comprobante</span>" : ""}</div>
-            <div class="rb-row"><button class="btn small" type="button" data-rb="llam-no">❌ No, otra</button><button class="btn rb-oro" type="button" style="flex:1" data-rb="llam-si" data-c="${esc(cod)}">✅ Sí, es esta</button></div></div>`
+            <div class="rb-row"><button class="btn small" type="button" data-rb="llam-no">❌ No, otra</button><button class="btn rb-oro" type="button" style="flex:1" data-rb="llam-si" data-c="${esc(cod)}">✅ Sí, es esta</button></div></div>
+          ${C.length > 1 ? `<div class="rb-sec">Otras que calzan</div>${C.filter((x) => x !== cod).map((x) => { const y = trabajoG(x) || {}; return `<button class="rb-hist" type="button" data-rb="llam-si" data-c="${esc(x)}"><b>${esc((y.nombre || x).slice(0, 60))}</b><span>${esc((y.organismo || "").slice(0, 30))}${y.op?.oc_codigo ? " · 🏆 OC" : ""}</span></button>`; }).join("")}` : ""}`
         : C ? `<div class="rb-alertas"><b>No la encontré por esas palabras</b>Elige de tus enviadas recientes o escribe el ID que te dé el cliente.</div>
           ${recientes.map((x) => `<button class="rb-hist" type="button" data-rb="llam-si" data-c="${esc(x.codigo)}"><b>${esc((x.nombre || x.codigo).slice(0, 60))}</b><span>${clp(x.total)}</span></button>`).join("")}` : ""}
         ${leerHist().length && !C ? `<div class="rb-sec">Últimas consultas</div>${leerHist().slice(0, 5).map((h) => `<button class="rb-hist" type="button" data-rb="llamada-ver" data-id="${esc(h.id)}"><b>${esc((h.titular || h.texto || "").slice(0, 70))}</b><span>${esc(hace(h.t))}</span></button>`).join("")}` : ""}
       </div>`;
     }
     // 2) compra confirmada: si da o no, a quién comprarle y el correo listo para 3–4 proveedores
-    const cod = q.confirmado, t = trabajo(cod) || { codigo: cod }, inf = t.op?.informe || {}, g = segDe(cod) || {};
+    const cod = q.confirmado, t = trabajoG(cod) || { codigo: cod }, inf = t.op?.informe || {}, g = segDe(cod) || {};
     const F = (R.fichas || {})[cod], W = (R.full || {})[cod];
     if (!F && !(R._pidiendo || {})[cod]) setTimeout(() => cargarDocs(cod), 0);
     const selc = (leerSel()[cod] || {}).costo;
@@ -2502,7 +2655,8 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       <div class="rb-card" style="border-color:rgba(245,207,107,.6)"><div class="rb-env"><b style="font-size:.78rem">${esc(cod)}</b><button class="btn small" type="button" data-rb="llam-cambiar">Cambiar</button></div>
         <div class="rb-fnom">${esc(t.nombre || F?.nombre || "")}</div><div class="muted" style="font-size:.74rem">${esc(t.organismo || F?.organismo || "")}</div>
         <div class="rb-kv"><span>Ofertamos <b>${clp(t.total)}</b></span>${g.ganada ? `<span>🏆 ganada${g.oc ? " · OC " + esc(g.oc) : ""}</span>` : g.glosa ? `<span>${esc(g.glosa)}</span>` : ""}${g.mi_lugar ? `<span>${g.mi_lugar}° de ${g.competidores}</span>` : ""}</div>
-        ${t.comprobante ? `<div class="rb-row"><button class="btn small" type="button" data-rb="comprobante" data-c="${esc(cod)}">🧾 Comprobante</button></div>` : ""}</div>
+        ${t.comprobante ? `<div class="rb-row"><button class="btn small" type="button" data-rb="comprobante" data-c="${esc(cod)}">🧾 Comprobante</button></div>` : ""}
+        ${barraAcciones(t)}</div>
       <div class="rb-resp ${verd ? verd[1] : finalLocal == null ? "dep" : finalLocal > 0 ? "si" : "no"}">
         <div class="rb-verd">${verd ? verd[0] : finalLocal == null ? "🤔 Calculando…" : finalLocal > 0 ? "✅ SÍ DA" : "❌ NO DA"}</div>
         ${finalLocal != null ? `<div class="rb-tit">Utilidad ${inf.final != null ? "según informe" : "con tu costo"}: <span class="${finalLocal < 0 ? "rb-neg-t" : "rb-vivo-t"}">${clp(finalLocal)}</span></div>` : ""}
@@ -2553,21 +2707,36 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     if (n > 100) { R.llamada.error = "El PC no respondió. ¿Está encendido el robot?"; return pintarHoja(true); }
     setTimeout(() => esperarRespuesta(id, n + 1), 3000);
   }
+  // 🎤 dictado robusto: en iPhone el reconocimiento se corta solo, así que se reinicia hasta que tocas «Listo»
   function dictar() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return grabar();
-    if (R.dictando) { R.sr?.stop(); return; }
-    const sr = new SR(); sr.lang = "es-CL"; sr.interimResults = true; sr.continuous = true;
+    if (R.dictando) { R.dictParar = true; try { R.sr?.stop(); } catch {} return; }
     const base = ($("#rbLlamada")?.value || "").trim();
-    sr.onresult = (e) => { const txt = [...e.results].map((x) => x[0].transcript).join(" "); const ta = $("#rbLlamada"); if (ta) ta.value = (base ? base + " " : "") + txt; };
-    sr.onerror = (e) => { R.dictando = false; if (e.error === "not-allowed" || e.error === "service-not-allowed") toast("Activa Siri y dictado en el iPhone, o usa el micrófono del teclado"); pintarHoja(true); };
-    sr.onend = () => { const v = ($("#rbLlamada")?.value || "").trim(); R.dictando = false; R.sr = null; R.llamada = { ...(R.llamada || {}), texto: v }; pintarHoja(true); if (v) buscarLlamada(v); };
-    try { sr.start(); R.sr = sr; R.dictando = true; R.llamada = { ...(R.llamada || {}), texto: base }; pintarHoja(true); } catch { grabar(); }
+    let finales = "", parcial = "", inicio = Date.now();
+    const pinta = () => { const ta = $("#rbLlamada"); if (ta) ta.value = [base, finales, parcial].filter(Boolean).join(" ").replace(/\s+/g, " ").trim(); };
+    const arrancar = () => {
+      const sr = new SR(); sr.lang = "es-CL"; sr.interimResults = true; sr.continuous = !/iPhone|iPad|iPod/.test(navigator.userAgent); sr.maxAlternatives = 1;
+      sr.onresult = (e) => { parcial = ""; for (let i = e.resultIndex; i < e.results.length; i++) { const x = e.results[i]; if (x.isFinal) finales += " " + x[0].transcript; else parcial += x[0].transcript; } pinta(); };
+      sr.onerror = (e) => { if (e.error === "not-allowed" || e.error === "service-not-allowed") { R.dictParar = true; toast("Permite el micrófono para esta página (o usa el 🎤 del teclado)"); } };
+      sr.onend = () => {
+        finales += parcial ? " " + parcial : ""; parcial = ""; pinta();
+        if (!R.dictParar && Date.now() - inicio < 90000) { try { arrancar(); return; } catch {} }       // sigue escuchando
+        const v = ($("#rbLlamada")?.value || "").trim(); R.dictando = false; R.sr = null; R.dictParar = false;
+        R.llamada = { ...(R.llamada || {}), texto: v }; pintarHoja(true); if (v) buscarLlamada(v);
+      };
+      sr.start(); R.sr = sr;
+    };
+    try { R.dictParar = false; arrancar(); R.dictando = true; R.llamada = { ...(R.llamada || {}), texto: base }; pintarHoja(true); navigator.vibrate?.(15); } catch { grabar(); }
   }
   function buscarLlamada(texto) {
     if (!texto) { toast("Escribe o dicta quién te llamó"); return; }
     R.llamada = { texto, cands: candidatasLlamada(texto), idx: 0 };
     pintarHoja(true);
+    // también busca en Ejecuta y en el informe global (todos los juegos) y vuelve a ordenar
+    Promise.all([R.ejec ? null : cargarEjecuta(), cargarGlobal()]).then(() => {
+      if (R.llamada?.texto === texto && !R.llamada.confirmado) { R.llamada.cands = candidatasLlamada(texto); R.llamada.idx = 0; pintarHoja(true); }
+    }).catch(() => {});
   }
   function confirmarLlamada(cod) {
     const texto = R.llamada?.texto || "";
@@ -2608,7 +2777,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         <button class="rb-emp" type="button" data-rb="empresa-editar">🏢 <span>${esc(corta(emp?.razon_social) || "Mi empresa")}</span> ▾</button>
         <button class="rb-yo" type="button" data-rb="persona-editar" title="Quién usa este celular">👤 ${esc((persona()?.nombre || "¿quién?").split(" ")[0].slice(0, 12))}</button>
         <span class="rb-pcs" title="${conectado ? "PC conectado" : "PC desconectado"}"><i class="${conectado ? "on" : ""}"></i>PC<i class="${mp?.conectado ? "on" : ""}"></i>MP</span>
-        ${mailChip()}<button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
+        <button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
         <button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
         <div class="rb-portal"><button type="button" class="${!["ejecuta", "licita"].includes(leer().portal) ? "on" : ""}" data-rb="portal" data-v="juego">🎮 Juego</button><button type="button" class="${leer().portal === "licita" ? "on" : ""}" data-rb="portal" data-v="licita">📑 Licitaciones</button><button type="button" class="${leer().portal === "ejecuta" ? "on" : ""}" data-rb="portal" data-v="ejecuta">🛠 Ejecuta</button></div>`;
       // 🏆 portada: cada vez que abres la app (y siempre que no haya empresa). Sin formularios: RUT → jugar.
@@ -2619,7 +2788,10 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       else if (R.rubroEditar) { if (!R.oport) cargarOport(); cuerpo = `<div class="rb-paso-n" style="text-align:center;margin-top:10px">Paso 3 de 3</div>` + pantallaRubro(R.oport?.lista || []); }
       else if (R.pantalla === "llamada") cuerpo = pantallaLlamada();
       else if (R.pantalla === "correos") cuerpo = pantallaCorreos();
-      else cuerpo = (leer().portal === "ejecuta" ? portalEjecuta() : leer().portal === "licita" ? portalLicita() : vistaOport());
+      else if (R.pantalla === "global") cuerpo = pantallaGlobal();
+      else if (R.pantalla === "planes") cuerpo = pantallaPlanes();
+      else { if (!esDueno() && (!R.planT || Date.now() - R.planT > 300000)) setTimeout(cargarPlan, 0);
+        cuerpo = (leer().portal === "ejecuta" ? (tienePlan("medio") ? portalEjecuta() : candado("medio", "🛠 Ejecuta")) : leer().portal === "licita" ? (tienePlan("medio") ? portalLicita() : candado("medio", "📑 Licitaciones")) : vistaOport()); }
       const mas = `<details class="rb-ajustes rb-mas"><summary>⚙ Más opciones</summary>
         ${!conectado ? `<div class="rb-alertas"><b>PC desconectado</b>${r?.visto ? "Visto " + esc(hace(r.visto)) + ". " : ""}Abre el robot en el PC.</div>` : ""}
         ${mp?.conectado ? "" : `<button class="btn small rb-oro" data-rb="conectar-mp" type="button" style="margin:8px 0">Conectar tu Mercado Público</button>`}
@@ -2753,6 +2925,11 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     finally { R.enCurso = false; pintarHoja(); }
   }
 
+  sheet.addEventListener("click", (ev) => {           // 👆👆 doble toque en la barra de arriba (fuera de un botón) = volver al inicio
+    const barra = ev.target.closest(".rb-top2, .rb-portal, .rb-h"); if (!barra || ev.target.closest("button:not(.rb-portal button),a,input,textarea,select")) return;
+    const n = Date.now(); if (n - (R._tapT || 0) < 400) { R._tapT = 0; volverAlOrigen(); } else R._tapT = n;
+  });
+  sheet.addEventListener("dblclick", (ev) => { if (ev.target.closest(".rb-top2, .rb-portal")) { ev.preventDefault(); volverAlOrigen(); } });
   sheet.addEventListener("click", async (ev) => {
     const b = ev.target.closest("[data-rb]"); if (!b) return;
     R.toque = 0;                                     // un toque en un botón repinta al instante
@@ -2796,6 +2973,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       toast(todo ? "Mostrando todas las oportunidades" : "🔎 Buscando oportunidades de tu rubro…");
       return pintarHoja(true);
     }
+    if (a === "oport-q-borrar") { R.oportQ = ""; R.oportN = 40; pintarHoja(true); return; }
     if (a === "oport-filtro") { R.oportFiltro = b.dataset.f; R.oportN = 40; return pintarHoja(); }
     if (a === "oport-tab") { if ((R.oportTab || "nuevas") !== b.dataset.t) R.tabHist = [...(R.tabHist || []), R.oportTab || "nuevas"].slice(-12); R.oportTab = b.dataset.t; guardar({ oportTab: R.oportTab }); R.oportN = 40; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "oport-mas") { R.oportN = (R.oportN || 40) + 40; return pintarHoja(); }
@@ -2956,7 +3134,17 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "llamada-preguntar") return preguntarRobot(($("#rbLlamada")?.value || "").trim());
     if (a === "llamada-buscar") return buscarLlamada(($("#rbLlamada")?.value || "").trim());
     if (a === "llamada-mic") return dictar();
-    if (a === "llam-si") return confirmarLlamada(cod);
+    if (a === "planes") { R.pantalla = "planes"; sheet.scrollTop = 0; cargarPlan(); return pintarHoja(true); }
+    if (a === "planes-cerrar") { R.pantalla = null; return pintarHoja(true); }
+    if (a === "plan-pedir") { const k = b.dataset.v, link = (R.planLinks || {})[k];
+      try { const r = await api("plan", { method: "POST", body: JSON.stringify({ jugador: miJug(), plan: k, nombre: persona()?.nombre || "", telefono: persona()?.telefono || "" }) }); R.plan = r.plan; } catch (e) { toast(e.message); return; }
+      if (link) window.open(link, "_blank"); else toast("💎 Plan pedido: te contactamos para el pago y se activa al confirmarlo");
+      return pintarHoja(true); }
+    if (a === "plan-activar") { try { await api("plan", { method: "POST", body: JSON.stringify({ jugador: b.dataset.j, plan: b.dataset.v, activar: true }) }); toast("👑 Plan activado"); R.planT = 0; await cargarPlan(); } catch (e) { toast(e.message); } return; }
+    if (a === "global") { R.pantalla = "global"; sheet.scrollTop = 0; cargarGlobal(); if (!R.ejecutores) cargarEjecuta(); return pintarHoja(true); }
+    if (a === "global-cerrar") { R.pantalla = null; return pintarHoja(true); }
+    if (a === "global-j") { R.globalJ = b.dataset.v || ""; return pintarHoja(true); }
+    if (a === "llam-si") { if (R.pantalla !== "llamada") { R.pantalla = "llamada"; R.llamada = { texto: "" }; sheet.scrollTop = 0; } return confirmarLlamada(cod); }
     if (a === "llam-no") { R.llamada.idx = (R.llamada.idx || 0) + 1; if (R.llamada.idx >= (R.llamada.cands || []).length) R.llamada.cands = []; return pintarHoja(true); }
     if (a === "llam-cambiar") { R.llamada = { texto: R.llamada?.texto, cands: candidatasLlamada(R.llamada?.texto || ""), idx: 0 }; return pintarHoja(true); }
     if (a === "llam-gmail" || a === "llam-mail") {          // abre el correo con lo que escribiste (tú presionas Enviar)
@@ -3045,6 +3233,27 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       return;
     }
     if (a === "lic-tab") { R.licTab = b.dataset.e; return pintarHoja(true); }
+    if (a === "tw-guardar" || a === "tw-cambiar") {
+      if (a === "tw-cambiar") { try { localStorage.removeItem(TW); } catch {} return ejOpVivo(cod, { twitch_canal: "" }); }
+      const v = ($("#rbTw-" + cod)?.value || "").trim().replace(/^https?:\/\/(www\.)?twitch\.tv\//, "").replace(/^@/, "").replace(/[^\w]/g, "");
+      if (!v) { toast("Escribe el nombre de tu canal de Twitch"); return; }
+      try { localStorage.setItem(TW, v); } catch {} return ejOpVivo(cod, { twitch_canal: v }, "📺 Canal guardado");
+    }
+    if (a === "tw-inicio") { const t = (R.ejec || []).find((x) => x.codigo === cod); const canal = t ? twCanal(t) : "";
+      window.open(/iPhone|iPad|Android/.test(navigator.userAgent) ? "twitch://open" : "https://dashboard.twitch.tv/stream-manager", "_blank");
+      return ejOpVivo(cod, { en_vivo: true, twitch_canal: canal }, "🔴 En vivo · el inversionista recibió el aviso"); }
+    if (a === "tw-fin") return ejOpVivo(cod, { en_vivo: false }, "⏹ Listo · pega el link del video como prueba de entrega");
+    if (a === "lic-codigo" || a === "lic-pegar") {
+      let v = ($("#rbLicCod")?.value || "").trim();
+      if (a === "lic-pegar") { try { v = (await navigator.clipboard.readText()).trim(); } catch { toast("Mantén apretado el campo y elige Pegar"); return; } const i = $("#rbLicCod"); if (i) i.value = v; }
+      const m = v.toUpperCase().replace(/\s+/g, "").match(/\d{1,8}-\d{1,6}-[A-Z][A-Z0-9]{1,2}\d{2}/);
+      if (!m) { if (a === "lic-codigo") toast("Ese código no se ve como una licitación (ej: 2585-77-LE26)"); return; }
+      try { const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: m[0], accion: "licitar" }) });
+        toast(r._status === 409 ? "Ya está en manos del robot" : "🚀 " + m[0] + ": el robot baja las bases y las lee"); R.licTab = "prep"; await refrescar(); pintarHoja(true); } catch (e) { toast(e.message); }
+      return;
+    }
+    if (a === "lic-ir") { const ok = await copiar(cod); toast(ok ? "📋 Código copiado: pégalo en el buscador si te lo pide" : cod);
+      window.open(`https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion=${encodeURIComponent(cod)}`, "_blank"); return; }
     if (a === "lic-no") { const n = licNo(); n[cod] = Date.now(); try { localStorage.setItem(LIC_NO, JSON.stringify(n)); } catch {} navigator.vibrate?.(8); return pintarHoja(true); }
     if (a === "lic-vamos") {
       try { const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "licitar" }) });
@@ -3221,8 +3430,11 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     const e = c.querySelector(".rb-cest"); if (e) e.textContent = "";
     pintarSel(c, false); guardarSelLuego(c.dataset.c, { costo: +n || null });
   });
-  sheet.addEventListener("input", (ev) => {           // 💲 precio de licitación en vivo
-    const el = ev.target; if (!el.classList?.contains("rb-rango")) return;
+  sheet.addEventListener("input", (ev) => {           // 💲 precio de licitación en vivo · 🔎 búsqueda global
+    const el = ev.target;
+    if (el.id === "rbOportQ") { R.oportQ = el.value; R.oportN = 40; clearTimeout(R._oq); R._oq = setTimeout(() => { const pos = el.selectionStart; pintarHoja(true); const n = $("#rbOportQ"); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch {} } }, 350); return; }
+    if (el.id === "rbGlobalQ") { R.globalQ = el.value; clearTimeout(R._gq); R._gq = setTimeout(() => { const pos = el.selectionStart; pintarHoja(true); const n = $("#rbGlobalQ"); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch {} } }, 350); return; }
+    if (!el.classList?.contains("rb-rango")) return;
     const box = el.closest(".rb-precio-lic"); if (!box) return;
     const d = (+el.value || 0) / 100, pres = +box.dataset.pres || 0, cant = +box.dataset.cant || 1;
     const neto_max = box.dataset.coniva === "1" ? pres / 1.19 : pres, unit = Math.floor(neto_max * (1 - d) / cant / 10) * 10, neto = unit * cant;
