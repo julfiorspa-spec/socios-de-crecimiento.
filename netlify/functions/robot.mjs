@@ -1047,6 +1047,33 @@ async function atender(req) {
     return json({ trabajo: r });
   }
   // ---------- 🛠 Ejecuta: socios ejecutadores (compran, negocian, entregan y cierran con guía y factura firmadas) ----------
+  // ☁️ robot en la nube: el PC sube su paquete (código + configuración) UNA vez; el servidor lo baja y se borra
+  if (ruta === "paquete" && req.method === "POST") {
+    const bytes = Buffer.from(await req.arrayBuffer());
+    if (bytes.length < 1000 || bytes.length > 4_300_000 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) return json({ error: "Paquete inválido o de más de 4 MB." }, 400);
+    await store.set("nube/paquete", bytes);
+    await store.setJSON("nube/paquete-meta", { t: ahora(), kb: Math.round(bytes.length / 1024), desde: texto(url.searchParams.get("desde"), 60) });
+    return json({ ok: true, kb: Math.round(bytes.length / 1024) });
+  }
+  if (ruta === "paquete" && req.method === "GET") {
+    const data = await store.get("nube/paquete", { type: "arrayBuffer" });
+    if (!data) return json({ error: "No hay paquete: en el PC haz doble clic en SUBIR_A_LA_NUBE." }, 404);
+    if (url.searchParams.get("borrar") !== "0") { await store.delete("nube/paquete"); await store.setJSON("nube/paquete-meta", { bajado: ahora() }); }
+    return new Response(data, { headers: { "content-type": "application/zip", "cache-control": "no-store" } });
+  }
+  if (ruta === "nube-estado" && req.method === "POST") {      // el servidor avisa dónde quedó su vista remota
+    const b = await cuerpo(req);
+    const e = { t: ahora(), host: texto(b.host, 120), vista: texto(b.vista, 200), panel: texto(b.panel, 200), usuario: texto(b.usuario, 40), clave: texto(b.clave, 80), version: texto(b.version, 20) };
+    await store.setJSON("nube/estado", e);
+    await avisarTexto(store, "☁️ Tu robot ya vive en la nube", "Funciona 24/7 sin tu PC. Abre 💎 Planes → Robot en la nube para iniciar sesión en Mercado Público una vez.", "nube", "/#robot").catch(() => {});
+    return json({ ok: true });
+  }
+  if (ruta === "nube-estado" && req.method === "GET") {
+    const e = (await store.get("nube/estado", { type: "json" })) || null;
+    const pm = (await store.get("nube/paquete-meta", { type: "json" })) || null;
+    const lat = (await store.get("robot/latido", { type: "json" })) || null;
+    return json({ nube: e, paquete: pm, latido: lat ? { visto: lat.visto || null, equipo: lat.equipo || null } : null });
+  }
   // 💎 planes de suscripción (USD/mes): cada celular/juego tiene el suyo; el dueño los activa cuando llega el pago
   const PLANES = { basico: { usd: 20, nombre: "Básico" }, medio: { usd: 100, nombre: "Medio" }, premium: { usd: 1000, nombre: "Premium" } };
   if (ruta === "plan" && req.method === "GET") {
