@@ -784,7 +784,7 @@ async function atender(req) {
       "ejecutor", "ejecutor_nombre", "plazo_proveedor", "fecha_entrega", "banco_proveedor", "negociacion", "plazo_fecha", "plazo_nota", "incidencia",
       "transportista", "transportista_tel", "origen_flete", "patente", "recibio_nombre", "recibio_rut", "fecha_cobro", "inversionista_nombre", "inversionista_tel", "despacho_modo", "proveedor_k", "proveedor_email", "proveedor_tel", "entrega_contacto", "entrega_tel", "vehiculo", "factoring", "nota_cierre", "twitch_canal", "video_prueba"]) if (d[k] !== undefined) op[k] = texto(d[k], 400);
     for (const k of ["precio_acordado", "costo_transporte", "opcion", "km", "cobrado"]) if (d[k] !== undefined) op[k] = d[k] === null ? null : Math.max(0, Math.round(Number(d[k]) || 0));
-    const yaPedido = !!op.pedido_transferencia;
+    const yaPedido = !!op.pedido_transferencia, yaTransf = !!op.transferido;
     for (const k of ["inversion_ok", "compra_ok", "despacho_ok", "guia_firmada", "factura_firmada", "aplica_comision", "nos_da", "proveedor_pagado", "guia_hecha", "factura_hecha", "oc_aceptada", "pedido_transferencia", "transferido"]) if (d[k] !== undefined) op[k] = !!d[k];
     if (d.comision !== undefined) op.comision = Math.min(0.10, Math.max(0.01, Number(d.comision) || 0.04));
     // 📨 el juego de los proveedores: a quién le escribiste/llamaste y qué precio te dio cada uno
@@ -802,6 +802,7 @@ async function atender(req) {
       if (x) { op.docs = op.docs.filter((y) => y.id !== id); await store.delete(`doc/${t.codigo}/${id}`).catch(() => {}); if (x.tipo === "oc") op.oc_pdf_intento = null; }
     }
     const avisarPago = d.pedido_transferencia === true && !yaPedido;
+    const avisarInv = d.transferido === true && !yaTransf;          // 💼 el inversionista dice que ya transfirió
     const avisarVivo = d.en_vivo === true && !op.en_vivo;      // 🔴 transmisión en vivo de la entrega (lentes Meta → Twitch)
     if (d.en_vivo !== undefined) { op.en_vivo = !!d.en_vivo; if (d.en_vivo) op.vivo_desde = ahora(); else op.vivo_hasta = ahora(); }
     if (d.proveedor_extra && typeof d.proveedor_extra === "object" && d.proveedor_extra.proveedor) {
@@ -811,6 +812,7 @@ async function atender(req) {
     if (b.pedir_informe || (cambioEtapa && AVISO_INV[op.etapa]) || d.precio_acordado !== undefined || d.costo_transporte !== undefined) op.pedido_informe = { t: ahora(), rebuscar: !!b.rebuscar };
     t.op = op;
     const r = await escribir(store, t);
+    if (avisarInv) await avisarTexto(store, "💼 El inversionista transfirió · " + t.codigo, `${String(t.nombre || "").slice(0, 60)} · revisa la cuenta de la empresa y paga a ${String(op.proveedor || "el proveedor").slice(0, 40)} (${"$" + Math.round(op.precio_acordado || 0).toLocaleString("es-CL")}).`, "inv-" + t.codigo, "/#robot", true).catch(() => {});
     if (avisarVivo && op.twitch_canal) await avisarTexto(store, "🔴 En vivo: " + String(t.nombre || t.codigo).slice(0, 50), `${t.codigo} · mira la entrega en directo: twitch.tv/${op.twitch_canal}`, "vivo-" + t.codigo, "https://www.twitch.tv/" + encodeURIComponent(op.twitch_canal), true).catch(() => {});
     if (avisarPago) await avisarTexto(store, "💸 Inversionista: paga a " + String(op.proveedor || "proveedor").slice(0, 40), `${t.codigo} · ${"$" + Math.round(op.precio_acordado || 0).toLocaleString("es-CL")}${op.banco_proveedor ? " · " + texto(op.banco_proveedor, 140) : ""}. Sube el comprobante en Ejecuta para que avance.`, "pago-" + t.codigo, "/#robot", true).catch(() => {});
     if (cambioEtapa && AVISO_INV[op.etapa]) {        // 💼 aviso al inversionista (push) con el resumen del negocio
