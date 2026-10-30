@@ -178,6 +178,7 @@
   .rb-glob{display:block!important;text-align:left;width:100%}.rb-glob b{display:block;margin-bottom:2px}.rb-glob span{display:block;font-size:.68rem;opacity:.8;white-space:normal!important;overflow-wrap:anywhere;text-overflow:clip!important;overflow:visible!important}
   .rb-link{background:none;border:0;color:inherit;padding:0;text-align:left;font:inherit;cursor:pointer}
   .rb-acciones{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .rb-cmd{font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:8px 10px;margin:6px 0;overflow-wrap:anywhere;user-select:all}
   .rb-firma-ok{display:flex;gap:10px;align-items:center;padding:10px;border-radius:14px;border:1px solid rgba(183,140,255,.45);background:rgba(183,140,255,.08);margin:6px 0}
   .rb-firma-ok img{height:46px;max-width:120px;object-fit:contain;background:#fff;border-radius:8px;padding:3px}
   .rb-licmatch{border-color:#b78cff}.rb-mesa{border-color:rgba(183,140,255,.6)}
@@ -2566,9 +2567,34 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       ${esDueno() ? `<div class="rb-sec">💳 Links de pago de cada plan</div><div class="muted" style="font-size:.72rem">Crea en Mercado Pago (o Flow) un link de suscripción mensual por plan y pégalo aquí. Al tocar «Quiero el plan», el cliente va directo a pagar.</div>
         ${PLANES_INFO.map(([k, nom, usd]) => `<label class="rb-lab">${nom} · USD ${usd.toLocaleString("es-CL")}/mes<input class="rb-in" id="rbPago-${k}" value="${esc((R.planLinks || {})[k] || "")}" placeholder="https://www.mercadopago.cl/subscriptions/..." inputmode="url" autocapitalize="off" autocorrect="off"></label>`).join("")}
         <div class="rb-row"><button class="btn rb-oro" type="button" data-rb="plan-links" style="flex:1">💾 Guardar links</button><a class="btn small" href="https://www.mercadopago.cl/subscription-plans/create" target="_blank" rel="noopener">Crear en Mercado Pago</a></div>` : ""}
+      ${esDueno() ? bloqueNube() : ""}
       ${esDueno() && R.planesTodos ? `<div class="rb-sec">👑 Activar planes de tus clientes</div>${Object.entries(R.planesTodos).map(([j, x]) => `<div class="rb-op"><div class="rb-env"><b>${esc(x.nombre || "Juego " + j.slice(-4))}</b><span class="rb-pill">${esc(x.estado || "")} · ${esc(x.plan || x.plan_pedido || "")}</span></div>
         <div class="rb-row">${PLANES_INFO.map(([k, nom]) => `<button class="btn small ${x.plan === k && x.estado === "activo" ? "rb-oro" : ""}" type="button" data-rb="plan-activar" data-j="${esc(j)}" data-v="${k}">${nom}</button>`).join("")}${x.telefono ? `<a class="btn small" href="https://wa.me/${waNum(x.telefono)}" target="_blank" rel="noopener">💬</a>` : ""}</div></div>`).join("") || `<div class="muted" style="font-size:.74rem">Aún nadie ha pedido un plan.</div>`}` : ""}
     </div>`;
+  }
+  // ☁️ robot en la nube 24/7: funciona aunque el PC esté apagado
+  async function cargarNube() {
+    if (R._cargNube) return; R._cargNube = true;
+    try { R.nube = await api("nube-estado"); R.nubeT = Date.now(); pintarHojaSiAbierta(); } catch {} finally { R._cargNube = false; }
+  }
+  function bloqueNube() {
+    if (!R.nubeT || Date.now() - R.nubeT > 30000) setTimeout(cargarNube, 0);
+    const N = R.nube || {}, e = N.nube, lat = N.latido, pq = N.paquete;
+    const cmd = `curl -fsSL ${location.origin}/nube/instalar.sh | bash -s -- ${R.token || leer().token || "TU_CODIGO"}`;
+    const vivo = lat?.visto && Date.now() - Date.parse(lat.visto) < 120000, enNube = /nube/i.test(lat?.equipo || "");
+    return `<div class="rb-sec">☁️ Robot en la nube 24/7</div>
+      <div class="rb-op"><div class="rb-env"><b>${vivo ? (enNube ? "🟢 Funcionando en la nube" : "🟡 Funcionando en tu PC") : "⚪ Robot apagado"}</b><span class="muted" style="font-size:.7rem">${esc(lat?.equipo || "")}${lat?.visto ? " · " + esc(hace(lat.visto)) : ""}</span></div>
+      ${e ? `<div class="muted" style="font-size:.74rem;margin:4px 0">Servidor ${esc(e.host)} · instalado ${esc(hace(e.t))}</div>
+        <div class="rb-row"><a class="btn rb-oro" href="${esc(e.vista)}" target="_blank" rel="noopener" style="flex:1">🖥 Abrir vista remota</a><a class="btn small" href="${esc(e.panel)}" target="_blank" rel="noopener">Panel</a></div>
+        <div class="rb-kv"><span>Usuario <b>${esc(e.usuario)}</b></span><span>Clave <b>${esc(e.clave)}</b></span><button class="btn small" type="button" data-rb="nube-copiar" data-v="${esc(e.clave)}">📋</button></div>
+        <div class="muted" style="font-size:.7rem">En la vista remota inicias sesión en Mercado Público una vez (como en el PC). Después el robot trabaja solo, aunque apagues el computador.</div>`
+      : `<ol class="rb-ul" style="font-size:.76rem;line-height:1.5;padding-left:18px">
+          <li>Crea un servidor Ubuntu 24.04 de 2–4 GB (DigitalOcean, Hetzner, Vultr…: ~USD 12–24/mes).</li>
+          <li>En el PC: doble clic en <b>SUBIR_A_LA_NUBE</b> ${pq?.t ? `<span class="rb-pill verde">✓ subido ${esc(hace(pq.t))}</span>` : pq?.bajado ? `<span class="rb-pill verde">✓ descargado</span>` : ""}</li>
+          <li>Abre la consola del servidor y pega este comando:</li></ol>
+        <div class="rb-cmd">${esc(cmd)}</div>
+        <div class="rb-row"><button class="btn rb-oro" type="button" data-rb="nube-copiar" data-v="${esc(cmd)}" style="flex:1">📋 Copiar comando</button></div>
+        <div class="muted" style="font-size:.68rem">Al terminar te llega un aviso y aquí aparece la vista remota con su clave.</div>`}</div>`;
   }
   // 🌍 informe global
   async function cargarGlobal() {
@@ -3143,6 +3169,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       try { const r = await api("plan", { method: "POST", body: JSON.stringify({ jugador: miJug(), plan: k, nombre: persona()?.nombre || "", telefono: persona()?.telefono || "" }) }); R.plan = r.plan; } catch (e) { toast(e.message); return; }
       if (link) window.open(link, "_blank"); else toast("💎 Plan pedido: te contactamos para el pago y se activa al confirmarlo");
       return pintarHoja(true); }
+    if (a === "nube-copiar") { const ok = await copiar(b.dataset.v || ""); toast(ok ? "📋 Copiado" : "No se pudo copiar"); return; }
     if (a === "plan-links") { const links = Object.fromEntries(PLANES_INFO.map(([k]) => [k, ($("#rbPago-" + k)?.value || "").trim()]));
       try { const r = await api("plan-links", { method: "POST", body: JSON.stringify({ links }) }); R.planLinks = r.links; toast("💳 Links de pago guardados"); pintarHoja(true); } catch (e) { toast(e.message); } return; }
     if (a === "plan-activar") { try { await api("plan", { method: "POST", body: JSON.stringify({ jugador: b.dataset.j, plan: b.dataset.v, activar: true }) }); toast("👑 Plan activado"); R.planT = 0; await cargarPlan(); } catch (e) { toast(e.message); } return; }
