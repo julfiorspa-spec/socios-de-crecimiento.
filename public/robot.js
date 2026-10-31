@@ -2743,6 +2743,15 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
     let bin = ""; ct.forEach((x) => (bin += String.fromCharCode(x)));
     return btoa(bin);
   }
+  // 🚪 al abrir la app (dueño): si la nube no tiene sesión de Mercado Público vigente, lo primero es conectarla
+  function inicioLoginMP() {
+    if (R.mplIni) return; R.mplIni = true;
+    api("mp-login").then((x) => {
+      R.mpl = x; const sn = x.sesion_nube;
+      const vigente = sn && sn.ok && Date.now() - Date.parse(sn.t) < 20 * 3600e3;
+      if (!vigente && !R.pantalla && !R.detalle) { R.pantalla = "mplogin"; R.mplCarg = false; pintarHojaSiAbierta(); }
+    }).catch(() => {});
+  }
   function loginActivo() {
     const E = R.mpl?.estado;
     return E && Date.now() - Date.parse(E.t) < 360000 && !["listo", "error", "cancelado"].includes(E.paso) ? E : null;
@@ -2751,7 +2760,7 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
     if (!R.mplCarg) { R.mplCarg = true; setTimeout(cargarLoginMP, 0); }
     const L = R.mpl || {}, E = L.estado && Date.now() - Date.parse(L.estado.t) < 900000 ? L.estado : null, A = loginActivo();
     const foto = E?.foto ? `<details class="rb-ajustes" style="margin-top:10px"><summary>🖥 Ver la pantalla del robot</summary><img src="data:image/jpeg;base64,${E.foto}" alt="Pantalla del robot" style="width:100%;border-radius:10px;margin-top:6px"></details>` : "";
-    const form = `<div class="label" style="margin-top:12px">RUN</div>
+    const form = `<div class="label" style="margin-top:12px">RUN (tu RUT)</div>
         <input id="rbMplRun" class="rb-in" placeholder="12.345.678-9" autocomplete="username" autocapitalize="characters" inputmode="text" style="width:100%">
         <div class="label" style="margin-top:10px">ClaveÚnica</div>
         <input id="rbMplClave" class="rb-in" type="password" placeholder="Tu ClaveÚnica" autocomplete="current-password" style="width:100%">
@@ -2774,7 +2783,8 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
       cuerpo = `<div class="rb-op" style="margin:12px 0;text-align:center"><span class="spinner"></span><div style="margin-top:8px">${esc(A.mensaje || "Trabajando…")}</div></div>`;
     }
     return `<div class="rb-sheet-head"><h2 style="margin:0">🔐 Conectar Mercado Público</h2><button class="rb-x" type="button" data-rb="mpl-salir" aria-label="Volver">✕</button></div>
-      <div class="muted" style="font-size:.78rem">El robot de tu PC entra a Mercado Público con tu ClaveÚnica, como lo harías tú en Chrome. Solo una vez: después sigue solo.</div>
+      <div class="muted" style="font-size:.78rem">Ingresa tu RUN y ClaveÚnica; si llega un código a tu correo, lo escribes aquí. El robot entra a Mercado Público por ti y deja la sesión en la nube para trabajar 24/7.</div>
+      ${L.sesion_nube ? `<div class="rb-pill ${L.sesion_nube.ok ? "verde" : ""}" style="margin:8px 0;display:inline-block">${L.sesion_nube.ok ? "☁️ Nube conectada" : "☁️ Nube sin sesión"} · ${esc(hace(L.sesion_nube.t))}</div>` : ""}
       ${R.mplErr ? `<div class="rb-alertas"><b>Sin conexión</b>${esc(R.mplErr)}</div>` : ""}${cuerpo}${foto}
       ${A ? `<button class="btn small" type="button" data-rb="mpl-cancelar" style="width:100%;margin-top:10px">Cancelar</button>` : ""}`;
   }
@@ -3031,7 +3041,7 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
         <span class="rb-pcs" title="${conectado ? "Robot conectado" + (r?.equipo ? " · " + esc(r.equipo) : "") : "Robot apagado"}"><i class="${conectado ? "on" : ""}"></i>${/nube/i.test(r?.equipo || "") ? "☁️" : "Robot"}<i class="${mp?.conectado ? "on" : ""}"></i>MP</span>
         <button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
         <button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
-        <div class="rb-portal"><button type="button" class="${!["ejecuta", "licita", "inversion"].includes(leer().portal) ? "on" : ""}" data-rb="portal" data-v="juego">🎮 Juego</button><button type="button" class="${leer().portal === "licita" ? "on" : ""}" data-rb="portal" data-v="licita">📑 Licita</button><button type="button" class="${leer().portal === "ejecuta" ? "on" : ""}" data-rb="portal" data-v="ejecuta">🛠 Ejecuta</button><button type="button" class="${leer().portal === "inversion" ? "on" : ""}" data-rb="portal" data-v="inversion">💼 Inversión</button></div>${esDueno() ? (setTimeout(() => { if (!R.nubeT || Date.now() - R.nubeT > 60000) cargarNube(); }, 0), `<button class="btn small ${mp?.conectado ? "" : "rb-oro"}" type="button" data-rb="mpl-abrir" style="width:100%;margin:6px 0 0">🔐 Conectar Mercado Público${mp?.conectado ? " · 🟢 conectado" : ""}</button>`) : ""}${R.data && conectado && !mp?.conectado && /nube/i.test(r?.equipo || "") ? `<div class="rb-alertas" style="margin:6px 0"><b>☁️ Falta la sesión de Mercado Público en la nube</b>Sin ella las ofertas no se pueden cargar para firmar. Ábrela una vez y el robot sigue solo.<button class="btn small rb-oro" data-rb="mpl-abrir" type="button" style="margin-top:6px;width:100%">🔐 Conectar con RUN y ClaveÚnica</button></div>` : ""}`;
+        <div class="rb-portal"><button type="button" class="${!["ejecuta", "licita", "inversion"].includes(leer().portal) ? "on" : ""}" data-rb="portal" data-v="juego">🎮 Juego</button><button type="button" class="${leer().portal === "licita" ? "on" : ""}" data-rb="portal" data-v="licita">📑 Licita</button><button type="button" class="${leer().portal === "ejecuta" ? "on" : ""}" data-rb="portal" data-v="ejecuta">🛠 Ejecuta</button><button type="button" class="${leer().portal === "inversion" ? "on" : ""}" data-rb="portal" data-v="inversion">💼 Inversión</button></div>${esDueno() ? (setTimeout(() => { if (!R.nubeT || Date.now() - R.nubeT > 60000) cargarNube(); inicioLoginMP(); }, 0), `<button class="btn small ${mp?.conectado ? "" : "rb-oro"}" type="button" data-rb="mpl-abrir" style="width:100%;margin:6px 0 0">🔐 Conectar Mercado Público${mp?.conectado ? " · 🟢 conectado" : ""}</button>`) : ""}${R.data && conectado && !mp?.conectado && /nube/i.test(r?.equipo || "") ? `<div class="rb-alertas" style="margin:6px 0"><b>☁️ Falta la sesión de Mercado Público en la nube</b>Sin ella las ofertas no se pueden cargar para firmar. Ábrela una vez y el robot sigue solo.<button class="btn small rb-oro" data-rb="mpl-abrir" type="button" style="margin-top:6px;width:100%">🔐 Conectar con RUN y ClaveÚnica</button></div>` : ""}`;
       // 🏆 portada: cada vez que abres la app (y siempre que no haya empresa). Sin formularios: RUT → jugar.
       if (!miEmp() || !portadaVista()) { if (!R.oport) cargarOport(); return pantallaPortada(); }
       let cuerpo;
