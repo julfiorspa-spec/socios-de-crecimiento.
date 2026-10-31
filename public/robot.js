@@ -743,8 +743,21 @@
     const abierto = $("#rbSheet")?.classList.contains("on");
     if (!document.hidden) R.timer = setTimeout(refrescar, activos ? POLL_RAPIDO : abierto ? 12000 : POLL_LENTO);
   }
+  // 🔄 auto-actualiza: si el servidor tiene una versión nueva de la app, la recarga sola (sin botar la app a mano)
+  let _appLen = null;
+  async function chequeaActualiza() {
+    try {
+      const r = await fetch("/public/robot.js?v=" + Date.now(), { method: "HEAD", cache: "no-store" });
+      const len = r.headers.get("content-length");
+      if (!len) return;
+      if (_appLen === null) { _appLen = len; return; }
+      if (len !== _appLen) { _appLen = len; try { toast("🔄 Actualizando a la última versión…"); } catch (e) {} setTimeout(() => location.reload(), 700); }
+    } catch (e) {}
+  }
+  setTimeout(chequeaActualiza, 3000);
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) { ocultaDesde = Date.now(); return; }
+    chequeaActualiza();
     verificarAbiertas().finally(refrescar);           // al volver de Mercado Público el robot revisa solo si quedó enviada
   });
 
