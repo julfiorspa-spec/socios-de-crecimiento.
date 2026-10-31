@@ -193,6 +193,8 @@
   .rb-prov-oro{padding:12px;border-radius:14px;border:1px solid #f5cf6b;background:linear-gradient(135deg,rgba(245,207,107,.22),rgba(245,207,107,.05));margin:4px 0 10px}
   .rb-xl table td small,.rb-copias td small{display:block;font-size:.62rem;opacity:.65}.rb-xl tr.t td{font-weight:700}.rb-xl tr.oro td{font-weight:800;color:#f5cf6b;border-top:1px solid rgba(245,207,107,.5)}
   .rb-rep{display:flex;align-items:center;gap:10px;padding:8px 10px;margin:5px 0;border-radius:12px;background:rgba(255,255,255,.05)}.rb-rep>span{font-size:1.2rem}.rb-rep>div{flex:1;min-width:0}.rb-rep small{display:block;font-size:.66rem;opacity:.7}
+  .rb-rep.pagado{opacity:.6;background:rgba(94,240,176,.08)}.rb-rep .rb-banco{width:100%;margin-top:4px;font-size:16px;padding:5px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);color:inherit;box-sizing:border-box}
+  .rb-pagado{display:flex;gap:4px;align-items:center;justify-content:flex-end;font-size:.66rem;margin-top:4px;opacity:.85}
   .rb-inv-c{padding:10px 12px;border-radius:14px;background:rgba(94,240,176,.07);border:1px solid rgba(94,240,176,.35);margin-bottom:8px}
   .rb-inv{padding:12px;border-radius:16px;margin:8px 0;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04)}.rb-inv.toca{border-color:#f5cf6b;box-shadow:0 0 16px rgba(245,207,107,.2)}.rb-inv.activo{border-color:rgba(94,240,176,.5)}
   .rb-inv-flecha{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:.8rem}.rb-inv-flecha b{font-size:1.15rem;color:#5ef0b0}
@@ -502,7 +504,7 @@
 
   async function api(ruta, opt = {}) {
     if (!R.token) throw new Error("Robot sin enlazar");
-    if (opt.body && /^(pedir|seleccionar|preguntar|oport-descartar|plan-links|nube-aprobar)$/.test(ruta)) {      // cada pedido viaja con TU empresa, tu celular y tu juego
+    if (opt.body && /^(pedir|seleccionar|preguntar|oport-descartar|plan-links|nube-aprobar|robot-mando)$/.test(ruta)) {      // cada pedido viaja con TU empresa, tu celular y tu juego
       try { const o = JSON.parse(opt.body); if (!o.empresa && leer().empresa) o.empresa = leer().empresa; if (!o.dispositivo) o.dispositivo = dispositivo(false);
         o.jugador = miJug(); if (legado()) o.legado = true; if (!o.persona && typeof persona === "function" && persona()?.nombre) o.persona = persona().nombre; opt = { ...opt, body: JSON.stringify(o) }; } catch {}
     }
@@ -1675,7 +1677,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       caja("excel", "📊 Excel en vivo", X.compras ? `utilidad ${clp(X.final)} · ${X.fuente}` : "esperando precio", X.compras ? "vivo" : "luego", excelVivo(t, X), false),
       caja("terreno", "🚚 Terreno (en vivo)", E === "despacho" ? (op.en_vivo ? "🔴 transmitiendo" : "en trayecto") : iE > 3 ? "✓ entregado" : "despacho y transmisión", est(E === "despacho" ? "despacho" : "transporte"), E === "despacho" ? etapaHTML("despacho") : etapaHTML("transporte") + bloqueVivo(t), E === "transporte" || E === "despacho"),
       caja("docs", "🧾 Guía, factura y recepción", (op.docs || []).some((d) => d.tipo === "guia") ? "✓ guía firmada" : "guía, factura y firma del cliente", est("entrega"), etapaHTML("entrega"), E === "entrega"),
-      caja("fact", "💸 Factoring y reparto", op.cerrado ? "🥇 cerrado" : "al cerrar", E === "cerrado" ? "oro" : "luego", repartoHTML(t, X) + eerrNegocio(t), E === "cerrado"),
+      caja("fact", "💸 Factoring y reparto", repartoListo(op) ? "🥇 repartido" : op.cobrado ? "💰 llegó la plata · repartir" : op.cerrado ? "esperando el factoring" : "al cerrar", repartoListo(op) || E === "cerrado" ? "oro" : op.cobrado ? "ahora" : "luego", repartoFinal(t, X) + eerrNegocio(t), E === "cerrado" || !!op.cobrado),
     ].join("");
     return `<div class="rb-neg ${E === "cerrado" ? "cerrado" : ""}">
       <div class="rb-env" data-rb="ej-cerrar-card" data-c="${esc(cod)}" style="cursor:pointer"><div style="min-width:0"><div style="font-size:.74rem"><b>${esc(cod)}</b>${ocN ? " · OC " + esc(ocN) : ""} <span class="muted">▲ cerrar</span></div><div class="rb-fnom">${esc(t.nombre || "")}</div>
@@ -1720,6 +1722,39 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       ${fila("🎮", "Jugador", X.jugador, `comisión ${pc(X.p.comision)} por traer el negocio`)}
       ${fila("🏢", "Empresa", X.empresa, "el resto de la utilidad final")}
       ${corto ? "" : `${fila("🏛", "SII", X.iva_pagar + X.impuesto, "IVA a pagar + impuesto")}${fila("💰", "Factoring", X.factoring, pc(X.p.factoring) + " de la OC")}`}`;
+  }
+  // 💰 REPARTO FINAL CON 1 CLIC: llega la plata del factoring → cuánto le toca a cada uno, nómina lista y ✅ por pago
+  const RP = ["rp_inversionista", "rp_ejecutador", "rp_jugador", "rp_sii"];
+  const repartoListo = (op) => !!op.cobrado && RP.every((k) => op[k]);
+  function lineasReparto(t, X) {
+    const op = t.op || {}, emp = empresaActual() || {}, dif = op.cobrado ? Number(op.cobrado) - X.ingreso : 0;
+    return [
+      { k: "rp_inversionista", ico: "💼", quien: op.inversionista_nombre || "Inversionista", monto: X.invRecibe, banco: op.inversionista_banco, campo: "inversionista_banco", det: `capital ${clp(Math.round(X.capital))} + ganancia ${clp(Math.round(X.invGan))}` },
+      { k: "rp_ejecutador", ico: "🚚", quien: op.ejecutor_nombre || "Ejecutador", monto: X.ejec, banco: op.ejecutor_banco, campo: "ejecutor_banco", det: `${Math.round(X.p.ejecutador * 100)}% de la utilidad final` },
+      { k: "rp_jugador", ico: "🎮", quien: t.persona || "Jugador", monto: X.jugador, banco: op.jugador_banco, campo: "jugador_banco", det: `comisión ${Math.round(X.p.comision * 100)}%` },
+      { k: "rp_sii", ico: "🏛", quien: "Reserva impuestos (F29)", monto: X.iva_pagar + X.impuesto, banco: "Cuenta de impuestos de " + (emp.razon_social || "la empresa"), det: `IVA ${clp(Math.round(X.iva_pagar))} + impuesto ${clp(Math.round(X.impuesto))}` },
+      { k: null, ico: "🏢", quien: emp.razon_social || "Empresa", monto: X.empresa + (X.compras - X.capital) + dif, banco: "queda en la cuenta operativa",
+        det: `utilidad ${clp(Math.round(X.empresa))} + recupera su aporte a la compra ${clp(Math.round(X.compras - X.capital))}${dif ? ` · diferencia factoring ${dif > 0 ? "+" : ""}${clp(Math.round(dif))}` : ""}` },
+    ];
+  }
+  function repartoFinal(t, X) {
+    if (!X.compras) return repartoHTML(t, X);
+    const op = t.op || {}, cod = t.codigo, L = lineasReparto(t, X), hechos = RP.filter((k) => op[k]).length;
+    const cob = `<label class="rb-lab">💰 ¿Cuánto llegó del factoring a la cuenta?<input class="rb-neg-in" data-campo="cobrado" data-c="${esc(cod)}" inputmode="numeric" value="${op.cobrado ? Number(op.cobrado).toLocaleString("es-CL") : ""}" placeholder="Esperado ${Math.round(X.ingreso).toLocaleString("es-CL")}"></label>`;
+    if (!op.cobrado) return `${repartoHTML(t, X)}<div class="rb-sec">💰 Reparto final</div><div class="muted" style="font-size:.72rem">Cuando el factoring deposite, anota el monto y la app arma la nómina de pagos para cada uno.</div>${cob}`;
+    const fila = (x) => `<div class="rb-rep ${x.k && op[x.k] ? "pagado" : ""}"><span>${x.ico}</span><div><b>${esc(x.quien)}</b><small>${x.det}</small>
+        ${x.campo ? `<input class="rb-neg-in rb-banco" data-campo="${x.campo}" data-c="${esc(cod)}" value="${esc(x.banco || "")}" placeholder="Banco · tipo · N° cuenta · RUT · correo">` : `<small>${esc(x.banco || "")}</small>`}</div>
+      <div style="text-align:right"><b>${clp(Math.round(x.monto))}</b>${x.k ? `<label class="rb-pagado"><input type="checkbox" data-rb-chk="${x.k}" data-c="${esc(cod)}" ${op[x.k] ? "checked" : ""}> pagado</label>` : ""}</div></div>`;
+    return `<div class="rb-sec">💰 Reparto final · ${hechos}/${RP.length} pagos</div>${cob}
+      <div class="rb-barra"><i style="width:${hechos / RP.length * 100}%"></i></div>
+      ${L.map(fila).join("")}
+      <div class="rb-row"><button class="btn small rb-oro" type="button" data-rb="rep-nomina" data-c="${esc(cod)}">⬇ Nómina de pagos (Excel / banco)</button><button class="btn small" type="button" data-rb="rep-copiar" data-c="${esc(cod)}">📋 Copiar transferencias</button></div>
+      ${repartoListo(op) ? `<div class="rb-resp nueva">🥇 <b>Negocio repartido.</b> Todos cobraron su parte.</div>` : `<div class="muted" style="font-size:.66rem">🔐 Las transferencias las autoriza el dueño desde su banco; aquí marcas ✅ cada una al hacerla.</div>`}`;
+  }
+  function nominaTexto(t, csv) {
+    const X = calcNeg(t), L = lineasReparto(t, X).filter((x) => x.k && !(t.op || {})[x.k]);
+    if (csv) return "\ufeffNombre;Monto;Datos bancarios;Glosa\n" + L.map((x) => [x.quien, Math.round(x.monto), x.banco || "", "Negocio " + t.codigo].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
+    return L.map((x) => `${x.quien}: ${clp(Math.round(x.monto))}\n${x.banco || "(faltan datos bancarios)"}\nGlosa: Negocio ${t.codigo}`).join("\n\n");
   }
   // 💼 lo que ve el inversionista en cada negocio: cuánto pone, cuánto recibe y a quién le paga
   function bloqueInversion(t, X) {
@@ -2698,7 +2733,13 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
       <div class="rb-row"><button class="btn rb-oro" type="button" data-rb="nube-aprobar" data-v="${esc(x.id)}" style="flex:1">✅ Aprobar</button><button class="btn small" type="button" data-rb="nube-rechazar" data-v="${esc(x.id)}">✕</button></div></div>`).join("");
     const vivo = lat?.visto && Date.now() - Date.parse(lat.visto) < 120000, enNube = /nube/i.test(lat?.equipo || "");
     return `<div class="rb-sec">☁️ Robot en la nube 24/7</div>
-      ${solic}<div class="rb-op"><div class="rb-env"><b>${vivo ? (enNube ? "🟢 Funcionando en la nube" : "🟡 Funcionando en tu PC") : "⚪ Robot apagado"}</b><span class="muted" style="font-size:.7rem">${esc(lat?.equipo || "")}${lat?.visto ? " · " + esc(hace(lat.visto)) : ""}</span></div>
+      ${solic}${(() => { const M = N.mando || {}, eqs = N.equipos || {}, pref = M.preferido || "";
+        const otros = Object.entries(eqs).filter(([k, v]) => k !== M.equipo && Date.now() - Date.parse(v.visto) < 120000).map(([k]) => k);
+        const b2 = (v, t) => `<button type="button" class="${pref === v ? "on" : ""}" data-rb="robot-mando" data-v="${v}">${t}</button>`;
+        return `<div class="rb-op"><div class="rb-env"><b>🎖 Robot a cargo</b><span class="muted" style="font-size:.7rem">${esc(M.equipo || "—")}</span></div>
+          <div class="rb-etapas rb-modos">${b2("pc", "🖥 PC")}${b2("nube", "☁️ Nube")}${b2("", "⚙ Automático")}</div>
+          <div class="muted" style="font-size:.68rem">Mercado Público acepta una sola sesión: trabaja un robot a la vez y el otro espera quieto.${otros.length ? ` En espera: ${otros.map(esc).join(", ")}.` : ""}</div></div>`; })()}
+      <div class="rb-op"><div class="rb-env"><b>${vivo ? (enNube ? "🟢 Funcionando en la nube" : "🟡 Funcionando en tu PC") : "⚪ Robot apagado"}</b><span class="muted" style="font-size:.7rem">${esc(lat?.equipo || "")}${lat?.visto ? " · " + esc(hace(lat.visto)) : ""}</span></div>
       ${e ? `<div class="muted" style="font-size:.74rem;margin:4px 0">Servidor ${esc(e.host)} · instalado ${esc(hace(e.t))}</div>
         <div class="rb-row"><a class="btn rb-oro" href="${esc(e.vista)}" target="_blank" rel="noopener" style="flex:1">🖥 Abrir vista remota</a><a class="btn small" href="${esc(e.panel)}" target="_blank" rel="noopener">Panel</a></div>
         <div class="rb-kv"><span>Usuario <b>${esc(e.usuario)}</b></span><span>Clave <b>${esc(e.clave)}</b></span><button class="btn small" type="button" data-rb="nube-copiar" data-v="${esc(e.clave)}">📋</button></div>
@@ -3285,9 +3326,14 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       try { const r = await api("plan", { method: "POST", body: JSON.stringify({ jugador: miJug(), plan: k, nombre: persona()?.nombre || "", telefono: persona()?.telefono || "" }) }); R.plan = r.plan; } catch (e) { toast(e.message); return; }
       if (link) window.open(link, "_blank"); else toast("💎 Plan pedido: te contactamos para el pago y se activa al confirmarlo");
       return pintarHoja(true); }
+    if (a === "rep-nomina" || a === "rep-copiar") { const t = (R.ejec || []).find((x) => x.codigo === cod); if (!t) return;
+      if (a === "rep-copiar") { const ok = await copiar(nominaTexto(t)); toast(ok ? "📋 Transferencias copiadas" : "No se pudo copiar"); return; }
+      const url = URL.createObjectURL(new Blob([nominaTexto(t, true)], { type: "text/csv;charset=utf-8" })), el = document.createElement("a");
+      el.href = url; el.download = `Nomina_${cod}.csv`; document.body.append(el); el.click(); el.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); toast("⬇ Nómina descargada"); return; }
     if (a === "inv-transferi") return ejOpVivo(cod, { transferido: true }, "✅ Inversión registrada: la empresa paga al proveedor");
     if (a === "nube-aprobar" || a === "nube-rechazar") {
       try { await api("nube-aprobar", { method: "POST", body: JSON.stringify({ id: b.dataset.v, rechazar: a === "nube-rechazar" }) }); toast(a === "nube-aprobar" ? "✅ Servidor aprobado: se está instalando" : "Solicitud rechazada"); R.nubeT = 0; await cargarNube(); } catch (e) { toast(e.message); } return; }
+    if (a === "robot-mando") { try { await api("robot-mando", { method: "POST", body: JSON.stringify({ preferido: b.dataset.v || null }) }); toast(b.dataset.v ? `🎖 Manda ${b.dataset.v === "nube" ? "la nube" : "el PC"} (cambia en ~10 s)` : "⚙ Automático"); R.nubeT = 0; await cargarNube(); } catch (e) { toast(e.message); } return; }
     if (a === "nube-copiar") { const ok = await copiar(b.dataset.v || ""); toast(ok ? "📋 Copiado" : "No se pudo copiar"); return; }
     if (a === "plan-links") { const links = Object.fromEntries(PLANES_INFO.map(([k]) => [k, ($("#rbPago-" + k)?.value || "").trim()]));
       try { const r = await api("plan-links", { method: "POST", body: JSON.stringify({ links }) }); R.planLinks = r.links; toast("💳 Links de pago guardados"); pintarHoja(true); } catch (e) { toast(e.message); } return; }
@@ -3596,7 +3642,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     let datos = null, informe = false;
     if (el.classList.contains("rb-cot-in")) { const v = +(el.value || "").replace(/\D/g, "") || 0; el.value = v ? v.toLocaleString("es-CL") : "";
       datos = { cotizacion: { k: el.dataset.k, v, nombre: el.dataset.n } }; }
-    if (el.classList.contains("rb-neg-in")) { const txt = !["precio_acordado", "costo_transporte", "km"].includes(el.dataset.campo);
+    if (el.classList.contains("rb-neg-in")) { const txt = !["precio_acordado", "costo_transporte", "km", "cobrado"].includes(el.dataset.campo);
       const v = txt ? el.value : +(el.value || "").replace(/\D/g, "") || null; datos = { [el.dataset.campo]: v }; informe = !txt; }
     if (el.type === "date") el.blur();
     if (el.dataset.rbChk) datos = { [el.dataset.rbChk]: el.checked };
