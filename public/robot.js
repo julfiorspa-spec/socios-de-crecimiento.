@@ -981,7 +981,7 @@
     acts.push(`<a class="btn small" href="${portal}" target="_blank" rel="noopener noreferrer">Mercado Público ↗</a>`);
     if (!e.activo) acts.push(`<button class="btn small" data-rb="olvidar" data-c="${esc(t.codigo)}" type="button" aria-label="Quitar de la lista">Quitar</button>`);
     const msg = t.estado === "lista"
-      ? "Todo cargado en el PC. Presiona «Enviar cotización», marca la declaración y «Aceptar y enviar» (en el PC o desde aquí con escritorio remoto). El robot confirma solo."
+      ? "Todo cargado en el robot. Presiona «Enviar cotización», marca la declaración y «Aceptar y enviar» (en el PC o desde aquí con escritorio remoto). El robot confirma solo."
       : firmable ? (t.firma.aviso || null) : t.mensaje;
     const al = firmable ? (t.firma.alertas || []) : [];
     const alertasHtml = al.length ? `<div class="rb-alertas"><b>Revisa antes de firmar</b><ul style="margin:0;padding:0">${al.map((a) =>
@@ -1062,7 +1062,7 @@
         <div class="muted">El robot del PC lee la ficha y los adjuntos, calcula el precio y arma cotización, ficha técnica y PDF. La oferta queda <b>lista para firmar</b> aquí.</div>
         <div class="muted" style="margin-top:8px"><strong style="color:#d9c9ff">Tú la envías y firmas</strong> desde tu navegador normal con el botón <b>Rellenar</b>: así Mercado Público no ve un navegador automatizado. Te avisamos cuando esté lista.</div>
       </div>
-      ${!R.data?.robot?.conectado ? `<div class="note" style="border-left-color:var(--warn)">El robot del PC está desconectado. El pedido queda en cola y parte apenas se encienda el panel en el PC.</div>` : ""}
+      ${!R.data?.robot?.conectado ? `<div class="note" style="border-left-color:var(--warn)">El robot está apagado. El pedido queda en cola y parte apenas vuelva.</div>` : ""}
       ${t && est(t.estado).activo ? `<div class="note" style="border-left-color:var(--warn)">Esta compra ya está en manos del robot (${esc(est(t.estado).txt)}).</div>` : ""}
       <div class="row" style="margin-top:14px">
         <button class="btn" type="button" data-rb="volver">Volver</button>
@@ -2961,10 +2961,10 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
       const cab = `<div class="rb-top2">
         <button class="rb-emp" type="button" data-rb="empresa-editar">🏢 <span>${esc(corta(emp?.razon_social) || "Mi empresa")}</span> ▾</button>
         <button class="rb-yo" type="button" data-rb="persona-editar" title="Quién usa este celular">👤 ${esc((persona()?.nombre || "¿quién?").split(" ")[0].slice(0, 12))}</button>
-        <span class="rb-pcs" title="${conectado ? "PC conectado" : "PC desconectado"}"><i class="${conectado ? "on" : ""}"></i>PC<i class="${mp?.conectado ? "on" : ""}"></i>MP</span>
+        <span class="rb-pcs" title="${conectado ? "Robot conectado" + (r?.equipo ? " · " + esc(r.equipo) : "") : "Robot apagado"}"><i class="${conectado ? "on" : ""}"></i>${/nube/i.test(r?.equipo || "") ? "☁️" : "Robot"}<i class="${mp?.conectado ? "on" : ""}"></i>MP</span>
         <button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
         <button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
-        <div class="rb-portal"><button type="button" class="${!["ejecuta", "licita", "inversion"].includes(leer().portal) ? "on" : ""}" data-rb="portal" data-v="juego">🎮 Juego</button><button type="button" class="${leer().portal === "licita" ? "on" : ""}" data-rb="portal" data-v="licita">📑 Licita</button><button type="button" class="${leer().portal === "ejecuta" ? "on" : ""}" data-rb="portal" data-v="ejecuta">🛠 Ejecuta</button><button type="button" class="${leer().portal === "inversion" ? "on" : ""}" data-rb="portal" data-v="inversion">💼 Inversión</button></div>`;
+        <div class="rb-portal"><button type="button" class="${!["ejecuta", "licita", "inversion"].includes(leer().portal) ? "on" : ""}" data-rb="portal" data-v="juego">🎮 Juego</button><button type="button" class="${leer().portal === "licita" ? "on" : ""}" data-rb="portal" data-v="licita">📑 Licita</button><button type="button" class="${leer().portal === "ejecuta" ? "on" : ""}" data-rb="portal" data-v="ejecuta">🛠 Ejecuta</button><button type="button" class="${leer().portal === "inversion" ? "on" : ""}" data-rb="portal" data-v="inversion">💼 Inversión</button></div>${R.data && conectado && !mp?.conectado && /nube/i.test(r?.equipo || "") ? `<div class="rb-alertas" style="margin:6px 0"><b>☁️ Falta la sesión de Mercado Público en la nube</b>Sin ella las ofertas no se pueden cargar para firmar. Ábrela una vez y el robot sigue solo.<button class="btn small rb-oro" data-rb="conectar-mp" type="button" style="margin-top:6px;width:100%">🖥 Abrir vista remota e iniciar sesión</button></div>` : ""}`;
       // 🏆 portada: cada vez que abres la app (y siempre que no haya empresa). Sin formularios: RUT → jugar.
       if (!miEmp() || !portadaVista()) { if (!R.oport) cargarOport(); return pantallaPortada(); }
       let cuerpo;
@@ -2978,8 +2978,8 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
       else { if (!esDueno() && (!R.planT || Date.now() - R.planT > 300000)) setTimeout(cargarPlan, 0);
         cuerpo = (leer().portal === "ejecuta" ? (tienePlan("medio") ? portalEjecuta() : candado("medio", "🛠 Ejecuta")) : leer().portal === "licita" ? (tienePlan("medio") ? portalLicita() : candado("medio", "📑 Licitaciones")) : leer().portal === "inversion" ? portalInversion() : vistaOport()); }
       const mas = `<details class="rb-ajustes rb-mas"><summary>⚙ Más opciones</summary>
-        ${!conectado ? `<div class="rb-alertas"><b>PC desconectado</b>${r?.visto ? "Visto " + esc(hace(r.visto)) + ". " : ""}Abre el robot en el PC.</div>` : ""}
-        ${mp?.conectado ? "" : `<button class="btn small rb-oro" data-rb="conectar-mp" type="button" style="margin:8px 0">Conectar tu Mercado Público</button>`}
+        ${!conectado ? `<div class="rb-alertas"><b>Robot apagado</b>${r?.visto ? "Visto " + esc(hace(r.visto)) + ". " : ""}Revisa 💎 Planes → ☁️ Robot en la nube.</div>` : ""}
+        ${mp?.conectado ? "" : `<button class="btn small rb-oro" data-rb="conectar-mp" type="button" style="margin:8px 0">${/nube/i.test(r?.equipo || "") ? "☁️ Falta tu sesión de Mercado Público en la nube · abrir" : "Conectar tu Mercado Público"}</button>`}
         <div class="rb-row" style="margin:8px 0"><input id="rbCod" class="rb-in" placeholder="Preparar por código: 3704-203-COT26" autocomplete="off" autocapitalize="characters"><button class="btn small rb-oro" type="button" data-rb="nuevo">✍</button></div>
         ${!R.push && pushPosible && !(esIOS && !instalada()) ? `<button class="btn small" type="button" data-rb="avisos">🔔 Activar avisos</button>` : ""}
         ${esIOS && !instalada() ? `<button class="btn small" type="button" data-rb="copiar-enlace-app">📲 Copiar enlace para la app del inicio</button>` : `<button class="btn small" type="button" data-rb="copiar-enlace-app">📲 Copiar enlace para otro celular</button>`}
@@ -2997,12 +2997,12 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
       <div class="rb-sheet-head"><h2 style="margin:0">Robot de ofertas</h2><button class="rb-x" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
       <div class="rb-status ${conectado ? "on" : ""}"><span class="rb-dot"></span>
         <span>${!R.data ? (R.err ? esc(R.err) : '<span class="spinner"></span>') : conectado
-          ? `PC conectado${r.equipo ? " · " + esc(r.equipo) : ""}${r.ocupado && r.tarea ? " · " + esc(r.tarea) : " · libre"}`
-          : `PC desconectado${r?.visto ? " · visto " + esc(hace(r.visto)) : ""}. Abre el panel del robot en el PC.`}</span></div>
+          ? `Robot conectado${r.equipo ? " · " + esc(r.equipo) : ""}${r.ocupado && r.tarea ? " · " + esc(r.tarea) : " · libre"}`
+          : `Robot apagado${r?.visto ? " · visto " + esc(hace(r.visto)) : ""}. Revisa 💎 Planes → ☁️ Robot en la nube.`}</span></div>
       ${R.data ? (() => { const mp = R.data.mp; return `<div class="rb-status ${mp?.conectado ? "on" : ""}" style="align-items:center"><span class="rb-dot"></span>
-        <span style="flex:1">${mp?.conectado ? `Mercado Público conectado en Safari · ${esc(hace(mp.visto))}`
+        <span style="flex:1">${mp?.conectado ? `Mercado Público conectado${mp.usuario ? " · " + esc(mp.usuario) : ""} · ${esc(hace(mp.visto))}`
           : `Mercado Público desconectado${mp?.visto ? " · visto " + esc(hace(mp.visto)) : ""}`}</span>
-        ${mp?.conectado ? "" : `<button class="btn small rb-firmar" data-rb="conectar-mp" type="button">Conéctate a tu Mercado Público</button>`}</div>`; })() : ""}
+        ${mp?.conectado ? "" : `<button class="btn small rb-firmar" data-rb="conectar-mp" type="button">${/nube/i.test(R.data?.robot?.equipo || "") ? "☁️ Iniciar sesión en la nube" : "Conéctate a tu Mercado Público"}</button>`}</div>`; })() : ""}
       <div class="row" style="margin:6px 0 4px">
         <div class="field" style="flex:1;min-width:150px"><input id="rbCod" placeholder="Uno o varios códigos (ej. 3704-203-COT26, 1261-12-COT26)" autocomplete="off" autocapitalize="characters"></div>
         <button class="btn small rb-firmar" type="button" data-rb="nuevo">✍ Preparar</button>
@@ -3542,6 +3542,8 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     }
     if (a === "marcador-arrastrar") { ev.preventDefault(); toast("Arrástralo a la barra de favoritos; se usa en Mercado Público"); return; }
     if (a === "conectar-mp") {
+      // ☁️ si trabaja el robot de la nube, la sesión de Mercado Público se abre en SU navegador (vista remota)
+      if (/nube/i.test(R.data?.robot?.equipo || "")) { const v = R.nube?.nube?.vista; if (v) { window.open(v, "_blank"); toast("Usuario «robot» y tu clave de la nube · luego inicia sesión en Mercado Público"); } else { setTimeout(cargarNube, 0); toast("Abre 💎 Planes → ☁️ Robot en la nube → Abrir vista remota"); } return; }
       if (esIOS && instalada()) { abrirEnSafari("conectar"); return; }
       window.open(location.origin + "/firmar.html#conectar", "_blank"); return;
     }
