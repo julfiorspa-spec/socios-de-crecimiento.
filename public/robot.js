@@ -504,7 +504,7 @@
 
   async function api(ruta, opt = {}) {
     if (!R.token) throw new Error("Robot sin enlazar");
-    if (opt.body && /^(pedir|seleccionar|preguntar|oport-descartar|plan-links|nube-aprobar|robot-mando)$/.test(ruta)) {      // cada pedido viaja con TU empresa, tu celular y tu juego
+    if (opt.body && /^(pedir|seleccionar|preguntar|oport-descartar|plan-links|nube-aprobar|robot-mando|mp-login|mp-login-resp)$/.test(ruta)) {      // cada pedido viaja con TU empresa, tu celular y tu juego
       try { const o = JSON.parse(opt.body); if (!o.empresa && leer().empresa) o.empresa = leer().empresa; if (!o.dispositivo) o.dispositivo = dispositivo(false);
         o.jugador = miJug(); if (legado()) o.legado = true; if (!o.persona && typeof persona === "function" && persona()?.nombre) o.persona = persona().nombre; opt = { ...opt, body: JSON.stringify(o) }; } catch {}
     }
@@ -2724,6 +2724,60 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
     if (R._cargNube) return; R._cargNube = true;
     try { const [n, so] = await Promise.all([api("nube-estado"), api("nube-solicitudes").catch(() => ({}))]); R.nube = { ...n, solicitudes: so.solicitudes || [] }; R.nubeT = Date.now(); pintarHojaSiAbierta(); } catch {} finally { R._cargNube = false; }
   }
+  // 🔐 CONECTAR MERCADO PÚBLICO DESDE EL CELULAR: RUN y ClaveÚnica se cifran aquí con la llave pública del robot del PC
+  // (RSA-OAEP). La nube solo los pasa sellados: no los puede leer ni los guarda. El robot los escribe en ClaveÚnica
+  // con el internet del PC (ClaveÚnica bloquea los servidores en la nube) y pregunta aquí el código o la empresa.
+  async function cargarLoginMP() {
+    clearTimeout(R.mplTimer);
+    try { R.mpl = await api("mp-login"); R.mplErr = null; } catch (e) { R.mplErr = e.message; }
+    const E = R.mpl?.estado, firma = E ? E.id + E.paso + E.t : "";
+    if (firma !== R.mplFirma) { R.mplFirma = firma; pintarHojaSiAbierta(); }
+    if (R.pantalla === "mplogin") R.mplTimer = setTimeout(cargarLoginMP, E && !["listo", "error"].includes(E.paso) ? 2000 : 6000);
+  }
+  async function sobreMP(obj) {
+    const pub = R.mpl?.pub;
+    if (!pub) throw new Error("El robot del PC aún no manda su llave: enciéndelo (con la versión nueva) y espera 10 segundos.");
+    const der = Uint8Array.from(atob(pub), (c) => c.charCodeAt(0));
+    const k = await crypto.subtle.importKey("spki", der, { name: "RSA-OAEP", hash: "SHA-256" }, false, ["encrypt"]);
+    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "RSA-OAEP" }, k, new TextEncoder().encode(JSON.stringify(obj))));
+    let bin = ""; ct.forEach((x) => (bin += String.fromCharCode(x)));
+    return btoa(bin);
+  }
+  function loginActivo() {
+    const E = R.mpl?.estado;
+    return E && Date.now() - Date.parse(E.t) < 360000 && !["listo", "error", "cancelado"].includes(E.paso) ? E : null;
+  }
+  function pantallaLoginMP() {
+    if (!R.mplCarg) { R.mplCarg = true; setTimeout(cargarLoginMP, 0); }
+    const L = R.mpl || {}, E = L.estado && Date.now() - Date.parse(L.estado.t) < 900000 ? L.estado : null, A = loginActivo();
+    const foto = E?.foto ? `<details class="rb-ajustes" style="margin-top:10px"><summary>🖥 Ver la pantalla del robot</summary><img src="data:image/jpeg;base64,${E.foto}" alt="Pantalla del robot" style="width:100%;border-radius:10px;margin-top:6px"></details>` : "";
+    const form = `<div class="label" style="margin-top:12px">RUN</div>
+        <input id="rbMplRun" class="rb-in" placeholder="12.345.678-9" autocomplete="username" autocapitalize="characters" inputmode="text" style="width:100%">
+        <div class="label" style="margin-top:10px">ClaveÚnica</div>
+        <input id="rbMplClave" class="rb-in" type="password" placeholder="Tu ClaveÚnica" autocomplete="current-password" style="width:100%">
+        <button class="btn rb-oro" type="button" data-rb="mpl-enviar" style="width:100%;margin-top:12px">🔐 Conectar</button>
+        <div class="muted" style="font-size:.7rem;margin-top:8px">Se cifran en este celular con la llave del robot de tu PC: la nube no puede leerlos y no se guardan en ninguna parte.</div>`;
+    let cuerpo;
+    if (!A) {
+      cuerpo = (E?.paso === "listo" ? `<div class="rb-resp nueva" style="margin:10px 0"><b>✅ Mercado Público conectado</b><div style="font-size:.78rem">${esc(E.mensaje || "El robot ya tiene tu sesión.")}</div></div>`
+        : E?.paso === "error" ? `<div class="rb-alertas"><b>No se pudo conectar</b>${esc(E.mensaje || "")}</div>` : "")
+        + (L.pc_vivo === false ? `<div class="rb-alertas" style="margin-top:8px"><b>🖥 El robot del PC está apagado</b>Enciéndelo: ClaveÚnica solo deja entrar desde internet de casa u oficina, no desde servidores en la nube.</div>` : "")
+        + (E?.paso === "listo" ? `<button class="btn small" type="button" data-rb="mpl-salir" style="width:100%;margin-top:8px">Volver</button><details class="rb-ajustes" style="margin-top:8px"><summary>Conectar otra vez</summary>${form}</details>` : form);
+    } else if (A.paso === "codigo") {
+      cuerpo = `<div class="rb-resp nueva" style="margin:10px 0"><b>🔢 ClaveÚnica pide un código</b><div style="font-size:.78rem">${esc(A.mensaje || "Escribe el código que te llegó.")}</div></div>
+        <input id="rbMplCod" class="rb-in" placeholder="Código" inputmode="numeric" autocomplete="one-time-code" style="width:100%;font-size:1.3rem;letter-spacing:.2em;text-align:center">
+        <button class="btn rb-oro" type="button" data-rb="mpl-codigo" style="width:100%;margin-top:10px">Enviar código</button>`;
+    } else if (A.paso === "empresa") {
+      cuerpo = `<div class="rb-resp nueva" style="margin:10px 0"><b>🏢 Elige con qué empresa entrar</b><div style="font-size:.78rem">${esc(A.mensaje || "")}</div></div>`
+        + (A.opciones || []).map((o, i) => `<button class="btn small" type="button" data-rb="mpl-opcion" data-v="${i}" style="width:100%;margin:4px 0;text-align:left">${esc(o)}</button>`).join("");
+    } else {
+      cuerpo = `<div class="rb-op" style="margin:12px 0;text-align:center"><span class="spinner"></span><div style="margin-top:8px">${esc(A.mensaje || "Trabajando…")}</div></div>`;
+    }
+    return `<div class="rb-sheet-head"><h2 style="margin:0">🔐 Conectar Mercado Público</h2><button class="rb-x" type="button" data-rb="mpl-salir" aria-label="Volver">✕</button></div>
+      <div class="muted" style="font-size:.78rem">El robot de tu PC entra a Mercado Público con tu ClaveÚnica, como lo harías tú en Chrome. Solo una vez: después sigue solo.</div>
+      ${R.mplErr ? `<div class="rb-alertas"><b>Sin conexión</b>${esc(R.mplErr)}</div>` : ""}${cuerpo}${foto}
+      ${A ? `<button class="btn small" type="button" data-rb="mpl-cancelar" style="width:100%;margin-top:10px">Cancelar</button>` : ""}`;
+  }
   // ☁️ entrar directo a la pantalla del robot de la nube (la contraseña VNC va en el # : no viaja al servidor)
   function vistaDirecta() {
     const e = R.nube?.nube; if (!e?.vista) return null;
@@ -2977,7 +3031,7 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
         <span class="rb-pcs" title="${conectado ? "Robot conectado" + (r?.equipo ? " · " + esc(r.equipo) : "") : "Robot apagado"}"><i class="${conectado ? "on" : ""}"></i>${/nube/i.test(r?.equipo || "") ? "☁️" : "Robot"}<i class="${mp?.conectado ? "on" : ""}"></i>MP</span>
         <button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
         <button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
-        <div class="rb-portal"><button type="button" class="${!["ejecuta", "licita", "inversion"].includes(leer().portal) ? "on" : ""}" data-rb="portal" data-v="juego">🎮 Juego</button><button type="button" class="${leer().portal === "licita" ? "on" : ""}" data-rb="portal" data-v="licita">📑 Licita</button><button type="button" class="${leer().portal === "ejecuta" ? "on" : ""}" data-rb="portal" data-v="ejecuta">🛠 Ejecuta</button><button type="button" class="${leer().portal === "inversion" ? "on" : ""}" data-rb="portal" data-v="inversion">💼 Inversión</button></div>${esDueno() ? (setTimeout(() => { if (!R.nubeT || Date.now() - R.nubeT > 60000) cargarNube(); }, 0), `<button class="btn small ${mp?.conectado ? "" : "rb-oro"}" type="button" data-rb="nube-entrar" style="width:100%;margin:6px 0 0">☁️ Conectarme a la nube${mp?.conectado ? " · 🟢 Mercado Público conectado" : ""}</button>`) : ""}${R.data && conectado && !mp?.conectado && /nube/i.test(r?.equipo || "") ? `<div class="rb-alertas" style="margin:6px 0"><b>☁️ Falta la sesión de Mercado Público en la nube</b>Sin ella las ofertas no se pueden cargar para firmar. Ábrela una vez y el robot sigue solo.<button class="btn small rb-oro" data-rb="conectar-mp" type="button" style="margin-top:6px;width:100%">🖥 Abrir vista remota e iniciar sesión</button></div>` : ""}`;
+        <div class="rb-portal"><button type="button" class="${!["ejecuta", "licita", "inversion"].includes(leer().portal) ? "on" : ""}" data-rb="portal" data-v="juego">🎮 Juego</button><button type="button" class="${leer().portal === "licita" ? "on" : ""}" data-rb="portal" data-v="licita">📑 Licita</button><button type="button" class="${leer().portal === "ejecuta" ? "on" : ""}" data-rb="portal" data-v="ejecuta">🛠 Ejecuta</button><button type="button" class="${leer().portal === "inversion" ? "on" : ""}" data-rb="portal" data-v="inversion">💼 Inversión</button></div>${esDueno() ? (setTimeout(() => { if (!R.nubeT || Date.now() - R.nubeT > 60000) cargarNube(); }, 0), `<button class="btn small ${mp?.conectado ? "" : "rb-oro"}" type="button" data-rb="mpl-abrir" style="width:100%;margin:6px 0 0">🔐 Conectar Mercado Público${mp?.conectado ? " · 🟢 conectado" : ""}</button>`) : ""}${R.data && conectado && !mp?.conectado && /nube/i.test(r?.equipo || "") ? `<div class="rb-alertas" style="margin:6px 0"><b>☁️ Falta la sesión de Mercado Público en la nube</b>Sin ella las ofertas no se pueden cargar para firmar. Ábrela una vez y el robot sigue solo.<button class="btn small rb-oro" data-rb="mpl-abrir" type="button" style="margin-top:6px;width:100%">🔐 Conectar con RUN y ClaveÚnica</button></div>` : ""}`;
       // 🏆 portada: cada vez que abres la app (y siempre que no haya empresa). Sin formularios: RUT → jugar.
       if (!miEmp() || !portadaVista()) { if (!R.oport) cargarOport(); return pantallaPortada(); }
       let cuerpo;
@@ -2988,6 +3042,7 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
       else if (R.pantalla === "correos") cuerpo = pantallaCorreos();
       else if (R.pantalla === "global") cuerpo = pantallaGlobal();
       else if (R.pantalla === "planes") cuerpo = pantallaPlanes();
+      else if (R.pantalla === "mplogin") cuerpo = pantallaLoginMP();
       else { if (!esDueno() && (!R.planT || Date.now() - R.planT > 300000)) setTimeout(cargarPlan, 0);
         cuerpo = (leer().portal === "ejecuta" ? (tienePlan("medio") ? portalEjecuta() : candado("medio", "🛠 Ejecuta")) : leer().portal === "licita" ? (tienePlan("medio") ? portalLicita() : candado("medio", "📑 Licitaciones")) : leer().portal === "inversion" ? portalInversion() : vistaOport()); }
       const mas = `<details class="rb-ajustes rb-mas"><summary>⚙ Más opciones</summary>
@@ -3060,7 +3115,9 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
     // el repintado cada pocos segundos no debe cerrar lo que la persona abrió
     const abiertos = new Set($$("details", box).map((d, i) => d.open && (d.closest("[id]")?.id || "") + d.className + i).filter(Boolean));
     const tabX = $(".rb-tablero", box)?.scrollLeft || 0;
+    const mplV = $$("input[id^=rbMpl]", box).map((i) => [i.id, i.value, document.activeElement === i]);   // 🔐 no borrar lo que escribes
     box.innerHTML = html;
+    mplV.forEach(([id, v, f]) => { const i = $("#" + id, box); if (i) { i.value = v; if (f) i.focus(); } });
     contar(box);
     $$("details", box).forEach((d, i) => { if (abiertos.has((d.closest("[id]")?.id || "") + d.className + i)) d.open = true; });
     const tab = $(".rb-tablero", box);
@@ -3555,9 +3612,32 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     }
     if (a === "marcador-arrastrar") { ev.preventDefault(); toast("Arrástralo a la barra de favoritos; se usa en Mercado Público"); return; }
     if (a === "nube-entrar") { await entrarNube(); return; }
+    if (a === "mpl-abrir") { R.pantalla = "mplogin"; R.mplCarg = false; sheet.scrollTop = 0; return pintarHoja(true); }
+    if (a === "mpl-salir") { R.pantalla = null; clearTimeout(R.mplTimer); R.mplCarg = false; return pintarHoja(true); }
+    if (a === "mpl-enviar") {
+      const run = ($("#rbMplRun")?.value || "").replace(/[^0-9kK]/g, "").toUpperCase(), clave = $("#rbMplClave")?.value || "";
+      if (run.length < 7 || !clave) return toast("Escribe tu RUN y tu ClaveÚnica");
+      b.disabled = true;
+      try {
+        if (!R.mpl?.pub) await cargarLoginMP();
+        const sobre = await sobreMP({ run, clave });
+        $("#rbMplClave").value = ""; $("#rbMplRun").value = "";
+        await api("mp-login", { method: "POST", body: JSON.stringify({ sobre }) });
+        toast("🔐 Enviado cifrado al robot del PC"); R.mplFirma = null; await cargarLoginMP();
+      } catch (e) { toast(e.message); } finally { b.disabled = false; }
+      return;
+    }
+    if (a === "mpl-codigo") {
+      const cod = ($("#rbMplCod")?.value || "").trim(), A = loginActivo();
+      if (!cod || !A) return toast("Escribe el código");
+      try { const sobre = await sobreMP({ codigo: cod }); $("#rbMplCod").value = ""; await api("mp-login-resp", { method: "POST", body: JSON.stringify({ id: A.id, sobre }) }); toast("Código enviado"); R.mplFirma = null; await cargarLoginMP(); } catch (e) { toast(e.message); }
+      return;
+    }
+    if (a === "mpl-opcion") { const A = loginActivo(); if (!A) return; try { await api("mp-login-resp", { method: "POST", body: JSON.stringify({ id: A.id, opcion: +b.dataset.v }) }); toast("Elegida"); R.mplFirma = null; await cargarLoginMP(); } catch (e) { toast(e.message); } return; }
+    if (a === "mpl-cancelar") { const A = loginActivo(); if (A) await api("mp-login-resp", { method: "POST", body: JSON.stringify({ id: A.id, cancelar: true }) }).catch(() => {}); toast("Cancelado"); return; }
     if (a === "conectar-mp") {
       // ☁️ si trabaja el robot de la nube, la sesión de Mercado Público se abre en SU navegador (vista remota)
-      if (/nube/i.test(R.data?.robot?.equipo || "")) { await entrarNube(); toast("Inicia sesión en Mercado Público en esa pantalla · una sola vez"); return; }
+      if (esDueno()) { R.pantalla = "mplogin"; R.mplCarg = false; sheet.scrollTop = 0; return pintarHoja(true); }
       if (esIOS && instalada()) { abrirEnSafari("conectar"); return; }
       window.open(location.origin + "/firmar.html#conectar", "_blank"); return;
     }
