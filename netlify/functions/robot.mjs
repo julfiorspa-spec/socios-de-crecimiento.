@@ -153,7 +153,7 @@ async function enviarPush(v, sub, texto, urgente) {
 const idSub = (endpoint) => createHash("sha256").update(String(endpoint)).digest("hex").slice(0, 32);
 
 const AVISO = {
-  lista:      (t) => ["Falta tu clic · " + t.codigo, `${clpTxt(t.total)} lista en el PC. Presiona «Enviar cotización» y acepta la declaración.`, true],
+  lista:      (t) => ["Falta tu clic · " + t.codigo, `${clpTxt(t.total)} lista en el robot. Presiona «Enviar cotización» y acepta la declaración.`, true],
   enviada:    (t) => ["Oferta enviada · " + t.codigo, clpTxt(t.total), false],
   confirmada: (t) => ["Oferta confirmada · " + t.codigo, `${clpTxt(t.total)} · confirmada en Mercado Público`, false],
   requiere:   (t) => ["Necesita tu atención · " + t.codigo, t.mensaje || "", true],
@@ -995,7 +995,7 @@ async function atender(req) {
       persona: texto(b.persona, 60) || previo?.persona || null,               // quién la pidió (nombre que puso en la app)
     };
     if (esLic) t.tipo = "licitacion";
-    anotar(t, "en_cola", accion === "probar" ? "Prueba sin enviar: el robot la tomará en segundos." : esLic ? "Licitación: el robot bajará la ficha, las bases y los anexos." : "Esperando que el robot del PC la tome.");
+    anotar(t, "en_cola", accion === "probar" ? "Prueba sin enviar: el robot la tomará en segundos." : esLic ? "Licitación: el robot bajará la ficha, las bases y los anexos." : "Esperando que el robot la tome.");
     return json({ trabajo: await escribir(store, t) });
   }
 
@@ -1448,7 +1448,7 @@ async function atender(req) {
     }
     const siguiente = lista.filter((t) => t.estado === "en_cola" && mioT(t)).sort((a, b) => (humano(b) - humano(a)) || a.creado.localeCompare(b.creado))[0];
     if (!siguiente) return json({ siguiente: null, ...op });
-    anotar(siguiente, "tomado", "El robot del PC la tomó.");
+    anotar(siguiente, "tomado", "El robot la tomó.");
     return json({ siguiente: await escribir(store, siguiente), ...op });
   }
 
