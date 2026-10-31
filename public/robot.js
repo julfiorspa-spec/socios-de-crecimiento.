@@ -350,6 +350,8 @@
   .rb-top2{display:flex;align-items:center;gap:8px;margin:0 0 8px}
   .rb-emp{flex:1;min-width:0;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);color:#f4f7ff;border-radius:12px;padding:8px 10px;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer;text-align:left}
   .rb-emp span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rb-mando-barra{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:13px;padding:9px 11px;margin:7px 0}
+  .rb-mando-luz{font-size:.82rem;color:#e8edf8}
   .rb-pcs{display:flex;align-items:center;gap:4px;font-size:.66rem;color:#a9b8d9;letter-spacing:.04em}
   .rb-pcs i{width:7px;height:7px;border-radius:50%;background:#64708a;display:inline-block;margin-left:4px}.rb-pcs i.on{background:#3fdc8a;box-shadow:0 0 0 3px rgba(63,220,138,.18)}
   .rb-ico{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);color:#fff;border-radius:12px;width:38px;height:36px;font-size:1rem;cursor:pointer}
@@ -2784,11 +2786,23 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
   // 🚪 al abrir la app (dueño): si la nube no tiene sesión de Mercado Público vigente, lo primero es conectarla
   function inicioLoginMP() {
     if (R.mplIni) return; R.mplIni = true;
-    api("mp-login").then((x) => {
-      R.mpl = x; const sn = x.sesion_nube;
-      const vigente = sn && sn.ok && Date.now() - Date.parse(sn.t) < 20 * 3600e3;
-      if (!vigente && !R.pantalla && !R.detalle) { R.pantalla = "mplogin"; R.mplCarg = false; pintarHojaSiAbierta(); }
-    }).catch(() => {});
+    api("mp-login").then((x) => { R.mpl = x; pintarHojaSiAbierta(); }).catch(() => {});
+  }
+  // 🖥/☁️ barra de modo del dueño: elige dónde corre el robot, con luz 🟢 encendido / 🔴 apagado, y el botón de ingreso
+  function barraMando(r, mp, conectado) {
+    const M = R.nube?.mando || {}, pref = M.preferido || "";
+    const enNube = /nube/i.test(r?.equipo || "");
+    const luz = conectado ? "🟢" : "🔴";
+    const estado = conectado
+      ? (enNube ? "Robot andando en la nube" : "Robot andando en tu PC") + (r?.ocupado && r?.tarea ? " · " + esc(corta(r.tarea)) : r?.ocupado ? " · ocupado" : " · libre")
+      : "Robot apagado — enciéndelo en tu PC (abre el robot)";
+    const b = (v, t) => `<button type="button" class="${pref === v ? "on" : ""}" data-rb="robot-mando" data-v="${v}">${t}</button>`;
+    return `<div class="rb-mando-barra">
+      <div class="rb-mando-luz"><b>${luz} ${esc(estado)}</b></div>
+      <div class="rb-etapas rb-modos" style="margin-top:6px">${b("pc", "🖥 PC")}${b("nube", "☁️ Nube")}${b("", "⚙ Auto")}</div>
+      <button class="btn small ${mp?.conectado ? "" : "rb-oro"}" type="button" data-rb="mpl-abrir" style="width:100%;margin-top:7px">${mp?.conectado ? "🟢 Mercado Público conectado · reconectar" : "🔐 Ingresar a Mercado Público"}</button>
+      ${conectado ? "" : `<div class="muted" style="font-size:.68rem;margin-top:5px">Si está en rojo: abre el robot en tu PC. Cuando se ponga 🟢, toca «Ingresar a Mercado Público».</div>`}
+    </div>`;
   }
   function loginActivo() {
     const E = R.mpl?.estado;
@@ -3084,7 +3098,7 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
         <span class="rb-pcs" title="${conectado ? "Robot conectado" + (r?.equipo ? " · " + esc(r.equipo) : "") : "Robot apagado"}"><i class="${conectado ? "on" : ""}"></i>${/nube/i.test(r?.equipo || "") ? "☁️" : "Robot"}<i class="${mp?.conectado ? "on" : ""}"></i>MP</span>
         <button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
         <button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
-        <div class="rb-portal"><button type="button" class="${!["ejecuta", "licita", "inversion"].includes(leer().portal) ? "on" : ""}" data-rb="portal" data-v="juego">🎮 Juego</button><button type="button" class="${leer().portal === "licita" ? "on" : ""}" data-rb="portal" data-v="licita">📑 Licita</button><button type="button" class="${leer().portal === "ejecuta" ? "on" : ""}" data-rb="portal" data-v="ejecuta">🛠 Ejecuta</button><button type="button" class="${leer().portal === "inversion" ? "on" : ""}" data-rb="portal" data-v="inversion">💼 Inversión</button></div>${esDueno() ? (setTimeout(() => { if (!R.nubeT || Date.now() - R.nubeT > 60000) cargarNube(); inicioLoginMP(); }, 0), `<button class="btn small ${mp?.conectado ? "" : "rb-oro"}" type="button" data-rb="mpl-abrir" style="width:100%;margin:6px 0 0">🔐 Conectar Mercado Público${mp?.conectado ? " · 🟢 conectado" : ""}</button>`) : ""}${R.data && conectado && !mp?.conectado && /nube/i.test(r?.equipo || "") ? `<div class="rb-alertas" style="margin:6px 0"><b>☁️ Falta la sesión de Mercado Público en la nube</b>Sin ella las ofertas no se pueden cargar para firmar. Ábrela una vez y el robot sigue solo.<button class="btn small rb-oro" data-rb="mpl-abrir" type="button" style="margin-top:6px;width:100%">🔐 Conectar con RUN y ClaveÚnica</button></div>` : ""}`;
+        <div class="rb-portal"><button type="button" class="${!["ejecuta", "licita", "inversion"].includes(leer().portal) ? "on" : ""}" data-rb="portal" data-v="juego">🎮 Juego</button><button type="button" class="${leer().portal === "licita" ? "on" : ""}" data-rb="portal" data-v="licita">📑 Licita</button><button type="button" class="${leer().portal === "ejecuta" ? "on" : ""}" data-rb="portal" data-v="ejecuta">🛠 Ejecuta</button><button type="button" class="${leer().portal === "inversion" ? "on" : ""}" data-rb="portal" data-v="inversion">💼 Inversión</button></div>${esDueno() ? (setTimeout(() => { if (!R.nubeT || Date.now() - R.nubeT > 60000) cargarNube(); inicioLoginMP(); }, 0), barraMando(r, mp, conectado)) : ""}`;
       // 🏆 portada: cada vez que abres la app (y siempre que no haya empresa). Sin formularios: RUT → jugar.
       if (!miEmp() || !portadaVista()) { if (!R.oport) cargarOport(); return pantallaPortada(); }
       let cuerpo;
