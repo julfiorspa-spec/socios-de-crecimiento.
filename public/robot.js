@@ -1172,6 +1172,36 @@
   }
   // 📒 Libro del juego (el ERP que nace): vendido, comprado, facturado, utilidad, por mes; y tu nivel de jugador
   const NIVELES = [[0, "🥉 Bronce"], [2e6, "🥈 Plata"], [10e6, "🥇 Oro"], [30e6, "💎 Diamante"], [100e6, "👑 Leyenda"]];
+  // 🏆 Éxitos: la vitrina de casos de éxito. Se llena sola cada vez que ganas una Compra Ágil o licitación.
+  function exitosBox(gan, montoG, utilG) {
+    const n = gan.length;
+    const cab = `<div class="rb-sec" style="margin-top:14px">🏆 Éxitos</div>`;
+    if (!n) {
+      return cab + `<div class="rb-op" style="text-align:center;padding:16px 12px">
+        <div style="font-size:2rem">🌱</div><b>Aún no hay casos de éxito… todavía.</b>
+        <div class="muted" style="font-size:.78rem;margin-top:4px">Cuando ganes tu primera Compra Ágil o licitación, aparece aquí sola, con su monto y su utilidad. Esta va a ser tu vitrina para mostrarle al mundo lo que logras.</div></div>`;
+    }
+    const corto2 = (x) => x >= 1e6 ? "$" + (x / 1e6).toFixed(x >= 1e7 ? 0 : 1).replace(".", ",") + "M" : clp(x);
+    const breve = (s) => String(s || "").slice(0, 60);
+    const cards = gan.slice(0, 50).map((t) => {
+      const op = t.op || {}, inf = op.informe || {};
+      const utilOK = inf && !inf.incompleto && inf.final != null;
+      const util = utilOK ? Number(inf.final) : Math.round((Number(t.total) || 0) * 0.13);
+      const f = (op.historial || []).find((h) => h.etapa === "ganada")?.t || t.actualizado || "";
+      const cerr = op.etapa === "cerrado";
+      return `<div class="rb-prov-oro" style="margin:6px 0">
+        <div class="row" style="justify-content:space-between;align-items:baseline"><b>${esc(t.codigo)}</b><span class="rb-pill verde">${cerr ? "🥇 Cerrado en oro" : "🏆 Ganada"}</span></div>
+        <div style="font-size:.8rem">${esc(breve(t.nombre))}</div>
+        <div class="muted" style="font-size:.72rem">${esc(breve(t.organismo))}${f ? " · " + esc(new Date(f).toLocaleDateString("es-CL", { day: "numeric", month: "short", year: "2-digit" })) : ""}</div>
+        <div class="row" style="justify-content:space-between;margin-top:4px"><span>💰 Venta <b>${clp(Number(t.total) || 0)}</b></span><span>📈 Utilidad <b class="rb-oro-t">${clp(util)}</b></span></div>
+      </div>`;
+    }).join("");
+    return cab + `<div style="display:flex;gap:8px;margin:6px 0">
+        <div class="rb-m oro" style="flex:1"><span>🏆 Casos</span><b>${n}</b></div>
+        <div class="rb-m verde" style="flex:1"><span>💰 Ganado</span><b>${corto2(montoG)}</b></div>
+        <div class="rb-m azul" style="flex:1"><span>📈 Utilidad</span><b>${corto2(utilG)}</b></div>
+      </div>${cards}`;
+  }
   function libroJuego(gan, env) {
     const vivas = gan.filter((t) => t.op?.etapa !== "rechazada");
     const fila = (t) => { const op = t.op || {}, inf = op.informe || {};
@@ -2069,7 +2099,7 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
       <div class="rb-m oro"><span>🏆 Ganado</span><b class="rb-oro-t" data-cnt="${ganadoMonto}" data-k="ganado" data-fmt="corto">${corto(ganadoMonto)}</b><small>${ganadasR.length} adjudicada${ganadasR.length === 1 ? "" : "s"}</small></div>
       <div class="rb-m verde"><span>💰 Utilidad</span><b data-cnt="${utilidadG}" data-k="util" data-fmt="corto">${corto(utilidadG)}</b><small>${ganadasR.length && ganadasR.every(utilOk) ? "según informes" : "estimada · faltan precios"}</small></div>
       <div class="rb-m azul"><span>🎯 Tasa de éxito</span><b data-cnt="${tasa ?? 0}" data-k="tasa" data-fmt="pct">${tasa == null ? "—" : tasa + "%"}</b><small>${ganadasR.length} de ${decididas.length} resueltas</small></div>
-      <div class="rb-m violeta"><span>⏳ En juego</span><b data-cnt="${enJuego}" data-k="juego" data-fmt="corto">${corto(enJuego)}</b><small>${enviadosAll.length - decididas.length} esperando resultado</small></div></div>${libroJuego(ganadasR, enviadosAll)}`;
+      <div class="rb-m violeta"><span>⏳ En juego</span><b data-cnt="${enJuego}" data-k="juego" data-fmt="corto">${corto(enJuego)}</b><small>${enviadosAll.length - decididas.length} esperando resultado</small></div></div>${exitosBox(ganadasR, ganadoMonto, utilidadG)}${libroJuego(ganadasR, enviadosAll)}`;
     // ---- 🏆 negocios ganados por etapa
     const ETAPAS = [["previa", "📞 Vas 1°"], ["ganada", "🆕 OC ¿nos da?"], ["inversionista", "💼 Inversión"], ["operacion", "🛠 Proveedor"], ["transporte", "🚚 Transporte"], ["pago", "💳 Pagar"], ["documentos", "🧾 Guía y factura"],
       ["despacho", "🚚 Despacho"], ["entrega", "📸 Entrega"], ["cerrado", "🥇 Cerrados"], ["rechazada", "❌ No dio"]];
