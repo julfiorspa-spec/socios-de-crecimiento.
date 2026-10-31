@@ -782,10 +782,10 @@ async function atender(req) {
     const d = b.datos && typeof b.datos === "object" ? b.datos : {};
     for (const k of ["proveedor", "contacto", "telefono", "email", "transporte", "notas", "medio_pago", "guia", "factura", "motivo_no", "folio_guia", "folio_factura",
       "ejecutor", "ejecutor_nombre", "plazo_proveedor", "fecha_entrega", "banco_proveedor", "negociacion", "plazo_fecha", "plazo_nota", "incidencia",
-      "transportista", "transportista_tel", "origen_flete", "patente", "recibio_nombre", "recibio_rut", "fecha_cobro", "inversionista_nombre", "inversionista_tel", "despacho_modo", "proveedor_k", "proveedor_email", "proveedor_tel", "entrega_contacto", "entrega_tel", "vehiculo", "factoring", "nota_cierre", "twitch_canal", "video_prueba"]) if (d[k] !== undefined) op[k] = texto(d[k], 400);
+      "transportista", "transportista_tel", "origen_flete", "patente", "recibio_nombre", "recibio_rut", "fecha_cobro", "inversionista_nombre", "inversionista_tel", "despacho_modo", "proveedor_k", "proveedor_email", "proveedor_tel", "entrega_contacto", "entrega_tel", "vehiculo", "factoring", "nota_cierre", "twitch_canal", "video_prueba", "inversionista_banco", "ejecutor_banco", "jugador_banco"]) if (d[k] !== undefined) op[k] = texto(d[k], 400);
     for (const k of ["precio_acordado", "costo_transporte", "opcion", "km", "cobrado"]) if (d[k] !== undefined) op[k] = d[k] === null ? null : Math.max(0, Math.round(Number(d[k]) || 0));
     const yaPedido = !!op.pedido_transferencia, yaTransf = !!op.transferido;
-    for (const k of ["inversion_ok", "compra_ok", "despacho_ok", "guia_firmada", "factura_firmada", "aplica_comision", "nos_da", "proveedor_pagado", "guia_hecha", "factura_hecha", "oc_aceptada", "pedido_transferencia", "transferido"]) if (d[k] !== undefined) op[k] = !!d[k];
+    for (const k of ["inversion_ok", "compra_ok", "despacho_ok", "guia_firmada", "factura_firmada", "aplica_comision", "nos_da", "proveedor_pagado", "guia_hecha", "factura_hecha", "oc_aceptada", "pedido_transferencia", "transferido", "rp_inversionista", "rp_ejecutador", "rp_jugador", "rp_sii"]) if (d[k] !== undefined) op[k] = !!d[k];
     if (d.comision !== undefined) op.comision = Math.min(0.10, Math.max(0.01, Number(d.comision) || 0.04));
     // 📨 el juego de los proveedores: a quién le escribiste/llamaste y qué precio te dio cada uno
     if (d.contactado && typeof d.contactado === "object") {
@@ -1094,6 +1094,14 @@ async function atender(req) {
     await avisarTexto(store, "☁️ Tu robot ya vive en la nube", "Funciona 24/7 sin tu PC. Abre 💎 Planes → Robot en la nube para iniciar sesión en Mercado Público una vez.", "nube", "/#robot").catch(() => {});
     return json({ ok: true });
   }
+  if (ruta === "robot-mando" && req.method === "POST") {     // el dueño elige qué robot manda: PC o nube
+    const b = await cuerpo(req);
+    if (!b.legado) return json({ error: "Solo el dueño elige qué robot manda." }, 403);
+    const M = (await store.get("robot/mando", { type: "json" })) || {};
+    M.preferido = ["pc", "nube"].includes(b.preferido) ? b.preferido : null;
+    await store.setJSON("robot/mando", M);
+    return json({ ok: true, mando: M });
+  }
   if (ruta === "nube-solicitudes" && req.method === "GET") {
     const L = ((await store.get("nube/solicitudes", { type: "json" })) || []).filter((x) => Date.now() - Date.parse(x.t) < 3 * 3600_000);
     return json({ solicitudes: L.map(({ id, t, estado, ip, nombre }) => ({ id, t, estado, ip, nombre })) });
@@ -1112,7 +1120,8 @@ async function atender(req) {
     const e = (await store.get("nube/estado", { type: "json" })) || null;
     const pm = (await store.get("nube/paquete-meta", { type: "json" })) || null;
     const lat = (await store.get("robot/latido", { type: "json" })) || null;
-    return json({ nube: e, paquete: pm, latido: lat ? { visto: lat.visto || null, equipo: lat.equipo || null } : null });
+    const mando = (await store.get("robot/mando", { type: "json" })) || null, equipos = (await store.get("robot/equipos", { type: "json" })) || {};
+    return json({ nube: e, paquete: pm, latido: lat ? { visto: lat.visto || null, equipo: lat.equipo || null } : null, mando, equipos });
   }
   // 💎 planes de suscripción (USD/mes): cada celular/juego tiene el suyo; el dueño los activa cuando llega el pago
   const PLANES = { basico: { usd: 20, nombre: "Básico" }, medio: { usd: 100, nombre: "Medio" }, premium: { usd: 1000, nombre: "Premium" } };
@@ -1302,6 +1311,22 @@ async function atender(req) {
   // ---------- robot del PC ----------
   if (ruta === "latido" && req.method === "POST") {
     const b = await cuerpo(req);
+    // 🎖 UN SOLO ROBOT AL MANDO: Mercado Público acepta una sesión por usuario; si dos robots trabajan se botan entre sí.
+    // Manda el preferido (lo elige el dueño: PC o nube) si está vivo; si no, el que ya mandaba; si nadie, el primero que llega.
+    {
+      const eqM = texto(b.equipo, 60) || "pc", M = (await store.get("robot/mando", { type: "json" })) || {};
+      const fresco = M.equipo && Date.now() - Date.parse(M.visto || 0) < 90_000;
+      const esPref = (e) => (M.preferido === "nube" ? /nube/i.test(e || "") : M.preferido === "pc" ? !/nube/i.test(e || "") : false);
+      const manda = !fresco || M.equipo === eqM || (esPref(eqM) && !esPref(M.equipo)) ? eqM : M.equipo;
+      if (manda !== eqM) {
+        const E2 = (await store.get("robot/equipos", { type: "json" })) || {};
+        E2[eqM] = { visto: ahora(), ocupado: !!b.ocupado, version: texto(b.version, 20), pausa: true };
+        await store.setJSON("robot/equipos", E2);
+        return json({ pausa: true, manda, pendientes: true, motivo: `El robot «${manda}» está a cargo: este espera para no cerrar su sesión de Mercado Público.` });
+      }
+      if (M.equipo !== eqM) await avisarTexto(store, "🎖 Robot a cargo: " + eqM, M.equipo ? `Tomó el mando desde «${M.equipo}». Solo uno trabaja con tu sesión de Mercado Público.` : "Trabajando.", "mando", "/#robot").catch(() => {});
+      await store.setJSON("robot/mando", { ...M, equipo: eqM, visto: ahora(), desde: M.equipo === eqM ? M.desde : ahora() });
+    }
     await store.setJSON("robot/latido", {
       visto: ahora(), ocupado: !!b.ocupado, tarea: texto(b.tarea, 200), equipo: texto(b.equipo, 60), version: texto(b.version, 20),
       rut: texto(b.rut, 20), correo: !!b.correo,
@@ -1312,7 +1337,7 @@ async function atender(req) {
     E[eq] = { visto: ahora(), ocupado: !!b.ocupado, version: texto(b.version, 20) };
     for (const k of Object.keys(E)) if (Date.now() - Date.parse(E[k].visto) > 600_000) delete E[k];
     await store.setJSON("robot/equipos", E);
-    const vivos = Object.keys(E).filter((k) => Date.now() - Date.parse(E[k].visto) < 90_000).sort();
+    const vivos = Object.keys(E).filter((k) => Date.now() - Date.parse(E[k].visto) < 90_000 && !E[k].pausa).sort();   // los pausados no reciben trabajo
     const hashTxt = (x) => [...String(x)].reduce((a, c) => Math.imul(a ^ c.charCodeAt(0), 16777619) >>> 0, 2166136261) >>> 5;   // FNV-1a
     const dueno = (x) => (vivos.length < 2 ? eq : vivos[hashTxt(x) % vivos.length]);
     const mio = (x) => dueno(x) === eq || !vivos.includes(dueno(x));
