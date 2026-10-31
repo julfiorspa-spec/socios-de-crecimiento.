@@ -2800,7 +2800,8 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
     return `<div class="rb-mando-barra">
       <div class="rb-mando-luz"><b>${luz} ${esc(estado)}</b></div>
       <div class="rb-etapas rb-modos" style="margin-top:6px">${b("pc", "🖥 PC")}${b("nube", "☁️ Nube")}${b("", "⚙ Auto")}</div>
-      <button class="btn small ${mp?.conectado ? "" : "rb-oro"}" type="button" data-rb="mpl-abrir" style="width:100%;margin-top:7px">${mp?.conectado ? "🟢 Mercado Público conectado · reconectar" : "🔐 Ingresar a Mercado Público"}</button>
+      <button class="btn small rb-oro" type="button" data-rb="mp-safari" style="width:100%;margin-top:7px">🧑 Iniciar sesión en Mercado Público <small style="opacity:.85">(abre Safari)</small></button>
+      <button class="btn small" type="button" data-rb="nube-pronto" style="width:100%;margin-top:6px;opacity:.5">☁️ Ingresar a la nube <small>(pronto)</small></button>
       ${conectado ? "" : `<div class="muted" style="font-size:.68rem;margin-top:5px">Si está en rojo: abre el robot en tu PC. Cuando se ponga 🟢, toca «Ingresar a Mercado Público».</div>`}
     </div>`;
   }
@@ -3679,6 +3680,8 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     }
     if (a === "marcador-arrastrar") { ev.preventDefault(); toast("Arrástralo a la barra de favoritos; se usa en Mercado Público"); return; }
     if (a === "nube-entrar") { await entrarNube(); return; }
+    if (a === "mp-safari") { try { window.open("https://www.mercadopublico.cl/", "_blank", "noopener"); } catch (e) { location.href = "https://www.mercadopublico.cl/"; } toast("🧑 Abriendo Mercado Público — entra con tu cuenta y firma ahí mismo"); return; }
+    if (a === "nube-pronto") { toast("☁️ La nube la activamos más adelante (con los permisos). Por ahora el robot trabaja en tu PC."); return; }
     if (a === "mpl-abrir") { R.pantalla = "mplogin"; R.mplCarg = false; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "mpl-salir") { R.pantalla = null; clearTimeout(R.mplTimer); R.mplCarg = false; return pintarHoja(true); }
     if (a === "mpl-enviar") {
