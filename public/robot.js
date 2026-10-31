@@ -2732,7 +2732,15 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
     try { R.mpl = await api("mp-login"); R.mplErr = null; } catch (e) { R.mplErr = e.message; }
     const E = R.mpl?.estado, firma = E ? E.id + E.paso + E.t : "";
     if (firma !== R.mplFirma) { R.mplFirma = firma; pintarHojaSiAbierta(); }
-    if (R.pantalla === "mplogin") R.mplTimer = setTimeout(cargarLoginMP, E && !["listo", "error"].includes(E.paso) ? 2000 : 6000);
+    if (R.pantalla === "mplogin") R.mplTimer = setTimeout(cargarLoginMP, E && !["listo", "error", "cancelado", "bloqueada", "run_malo", "clave_mala"].includes(E.paso) ? 2000 : 6000);
+    // 🛡 ClaveÚnica se bloquea al 3er intento: se cuentan los rechazos y se avisa ANTES de gastar el último
+    if (E && E.id !== R.mplContado && ["clave_mala", "run_malo"].includes(E.paso)) { R.mplContado = E.id; guardar({ mplFallos: (leer().mplFallos || 0) + 1 }); pintarHojaSiAbierta(); }
+    if (E && E.paso === "listo" && leer().mplFallos) guardar({ mplFallos: 0 });
+  }
+  function runValido(r) {                 // dígito verificador del RUN (módulo 11): un RUN mal escrito no gasta intentos
+    const m = String(r).toUpperCase().replace(/[^0-9K]/g, "").match(/^(\d{7,8})([0-9K])$/); if (!m) return false;
+    let s = 0, f = 2; for (let i = m[1].length - 1; i >= 0; i--) { s += +m[1][i] * f; f = f === 7 ? 2 : f + 1; }
+    const dv = 11 - (s % 11); return m[2] === (dv === 11 ? "0" : dv === 10 ? "K" : String(dv));
   }
   async function sobreMP(obj) {
     const pub = R.mpl?.pub;
@@ -2754,7 +2762,7 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
   }
   function loginActivo() {
     const E = R.mpl?.estado;
-    return E && Date.now() - Date.parse(E.t) < 360000 && !["listo", "error", "cancelado"].includes(E.paso) ? E : null;
+    return E && Date.now() - Date.parse(E.t) < 360000 && !["listo", "error", "cancelado", "bloqueada", "run_malo", "clave_mala"].includes(E.paso) ? E : null;
   }
   function pantallaLoginMP() {
     if (!R.mplCarg) { R.mplCarg = true; setTimeout(cargarLoginMP, 0); }
@@ -2765,11 +2773,16 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
         <div class="label" style="margin-top:10px">ClaveÚnica</div>
         <input id="rbMplClave" class="rb-in" type="password" placeholder="Tu ClaveÚnica" autocomplete="current-password" style="width:100%">
         <button class="btn rb-oro" type="button" data-rb="mpl-enviar" style="width:100%;margin-top:12px">🔐 Conectar</button>
+        <div class="muted" style="font-size:.7rem;margin-top:6px">⚠️ ClaveÚnica se bloquea al 3er intento fallido. El robot hace un solo intento por vez y nunca reintenta solo.</div>
         <div class="muted" style="font-size:.7rem;margin-top:8px">Se cifran en este celular con la llave del robot de tu PC: la nube no puede leerlos y no se guardan en ninguna parte.</div>`;
     let cuerpo;
     if (!A) {
       cuerpo = (E?.paso === "listo" ? `<div class="rb-resp nueva" style="margin:10px 0"><b>✅ Mercado Público conectado</b><div style="font-size:.78rem">${esc(E.mensaje || "El robot ya tiene tu sesión.")}</div></div>`
-        : E?.paso === "error" ? `<div class="rb-alertas"><b>No se pudo conectar</b>${esc(E.mensaje || "")}</div>` : "")
+        : E?.paso === "error" ? `<div class="rb-alertas"><b>No se pudo conectar</b>${esc(E.mensaje || "")}</div>`
+        : E?.paso === "run_malo" ? `<div class="rb-alertas"><b>🪪 El RUN no fue aceptado</b>${esc(E.mensaje || "")}<br>Revisa tu RUN y vuelve a intentar. El robot no reintentó solo.</div>`
+        : E?.paso === "clave_mala" ? `<div class="rb-alertas"><b>🔑 RUN o ClaveÚnica incorrectos</b>ClaveÚnica dice: «${esc(E.mensaje || "")}».<br>ClaveÚnica no indica cuál de los dos está mal. Revisa ambos con calma: <b>al 3er intento fallido se bloquea</b>. El robot no reintenta solo.${(leer().mplFallos || 0) >= 2 ? `<br><b>Ya van ${leer().mplFallos} rechazos.</b> Te recomendamos recuperar tu clave antes de intentar otra vez: <a href="https://claveunica.gob.cl/" target="_blank" rel="noopener">claveunica.gob.cl → Recupera tu ClaveÚnica</a>` : ""}</div>`
+        : E?.paso === "bloqueada" ? `<div class="rb-alertas"><b>🔒 Tu ClaveÚnica quedó bloqueada</b>Lo sentimos mucho: nunca fue la intención bloquearla. ClaveÚnica dice: «${esc(E.mensaje || "")}».<br><br><b>Cómo recuperarla:</b> entra a <a href="https://claveunica.gob.cl/" target="_blank" rel="noopener">claveunica.gob.cl</a> → «Recupera tu ClaveÚnica» y sigue los pasos (te llega un enlace a tu correo). Si no tienes acceso a ese correo, puedes pedir una nueva en una oficina del Registro Civil o ChileAtiende con tu cédula. Cuando la tengas, vuelve aquí y conectamos con calma.</div>`
+        : E?.paso === "captcha" ? `<div class="rb-alertas"><b>🧩 ClaveÚnica pide una verificación</b>${esc(E.mensaje || "")}</div>` : "")
         + (L.pc_vivo === false ? `<div class="rb-alertas" style="margin-top:8px"><b>🖥 El robot del PC está apagado</b>Enciéndelo: ClaveÚnica solo deja entrar desde internet de casa u oficina, no desde servidores en la nube.</div>` : "")
         + (E?.paso === "listo" ? `<button class="btn small" type="button" data-rb="mpl-salir" style="width:100%;margin-top:8px">Volver</button><details class="rb-ajustes" style="margin-top:8px"><summary>Conectar otra vez</summary>${form}</details>` : form);
     } else if (A.paso === "codigo") {
@@ -3627,6 +3640,8 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "mpl-enviar") {
       const run = ($("#rbMplRun")?.value || "").replace(/[^0-9kK]/g, "").toUpperCase(), clave = $("#rbMplClave")?.value || "";
       if (run.length < 7 || !clave) return toast("Escribe tu RUN y tu ClaveÚnica");
+      if (!runValido(run)) return toast("⚠️ Ese RUN no es válido: revisa los números y el dígito verificador (después del guion). No se envió nada.");
+      if ((leer().mplFallos || 0) >= 2 && !confirm("⚠️ ClaveÚnica ya rechazó 2 intentos. Al TERCERO se BLOQUEA tu ClaveÚnica.\n\nSi no estás 100% seguro de la clave, mejor recupérala primero en claveunica.gob.cl.\n\n¿Seguro que quieres intentar?")) return;
       b.disabled = true;
       try {
         if (!R.mpl?.pub) await cargarLoginMP();
