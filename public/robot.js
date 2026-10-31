@@ -996,6 +996,8 @@
       ? "Todo cargado en el robot. Presiona «Enviar cotización», marca la declaración y «Aceptar y enviar» (en el PC o desde aquí con escritorio remoto). El robot confirma solo."
       : firmable ? (t.firma.aviso || null) : t.mensaje;
     const al = firmable ? (t.firma.alertas || []) : [];
+    const avisoIA = firmable && al.some((a) => /sin saldo|insufficient|exceeded your current quota|429|valor promedio/i.test(a.texto || "")) ? `<div class="rb-alertas" style="border-left-color:var(--warn)"><b>⚠️ Precios de relleno (faltó saldo de IA)</b>Esta oferta se preparó sin poder buscar precios reales por ítem. Si ya recargaste OpenAI, toca «↻ Rehacer oferta» para precios verdaderos.</div>` : "";
+    const declJurada = firmable ? `<details class="rb-det" style="margin-top:8px"><summary>📜 La declaración jurada que vas a aceptar (léela)</summary><div class="muted" style="font-size:.76rem;line-height:1.5;margin-top:4px">Declaro que toda la información ingresada en este formulario es veraz, completa, verificable y se encuentra actualizada. Debe tenerse presente que faltar a la verdad respecto de lo informado en una declaración jurada puede traducirse en la comisión del delito de perjurio, en virtud del artículo 210 del Código Penal, que dispone que «el que ante la autoridad o sus agentes perjurare o diere falso testimonio en materia que no sea contenciosa, sufrirá las penas de presidio menor en sus grados mínimo a medio y multa de seis a diez unidades tributarias mensuales.»<br><br><b>Tú firmas, no el robot.</b> Por ley, el envío y esta declaración los autorizas tú en Mercado Público.</div></details>` : "";
     const alertasHtml = al.length ? `<div class="rb-alertas"><b>Revisa antes de firmar</b><ul style="margin:0;padding:0">${al.map((a) =>
       `<li class="${a.nivel === "rojo" ? "rojo" : ""}">${a.nivel === "rojo" ? "⛔" : "⚠"} ${esc(a.texto)}</li>`).join("")}</ul></div>` : "";
     const pasos = firmable && firmaRapida() ? `<ol class="rb-pasos">
@@ -1022,8 +1024,9 @@
         ${enviada && t.fecha_envio ? `<span>Enviada ${esc(t.fecha_envio)}</span>` : ""}
       </div>
       ${msg ? `<div class="rb-msg">${esc(msg)}</div>` : ""}
+      ${avisoIA}
       ${alertasHtml}
-      ${pasos}
+      ${pasos}${declJurada}
       ${t.detalle || (t.items && t.items.length) ? `<details class="rb-det"><summary>Detalle de la oferta</summary><pre>${esc(
         (t.items || []).map((i, k) => `${k + 1}. ${i.d} — ${i.q} x ${clp(i.p)}`).join("\n") + (t.detalle ? "\n\n" + t.detalle : ""))}</pre></details>` : ""}
       <div class="rb-acts">${acts.join("")}</div>
