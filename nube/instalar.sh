@@ -117,7 +117,7 @@ Requires=cotizagil-pantalla.service
 [Service]
 User=$USR
 ExecStartPre=/bin/sleep 2
-ExecStart=/usr/bin/x11vnc -display :99 -forever -shared -localhost -nopw -quiet -rfbport 5900
+ExecStart=/usr/bin/x11vnc -display :99 -forever -shared -localhost -rfbauth $DIR/.vncpass -quiet -rfbport 5900
 Restart=always
 [Install]
 WantedBy=multi-user.target
@@ -193,11 +193,10 @@ CLAVE_F="$DIR/.clave_vista"
 [ -s "$CLAVE_F" ] || python3 -c "import secrets;print(secrets.token_urlsafe(10),end='')" > "$CLAVE_F"
 chmod 600 "$CLAVE_F"; CLAVE=$(cat "$CLAVE_F")
 HASH=$(caddy hash-password --plaintext "$CLAVE")
+x11vnc -storepasswd "$CLAVE" "$DIR/.vncpass" >/dev/null 2>&1; chown $USR:$USR "$DIR/.vncpass"; chmod 600 "$DIR/.vncpass"
+# la vista la protege la contraseña VNC (la misma clave): así el botón de la app entra directo, sin pedir usuario
 cat > /etc/caddy/Caddyfile <<EOF
 vista.$DOM {
-  basicauth {
-    robot $HASH
-  }
   reverse_proxy 127.0.0.1:6080
 }
 panel.$DOM {
