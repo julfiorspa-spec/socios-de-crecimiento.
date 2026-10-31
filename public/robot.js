@@ -352,6 +352,16 @@
   .rb-emp span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .rb-mando-barra{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:13px;padding:9px 11px;margin:7px 0}
   .rb-mando-luz{font-size:.82rem;color:#e8edf8}
+  .rb-puertas{display:flex;flex-direction:column;gap:10px;margin:18px 0 4px}
+  .rb-puerta{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:14px 14px;color:#eaf0ff;cursor:pointer;transition:transform .08s,border-color .15s,background .15s}
+  .rb-puerta:active{transform:scale(.98)}
+  .rb-puerta:hover{border-color:#c8a24a;background:rgba(200,162,74,.12)}
+  .rb-puerta-i{font-size:1.7rem;flex:0 0 auto;width:40px;text-align:center}
+  .rb-puerta-t{flex:1;display:flex;flex-direction:column;gap:2px}
+  .rb-puerta-t b{font-size:.96rem}
+  .rb-puerta-t small{font-size:.74rem;color:#a9b8d9;line-height:1.3}
+  .rb-puerta-f{font-size:1.4rem;color:#c8a24a;flex:0 0 auto}
+  .rb-p-cambiar{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:999px;padding:4px 11px;font-size:.72rem;color:#dfe7fb;cursor:pointer}
   .rb-pcs{display:flex;align-items:center;gap:4px;font-size:.66rem;color:#a9b8d9;letter-spacing:.04em}
   .rb-pcs i{width:7px;height:7px;border-radius:50%;background:#64708a;display:inline-block;margin-left:4px}.rb-pcs i.on{background:#3fdc8a;box-shadow:0 0 0 3px rgba(63,220,138,.18)}
   .rb-ico{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);color:#fff;border-radius:12px;width:38px;height:36px;font-size:1rem;cursor:pointer}
@@ -2572,7 +2582,34 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
     let s2 = 0, m = 2; for (let i = cuerpo.length - 1; i >= 0; i--) { s2 += +cuerpo[i] * m; m = m === 7 ? 2 : m + 1; }
     const r2 = 11 - (s2 % 11), esp = r2 === 11 ? "0" : r2 === 10 ? "K" : String(r2); return esp === dv; };
   const rutFmt = (r) => { const c = rutLimpio(r); if (c.length < 2) return c; return c.slice(0, -1).replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "-" + c.slice(-1); };
+  // 🚪 ¿Qué vienes a hacer? — cada persona entra por su puerta (arregla que la portada hablaba solo de "juego")
+  const ROL = "sdc:rol";
+  const rolActual = () => { try { return localStorage.getItem(ROL); } catch { return null; } };
+  const ROLES = {
+    juego:     { ico: "🎮", corto: "Busco negocios", portal: "juego",     h: "El Estado compra todos los días.<br><span>Encuentra y gana tu parte.</span>", sub: "Eliges, el robot arma la oferta, la ficha y el PDF. Tú solo firmas y cobras.", cta: "▶ ENTRAR" },
+    ejecuta:   { ico: "🛠", corto: "Ejecuto", portal: "ejecuta",   h: "Tú ejecutas los negocios.<br><span>Haces la pega y cobras.</span>", sub: "Te asignan negocios ya ganados y tú los ejecutas: compras, entregas, instalas.", cta: "▶ ENTRAR A EJECUTAR" },
+    inversion: { ico: "💰", corto: "Invierto", portal: "inversion", h: "Pones la plata.<br><span>El negocio ya está ganado.</span>", sub: "Inviertes en negocios ya adjudicados y recibes tu parte de la utilidad.", cta: "▶ ENTRAR A INVERTIR" },
+    todo:      { ico: "⭐", corto: "Hago de todo", portal: "juego",     h: "El mercado público, completo.<br><span>Buscas, ejecutas e inviertes.</span>", sub: "El perfil completo: encuentras negocios, los ejecutas y pones capital.", cta: "▶ ENTRAR" },
+  };
+  function selectorRol() {
+    const puerta = (v, ico, t, sub) => `<button type="button" class="rb-puerta" data-rb="rol-elegir" data-v="${v}"><span class="rb-puerta-i">${ico}</span><span class="rb-puerta-t"><b>${t}</b><small>${sub}</small></span><span class="rb-puerta-f">›</span></button>`;
+    return `<div class="rb-portada">
+      <div class="rb-p-brillo"></div>
+      <div class="rb-p-top"><span class="rb-p-logo">◆ Socios de Crecimiento</span></div>
+      <h1 class="rb-p-h">¿Qué vienes a hacer?</h1>
+      <div class="rb-p-sub">Elige tu puerta y te muestro tu parte. Puedes ser más de una.</div>
+      <div class="rb-puertas">
+        ${puerta("juego", "🎮", "Busco y armo negocios del Estado", "Encuentro compras y el robot arma la oferta. Tú firmas y cobras.")}
+        ${puerta("ejecuta", "🛠", "Yo hago el trabajo / lo entrego", "Ejecutas los negocios: compras, entregas, instalas.")}
+        ${puerta("inversion", "💰", "Pongo plata y gano", "Inviertes en negocios ya ganados y recibes tu utilidad.")}
+        ${puerta("todo", "⭐", "Hago de todo", "Buscas, ejecutas e inviertes. El perfil completo.")}
+      </div>
+      <div class="rb-p-nota" style="margin-top:14px">No te preocupes: después puedes cambiar o sumar perfiles cuando quieras.</div>
+    </div>`;
+  }
   function pantallaPortada() {
+    const rol = rolActual(); if (!rol) return selectorRol();
+    const RC = ROLES[rol] || ROLES.juego;
     const L = (R.oport?.lista || []).filter((x) => x.fuente !== "licitacion" && Date.parse(x.cierre) - Date.now() > 3600000 && !x.ya_ofertada);
     const total = L.reduce((a, x) => a + (Number(x.monto) || 0), 0), seg = L.filter((x) => /^segundo/i.test(x.llamado || "")).length;
     const emp = empresaActual(), c = conex(), rut = R.rutTmp ?? (emp?.rut || "");
@@ -2580,12 +2617,12 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
     const btnC = (k, ico, nom, sub) => `<button type="button" class="rb-con ${c[k] ? "on" : ""}" data-rb="con" data-k="${k}"><span class="i">${ico}</span><span><b>${nom}</b><small>${c[k] ? "✓ " + esc(String(c[k]).slice(0, 28)) : sub}</small></span></button>`;
     return `<div class="rb-portada">
       <div class="rb-p-brillo"></div>
-      <div class="rb-p-top"><span class="rb-p-logo">◆ CotizÁgil</span><span class="rb-p-tag">Sala de juego</span></div>
-      <h1 class="rb-p-h">El Estado compra todos los días.<br><span>Juega y gana tu parte.</span></h1>
-      <div class="rb-p-sub">Eliges, apuestas tu precio y el robot arma la oferta, la ficha y el PDF. Tú solo firmas y cobras.</div>
+      <div class="rb-p-top"><span class="rb-p-logo">◆ Socios de Crecimiento</span><button type="button" class="rb-p-cambiar" data-rb="rol-cambiar">${RC.ico} ${RC.corto} · cambiar</button></div>
+      <h1 class="rb-p-h">${RC.h}</h1>
+      <div class="rb-p-sub">${RC.sub}</div>
       <div class="rb-p-stats"><div><b>${L.length || "…"}</b><small>compras abiertas</small></div><div><b>${total ? fmt(total) : "…"}</b><small>en juego hoy</small></div><div><b>${seg || "…"}</b><small>🔥 2° llamado</small></div></div>
       <label class="rb-p-rut"><span>RUT de tu empresa</span><input id="rbRut" value="${esc(rutFmt(rut))}" placeholder="76.123.456-7" autocomplete="off" autocapitalize="characters" inputmode="text"></label>
-      <button class="btn rb-oro rb-p-jugar" type="button" data-rb="portada-jugar">▶ JUGAR</button>
+      <button class="btn rb-oro rb-p-jugar" type="button" data-rb="portada-jugar">${RC.cta}</button>
       <div class="rb-p-nota">Sin formularios: con tu RUT descubro qué vende tu empresa y te muestro primero lo que puedes ganar.</div>
       <div class="rb-p-con-t">Conecta tus herramientas</div>
       <div class="rb-p-con">${btnC("gmail", "✉️", "Gmail", "correos a proveedores")}${btnC("whatsapp", "💬", "WhatsApp", "avisos y clientes")}${btnC("marketplace", "🛒", "Marketplace", "proveedores 2ª opción")}</div>
@@ -3492,6 +3529,8 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     }
     if (a === "llamada-ver") { const h = leerHist().find((x) => x.id === b.dataset.id); if (h) { R.llamada = { id: h.id, texto: h.texto, t: h.t, confirmado: h.codigo || null }; if (h.codigo) cargarDocs(h.codigo); esperarRespuesta(h.id); } return pintarHoja(true); }
     if (a === "recordar") return recordar(b.dataset.t, b.dataset.min, b.dataset.c);
+    if (a === "rol-elegir") { try { localStorage.setItem(ROL, b.dataset.v); } catch (e) {} const rp = (ROLES[b.dataset.v] || {}).portal; if (rp) guardar({ portal: rp }); sheet.scrollTop = 0; navigator.vibrate?.(10); return pintarHoja(true); }
+    if (a === "rol-cambiar") { try { localStorage.removeItem(ROL); } catch (e) {} sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "portada-jugar") {
       const v = $("#rbRut")?.value || ""; R.rutTmp = v;
       if (!rutOk(v)) { toast("Revisa el RUT (ej. 76.123.456-7)"); $("#rbRut")?.focus(); return; }
