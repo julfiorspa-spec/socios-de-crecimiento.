@@ -1100,7 +1100,8 @@ async function atender(req) {
     const pub = await store.get("login/pub", { type: "json" }), est = await store.get("login/estado", { type: "json" });
     const lat = (await store.get("robot/equipos", { type: "json" })) || {};
     const pcVivo = Object.entries(lat).some(([k, v]) => !/nube/i.test(k) && Date.now() - Date.parse(v.visto) < 90_000);
-    return json({ pub: pub?.pub || null, equipo: pub?.equipo || null, pc_vivo: pcVivo, estado: est || null });
+    const pn = await store.get("login/pub_nube", { type: "json" }), sn = await store.get("login/sesion_nube", { type: "json" });
+    return json({ pub: pub?.pub || null, equipo: pub?.equipo || null, pc_vivo: pcVivo, estado: est || null, pub_nube: pn?.pub || null, sesion_nube: sn || null });
   }
   if (ruta === "mp-login" && req.method === "POST") {
     const b = await cuerpo(req);
@@ -1124,6 +1125,19 @@ async function atender(req) {
     if (!r || r.id !== url.searchParams.get("id")) return json({ resp: null });
     await store.delete("login/resp");
     return json({ resp: r });
+  }
+  if (ruta === "mp-sesion" && req.method === "POST") {          // el PC deja la sesión SELLADA para la nube
+    const b = await cuerpo(req);
+    if (typeof b.datos !== "string" || b.datos.length > 3_000_000) return json({ error: "Sesión inválida." }, 400);
+    await store.setJSON("login/sesion", { llave: texto(b.llave, 1000), iv: texto(b.iv, 64), datos: b.datos, t: ahora() });
+    return json({ ok: true });
+  }
+  if (ruta === "mp-sesion-ok" && req.method === "POST") {       // la nube cuenta si quedó conectada
+    const b = await cuerpo(req), E = (await store.get("login/estado", { type: "json" })) || {};
+    await store.setJSON("login/sesion_nube", { ok: !!b.ok, mensaje: texto(b.mensaje, 300), t: ahora() });
+    await store.setJSON("login/estado", { ...E, paso: b.ok ? "listo" : "error", mensaje: texto(b.mensaje, 300), foto: null, t: ahora() });
+    await avisarTexto(store, b.ok ? "☁️ La nube quedó conectada" : "⚠️ La nube no quedó conectada", texto(b.mensaje, 200), "mp-login", "/#robot").catch(() => {});
+    return json({ ok: true });
   }
   if (ruta === "mp-login-estado" && req.method === "POST") {    // el robot del PC cuenta en qué paso va
     const b = await cuerpo(req);
@@ -1354,7 +1368,18 @@ async function atender(req) {
     let loginMP = null;
     {
       const eqL = texto(b.equipo, 60) || "pc";
-      if (!/nube/i.test(eqL)) {
+      if (/nube/i.test(eqL)) {            // ☁️ la nube recibe la SESIÓN cifrada que inició el PC (nunca la clave)
+        if (typeof b.pub === "string" && b.pub.length < 1500) {
+          const PN = (await store.get("login/pub_nube", { type: "json" })) || {};
+          if (PN.pub !== b.pub || Date.now() - Date.parse(PN.t || 0) > 600_000) await store.setJSON("login/pub_nube", { pub: b.pub, equipo: eqL, t: ahora() });
+        }
+        const SS = await store.get("login/sesion", { type: "json" });
+        if (SS && SS.datos && !SS.entregado) {
+          loginMP = null;
+          b._mp_sesion = { llave: SS.llave, iv: SS.iv, datos: SS.datos };
+          await store.setJSON("login/sesion", { t: SS.t, entregado: ahora() });     // la sesión cifrada se borra apenas sale
+        }
+      } else {
         if (typeof b.pub === "string" && b.pub.length < 1500) {
           const PB = (await store.get("login/pub", { type: "json" })) || {};
           if (PB.pub !== b.pub || PB.equipo !== eqL || Date.now() - Date.parse(PB.t || 0) > 600_000) await store.setJSON("login/pub", { pub: b.pub, equipo: eqL, t: ahora() });
@@ -1377,7 +1402,7 @@ async function atender(req) {
         const E2 = (await store.get("robot/equipos", { type: "json" })) || {};
         E2[eqM] = { visto: ahora(), ocupado: !!b.ocupado, version: texto(b.version, 20), pausa: true };
         await store.setJSON("robot/equipos", E2);
-        return json({ pausa: true, manda, pendientes: true, ...(loginMP ? { login_mp: loginMP } : {}), motivo: `El robot «${manda}» está a cargo: este espera para no cerrar su sesión de Mercado Público.` });
+        return json({ pausa: true, manda, pendientes: true, ...(loginMP ? { login_mp: loginMP } : {}), ...(b._mp_sesion ? { mp_sesion: b._mp_sesion } : {}), motivo: `El robot «${manda}» está a cargo: este espera para no cerrar su sesión de Mercado Público.` });
       }
       if (M.equipo !== eqM) await avisarTexto(store, "🎖 Robot a cargo: " + eqM, M.equipo ? `Tomó el mando desde «${M.equipo}». Solo uno trabaja con tu sesión de Mercado Público.` : "Trabajando.", "mando", "/#robot").catch(() => {});
       await store.setJSON("robot/mando", { ...M, equipo: eqM, visto: ahora(), desde: M.equipo === eqM ? M.desde : ahora() });
@@ -1484,7 +1509,7 @@ async function atender(req) {
     if (chats.length) await store.setJSON("chat/cola", cq.filter((x) => lista.some((y) => y.codigo === x.codigo)));
     const op = { ...(pidio ? { oportunidades: true } : {}), ...(negocios.length ? { negocios } : {}), ...(preguntas.length ? { preguntas } : {}), empresas, equipos: vivos,
       ...(correos.length ? { correos } : {}), ...(vigilar ? { vigilar } : {}), ...(chats.length ? { chats } : {}), ...(ocs_pdf.length ? { ocs_pdf } : {}), ...(oc_sin_pdf.length ? { oc_sin_pdf } : {}),
-      ...(firmaMeta ? { firma: firmaMeta } : {}), ...(visiones.length ? { visiones } : {}), ...(loginMP ? { login_mp: loginMP } : {}) };
+      ...(firmaMeta ? { firma: firmaMeta } : {}), ...(visiones.length ? { visiones } : {}), ...(loginMP ? { login_mp: loginMP } : {}), ...(b._mp_sesion ? { mp_sesion: b._mp_sesion } : {}) };
     // ⚡ lo que pide una persona desde el celular va antes que el autopiloto del PC
     const humano = (t) => !!(t.jugador || t.dispositivo);
     // un pedido es de este equipo si le toca por reparto, o si al dueño lo tienen ocupado y es de una persona (no se hace esperar)
