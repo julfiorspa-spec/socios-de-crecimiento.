@@ -1094,6 +1094,45 @@ async function atender(req) {
     await avisarTexto(store, "☁️ Tu robot ya vive en la nube", "Funciona 24/7 sin tu PC. Abre 💎 Planes → Robot en la nube para iniciar sesión en Mercado Público una vez.", "nube", "/#robot").catch(() => {});
     return json({ ok: true });
   }
+  // 🔐 conectar Mercado Público desde el celular: RUN + ClaveÚnica viajan CIFRADOS con la llave del robot del PC
+  // (este servidor no puede leerlos), el robot los escribe en ClaveÚnica y pide aquí el código o la empresa si hace falta.
+  if (ruta === "mp-login" && req.method === "GET") {
+    const pub = await store.get("login/pub", { type: "json" }), est = await store.get("login/estado", { type: "json" });
+    const lat = (await store.get("robot/equipos", { type: "json" })) || {};
+    const pcVivo = Object.entries(lat).some(([k, v]) => !/nube/i.test(k) && Date.now() - Date.parse(v.visto) < 90_000);
+    return json({ pub: pub?.pub || null, equipo: pub?.equipo || null, pc_vivo: pcVivo, estado: est || null });
+  }
+  if (ruta === "mp-login" && req.method === "POST") {
+    const b = await cuerpo(req);
+    if (!b.legado) return json({ error: "Solo el dueño conecta la sesión de Mercado Público del robot." }, 403);
+    if (typeof b.sobre !== "string" || b.sobre.length > 2000) return json({ error: "Datos inválidos." }, 400);
+    const id = globalThis.crypto.randomUUID();
+    await store.setJSON("login/pedido", { id, sobre: b.sobre, t: ahora() });
+    await store.delete("login/resp").catch(() => {});
+    await store.setJSON("login/estado", { id, paso: "enviado", mensaje: "Esperando que el robot del PC lo tome (segundos)…", t: ahora() });
+    return json({ ok: true, id });
+  }
+  if (ruta === "mp-login-resp" && req.method === "POST") {      // el celular contesta: código cifrado, empresa elegida o cancelar
+    const b = await cuerpo(req);
+    if (!b.legado) return json({ error: "Solo el dueño." }, 403);
+    await store.setJSON("login/resp", { id: texto(b.id, 60), sobre: typeof b.sobre === "string" ? b.sobre.slice(0, 2000) : null,
+      opcion: Number.isInteger(b.opcion) ? b.opcion : null, cancelar: !!b.cancelar, t: ahora() });
+    return json({ ok: true });
+  }
+  if (ruta === "mp-login-resp" && req.method === "GET") {       // el robot del PC retira la respuesta (y se borra)
+    const r = await store.get("login/resp", { type: "json" });
+    if (!r || r.id !== url.searchParams.get("id")) return json({ resp: null });
+    await store.delete("login/resp");
+    return json({ resp: r });
+  }
+  if (ruta === "mp-login-estado" && req.method === "POST") {    // el robot del PC cuenta en qué paso va
+    const b = await cuerpo(req);
+    const ops = Array.isArray(b.opciones) ? b.opciones.slice(0, 30).map((x) => texto(x, 160)) : null;
+    await store.setJSON("login/estado", { id: texto(b.id, 60), paso: texto(b.paso, 20), mensaje: texto(b.mensaje, 400), opciones: ops,
+      foto: typeof b.foto === "string" && b.foto.length < 400_000 ? b.foto : null, t: ahora() });
+    if (b.paso === "listo") await avisarTexto(store, "🔐 Mercado Público conectado", "El robot ya tiene tu sesión. Puedes seguir preparando ofertas.", "mp-login", "/#robot").catch(() => {});
+    return json({ ok: true });
+  }
   if (ruta === "robot-mando" && req.method === "POST") {     // el dueño elige qué robot manda: PC o nube
     const b = await cuerpo(req);
     if (!b.legado) return json({ error: "Solo el dueño elige qué robot manda." }, 403);
@@ -1311,6 +1350,22 @@ async function atender(req) {
   // ---------- robot del PC ----------
   if (ruta === "latido" && req.method === "POST") {
     const b = await cuerpo(req);
+    // 🔐 conectar Mercado Público desde el celular: SOLO el robot del PC (ClaveÚnica bloquea los servidores en la nube)
+    let loginMP = null;
+    {
+      const eqL = texto(b.equipo, 60) || "pc";
+      if (!/nube/i.test(eqL)) {
+        if (typeof b.pub === "string" && b.pub.length < 1500) {
+          const PB = (await store.get("login/pub", { type: "json" })) || {};
+          if (PB.pub !== b.pub || PB.equipo !== eqL || Date.now() - Date.parse(PB.t || 0) > 600_000) await store.setJSON("login/pub", { pub: b.pub, equipo: eqL, t: ahora() });
+        }
+        const LP = await store.get("login/pedido", { type: "json" });
+        if (LP && LP.sobre && Date.now() - Date.parse(LP.t) < 300_000) {
+          loginMP = { id: LP.id, sobre: LP.sobre };
+          await store.setJSON("login/pedido", { id: LP.id, t: LP.t, sobre: null, entregado: ahora(), equipo: eqL });   // la clave cifrada se borra apenas sale
+        }
+      }
+    }
     // 🎖 UN SOLO ROBOT AL MANDO: Mercado Público acepta una sesión por usuario; si dos robots trabajan se botan entre sí.
     // Manda el preferido (lo elige el dueño: PC o nube) si está vivo; si no, el que ya mandaba; si nadie, el primero que llega.
     {
@@ -1322,7 +1377,7 @@ async function atender(req) {
         const E2 = (await store.get("robot/equipos", { type: "json" })) || {};
         E2[eqM] = { visto: ahora(), ocupado: !!b.ocupado, version: texto(b.version, 20), pausa: true };
         await store.setJSON("robot/equipos", E2);
-        return json({ pausa: true, manda, pendientes: true, motivo: `El robot «${manda}» está a cargo: este espera para no cerrar su sesión de Mercado Público.` });
+        return json({ pausa: true, manda, pendientes: true, ...(loginMP ? { login_mp: loginMP } : {}), motivo: `El robot «${manda}» está a cargo: este espera para no cerrar su sesión de Mercado Público.` });
       }
       if (M.equipo !== eqM) await avisarTexto(store, "🎖 Robot a cargo: " + eqM, M.equipo ? `Tomó el mando desde «${M.equipo}». Solo uno trabaja con tu sesión de Mercado Público.` : "Trabajando.", "mando", "/#robot").catch(() => {});
       await store.setJSON("robot/mando", { ...M, equipo: eqM, visto: ahora(), desde: M.equipo === eqM ? M.desde : ahora() });
@@ -1429,7 +1484,7 @@ async function atender(req) {
     if (chats.length) await store.setJSON("chat/cola", cq.filter((x) => lista.some((y) => y.codigo === x.codigo)));
     const op = { ...(pidio ? { oportunidades: true } : {}), ...(negocios.length ? { negocios } : {}), ...(preguntas.length ? { preguntas } : {}), empresas, equipos: vivos,
       ...(correos.length ? { correos } : {}), ...(vigilar ? { vigilar } : {}), ...(chats.length ? { chats } : {}), ...(ocs_pdf.length ? { ocs_pdf } : {}), ...(oc_sin_pdf.length ? { oc_sin_pdf } : {}),
-      ...(firmaMeta ? { firma: firmaMeta } : {}), ...(visiones.length ? { visiones } : {}) };
+      ...(firmaMeta ? { firma: firmaMeta } : {}), ...(visiones.length ? { visiones } : {}), ...(loginMP ? { login_mp: loginMP } : {}) };
     // ⚡ lo que pide una persona desde el celular va antes que el autopiloto del PC
     const humano = (t) => !!(t.jugador || t.dispositivo);
     // un pedido es de este equipo si le toca por reparto, o si al dueño lo tienen ocupado y es de una persona (no se hace esperar)
