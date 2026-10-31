@@ -2724,6 +2724,19 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
     if (R._cargNube) return; R._cargNube = true;
     try { const [n, so] = await Promise.all([api("nube-estado"), api("nube-solicitudes").catch(() => ({}))]); R.nube = { ...n, solicitudes: so.solicitudes || [] }; R.nubeT = Date.now(); pintarHojaSiAbierta(); } catch {} finally { R._cargNube = false; }
   }
+  // ☁️ entrar directo a la pantalla del robot de la nube (la contraseña VNC va en el # : no viaja al servidor)
+  function vistaDirecta() {
+    const e = R.nube?.nube; if (!e?.vista) return null;
+    const u = e.vista.includes("path=") ? e.vista : e.vista + (e.vista.includes("?") ? "&" : "?") + "path=websockify";
+    return u.split("#")[0] + (e.clave ? "#&password=" + encodeURIComponent(String(e.clave).slice(0, 8)) : "");
+  }
+  async function entrarNube() {
+    let u = vistaDirecta();
+    if (u) { window.open(u, "_blank"); return; }
+    const w = window.open("about:blank", "_blank");
+    R.nubeT = 0; await cargarNube(); u = vistaDirecta();
+    if (u && w) w.location.href = u; else { try { w && w.close(); } catch {} toast("El robot de la nube aún no está listo: 💎 Planes → ☁️ Robot en la nube"); }
+  }
   function bloqueNube() {
     if (!R.nubeT || Date.now() - R.nubeT > 10000) setTimeout(cargarNube, 0);
     const N = R.nube || {}, e = N.nube, lat = N.latido, pq = N.paquete;
@@ -2741,7 +2754,7 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
           <div class="muted" style="font-size:.68rem">Mercado Público acepta una sola sesión: trabaja un robot a la vez y el otro espera quieto.${otros.length ? ` En espera: ${otros.map(esc).join(", ")}.` : ""}</div></div>`; })()}
       <div class="rb-op"><div class="rb-env"><b>${vivo ? (enNube ? "🟢 Funcionando en la nube" : "🟡 Funcionando en tu PC") : "⚪ Robot apagado"}</b><span class="muted" style="font-size:.7rem">${esc(lat?.equipo || "")}${lat?.visto ? " · " + esc(hace(lat.visto)) : ""}</span></div>
       ${e ? `<div class="muted" style="font-size:.74rem;margin:4px 0">Servidor ${esc(e.host)} · instalado ${esc(hace(e.t))}</div>
-        <div class="rb-row"><a class="btn rb-oro" href="${esc(e.vista)}" target="_blank" rel="noopener" style="flex:1">🖥 Abrir vista remota</a><a class="btn small" href="${esc(e.panel)}" target="_blank" rel="noopener">Panel</a></div>
+        <div class="rb-row"><a class="btn rb-oro" href="${esc(vistaDirecta() || e.vista)}" target="_blank" rel="noopener" style="flex:1">☁️ Conectarme a la nube</a><a class="btn small" href="${esc(e.panel)}" target="_blank" rel="noopener">Panel</a></div>
         <div class="rb-kv"><span>Usuario <b>${esc(e.usuario)}</b></span><span>Clave <b>${esc(e.clave)}</b></span><button class="btn small" type="button" data-rb="nube-copiar" data-v="${esc(e.clave)}">📋</button></div>
         <div class="muted" style="font-size:.7rem">En la vista remota inicias sesión en Mercado Público una vez (como en el PC). Después el robot trabaja solo, aunque apagues el computador.</div>`
       : `<ol class="rb-ul" style="font-size:.76rem;line-height:1.5;padding-left:18px">
@@ -2964,7 +2977,7 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
         <span class="rb-pcs" title="${conectado ? "Robot conectado" + (r?.equipo ? " · " + esc(r.equipo) : "") : "Robot apagado"}"><i class="${conectado ? "on" : ""}"></i>${/nube/i.test(r?.equipo || "") ? "☁️" : "Robot"}<i class="${mp?.conectado ? "on" : ""}"></i>MP</span>
         <button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
         <button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
-        <div class="rb-portal"><button type="button" class="${!["ejecuta", "licita", "inversion"].includes(leer().portal) ? "on" : ""}" data-rb="portal" data-v="juego">🎮 Juego</button><button type="button" class="${leer().portal === "licita" ? "on" : ""}" data-rb="portal" data-v="licita">📑 Licita</button><button type="button" class="${leer().portal === "ejecuta" ? "on" : ""}" data-rb="portal" data-v="ejecuta">🛠 Ejecuta</button><button type="button" class="${leer().portal === "inversion" ? "on" : ""}" data-rb="portal" data-v="inversion">💼 Inversión</button></div>${R.data && conectado && !mp?.conectado && /nube/i.test(r?.equipo || "") ? `<div class="rb-alertas" style="margin:6px 0"><b>☁️ Falta la sesión de Mercado Público en la nube</b>Sin ella las ofertas no se pueden cargar para firmar. Ábrela una vez y el robot sigue solo.<button class="btn small rb-oro" data-rb="conectar-mp" type="button" style="margin-top:6px;width:100%">🖥 Abrir vista remota e iniciar sesión</button></div>` : ""}`;
+        <div class="rb-portal"><button type="button" class="${!["ejecuta", "licita", "inversion"].includes(leer().portal) ? "on" : ""}" data-rb="portal" data-v="juego">🎮 Juego</button><button type="button" class="${leer().portal === "licita" ? "on" : ""}" data-rb="portal" data-v="licita">📑 Licita</button><button type="button" class="${leer().portal === "ejecuta" ? "on" : ""}" data-rb="portal" data-v="ejecuta">🛠 Ejecuta</button><button type="button" class="${leer().portal === "inversion" ? "on" : ""}" data-rb="portal" data-v="inversion">💼 Inversión</button></div>${esDueno() ? (setTimeout(() => { if (!R.nubeT || Date.now() - R.nubeT > 60000) cargarNube(); }, 0), `<button class="btn small ${mp?.conectado ? "" : "rb-oro"}" type="button" data-rb="nube-entrar" style="width:100%;margin:6px 0 0">☁️ Conectarme a la nube${mp?.conectado ? " · 🟢 Mercado Público conectado" : ""}</button>`) : ""}${R.data && conectado && !mp?.conectado && /nube/i.test(r?.equipo || "") ? `<div class="rb-alertas" style="margin:6px 0"><b>☁️ Falta la sesión de Mercado Público en la nube</b>Sin ella las ofertas no se pueden cargar para firmar. Ábrela una vez y el robot sigue solo.<button class="btn small rb-oro" data-rb="conectar-mp" type="button" style="margin-top:6px;width:100%">🖥 Abrir vista remota e iniciar sesión</button></div>` : ""}`;
       // 🏆 portada: cada vez que abres la app (y siempre que no haya empresa). Sin formularios: RUT → jugar.
       if (!miEmp() || !portadaVista()) { if (!R.oport) cargarOport(); return pantallaPortada(); }
       let cuerpo;
@@ -3541,9 +3554,10 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       return;
     }
     if (a === "marcador-arrastrar") { ev.preventDefault(); toast("Arrástralo a la barra de favoritos; se usa en Mercado Público"); return; }
+    if (a === "nube-entrar") { await entrarNube(); return; }
     if (a === "conectar-mp") {
       // ☁️ si trabaja el robot de la nube, la sesión de Mercado Público se abre en SU navegador (vista remota)
-      if (/nube/i.test(R.data?.robot?.equipo || "")) { const v = R.nube?.nube?.vista; if (v) { window.open(v, "_blank"); toast("Usuario «robot» y tu clave de la nube · luego inicia sesión en Mercado Público"); } else { setTimeout(cargarNube, 0); toast("Abre 💎 Planes → ☁️ Robot en la nube → Abrir vista remota"); } return; }
+      if (/nube/i.test(R.data?.robot?.equipo || "")) { await entrarNube(); toast("Inicia sesión en Mercado Público en esa pantalla · una sola vez"); return; }
       if (esIOS && instalada()) { abrirEnSafari("conectar"); return; }
       window.open(location.origin + "/firmar.html#conectar", "_blank"); return;
     }
