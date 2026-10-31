@@ -362,7 +362,7 @@
   .rb-puerta-t small{font-size:.74rem;color:#a9b8d9;line-height:1.3}
   .rb-puerta-f{font-size:1.4rem;color:#c8a24a;flex:0 0 auto}
   .rb-p-cambiar{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:999px;padding:4px 11px;font-size:.72rem;color:#dfe7fb;cursor:pointer}
-  .rb-pcs{display:flex;align-items:center;gap:4px;font-size:.66rem;color:#a9b8d9;letter-spacing:.04em}
+  .rb-pcs{display:flex;align-items:center;gap:4px;font-size:.66rem;color:#a9b8d9;letter-spacing:.04em;background:none;border:none;cursor:pointer;font-family:inherit;padding:2px 2px}
   .rb-pcs i{width:7px;height:7px;border-radius:50%;background:#64708a;display:inline-block;margin-left:4px}.rb-pcs i.on{background:#3fdc8a;box-shadow:0 0 0 3px rgba(63,220,138,.18)}
   .rb-ico{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);color:#fff;border-radius:12px;width:38px;height:36px;font-size:1rem;cursor:pointer}
   .rb-ico.rb-tel{background:linear-gradient(180deg,#fff0bd,#f5cf6b 50%,#c48f17);border-color:transparent;box-shadow:0 4px 14px rgba(245,190,70,.35)}
@@ -2589,25 +2589,25 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
   const ROL = "sdc:rol";
   const rolActual = () => { try { return localStorage.getItem(ROL); } catch { return null; } };
   const ROLES = {
-    juego:     { ico: "🎮", corto: "Busco negocios", portal: "juego",     h: "El Estado compra todos los días.<br><span>Encuentra y gana tu parte.</span>", sub: "Eliges, el robot arma la oferta, la ficha y el PDF. Tú solo firmas y cobras.", cta: "▶ ENTRAR" },
-    ejecuta:   { ico: "🛠", corto: "Ejecuto", portal: "ejecuta",   h: "Tú ejecutas los negocios.<br><span>Haces la pega y cobras.</span>", sub: "Te asignan negocios ya ganados y tú los ejecutas: compras, entregas, instalas.", cta: "▶ ENTRAR A EJECUTAR" },
-    inversion: { ico: "💰", corto: "Invierto", portal: "inversion", h: "Pones la plata.<br><span>El negocio ya está ganado.</span>", sub: "Inviertes en negocios ya adjudicados y recibes tu parte de la utilidad.", cta: "▶ ENTRAR A INVERTIR" },
-    todo:      { ico: "⭐", corto: "Hago de todo", portal: "juego",     h: "El mercado público, completo.<br><span>Buscas, ejecutas e inviertes.</span>", sub: "El perfil completo: encuentras negocios, los ejecutas y pones capital.", cta: "▶ ENTRAR" },
+    juego:     { ico: "🎮", corto: "Jugador", portal: "juego",     h: "El Estado compra todos los días.<br><span>Cotiza y gana tu parte.</span>", sub: "Cotizas, el robot arma la oferta, la ficha y el PDF. Tú firmas con tu ClaveÚnica y cobras.", cta: "▶ ENTRAR A COTIZAR" },
+    licita:    { ico: "📑", corto: "Licitador", portal: "licita",   h: "Las licitaciones grandes.<br><span>Postula y adjudícate proyectos.</span>", sub: "Compites por las licitaciones del Estado, montos mayores y proyectos de varios días.", cta: "▶ ENTRAR A LICITAR" },
+    ejecuta:   { ico: "🛠", corto: "Ejecutor", portal: "ejecuta",   h: "Tú ejecutas los negocios.<br><span>Haces la pega y cobras.</span>", sub: "Ejecutas órdenes de compra ya ganadas: compras, entregas, instalas, y muestras el avance en vivo.", cta: "▶ ENTRAR A EJECUTAR" },
+    inversion: { ico: "💰", corto: "Inversor", portal: "inversion", h: "Pones la plata.<br><span>El negocio ya está ganado.</span>", sub: "Inviertes en negocios ya adjudicados y ves tu inversión crecer en tiempo real. Sin ClaveÚnica.", cta: "▶ ENTRAR A INVERTIR" },
   };
   function selectorRol() {
     const puerta = (v, ico, t, sub) => `<button type="button" class="rb-puerta" data-rb="rol-elegir" data-v="${v}"><span class="rb-puerta-i">${ico}</span><span class="rb-puerta-t"><b>${t}</b><small>${sub}</small></span><span class="rb-puerta-f">›</span></button>`;
     return `<div class="rb-portada">
       <div class="rb-p-brillo"></div>
-      <div class="rb-p-top"><span class="rb-p-logo">◆ Socios de Crecimiento</span></div>
-      <h1 class="rb-p-h">¿Qué vienes a hacer?</h1>
-      <div class="rb-p-sub">Elige tu puerta y te muestro tu parte. Puedes ser más de una.</div>
+      <div class="rb-p-top"><span class="rb-p-logo">◆ Socios de Crecimiento</span>${R.verRoles ? `<button type="button" class="rb-p-cambiar" data-rb="roles-cerrar">✕ cerrar</button>` : ""}</div>
+      <h1 class="rb-p-h">¿Qué quieres hacer?</h1>
+      <div class="rb-p-sub">Toca tu perfil. Puedes ser más de uno.</div>
       <div class="rb-puertas">
-        ${puerta("juego", "🎮", "Busco y armo negocios del Estado", "Encuentro compras y el robot arma la oferta. Tú firmas y cobras.")}
-        ${puerta("ejecuta", "🛠", "Yo hago el trabajo / lo entrego", "Ejecutas los negocios: compras, entregas, instalas.")}
-        ${puerta("inversion", "💰", "Pongo plata y gano", "Inviertes en negocios ya ganados y recibes tu utilidad.")}
-        ${puerta("todo", "⭐", "Hago de todo", "Buscas, ejecutas e inviertes. El perfil completo.")}
+        ${puerta("juego", "🎮", "Jugador · Cotizador", "Cotizas Compras Ágiles del Estado. El robot arma la oferta; tú firmas con tu ClaveÚnica y cobras.")}
+        ${puerta("licita", "📑", "Licitador", "Vas por las licitaciones grandes: postulas, compites y te adjudicas proyectos. (Portal en construcción.)")}
+        ${puerta("ejecuta", "🛠", "Ejecutor", "Ejecutas las órdenes de compra ya ganadas: compras, entregas, instalas, y muestras el avance en vivo.")}
+        ${puerta("inversion", "💰", "Inversor", "Pones capital en negocios ya adjudicados y ves tu inversión crecer en tiempo real. Sin ClaveÚnica.")}
       </div>
-      <div class="rb-p-nota" style="margin-top:14px">No te preocupes: después puedes cambiar o sumar perfiles cuando quieras.</div>
+      <div class="rb-p-nota" style="margin-top:14px">Puedes cambiar o sumar perfiles cuando quieras. <b>Pronto:</b> cada perfil con su plan (básico · medio · premium).</div>
     </div>`;
   }
   function pantallaPortada() {
@@ -3136,11 +3136,12 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
       const cab = `<div class="rb-top2">
         <button class="rb-emp" type="button" data-rb="empresa-editar">🏢 <span>${esc(corta(emp?.razon_social) || "Mi empresa")}</span> ▾</button>
         <button class="rb-yo" type="button" data-rb="persona-editar" title="Quién usa este celular">👤 ${esc((persona()?.nombre || "¿quién?").split(" ")[0].slice(0, 12))}</button>
-        <span class="rb-pcs" title="${conectado ? "Robot conectado" + (r?.equipo ? " · " + esc(r.equipo) : "") : "Robot apagado"}"><i class="${conectado ? "on" : ""}"></i>${/nube/i.test(r?.equipo || "") ? "☁️" : "Robot"}<i class="${mp?.conectado ? "on" : ""}"></i>MP</span>
+        <button type="button" class="rb-pcs" data-rb="ver-roles" title="¿Qué quieres hacer? · ${conectado ? "Robot conectado" : "Robot apagado"}"><i class="${conectado ? "on" : ""}"></i>${/nube/i.test(r?.equipo || "") ? "☁️" : "Robot"}<i class="${mp?.conectado ? "on" : ""}"></i>MP</button>
         <button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
         <button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
         <div class="rb-portal"><button type="button" class="${!["ejecuta", "licita", "inversion"].includes(leer().portal) ? "on" : ""}" data-rb="portal" data-v="juego">🎮 Juego</button><button type="button" class="${leer().portal === "licita" ? "on" : ""}" data-rb="portal" data-v="licita">📑 Licita</button><button type="button" class="${leer().portal === "ejecuta" ? "on" : ""}" data-rb="portal" data-v="ejecuta">🛠 Ejecuta</button><button type="button" class="${leer().portal === "inversion" ? "on" : ""}" data-rb="portal" data-v="inversion">💼 Inversión</button></div>${esDueno() ? (setTimeout(() => { if (!R.nubeT || Date.now() - R.nubeT > 60000) cargarNube(); inicioLoginMP(); }, 0), barraMando(r, mp, conectado)) : ""}`;
       // 🏆 portada: cada vez que abres la app (y siempre que no haya empresa). Sin formularios: RUT → jugar.
+      if (R.verRoles) return selectorRol();
       if (!miEmp() || !portadaVista()) { if (!R.oport) cargarOport(); return pantallaPortada(); }
       let cuerpo;
       if (R.personaEditar) cuerpo = pantallaPersona();
@@ -3532,7 +3533,9 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     }
     if (a === "llamada-ver") { const h = leerHist().find((x) => x.id === b.dataset.id); if (h) { R.llamada = { id: h.id, texto: h.texto, t: h.t, confirmado: h.codigo || null }; if (h.codigo) cargarDocs(h.codigo); esperarRespuesta(h.id); } return pintarHoja(true); }
     if (a === "recordar") return recordar(b.dataset.t, b.dataset.min, b.dataset.c);
-    if (a === "rol-elegir") { try { localStorage.setItem(ROL, b.dataset.v); } catch (e) {} const rp = (ROLES[b.dataset.v] || {}).portal; if (rp) guardar({ portal: rp }); sheet.scrollTop = 0; navigator.vibrate?.(10); return pintarHoja(true); }
+    if (a === "ver-roles") { R.verRoles = true; sheet.scrollTop = 0; return pintarHoja(true); }
+    if (a === "roles-cerrar") { R.verRoles = false; return pintarHoja(true); }
+    if (a === "rol-elegir") { try { localStorage.setItem(ROL, b.dataset.v); } catch (e) {} const rp = (ROLES[b.dataset.v] || {}).portal; if (rp) guardar({ portal: rp }); R.verRoles = false; sheet.scrollTop = 0; navigator.vibrate?.(10); return pintarHoja(true); }
     if (a === "rol-cambiar") { try { localStorage.removeItem(ROL); } catch (e) {} sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "portada-jugar") {
       const v = $("#rbRut")?.value || ""; R.rutTmp = v;
