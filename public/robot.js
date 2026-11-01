@@ -1926,8 +1926,9 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     if (!tienePlan("premium")) return candado("premium", "💼 Inversión");
     if (!R.ejec) { cargarEjecuta(); return `<div class="empty"><span class="spinner"></span> Cargando negocios…</div>`; }
     const emp = empresaActual() || {};
+    const noInt = (() => { try { return JSON.parse(localStorage.getItem("sdc:invno")) || {}; } catch { return {}; } })();
     const L = (R.ejec || []).filter((t) => t.op && t.op.etapa !== "rechazada").map((t) => ({ t, X: calcNeg(t) })).filter((x) => x.X.compras);
-    const toca = L.filter(({ t, X }) => t.op.pedido_transferencia && !t.op.transferido && X.final > 0), activos = L.filter(({ t }) => t.op.transferido && !t.op.cerrado), abiertos = L.filter(({ t, X }) => !t.op.pedido_transferencia && X.final > 0);
+    const toca = L.filter(({ t, X }) => t.op.pedido_transferencia && !t.op.transferido && X.final > 0 && !noInt[t.codigo]), activos = L.filter(({ t }) => t.op.transferido && !t.op.cerrado), abiertos = L.filter(({ t, X }) => !t.op.pedido_transferencia && X.final > 0 && !noInt[t.codigo]);
     const tot = activos.reduce((a, x) => ({ c: a.c + x.X.capital, g: a.g + x.X.invGan }), { c: 0, g: 0 });
     const card = ({ t, X }, modo) => `<div class="rb-inv ${modo}"><div class="rb-env"><div style="min-width:0"><b>${esc((t.nombre || t.codigo).slice(0, 60))}</b><div class="muted" style="font-size:.7rem">${esc((t.oc_compra?.organismo || t.organismo || "").slice(0, 50))}${t.op.oc_codigo ? " · OC " + esc(t.op.oc_codigo) : ""}</div></div>
         <div style="text-align:right"><div class="muted" style="font-size:.6rem">INVIERTES</div><b>${clp(Math.round(X.capital))}</b></div></div>
@@ -1940,7 +1941,8 @@ ${emp.razon_social || ""}
 ${emp.banco || ""}`)}">📋 Copiar datos</button>
           <button class="btn small" type="button" data-rb="neg-subir" data-tipo="comprobante" data-c="${esc(t.codigo)}">📎 Comprobante</button>
           <button class="btn small rb-oro" type="button" data-rb="inv-transferi" data-c="${esc(t.codigo)}">✅ Ya transferí</button></div>` : ""}
-      ${t.op.en_vivo && t.op.twitch_canal ? `<a class="btn small" href="https://www.twitch.tv/${encodeURIComponent(t.op.twitch_canal)}" target="_blank" rel="noopener">🔴 Ver la entrega en vivo</a>` : ""}</div>`;
+      ${t.op.en_vivo && t.op.twitch_canal ? `<a class="btn small" href="https://www.twitch.tv/${encodeURIComponent(t.op.twitch_canal)}" target="_blank" rel="noopener">🔴 Ver la entrega en vivo</a>` : ""}
+      ${modo !== "activo" ? `<div class="rb-row" style="margin-top:4px"><button class="btn small rb-link" type="button" data-rb="inv-descartar" data-c="${esc(t.codigo)}" style="opacity:.65;margin-left:auto">✖ No me interesa</button></div>` : ""}</div>`;
     return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">💼 Inversión</h2><span class="muted" style="font-size:.7rem">en vivo</span></div>
       ${inversorDidactico(L, tot, emp)}
       <div class="rb-tira"><span>💰 <b>${cortoG(tot.c)}</b> invertido</span><span>📈 <b>+${cortoG(tot.g)}</b> por cobrar</span><span>🔔 <b>${toca.length}</b> por invertir</span></div>
@@ -2300,7 +2302,8 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
         <div class="rb-prov-oro" style="margin-top:10px">
           <div class="rb-sec" style="margin-top:0">⚡ Elegí proveedor — rápido</div>
           <label class="rb-lab">Proveedor (nombre)<input class="rb-neg-in" data-campo="proveedor" data-c="${esc(t.codigo)}" value="${esc(op.proveedor || "")}" placeholder="Ej: Mario Salas"></label>
-          <label class="rb-lab">¿Cuánto te cobra? <span class="muted">(con IVA · si te dan neto ×1,19)</span><input class="rb-neg-in" data-campo="precio_acordado" data-c="${esc(t.codigo)}" inputmode="numeric" value="${op.precio_acordado ? Number(op.precio_acordado).toLocaleString("es-CL") : ""}" placeholder="${inf.compras ? Number(inf.compras).toLocaleString("es-CL") : ""}"></label>
+          <label class="rb-lab">¿Cuánto te cobró NETO? <span class="muted">(sin IVA)</span><input class="rb-neg-in" data-campo="precio_neto" data-c="${esc(t.codigo)}" inputmode="numeric" value="${op.precio_acordado ? Math.round(Number(op.precio_acordado) / 1.19).toLocaleString("es-CL") : ""}" placeholder="Ej: 630.000"></label>
+          <label class="rb-lab">Total con IVA <span class="muted">(se calcula solo; o edítalo)</span><input class="rb-neg-in" data-campo="precio_acordado" data-c="${esc(t.codigo)}" inputmode="numeric" value="${op.precio_acordado ? Number(op.precio_acordado).toLocaleString("es-CL") : ""}" placeholder="${inf.compras ? Number(inf.compras).toLocaleString("es-CL") : ""}"></label>
           <div class="rb-row"><label class="rb-lab" style="flex:1">¿Cuándo le pagas?<input type="date" class="rb-neg-in" data-campo="fecha_pago" data-c="${esc(t.codigo)}" value="${esc(op.fecha_pago || "")}"></label><label class="rb-lab" style="flex:1">¿Cuándo termina?<input type="date" class="rb-neg-in" data-campo="plazo_fecha" data-c="${esc(t.codigo)}" value="${esc(op.plazo_fecha || "")}"></label></div>
           ${op.proveedor && op.precio_acordado ? `<div class="rb-pill verde" style="margin-top:6px">✅ ${esc(op.proveedor)} · ${clp(op.precio_acordado)}${op.fecha_pago ? " · pago " + esc(new Date(op.fecha_pago + "T12:00").toLocaleDateString("es-CL", { day: "numeric", month: "short" })) : ""} → ya está en 💼 Inversionista y Pago</div>` : `<div class="muted" style="font-size:.7rem;margin-top:4px">Llena esto y aparece solo en la caja 💼 Inversionista y Pago (tu Excel en vivo).</div>`}
         </div>
@@ -3639,6 +3642,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       if (a === "rep-copiar") { const ok = await copiar(nominaTexto(t)); toast(ok ? "📋 Transferencias copiadas" : "No se pudo copiar"); return; }
       const url = URL.createObjectURL(new Blob([nominaTexto(t, true)], { type: "text/csv;charset=utf-8" })), el = document.createElement("a");
       el.href = url; el.download = `Nomina_${cod}.csv`; document.body.append(el); el.click(); el.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); toast("⬇ Nómina descargada"); return; }
+    if (a === "inv-descartar") { const n = (() => { try { return JSON.parse(localStorage.getItem("sdc:invno")) || {}; } catch { return {}; } })(); n[cod] = Date.now(); try { localStorage.setItem("sdc:invno", JSON.stringify(n)); } catch {} toast("Quitada de tus oportunidades"); return pintarHoja(true); }
     if (a === "inv-transferi") return ejOpVivo(cod, { transferido: true }, "✅ Inversión registrada: la empresa paga al proveedor");
     if (a === "nube-aprobar" || a === "nube-rechazar") {
       try { await api("nube-aprobar", { method: "POST", body: JSON.stringify({ id: b.dataset.v, rechazar: a === "nube-rechazar" }) }); toast(a === "nube-aprobar" ? "✅ Servidor aprobado: se está instalando" : "Solicitud rechazada"); R.nubeT = 0; await cargarNube(); } catch (e) { toast(e.message); } return; }
@@ -3994,7 +3998,8 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     let datos = null, informe = false;
     if (el.classList.contains("rb-cot-in")) { const v = +(el.value || "").replace(/\D/g, "") || 0; el.value = v ? v.toLocaleString("es-CL") : "";
       datos = { cotizacion: { k: el.dataset.k, v, nombre: el.dataset.n } }; }
-    if (el.classList.contains("rb-neg-in")) { const txt = !["precio_acordado", "costo_transporte", "km", "cobrado"].includes(el.dataset.campo);
+    if (el.dataset.campo === "precio_neto") { const n = +(el.value || "").replace(/\D/g, "") || 0; el.value = n ? n.toLocaleString("es-CL") : ""; datos = { precio_acordado: Math.round(n * 1.19) }; informe = true; }
+    else if (el.classList.contains("rb-neg-in")) { const txt = !["precio_acordado", "costo_transporte", "km", "cobrado"].includes(el.dataset.campo);
       const v = txt ? el.value : +(el.value || "").replace(/\D/g, "") || null; datos = { [el.dataset.campo]: v }; informe = !txt; }
     if (el.type === "date") el.blur();
     if (el.dataset.rbChk) datos = { [el.dataset.rbChk]: el.checked };
