@@ -1794,6 +1794,37 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       ${repartoHTML(t, X, true)}
       <div class="rb-row"><button class="btn small rb-firmar" type="button" data-rb="neg-archivo" data-t="excel" data-c="${esc(t.codigo)}">📊 Descargar la planilla</button></div></div>`;
   }
+  // 📊 Ficha de una oferta ENVIADA: qué puede pasar, cuánto vale, excel previo + repartija, qué hacer
+  function fichaEnviada(t) {
+    const g = segDe(t.codigo) || {};
+    const estado = g.ganada ? "🏆 Ya te seleccionaron — esta es tuya."
+      : g.mi_lugar === 1 ? "🥇 Vas 1° por ahora: muy probable que te elijan."
+      : g.mi_lugar ? `Vas ${g.mi_lugar}° por ahora.`
+      : "⏳ En evaluación por el organismo.";
+    let X = calcNeg(t), tv = t, estim = false;
+    if (!X.compras && Number(t.total)) {
+      estim = true;
+      const comprasEst = Math.round(Number(t.total) / 1.19 * 0.70 * 1.19); // costo ≈ 70% de la venta neta (estimación hasta tener proveedor)
+      tv = { ...t, op: { ...(t.op || {}), informe: { ...((t.op || {}).informe || {}), compras: comprasEst } } };
+      X = calcNeg(tv);
+    }
+    const _r = ratingNeg(X.final);
+    const pasos = g.ganada
+      ? "Acepta la OC en Mercado Público → en Ejecuta pide precio a proveedores → elige el que deja más → avisa al inversionista → factura y simula factoring para cobrar antes."
+      : g.mi_lugar === 1
+      ? "Adelántate: en Ejecuta pide precio a proveedores por si te llaman o te seleccionan."
+      : "Espera la evaluación. Si te seleccionan, pásala a Ejecuta y arrancamos el negocio.";
+    const btn = t.op && t.op.etapa !== "rechazada"
+      ? `<button class="btn small" type="button" data-rb="mail-abrir" data-c="${esc(t.codigo)}">🛠 Abrir en Ejecuta</button>`
+      : g.ganada || g.mi_lugar === 1
+      ? `<button class="btn small rb-oro" type="button" data-rb="env-ejecutar" data-e="${g.ganada ? "ganada" : "previa"}" data-c="${esc(t.codigo)}">➡ Pasar a Ejecuta</button>` : "";
+    return `<details class="rb-det"><summary>📊 Qué puede pasar en este negocio · ${_r.emoji} ${clp(Math.round(X.final))} estimado</summary>
+      <div style="font-size:.8rem;margin:4px 0 2px">${estado}</div>
+      <div class="muted" style="font-size:.72rem;margin-bottom:4px">💵 El proyecto vale <b>${clp(Number(t.total) || 0)}</b>${estim ? " · <span style='color:#f5cf6b'>cifras estimadas — el costo real se afina en Ejecuta con el proveedor</span>" : ""}</div>
+      ${excelVivo(tv, X)}
+      <div class="rb-sec">🧭 Qué habría que hacer</div><div class="muted" style="font-size:.74rem">${pasos}</div>
+      ${btn ? `<div class="rb-row" style="margin-top:6px">${btn}</div>` : ""}</details>`;
+  }
   function repartoHTML(t, X, corto) {
     if (!X.compras) return "";
     const pc = (x) => Math.round(x * 1000) / 10 + "%";
@@ -2298,6 +2329,7 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
       ${g?.ganada || g?.mi_lugar === 1 ? `<details class="rb-det"><summary>🧭 Si sale la OC, ¿cómo actuamos?</summary><div class="muted" style="font-size:.72rem;line-height:1.5">
         1️⃣ Acepta la OC en Mercado Público (en 24–48 h).<br>2️⃣ En Ejecuta: pide precio a 4 proveedores con un toque y elige el que da más.<br>3️⃣ Pide su cuenta, avisa al inversionista y sube el comprobante.<br>
         4️⃣ Que el proveedor despache directo al cliente con la guía; recepción conforme firmada.<br>5️⃣ Factura en el SII y simulación de factoring para cobrar antes.</div></details>` : ""}
+      ${fichaEnviada(t)}
       <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">${t.comprobante ? `<button class="btn small rb-firmar" data-rb="comprobante" data-c="${esc(t.codigo)}" type="button">🧾 Comprobante PDF</button>` : ""}
         ${t.pdf ? `<button class="btn small" data-rb="pdf" data-c="${esc(t.codigo)}" type="button">Oferta PDF</button>` : ""}
         <a class="btn small" href="${portalDe(t.codigo)}" target="_blank" rel="noopener noreferrer">🔎 Revisar</a>
