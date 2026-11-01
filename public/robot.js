@@ -1902,6 +1902,26 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       ${op.pedido_transferencia && !op.transferido ? `<div class="rb-sug" style="border-color:#f5cf6b">🏦 ${emp.banco ? esc(emp.banco) : "Faltan los datos de transferencia de la empresa (🏢 empresa → banco)."}</div>` : ""}</div>`;
   }
   // 💼 PORTAL INVERSIONISTA: los negocios que necesitan capital, en vivo
+  // 💡 Onboarding del inversor: ejemplo con números + por qué es real + saldo (estilo Betano)
+  function inversorDidactico(L, tot, emp) {
+    const ej = L[0], nombreEmp = esc(emp.razon_social || "la empresa");
+    const ejemplo = ej ? `<div class="rb-inv-flecha" style="margin:6px 0"><span>Si inviertes</span><b>${clp(Math.round(ej.X.capital))}</b><span>recibes</span><b class="rb-vivo-t">${clp(Math.round(ej.X.invRecibe))}</b><span class="rb-pill verde">+${Math.round(ej.X.invPct * 1000) / 10}%</span></div>
+      <div class="muted" style="font-size:.68rem">Ejemplo real: «${esc((ej.t.nombre || ej.t.codigo).slice(0, 40))}». Recibes tu capital + la ganancia en ~5 días.</div>`
+      : `<div class="muted" style="font-size:.74rem">Ejemplo: inviertes <b>$3.000.000</b> en un negocio ya ganado → recibes tu capital + la ganancia que calcula el Excel de ese negocio (típico +10% a +20% en ~5 días). Cuando haya un negocio con precio, aquí ves tu número exacto.</div>`;
+    return `<details class="rb-det" open style="border-color:#5ef0b0"><summary>💡 ¿Cómo funciona y por qué es real?</summary>
+      ${ejemplo}
+      <div class="rb-sec">Tu plata, paso a paso</div>
+      <div class="muted" style="font-size:.74rem;line-height:1.6">
+        1️⃣ 💸 <b>Inviertes</b> en un negocio <b>ya ganado</b> en Mercado Público por ${nombreEmp}. Tu dinero paga directo los costos del proyecto (proveedor, transporte, logística); no se usa para otra cosa.<br>
+        2️⃣ 🛠 El <b>proveedor ejecuta y entrega</b>. Lo ves <b>en vivo</b> y te llegan notificaciones del estado de tu dinero.<br>
+        3️⃣ 🧾 Se emite y <b>firma la factura</b> (la IA estima que ocurre al ~4º día).<br>
+        4️⃣ 💰 Al <b>5º día</b>, por transferencia electrónica, se <b>abona a tu saldo</b> tu capital + tu ganancia.
+      </div>
+      <div class="rb-sec">🔒 Por qué es seguro</div>
+      <div class="muted" style="font-size:.72rem;line-height:1.55">El negocio <b>ya está adjudicado</b> antes de que pongas un peso · tu dinero <b>solo paga costos reales</b> del proyecto · ves <b>cada movimiento en tiempo real</b> · el Estado paga la factura (o se adelanta con factoring).</div>
+      <div style="display:flex;gap:10px;margin-top:8px"><div style="flex:1;background:rgba(63,220,138,.12);border:1px solid rgba(63,220,138,.4);border-radius:12px;padding:8px 12px"><span style="font-size:.64rem;opacity:.8;display:block">Tu saldo trabajando</span><b style="font-size:1.1rem">${clp(Math.round(tot.c))}</b></div><div style="flex:1;background:rgba(245,207,107,.12);border:1px solid rgba(245,207,107,.4);border-radius:12px;padding:8px 12px"><span style="font-size:.64rem;opacity:.8;display:block">Por cobrar</span><b class="rb-vivo-t" style="font-size:1.1rem">+${clp(Math.round(tot.g))}</b></div></div>
+      <div class="muted" style="font-size:.64rem;margin-top:4px">⚠️ Rentabilidad estimada, no garantizada. Las transferencias las autoriza el dueño de la empresa desde su banco.</div></details>`;
+  }
   function portalInversion() {
     if (!tienePlan("premium")) return candado("premium", "💼 Inversión");
     if (!R.ejec) { cargarEjecuta(); return `<div class="empty"><span class="spinner"></span> Cargando negocios…</div>`; }
@@ -1922,6 +1942,7 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
           <button class="btn small rb-oro" type="button" data-rb="inv-transferi" data-c="${esc(t.codigo)}">✅ Ya transferí</button></div>` : ""}
       ${t.op.en_vivo && t.op.twitch_canal ? `<a class="btn small" href="https://www.twitch.tv/${encodeURIComponent(t.op.twitch_canal)}" target="_blank" rel="noopener">🔴 Ver la entrega en vivo</a>` : ""}</div>`;
     return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">💼 Inversión</h2><span class="muted" style="font-size:.7rem">en vivo</span></div>
+      ${inversorDidactico(L, tot, emp)}
       <div class="rb-tira"><span>💰 <b>${cortoG(tot.c)}</b> invertido</span><span>📈 <b>+${cortoG(tot.g)}</b> por cobrar</span><span>🔔 <b>${toca.length}</b> por invertir</span></div>
       ${toca.length ? `<div class="rb-sec">🔔 Te toca invertir</div>${toca.map((x) => card(x, "toca")).join("")}` : ""}
       ${activos.length ? `<div class="rb-sec">🟢 Tu plata trabajando</div>${activos.map((x) => card(x, "activo")).join("")}` : ""}
