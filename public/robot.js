@@ -1904,7 +1904,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   // 💼 PORTAL INVERSIONISTA: los negocios que necesitan capital, en vivo
   // 💡 Onboarding del inversor: ejemplo con números + por qué es real + saldo (estilo Betano)
   function inversorDidactico(L, tot, emp) {
-    const ej = L[0], nombreEmp = esc(emp.razon_social || "la empresa");
+    const ej = [...L].filter((x) => x.X && x.X.final > 0).sort((a, b) => b.X.final - a.X.final)[0], nombreEmp = esc(emp.razon_social || "la empresa");
     const ejemplo = ej ? `<div class="rb-inv-flecha" style="margin:6px 0"><span>Si inviertes</span><b>${clp(Math.round(ej.X.capital))}</b><span>recibes</span><b class="rb-vivo-t">${clp(Math.round(ej.X.invRecibe))}</b><span class="rb-pill verde">+${Math.round(ej.X.invPct * 1000) / 10}%</span></div>
       <div class="muted" style="font-size:.68rem">Ejemplo real: «${esc((ej.t.nombre || ej.t.codigo).slice(0, 40))}». Recibes tu capital + la ganancia en ~5 días.</div>`
       : `<div class="muted" style="font-size:.74rem">Ejemplo: inviertes <b>$3.000.000</b> en un negocio ya ganado → recibes tu capital + la ganancia que calcula el Excel de ese negocio (típico +10% a +20% en ~5 días). Cuando haya un negocio con precio, aquí ves tu número exacto.</div>`;
@@ -1927,7 +1927,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     if (!R.ejec) { cargarEjecuta(); return `<div class="empty"><span class="spinner"></span> Cargando negocios…</div>`; }
     const emp = empresaActual() || {};
     const L = (R.ejec || []).filter((t) => t.op && t.op.etapa !== "rechazada").map((t) => ({ t, X: calcNeg(t) })).filter((x) => x.X.compras);
-    const toca = L.filter(({ t }) => t.op.pedido_transferencia && !t.op.transferido), activos = L.filter(({ t }) => t.op.transferido && !t.op.cerrado), abiertos = L.filter(({ t }) => !t.op.pedido_transferencia);
+    const toca = L.filter(({ t, X }) => t.op.pedido_transferencia && !t.op.transferido && X.final > 0), activos = L.filter(({ t }) => t.op.transferido && !t.op.cerrado), abiertos = L.filter(({ t, X }) => !t.op.pedido_transferencia && X.final > 0);
     const tot = activos.reduce((a, x) => ({ c: a.c + x.X.capital, g: a.g + x.X.invGan }), { c: 0, g: 0 });
     const card = ({ t, X }, modo) => `<div class="rb-inv ${modo}"><div class="rb-env"><div style="min-width:0"><b>${esc((t.nombre || t.codigo).slice(0, 60))}</b><div class="muted" style="font-size:.7rem">${esc((t.oc_compra?.organismo || t.organismo || "").slice(0, 50))}${t.op.oc_codigo ? " · OC " + esc(t.op.oc_codigo) : ""}</div></div>
         <div style="text-align:right"><div class="muted" style="font-size:.6rem">INVIERTES</div><b>${clp(Math.round(X.capital))}</b></div></div>
