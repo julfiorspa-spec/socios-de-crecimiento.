@@ -962,6 +962,13 @@
         <img src="data:image/png;base64,${esc(t.captcha)}" alt="Código" style="display:block;margin:8px 0;max-width:100%;background:#fff;border-radius:6px">
         <div class="row" style="gap:6px"><input id="rbCap-${c}" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="send" style="flex:1;min-width:120px;font-size:1.1rem;letter-spacing:.08em" placeholder="Pega el código aquí">
         <button class="btn small rb-firmar" data-rb="lic-captcha" data-c="${c}" type="button">Enviar</button></div></div>` : "";
+    const codigoBox = ["requiere", "error", "cancelada"].includes(t.estado) ? `<div class="rb-alertas" style="border-color:#7c4dff">
+        <b>📥 Baja las bases y te las analizo</b>
+        <div class="muted" style="font-size:.72rem;margin:3px 0 6px">Mercado Público pide verificación humana (un código de imagen) para bajar los anexos — por eso el robot no puede solo. Pega el código de la licitación y dale: cuando aparezca la imagen, escribes el código. Ahí leo las bases, calculo el precio y la paso a la Mesa de juego.</div>
+        <div class="row" style="gap:6px"><input id="rbLicGo-${c}" value="${c}" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="send" style="flex:1;min-width:120px;letter-spacing:.04em" placeholder="Código de la licitación (ej: 2585-77-LE26)">
+        <button class="btn small rb-firmar" data-rb="lic-go" data-c="${c}" type="button">📥 Bajar y analizar</button></div>
+        <div class="row" style="gap:6px;margin-top:6px"><a class="btn small" href="${fichaUrl}" target="_blank" rel="noopener noreferrer" style="flex:1;text-align:center">👁 Ver el código en Safari</a></div>
+        <div class="muted" style="font-size:.68rem;margin-top:4px">Abre la ficha en Safari → «Archivos adjuntos»: ahí ves la imagen del código. Léelo y escríbelo cuando el robot te lo pida.</div></div>` : "";
     const precio = L.precio_unit ? `<div class="rb-figs">
         <span>Precio <b>${clp(L.precio_unit)}</b> neto${L.unidad ? " / " + esc(L.unidad) : ""}</span>
         <span>Total <b>${clp(L.total)}</b> con IVA</span>
@@ -981,7 +988,7 @@
       ${t.organismo ? `<div class="muted">${esc(t.organismo)}</div>` : ""}
       ${precio}
       ${t.mensaje ? `<div class="rb-msg">${esc(t.mensaje)}</div>` : ""}
-      ${captcha}${aprobar}${alertas}
+      ${captcha}${codigoBox}${aprobar}${alertas}
       ${L.resumen ? `<details class="rb-det" open><summary>Análisis de las bases</summary><div style="font-size:.85rem">${esc(L.resumen)}
         ${(L.criterios || []).length ? `<div style="margin-top:6px"><b>Criterios · cómo ganamos</b>${lista(L.criterios, (k) => `<li>${esc(k.nombre)}${k.peso ? " (" + esc(k.peso) + ")" : ""}: ${esc(k.propuesta)}${k.confirmar ? " <b style='color:#ffd88a'>· confirmar</b>" : ""}</li>`)}</div>` : ""}
         ${(L.comparables || []).length ? `<div style="margin-top:6px"><b>Compras anteriores</b>${lista(L.comparables, (k) => `<li>${esc(k)}</li>`)}</div>` : ""}
@@ -3703,6 +3710,15 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       if (!confirm(`¿Participar en la licitación ${cod}?\n\nEl robot baja la ficha y los anexos (te pedirá el código de la imagen), analiza las bases, fija el precio (presupuesto −17%) y llena los papeles. Después te pregunta si te parece el precio.`)) return;
       try { const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "licitar" }) });
         toast(r._status === 409 ? "Ya está en manos del robot" : "El robot empezó con la licitación"); R.vista = "lista"; await refrescar(); }
+      catch (e) { toast(e.message); }
+      return;
+    }
+    if (a === "lic-go") {
+      const raw = ($(`#rbLicGo-${CSS.escape(cod)}`)?.value || cod || "").trim().toUpperCase().replace(/\s+/g, "");
+      const m = raw.match(/\d{1,8}-\d{1,6}-[A-Z][A-Z0-9]{1,2}\d{2}/);
+      if (!m) { toast("Ese código no se ve como una licitación (ej: 2585-77-LE26)"); return; }
+      try { const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: m[0], accion: "licitar" }) });
+        toast(r._status === 409 ? "Ya está en manos del robot" : "📥 " + m[0] + ": el robot baja las bases; te pedirá el código de la imagen"); R.licTab = "prep"; await refrescar(); pintarHoja(true); }
       catch (e) { toast(e.message); }
       return;
     }
