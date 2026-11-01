@@ -46,6 +46,7 @@ self.addEventListener("push", (e) => {
     body: d.body || "",
     tag: d.tag || "cotizagil",
     renotify: true,
+    silent: false,
     requireInteraction: !!d.urgente,
     vibrate: d.urgente ? [180, 90, 180, 90, 180] : [120],
     icon: "/icon-512.png",
