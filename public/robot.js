@@ -352,6 +352,13 @@
   .rb-emp span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .rb-mando-barra{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:13px;padding:9px 11px;margin:7px 0}
   .rb-mando-luz{font-size:.82rem;color:#e8edf8}
+  .rb-rating{display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-radius:12px;padding:9px 12px;margin-bottom:8px;font-size:1rem;font-weight:700}
+  .rb-rating span{font-size:.72rem;opacity:.9;width:100%;font-weight:400}
+  .rb-rating.fuego{background:linear-gradient(90deg,rgba(255,90,20,.28),rgba(255,180,0,.14));border:1px solid #ff7a1a;color:#ffd7ad}
+  .rb-rating.bien{background:rgba(63,220,138,.16);border:1px solid #3fdc8a;color:#c6f6de}
+  .rb-rating.ok{background:rgba(63,220,138,.1);border:1px solid rgba(63,220,138,.4);color:#d2efdf}
+  .rb-rating.reg{background:rgba(245,207,107,.13);border:1px solid rgba(245,207,107,.5);color:#f4e4b4}
+  .rb-rating.mal{background:rgba(255,90,90,.13);border:1px solid rgba(255,90,90,.5);color:#ffc7c7}
   .rb-puertas{display:flex;flex-direction:column;gap:10px;margin:18px 0 4px}
   .rb-puerta{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:14px 14px;color:#eaf0ff;cursor:pointer;transition:transform .08s,border-color .15s,background .15s}
   .rb-puerta:active{transform:scale(.98)}
@@ -1760,10 +1767,20 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     return { p, total, neto, iva, factoring, ingreso, compras, fuente, transporte, iva_compra, iva_pagar, recargo, utilidad, impuesto, repartir, comision, final,
       capital, invGan, invRecibe: capital + invGan, invPct: capital ? invGan / capital : 0, ejec, empresa, jugador: comision };
   }
+  // 🔥 ¿qué tan bueno es el negocio? (para saber si vale traer inversores)
+  function ratingNeg(v) {
+    if (v <= 0) return { emoji: "⛔", txt: "Pierdes — no ofertes", cls: "mal" };
+    if (v < 80000) return { emoji: "😕", txt: "Flojo — no vale traer inversores", cls: "mal" };
+    if (v < 300000) return { emoji: "🟡", txt: "Normalito", cls: "reg" };
+    if (v < 800000) return { emoji: "✅", txt: "Bueno", cls: "ok" };
+    if (v < 2000000) return { emoji: "🤑", txt: "Muy bueno", cls: "bien" };
+    return { emoji: "🔥", txt: "¡Negocio de fuego!", cls: "fuego" };
+  }
   function excelVivo(t, X) {
     if (!X.compras) return `<div class="muted" style="font-size:.74rem">El Excel se llena solo apenas haya un precio de proveedor (cotización o acordado).</div>`;
     const f = (a, v, cls, nota) => `<tr class="${cls || ""}"><td>${a}${nota ? `<small>${nota}</small>` : ""}</td><td class="n">${clp(Math.round(v))}</td></tr>`, pc = (x) => (x * 100).toLocaleString("es-CL", { maximumFractionDigits: 1 }) + "%";
-    return `<div class="rb-xl"><div class="rb-env"><b><i class="rb-luz"></i> NEGOCIO</b><span class="muted" style="font-size:.68rem">compras: ${esc(X.fuente)} · se recalcula con cada cambio</span></div>
+    const _r = ratingNeg(X.final);
+    return `<div class="rb-xl"><div class="rb-rating ${_r.cls}">${_r.emoji} <b>${_r.txt}</b><span>${clp(Math.round(X.final))} de utilidad final en este negocio</span></div><div class="rb-env"><b><i class="rb-luz"></i> NEGOCIO</b><span class="muted" style="font-size:.68rem">compras: ${esc(X.fuente)} · se recalcula con cada cambio</span></div>
       <table class="rb-copias">${f("Venta neta", X.neto)}${f("IVA (19 %)", X.iva)}${f("Total OC", X.total, "t")}${f("− Factoring", -X.factoring, "", pc(X.p.factoring))}${f("= Ingreso final", X.ingreso, "t")}
         ${f("− Compras (con factura)", -X.compras)}${f("− IVA a pagar al SII", -X.iva_pagar, "", "débito − crédito")}${X.transporte ? f("− Transporte", -X.transporte) : ""}${f("= Utilidad", X.utilidad, "t")}
         ${f("− Impuesto", -X.impuesto, "", pc(X.p.impuesto))}${f("= Utilidad a repartir", X.repartir, "t")}${f("− Comisión jugador", -X.comision, "", pc(X.p.comision))}${f("= Utilidad final", X.final, "oro")}</table>
