@@ -869,6 +869,35 @@
         <a class="btn small" href="https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion=${encodeURIComponent(x.codigo)}" target="_blank" rel="noopener">Ficha ↗</a>
         <button class="btn rb-oro" type="button" data-rb="lic-vamos" data-c="${esc(x.codigo)}" style="flex:1">💚 Vamos</button></div></div>`;
   }
+  // 🧾 Caja interactiva "Datos de ingreso": guía paso a paso para ofertar en el portal, con copiar y ✓
+  const ING = "sdc:ingreso";
+  const leerIng = () => { try { return JSON.parse(localStorage.getItem(ING)) || {}; } catch { return {}; } };
+  const ingDe = (cod) => leerIng()[cod] || {};
+  function cajaDatosIngreso(t) {
+    const L = t.lic || {}, X = L.experto || {}, c = esc(t.codigo);
+    const Oe = X.oferta_economica || {}, emp = empresaActual() || {};
+    const nombreOferta = `${(emp.razon_social || "PJANIC").split(" ").slice(0, 2).join(" ")} · ${(L.producto || t.nombre || "").slice(0, 40)}`;
+    const precioTxt = L.precio_unit ? `${clp(L.precio_unit)} ${esc(Oe.neto_o_iva || "neto")} ${esc(Oe.unitario_o_total || "")}`.trim() : "—";
+    const base = [
+      { k: "nombre", ico: "📝", lab: "Nombre de la oferta (SIN precios)", val: nombreOferta },
+      { k: "precio", ico: "💲", lab: "Oferta económica (Anexo 2)", val: precioTxt },
+    ];
+    const adm = (X.admisibilidad || []).map((a, i) => ({ k: "adm" + i, ico: "📎", lab: (a.requisito || "Documento") + (a.documento ? " — " + a.documento : ""), nota: a.seccion_portal || "", firma: a.firma && !/no/i.test(String(a.firma)) }));
+    const extra = [];
+    if ((t.lic_docs || []).some((d) => d.tipo === "render")) extra.push({ k: "render", ico: "🎨", lab: "Adjuntar el render del proyecto" });
+    extra.push({ k: "integridad", ico: "🧩", lab: "Pacto de integridad (aceptar en el portal)" });
+    extra.push({ k: "enviar", ico: "🚀", lab: "Finalizar y ENVIAR · guarda el comprobante" });
+    const items = adm.length ? [...base, ...adm, ...extra]
+      : [...base, { k: "anexos", ico: "📎", lab: "Adjuntar los anexos del ZIP (administrativo / técnico / económico)" }, ...extra];
+    const done = ingDe(t.codigo), hechos = items.filter((it) => done[it.k]).length;
+    return `<div class="rb-mision" style="border-color:#7c4dff">
+      <div class="rb-env"><b>🧾 Datos de ingreso al portal</b><span>${hechos}/${items.length}</span></div>
+      <div class="rb-barra"><i style="width:${Math.round(hechos / items.length * 100)}%"></i></div>
+      <div class="muted" style="font-size:.7rem;margin:2px 0 6px">Copia cada dato en «Ingresar nueva oferta» de Mercado Público y marca ✓ a medida que avanzas. La Clave Única y el envío final los haces tú.</div>
+      ${items.map((it) => `<div class="rb-rep ${done[it.k] ? "pagado" : ""}"><span>${it.ico}</span><div style="min-width:0"><b>${esc(it.lab)}</b>${it.val ? `<small>${esc(it.val)}</small>` : ""}${it.nota ? `<small class="muted">📍 ${esc(it.nota)}</small>` : ""}${it.firma ? `<small style="color:#ffd88a">✍️ requiere firma</small>` : ""}</div>
+        <div style="display:flex;gap:4px;align-items:center">${it.val && it.val !== "—" ? `<button class="btn small" type="button" data-rb="cp" data-v="${esc(it.val)}">📋</button>` : ""}<label class="rb-pagado"><input type="checkbox" data-rb-ing="${esc(it.k)}" data-c="${c}" ${done[it.k] ? "checked" : ""}> ✓</label></div></div>`).join("")}
+      <div class="rb-row" style="margin-top:6px"><button class="btn small rb-firmar" type="button" data-rb="lic-ir" data-c="${c}">🌐 Abrir portal para ofertar</button>${t.zip ? `<button class="btn small" data-rb="lic-zip" data-c="${c}" type="button">⬇ Anexos (ZIP)</button>` : ""}</div></div>`;
+  }
   function mesaLic(t) {
     const L = t.lic || {}, X = L.experto || {}, c = esc(t.codigo), cod = t.codigo;
     if ((t.lic_docs || []).some((d) => d.tipo === "render")) setTimeout(() => cargarImgsLic(t), 0);
@@ -898,6 +927,7 @@
         <div class="rb-kv"><span>Unitario neto <b data-v="unit">${clp(L.precio_unit)}</b></span><span>Total c/IVA <b data-v="total">${clp(L.total)}</b></span></div>
         <div class="muted" style="font-size:.68rem">Presupuesto ${clp(pres)}${L.con_iva ? " con IVA" : " neto"} · cantidad ${esc(cant)} ${esc(L.unidad || "")}${(L.comparables || []).length ? " · compras anteriores: " + esc(L.comparables.slice(0, 2).join(" | ")) : ""}</div>
         ${X.evaluacion?.formula_precio ? `<div class="muted" style="font-size:.68rem">📐 Puntaje precio: ${esc(X.evaluacion.formula_precio)}</div>` : ""}
+        ${(() => { const RM = L.referencia_mercado || {}; return (RM.precio_hoy || RM.oferta_sugerida) ? `<div class="rb-sug" style="border-color:#5ef0b0;margin-top:6px;font-size:.72rem">💡 <b>Precios a valor de hoy</b>${RM.precio_hoy ? `<br>Mercado hoy: <b>${clp(RM.precio_hoy)}</b>/u` : ""}${RM.piso_costo ? ` · piso costo: <b>${clp(RM.piso_costo)}</b>/u` : ""}${RM.oferta_sugerida ? `<br>🎯 Ofertar en torno a <b>${clp(RM.oferta_sugerida)}</b>/u` : ""}${RM.comentario ? `<div class="muted" style="font-size:.66rem;margin-top:2px">${esc(RM.comentario)}</div>` : ""}</div>` : ""; })()}
         ${t.estado === "lic_revisar" ? `<button class="btn rb-oro rb-big-btn" type="button" data-rb="lic-firmar" data-c="${c}">✅ Apruebo este precio · firmar anexos</button>` : ""}</div>` : ""}
       ${(L.alertas || []).length ? `<div class="rb-alertas"><b>⚠ Revisa antes de aprobar</b><ul style="margin:0;padding:0">${L.alertas.map((a) => `<li class="${a.nivel === "rojo" ? "rojo" : ""}">${a.nivel === "rojo" ? "⛔" : "⚠"} ${esc(a.texto)}</li>`).join("")}</ul></div>` : ""}
       ${sec("📋 Para no quedar fuera (admisibilidad)", li(X.habilidad, (h) => `<li>✔ ${esc(h)}</li>`) + li(X.admisibilidad, (a) => `<li><b>${esc(a.requisito || "")}</b>${a.documento ? " · " + esc(a.documento) : ""}${a.firma && !/no/i.test(a.firma) ? " · ✍️ firma" : ""}${a.seccion_portal ? " · " + esc(a.seccion_portal) : ""}${a.subsanable === false ? " <b class='rb-neg-t'>· no subsanable</b>" : ""}</li>`) + li(L.documentos, (d) => `<li>📎 ${esc(d.nombre)} · ${esc(d.estado)}</li>`), true)}
@@ -908,13 +938,7 @@
       ${sec("🗓 Fechas clave", Object.values(Fe).some(Boolean) ? li(Object.entries(Fe).filter(([, v]) => v), ([k, v]) => `<li>${esc({ foro_preguntas: "Foro de preguntas", respuestas: "Respuestas", cierre: "Cierre", apertura: "Apertura", adjudicacion: "Adjudicación", visita_terreno: "Visita a terreno" }[k] || k)}: <b>${esc(v)}</b></li>`) : "")}
       ${sec("🗺 Mapa de ejecución (así lo haremos)", (X.plan || []).length ? `<div class="rb-plan">${X.plan.map((p, i) => `<div class="rb-plan-p"><span>${i + 1}</span><div><b>${esc(p.paso || "")}</b>${p.cuando ? ` <span class="muted">· ${esc(p.cuando)}</span>` : ""}<div class="muted" style="font-size:.7rem">${esc(p.detalle || "")}</div></div></div>`).join("")}</div>${X.proveedor_ideal ? `<div class="rb-proy">🤝 <b>Proveedor ideal:</b> ${esc(X.proveedor_ideal)}</div>` : ""}` : "")}
       ${sec("❓ Preguntas para el foro", (X.preguntas_foro || []).length ? li(X.preguntas_foro, (q) => `<li>${esc(q)}</li>`) + `<button class="btn small" type="button" data-rb="cp" data-v="${esc((X.preguntas_foro || []).join("\n\n"))}">Copiar preguntas</button>` : "")}
-      ${t.estado === "lic_lista" ? sec("🚀 Cómo ingresarla en el portal (lo haces tú)", `<ol class="rb-ul" style="padding-left:18px">
-        <li>Mercado Público → Licitaciones → buscar <b>${c}</b> → Ofertas → <b>Ingresar nueva oferta</b>.</li>
-        <li>Nombre de la oferta: «PJANIC · ${esc((L.producto || "").slice(0, 40))}» <b>sin precios</b>.</li>
-        <li>Oferta económica: <b>${clp(L.precio_unit)}</b> ${esc(Oe.neto_o_iva || "neto")} ${esc(Oe.unitario_o_total || "unitario")}.</li>
-        <li>Adjunta los anexos del ZIP en su sección (administrativo / técnico / económico) y revisa que se vean.</li>
-        <li>Declaración jurada: la firma la representante con Clave Única, revisando cada casilla.</li>
-        <li>Finalizar y enviar · descarga el comprobante. Mejor con 24 h de holgura.</li></ol>`, true) : ""}
+      ${t.estado === "lic_lista" ? cajaDatosIngreso(t) : ""}
       <div class="rb-row" style="margin-top:8px">${t.zip ? `<button class="btn small" data-rb="lic-zip" data-c="${c}" type="button">⬇ Anexos (ZIP)</button>` : ""}
         <button class="btn small" type="button" data-rb="lic-preguntar" data-c="${c}">💬 Pregúntale al robot por estas bases</button>
         ${t.estado === "lic_lista" ? `<button class="btn small rb-firmar" data-rb="lic-ingresar" data-c="${c}" type="button">🚀 Ingresar al portal</button>
@@ -2762,6 +2786,7 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
     if (!R.empresas) cargarEmpresas();
     const L = Object.values(R.empresas || {}), yo = miEmp(), f = R.empForm;
     const campo = (k, lab, ph, tipo) => `<label class="rb-lab">${lab}<input data-emp="${k}" value="${esc((f || {})[k] || "")}" placeholder="${esc(ph || "")}" ${tipo || ""}></label>`;
+    const sel = (k, lab, opts) => `<label class="rb-lab">${lab}<select data-emp="${k}" style="width:100%;padding:8px;border-radius:8px">${["", ...opts].map((o) => `<option value="${esc(o)}" ${((f || {})[k] || "") === o ? "selected" : ""}>${o || "— elige —"}</option>`).join("")}</select></label>`;
     return `<div class="rb-paso"><div class="rb-paso-n">Paso 2 de 3 · 👤 ${esc(persona()?.nombre || "")}</div>
       <h2 class="rb-h">¿Con qué empresa ofertas?</h2>
       <div class="muted rb-sub">La cotización, la ficha técnica y el PDF salen con <b>sus</b> datos. Cada celular elige la suya.</div>
@@ -2773,6 +2798,16 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
           ${campo("direccion", "Dirección", "Calle 123")}${campo("comuna", "Comuna / ciudad", "Los Andes")}
           ${campo("representante", "Representante legal", "")}${campo("rut_representante", "RUT representante", "")}
           ${campo("despacho", "Condición de despacho", "Incluido, puesto en dirección del cliente")}
+          <details class="rb-det" style="margin-top:8px" ${(f && (f.integridad || f.sello_mujer || f.representante_facultades)) ? "open" : ""}><summary>📑 Datos para licitaciones (el robot los reusa en los anexos)</summary>
+            <div class="muted" style="font-size:.72rem;margin:4px 0">Llénalos una vez. Quedan guardados en tu empresa y el robot los reutiliza al preparar los anexos de cada licitación.</div>
+            ${campo("representante_cargo", "Cargo del representante legal", "Ej. Gerente General")}
+            ${sel("representante_facultades", "¿El representante puede ofertar y firmar contratos?", ["Sí", "No"])}
+            ${sel("chileproveedores_habil", "¿Está hábil en Chileproveedores?", ["Sí", "No"])}
+            ${sel("integridad", "¿Tiene Programa de Integridad documentado? (+5 pts)", ["Sí", "No"])}
+            ${sel("inclusivo", "¿Contrata personas en situación de discapacidad? (+5 pts)", ["Sí", "No"])}
+            ${sel("sello_mujer", "¿Tiene Sello Empresa Mujer en el portal? (+5 pts)", ["Sí", "No"])}
+            ${sel("cert_16744", "¿Certificado Ley 16.744 vigente?", ["Sí", "No"])}
+          </details>
           <input type="hidden" data-emp="id" value="${esc((f || {}).id || "")}">
           <button class="btn rb-oro rb-big-btn" type="button" data-rb="empresa-guardar">Guardar y usar esta empresa</button>
           <button class="btn small rb-link" type="button" data-rb="empresa-cancelar">Cancelar</button></div>`
@@ -3948,6 +3983,12 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (el.dataset.campo === "km") informe = false;
     try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos, pedir_informe: informe }) }); toast(datos.cotizacion ? "💲 Precio anotado" : informe ? "Guardado · el PC recalcula la utilidad" : "Guardado"); if (leer().portal === "ejecuta") { R.ejecT = 0; cargarEjecuta(); } else await refrescar(); }
     catch (e) { toast(e.message); }
+  });
+  sheet.addEventListener("change", (ev) => {           // 🧾 checklist "Datos de ingreso" (se guarda local)
+    const el = ev.target, k = el.dataset?.rbIng, cod = el.dataset?.c; if (!k || !cod) return;
+    const all = leerIng(); all[cod] = { ...(all[cod] || {}), [k]: el.checked };
+    try { localStorage.setItem(ING, JSON.stringify(all)); } catch {}
+    pintarHoja(true);
   });
   sheet.addEventListener("input", (ev) => {
     const id = ev.target.id, q = R.llamada; if (!q) return;
