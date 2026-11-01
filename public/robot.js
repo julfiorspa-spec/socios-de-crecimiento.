@@ -844,18 +844,37 @@
       try { const r = await api(`archivo?codigo=${encodeURIComponent(t.codigo)}&tipo=doc&id=${encodeURIComponent(d.id)}`); R.licImgs[d.id] = URL.createObjectURL(await r.blob()); pintarHojaSiAbierta(); } catch { delete R.licImgs[d.id]; }
     }
   }
+  // ✍️ lienzo para dibujar la firma con el dedo (estilo iLovePDF)
+  function initFirmaCanvas() {
+    const cv = document.getElementById("rbFirCv"); if (!cv || cv._init) return; cv._init = true;
+    const dpr = window.devicePixelRatio || 1, w = cv.clientWidth || 300, h = 160;
+    cv.width = w * dpr; cv.height = h * dpr; cv.style.height = h + "px";
+    const ctx = cv.getContext("2d"); ctx.scale(dpr, dpr);
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = "#111"; ctx.lineWidth = 2.6; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    cv._ctx = ctx; let dibujando = false, ult = null;
+    const pos = (e) => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    cv.addEventListener("pointerdown", (e) => { e.preventDefault(); dibujando = true; ult = pos(e); cv._dib = true; cv.setPointerCapture?.(e.pointerId); });
+    cv.addEventListener("pointermove", (e) => { if (!dibujando) return; e.preventDefault(); const p = pos(e); ctx.beginPath(); ctx.moveTo(ult.x, ult.y); ctx.lineTo(p.x, p.y); ctx.stroke(); ult = p; });
+    cv.addEventListener("pointerup", () => { dibujando = false; });
+    cv.addEventListener("pointerleave", () => { dibujando = false; });
+  }
   function cajaFirma() {
     if (!R.firmaT || Date.now() - R.firmaT > 120000) setTimeout(cargarFirma, 0);
     const F = R.firma;
     if (F && !R.firmaEditar) return `<div class="rb-firma-ok"><div>${R.firmaUrl ? `<img src="${R.firmaUrl}" alt="Firma">` : `<span class="spinner"></span>`}</div>
       <div style="flex:1;min-width:0"><b>✍️ ${esc(F.nombre || "Representante legal")}</b><div class="muted" style="font-size:.7rem">${esc(F.rut || "")} · ${esc(F.cargo || "")} · ${F.procesada ? (F.error ? "⚠ " + esc(F.error) : "lista para estampar en los anexos") : "⟳ el robot la está limpiando…"}</div></div>
       <button class="btn small" type="button" data-rb="firma-editar">Cambiar</button></div>`;
+    if (R.firmaDibujar) setTimeout(initFirmaCanvas, 0);
     return `<div class="rb-mision" style="border-color:#b78cff"><div class="rb-env"><b>✍️ Firma de la representante legal de PJANIC</b></div>
-      <div class="muted" style="font-size:.72rem">Firma con lápiz negro o azul en una hoja blanca, sácale una foto de cerca con buena luz y súbela. El robot borra el fondo y la estampa en todos los anexos y en el programa de integridad.</div>
+      <div class="muted" style="font-size:.72rem">Dibuja tu firma con el dedo acá abajo, o súbele una foto de tu firma en papel. El robot la limpia y la estampa en todos los anexos y en el programa de integridad.</div>
       <label class="rb-lab">Nombre completo (como en los anexos)<input class="rb-in" id="rbFirN" value="${esc(F?.nombre || "")}" placeholder="Ej: María José Pérez Soto"></label>
       <div class="rb-row"><label class="rb-lab" style="flex:1">RUT<input class="rb-in" id="rbFirR" value="${esc(F?.rut || "")}" placeholder="12.345.678-9"></label>
         <label class="rb-lab" style="flex:1">Cargo<input class="rb-in" id="rbFirC" value="${esc(F?.cargo || "Representante legal")}"></label></div>
-      <div class="rb-row"><button class="btn rb-oro rb-big-btn" type="button" data-rb="firma-subir">📷 Subir foto de la firma</button>${F ? `<button class="btn small" type="button" data-rb="firma-editar">Cancelar</button>` : ""}</div></div>`;
+      ${R.firmaDibujar ? `<div class="rb-sec">✍️ Dibuja tu firma aquí</div>
+        <canvas id="rbFirCv" style="touch-action:none;border:1px dashed #b78cff;border-radius:10px;background:#fff;width:100%;height:160px;display:block"></canvas>
+        <div class="rb-row" style="margin-top:6px"><button class="btn small" type="button" data-rb="firma-limpiar">🧽 Borrar</button><button class="btn rb-oro" type="button" data-rb="firma-guardar-dibujo" style="flex:1">✍️ Guardar firma</button></div>` : ""}
+      <div class="rb-row"><button class="btn ${R.firmaDibujar ? "small" : "rb-oro rb-big-btn"}" type="button" data-rb="firma-dibujar">✍️ ${R.firmaDibujar ? "Cerrar dibujo" : "Dibujar firma"}</button><button class="btn small" type="button" data-rb="firma-subir">📷 Subir foto</button>${F ? `<button class="btn small" type="button" data-rb="firma-editar">Cancelar</button>` : ""}</div></div>`;
   }
   function cartaMatch(x) {
     const dias = Math.max(0, Math.round((Date.parse(x.cierre) - Date.now()) / 864e5));
@@ -3781,6 +3800,19 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "lic-preguntar") { R.pantalla = "llamada"; R.llamada = { texto: "" };
       preguntarRobot("Revisa las bases de esta licitación como experto legal y de negocio: ¿qué nos puede dejar fuera, qué garantías y multas hay, qué precio conviene y qué le preguntarías al comprador en el foro?", null, cod); return; }
     if (a === "firma-editar") { R.firmaEditar = !R.firmaEditar; return pintarHoja(true); }
+    if (a === "firma-dibujar") { R.firmaDibujar = !R.firmaDibujar; return pintarHoja(true); }
+    if (a === "firma-limpiar") { const cv = $("#rbFirCv"); if (cv && cv._ctx) { cv._ctx.save(); cv._ctx.setTransform(1, 0, 0, 1, 0, 0); cv._ctx.fillStyle = "#fff"; cv._ctx.fillRect(0, 0, cv.width, cv.height); cv._ctx.restore(); cv._dib = false; } return; }
+    if (a === "firma-guardar-dibujo") {
+      const nombre = ($("#rbFirN")?.value || "").trim(), rut = ($("#rbFirR")?.value || "").trim(), cargo = ($("#rbFirC")?.value || "").trim();
+      if (!nombre || !rut) { toast("Escribe el nombre y el RUT de quien firma"); return; }
+      const cv = $("#rbFirCv"); if (!cv || !cv._dib) { toast("Dibuja tu firma primero"); return; }
+      try {
+        const b64 = cv.toDataURL("image/jpeg", 0.92).split(",")[1];
+        await api("firma-subir", { method: "POST", body: JSON.stringify({ b64, mime: "image/jpeg", nombre, rut, cargo }) });
+        R.firmaEditar = false; R.firmaDibujar = false; R.firmaT = 0; toast("✍️ Firma guardada · el robot la limpia y la estampa"); cargarFirma(); pintarHoja(true);
+      } catch (e) { toast(e.message || "No se pudo guardar la firma"); }
+      return;
+    }
     if (a === "firma-subir") {
       const nombre = ($("#rbFirN")?.value || "").trim(), rut = ($("#rbFirR")?.value || "").trim(), cargo = ($("#rbFirC")?.value || "").trim();
       if (!nombre || !rut) { toast("Escribe el nombre y el RUT de quien firma"); return; }
