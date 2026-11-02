@@ -877,6 +877,18 @@ async function atender(req) {
       await avisarTexto(store, "🎨 Proyecto visualizado · " + t.codigo, `${(t.lic?.producto || t.nombre || "").slice(0, 80)} · mira cómo quedaría por fuera y por dentro.`, "vis-" + t.codigo, "/#robot").catch(() => {});
     return json({ trabajo: r });
   }
+  if (ruta === "lic-anexos-listo" && req.method === "POST") {   // 📎 el celular subió los anexos del ZIP: el robot los absorbe sin bajar de Mercado Público
+    const b = await cuerpo(req);
+    const t = await leer(store, limpiaCodigo(b.codigo));
+    if (!t) return json({ error: "No existe." }, 404);
+    if (ESTADOS_ACTIVOS.has(t.estado)) return json({ trabajo: t, aviso: "Ya está en manos del robot." }, 409);
+    const n = (t.lic_docs || []).filter((d) => d.tipo === "anexo").length;
+    if (!n) return json({ error: "Primero elige los anexos que descargaste del portal." }, 400);
+    t.accion = "licitar";
+    t.anexos_sube = { t: ahora(), n };                           // señal para el robot: analiza desde estos archivos, no desde el portal
+    anotar(t, "en_cola", `📂 ${n} anexo${n > 1 ? "s" : ""} subido${n > 1 ? "s" : ""} desde el celular: el robot los absorbe y analiza (sin bajar de Mercado Público).`);
+    return json({ trabajo: await escribir(store, t) });
+  }
   if (ruta === "subir" && req.method === "POST") {
     const b = await cuerpo(req);
     const t = await leer(store, limpiaCodigo(b.codigo));
