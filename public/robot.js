@@ -942,6 +942,12 @@
       ${vision}
       ${L.precio_unit != null ? `<div class="rb-mision rb-precio-lic" data-pres="${pres}" data-coniva="${L.con_iva ? 1 : 0}" data-cant="${cant}">
         <div class="rb-env"><b>💲 Juguemos con el precio</b><b><span data-v="desc">${desc}</span>% bajo el presupuesto</b></div>
+        ${(() => { const RM = L.referencia_mercado || {}; const plazo = L.plazo_entrega || (X.evaluacion && X.evaluacion.plazo_recomendado) || ""; const sug = RM.oferta_sugerida ? clp(RM.oferta_sugerida) + "/u" : (L.precio_unit ? clp(L.precio_unit) + "/u" : "");
+          return `<div class="rb-sug" style="border-color:#7c4dff;margin:4px 0 8px;font-size:.74rem"><b>🧭 Lo recomendado</b> <span class="muted">(ya analicé las bases y el mercado)</span>
+            ${plazo ? `<div>🗓️ Plazo: <b>${esc(plazo)}</b> — cumplible, sin arriesgar multas.</div>` : ""}
+            ${sug ? `<div>💲 Precio: <b>${sug}</b> — competitivo y con margen.</div>` : ""}
+            <div>📎 Yo preparo: <b>Anexos 1-5 + Pacto de Integridad + render</b>, firmados y listos para subir.</div>
+            <div class="muted" style="font-size:.66rem;margin-top:2px">Ajusta la barra si quieres y aprueba: el robot firma los anexos con tu firma.</div></div>`; })()}
         <input type="range" class="rb-rango" id="rbDesc-${c}" min="0" max="40" step="0.5" value="${desc}">
         <div class="rb-kv"><span>Unitario neto <b data-v="unit">${clp(L.precio_unit)}</b></span><span>Total c/IVA <b data-v="total">${clp(L.total)}</b></span></div>
         <div class="muted" style="font-size:.68rem">Presupuesto ${clp(pres)}${L.con_iva ? " con IVA" : " neto"} · cantidad ${esc(cant)} ${esc(L.unidad || "")}${(L.comparables || []).length ? " · compras anteriores: " + esc(L.comparables.slice(0, 2).join(" | ")) : ""}</div>
