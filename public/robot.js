@@ -3133,6 +3133,29 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
       ${tel ? `<a class="btn small" href="tel:${esc(tel)}">📞 Comprador</a>` : ""}${mail ? `<a class="btn small" href="mailto:${esc(mail)}?subject=${encodeURIComponent("OC " + (ocN || cod))}">✉ Comprador</a>` : ""}
       </div>${q ? `<div class="muted" style="font-size:.68rem;margin-top:4px">👤 La ingresó ${yo ? "tu juego" : "<b>" + esc(q.nombre || "otro juego") + "</b>"}${!yo && q.telefono ? ` · <a href="https://wa.me/${waNum(q.telefono)}?text=${encodeURIComponent("Hola " + (q.nombre || "") + ", te escribo por la compra " + cod + " (" + (t.nombre || "") + ")")}" target="_blank" rel="noopener">💬 escríbele</a>` : ""}</div>` : ""}`;
   }
+  // 📊 Analizador de proyectos: Excel en vivo manual (producto, cantidad, compra/venta → utilidad y repartija)
+  function pantallaAnalizador() {
+    const a = R.anl || (R.anl = { prod: "", cant: 0, compra: 0, venta: 0 });
+    const cant = Math.max(0, +a.cant || 0), cu = Math.max(0, +a.compra || 0), vu = Math.max(0, +a.venta || 0);
+    const ventaIVA = Math.round(cant * vu * 1.19), compraIVA = Math.round(cant * cu * 1.19);
+    const t = { codigo: a.prod || "Proyecto", total: ventaIVA, op: { precio_acordado: compraIVA, informe: {} } };
+    const listo = ventaIVA > 0 && compraIVA > 0;
+    const num = (v) => (v ? Number(v).toLocaleString("es-CL") : "");
+    return `<div class="rb-paso">
+      <div class="rb-env"><h2 class="rb-h" style="margin:0">📊 Analizador de proyectos</h2><button class="btn small" type="button" data-rb="llamada-cerrar">← Volver</button></div>
+      <div class="muted rb-sub">Pon el producto, la cantidad y los precios <b>netos por unidad</b> (lo que te cuesta y a cuánto lo vendes). Te armo el <b>Excel en vivo</b>: utilidad, IVA, factoring, impuestos y repartija — igual que un negocio real, por proyecto.</div>
+      <div class="rb-llamar">
+        <label class="rb-lab">Producto / proyecto<input class="rb-in anl-in" data-anl="prod" value="${esc(a.prod || "")}" placeholder="Ej: Sillas plegables"></label>
+        <label class="rb-lab">Cantidad<input class="rb-in anl-in" data-anl="cant" inputmode="numeric" value="${cant || ""}" placeholder="100"></label>
+        <div class="rb-row">
+          <label class="rb-lab" style="flex:1">💸 Compra neto c/u<input class="rb-in anl-in" data-anl="compra" inputmode="numeric" value="${num(cu)}" placeholder="2.000"></label>
+          <label class="rb-lab" style="flex:1">🏷️ Venta neto c/u<input class="rb-in anl-in" data-anl="venta" inputmode="numeric" value="${num(vu)}" placeholder="3.000"></label>
+        </div>
+      </div>
+      <div class="rb-kv" style="margin:8px 0"><span>Venta total c/IVA <b>${clp(ventaIVA)}</b></span><span>Compra total c/IVA <b>${clp(compraIVA)}</b></span></div>
+      <div id="anlResult">${listo ? excelVivo(t, calcNeg(t)) : `<div class="muted" style="font-size:.78rem">Llena cantidad, compra y venta para ver el Excel en vivo. 📈</div>`}</div>
+    </div>`;
+  }
   function pantallaLlamada() {
     const q = R.llamada || {}, r = q.respuesta;
     const verd = r ? ({ si: ["✅ SÍ DA", "si"], no: ["❌ NO DA", "no"] }[r.da] || ["🤔 DEPENDE", "dep"]) : null;
@@ -3299,7 +3322,7 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
         <button class="rb-emp" type="button" data-rb="empresa-editar">🏢 <span>${esc(corta(emp?.razon_social) || "Mi empresa")}</span> ▾</button>
         <button class="rb-yo" type="button" data-rb="persona-editar" title="Quién usa este celular">👤 ${esc((persona()?.nombre || "¿quién?").split(" ")[0].slice(0, 12))}</button>
         <button type="button" class="rb-pcs" data-rb="ver-roles" title="¿Qué quieres hacer? · ${conectado ? "Robot conectado" : "Robot apagado"}"><i class="${conectado ? "on" : ""}"></i>${/nube/i.test(r?.equipo || "") ? "☁️" : "Robot"}<i class="${mp?.conectado ? "on" : ""}"></i>MP</button>
-        <button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
+        <button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button><button class="rb-ico" type="button" data-rb="analizador" aria-label="Analizador de proyectos" title="Analizador de proyectos — Excel en vivo">📊</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
         <button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
         <div class="rb-portal"><button type="button" class="${!["ejecuta", "licita", "inversion"].includes(leer().portal) ? "on" : ""}" data-rb="portal" data-v="juego">🎮 Juego</button><button type="button" class="${leer().portal === "licita" ? "on" : ""}" data-rb="portal" data-v="licita">📑 Licita</button><button type="button" class="${leer().portal === "ejecuta" ? "on" : ""}" data-rb="portal" data-v="ejecuta">🛠 Ejecuta</button><button type="button" class="${leer().portal === "inversion" ? "on" : ""}" data-rb="portal" data-v="inversion">💼 Inversión</button></div>${esDueno() ? (setTimeout(() => { if (!R.nubeT || Date.now() - R.nubeT > 60000) cargarNube(); inicioLoginMP(); }, 0), barraMando(r, mp, conectado)) : ""}`;
       // 🏆 portada: cada vez que abres la app (y siempre que no haya empresa). Sin formularios: RUT → jugar.
@@ -3310,6 +3333,7 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
       else if (R.empresaEditar) cuerpo = pantallaEmpresa();
       else if (R.rubroEditar) { if (!R.oport) cargarOport(); cuerpo = `<div class="rb-paso-n" style="text-align:center;margin-top:10px">Paso 3 de 3</div>` + pantallaRubro(R.oport?.lista || []); }
       else if (R.pantalla === "llamada") cuerpo = pantallaLlamada();
+      else if (R.pantalla === "analizador") cuerpo = pantallaAnalizador();
       else if (R.pantalla === "correos") cuerpo = pantallaCorreos();
       else if (R.pantalla === "global") cuerpo = pantallaGlobal();
       else if (R.pantalla === "planes") cuerpo = pantallaPlanes();
@@ -3330,7 +3354,7 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
         <div class="rb-row" style="margin-top:8px"><button class="btn small" type="button" data-rb="copiar-marcador">Copiar marcador «Rellenar» (sin extensión)</button>
           ${R.push ? `<button class="btn small" type="button" data-rb="push-probar">Probar aviso</button>` : ""}<button class="btn small" type="button" data-rb="desenlazar">Desenlazar</button></div>
       </details>`;
-      return cab + cuerpo + (R.pantalla === "llamada" || R.empresaEditar || R.rubroEditar || R.personaEditar ? "" : mas);
+      return cab + cuerpo + (R.pantalla === "llamada" || R.pantalla === "analizador" || R.empresaEditar || R.rubroEditar || R.personaEditar ? "" : mas);
     }
     return `
       <div class="rb-sheet-head"><h2 style="margin:0">Robot de ofertas</h2><button class="rb-x" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
@@ -3658,6 +3682,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "llamada") { R.pantalla = "llamada"; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "llamada-cod") { R.pantalla = "llamada"; R.llamada = { texto: "Me están llamando por la compra " + b.dataset.c }; sheet.scrollTop = 0; confirmarLlamada(b.dataset.c); return pintarHoja(true); }
     if (a === "llamada-cerrar") { R.pantalla = null; return pintarHoja(true); }
+    if (a === "analizador") { R.pantalla = "analizador"; R.anl = R.anl || { prod: "", cant: 0, compra: 0, venta: 0 }; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "llamada-preguntar") return preguntarRobot(($("#rbLlamada")?.value || "").trim());
     if (a === "llamada-buscar") return buscarLlamada(($("#rbLlamada")?.value || "").trim());
     if (a === "llamada-mic") return dictar();
@@ -4113,6 +4138,18 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
   let rafSel = 0;
   sheet.addEventListener("input", (ev) => { const c = ev.target.closest?.(".rb-sel"); if (!c || !ev.target.classList.contains("rb-range")) return;
     delete c.dataset.v; R.toque = Date.now(); if (!rafSel) rafSel = requestAnimationFrame(() => { rafSel = 0; pintarSel(c, true); }); });
+  // 📊 Analizador de proyectos: recalcula el Excel en vivo al teclear (sin re-render, para no perder el foco)
+  sheet.addEventListener("input", (ev) => {
+    const el = ev.target; if (!el.classList?.contains("anl-in")) return;
+    const a = R.anl || (R.anl = { prod: "", cant: 0, compra: 0, venta: 0 });
+    const k = el.dataset.anl;
+    if (k === "prod") a.prod = el.value;
+    else a[k] = +(el.value || "").replace(/\D/g, "") || 0;
+    const cant = Math.max(0, +a.cant || 0), cu = Math.max(0, +a.compra || 0), vu = Math.max(0, +a.venta || 0);
+    const t = { codigo: a.prod || "Proyecto", total: Math.round(cant * vu * 1.19), op: { precio_acordado: Math.round(cant * cu * 1.19), informe: {} } };
+    const res = sheet.querySelector("#anlResult");
+    if (res) res.innerHTML = (t.total > 0 && t.op.precio_acordado > 0) ? excelVivo(t, calcNeg(t)) : `<div class="muted" style="font-size:.78rem">Llena cantidad, compra y venta para ver el Excel en vivo. 📈</div>`;
+  });
   sheet.addEventListener("click", (ev) => {
     const b = ev.target.closest?.("[data-paso],[data-fijo]"); if (!b) return;
     const c = b.closest(".rb-sel"); if (!c) return; const r = c.querySelector(".rb-range");
