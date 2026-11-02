@@ -69,6 +69,11 @@
   }
   const leer = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
   const guardar = (o) => { try { localStorage.setItem(KEY, JSON.stringify({ ...leer(), ...o })); } catch {} };
+  // 💾 "quede guardado lo que estoy haciendo": recuerda la pantalla, el Analizador y la Caja al cerrar/abrir
+  const leerUI = () => { try { return JSON.parse(localStorage.getItem("sdc:ui")) || {}; } catch { return {}; } };
+  const guardarUI = () => { try { const q = R.llamada; localStorage.setItem("sdc:ui", JSON.stringify({
+    pantalla: R.pantalla || null, anl: R.anl || null,
+    llamada: q ? { confirmado: q.confirmado || null, compraAnalisis: q.compraAnalisis || null, cliTel: q.cliTel || null, cliMail: q.cliMail || null, propCuerpo: q.propCuerpo || null, texto: q.texto || null } : null })); } catch {} };
   const hace = (iso) => {
     if (!iso) return "";
     const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
@@ -511,6 +516,10 @@
   const R = { token: leer().token || null, data: null, err: null, previos: {}, timer: null, enCurso: false, foco: null,
               vista: (leer().v_cajas ? leer().vista : "oport") || "oport", detalle: null, push: false, instalar: null,
               oportTab: leer().oportTab || "nuevas", toque: 0, cnt: {} };
+  try { const __ui = leerUI();                         // 💾 vuelve a donde estabas
+    if (__ui.anl) R.anl = __ui.anl;
+    if (__ui.pantalla === "llamada" || __ui.pantalla === "analizador") R.pantalla = __ui.pantalla;
+    if (__ui.llamada) R.llamada = __ui.llamada; } catch {}
   // ---- rapidez: lo último que se vio queda guardado y se muestra al instante; la red solo actualiza
   const CK = "sdc:cache:";
   const deCache = (k) => { try { return JSON.parse(localStorage.getItem(CK + k)); } catch { return null; } };
@@ -3444,6 +3453,7 @@ ${empNom}`;
 
   function pintarHoja(forzar) {
     const box = $("#rbIn"); if (!box) return;
+    clearTimeout(R.tUI); R.tUI = setTimeout(guardarUI, 500);   // 💾 recuerda dónde estás
     if (R.arrastrando || R.barra || (!forzar && Date.now() - R.toque < 900)) {     // no repintar bajo tu dedo
       clearTimeout(R.tPend); R.tPend = setTimeout(() => pintarHoja(), 700); return;
     }
@@ -4194,6 +4204,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (el.id === "rbPropTel") q.cliTel = el.value;
     else if (el.id === "rbPropMail") q.cliMail = el.value;
     else if (el.id === "rbProp") q.propCuerpo = el.value;
+    clearTimeout(R.tUI); R.tUI = setTimeout(guardarUI, 500);
   });
   // 🔬 Análisis del negocio en la llamada: pones tu costo y ves al tiro si DA y cuánto ganas (Excel en vivo, sin robot)
   sheet.addEventListener("input", (ev) => {
@@ -4205,6 +4216,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (vta && compra) { const X = calcNeg(syn), rt = ratingNeg(X.final);
       res.innerHTML = `<div class="rb-verd" style="font-size:1.4rem">${rt.emoji} ${X.final > 0 ? "SÍ DA" : "NO DA"} · <span class="${X.final > 0 ? "rb-vivo-t" : "rb-neg-t"}">${clp(Math.round(X.final))}</span></div><div class="muted" style="font-size:.72rem">${esc(rt.txt)} · ganas ${clp(Math.round(X.final))} en este negocio</div>` + excelVivo(syn, X);
     } else res.innerHTML = `<div class="muted" style="font-size:.76rem">Pon tu costo y te digo al tiro si DA y cuánto ganas (Excel en vivo).</div>`;
+    clearTimeout(R.tUI); R.tUI = setTimeout(guardarUI, 500);
   });
   // 📊 Analizador de proyectos: recalcula el Excel en vivo al teclear (sin re-render, para no perder el foco)
   sheet.addEventListener("input", (ev) => {
@@ -4217,6 +4229,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     const t = { codigo: a.prod || "Proyecto", total: Math.round(cant * vu * 1.19), op: { precio_acordado: Math.round(cant * cu * 1.19), informe: {} } };
     const res = sheet.querySelector("#anlResult");
     if (res) res.innerHTML = (t.total > 0 && t.op.precio_acordado > 0) ? excelVivo(t, calcNeg(t)) : `<div class="muted" style="font-size:.78rem">Llena cantidad, compra y venta para ver el Excel en vivo. 📈</div>`;
+    clearTimeout(R.tUI); R.tUI = setTimeout(guardarUI, 500);
   });
   sheet.addEventListener("click", (ev) => {
     const b = ev.target.closest?.("[data-paso],[data-fijo]"); if (!b) return;
