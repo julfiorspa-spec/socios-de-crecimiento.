@@ -998,6 +998,7 @@
   /* ---------- licitaciones ---------- */
   function tarjetaLic(t) {
     const e = est(t.estado), L = t.lic || {}, c = esc(t.codigo);
+    const anexN = (t.lic_docs || []).filter((d) => d.tipo === "anexo").length;
     const fichaUrl = `https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion=${encodeURIComponent(t.codigo)}`;
     const acts = [];
     if (t.estado === "en_cola" || t.estado === "tomado") acts.push(`<button class="btn small danger" data-rb="cancelar" data-c="${c}" type="button">Cancelar</button>`);
@@ -1017,7 +1018,10 @@
         <div class="row" style="gap:6px"><input id="rbLicGo-${c}" value="${c}" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="send" style="flex:1;min-width:120px;letter-spacing:.04em" placeholder="Código de la licitación (ej: 2585-77-LE26)">
         <button class="btn small rb-firmar" data-rb="lic-go" data-c="${c}" type="button">📥 Bajar y analizar</button></div>
         <div class="row" style="gap:6px;margin-top:6px"><a class="btn small" href="${fichaUrl}" target="_blank" rel="noopener noreferrer" style="flex:1;text-align:center">👁 Ver el código en Safari</a></div>
-        <div class="muted" style="font-size:.68rem;margin-top:4px">Abre la ficha en Safari → «Archivos adjuntos»: ahí ves la imagen del código. Léelo y escríbelo cuando el robot te lo pida.</div></div>` : "";
+        <div class="muted" style="font-size:.68rem;margin-top:4px">Abre la ficha en Safari → «Archivos adjuntos»: ahí ves la imagen del código. Léelo y escríbelo cuando el robot te lo pida.</div>
+        <div class="rb-env" style="margin:10px 0 4px;border-top:1px solid #2a2350;padding-top:8px"><b>📱 Para el celular</b></div>
+        <div class="muted" style="font-size:.72rem;margin-bottom:6px">¿Ya bajaste los anexos desde Mercado Público (tú escribiste el código de la imagen en el portal)? Súbelos acá y yo los absorbo y los analizo — sin volver a pedirte el código.</div>
+        <button class="btn small rb-oro" data-rb="lic-anexos" data-c="${c}" type="button" style="width:100%">📎 ${anexN ? `${anexN} anexo${anexN > 1 ? "s" : ""} cargado${anexN > 1 ? "s" : ""} · agregar o reenviar` : "Ingresa los documentos acá"}</button></div>` : "";
     const precio = L.precio_unit ? `<div class="rb-figs">
         <span>Precio <b>${clp(L.precio_unit)}</b> neto${L.unidad ? " / " + esc(L.unidad) : ""}</span>
         <span>Total <b>${clp(L.total)}</b> con IVA</span>
@@ -3841,6 +3845,31 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       try { const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "licitar" }) });
         toast(r._status === 409 ? "Ya está en manos del robot" : "El robot empezó con la licitación"); R.vista = "lista"; await refrescar(); }
       catch (e) { toast(e.message); }
+      return;
+    }
+    if (a === "lic-anexos") {               // 📱 el celular sube los anexos que descargó del portal; el robot los absorbe y analiza
+      const inp = document.createElement("input"); inp.type = "file"; inp.multiple = true;
+      inp.accept = ".pdf,.doc,.docx,.xls,.xlsx,.zip,.rar,.jpg,.jpeg,.png,application/pdf,image/*";
+      inp.onchange = async () => {
+        const fs = [...(inp.files || [])]; if (!fs.length) return;
+        let ok = 0, fallo = 0;
+        for (let i = 0; i < fs.length; i++) {
+          const f = fs[i];
+          toast(`Subiendo ${i + 1}/${fs.length}: ${f.name.slice(0, 24)}…`);
+          try {
+            const b64 = await achicar(f);
+            await api("lic-archivo", { method: "POST", body: JSON.stringify({ codigo: cod, tipo: "anexo", nombre: f.name, mime: b64.mime, b64: b64.data }) });
+            ok++;
+          } catch (e) { fallo++; toast(`${f.name.slice(0, 20)}: ${e.message}`); }
+        }
+        if (!ok) { toast("No se pudo subir ningún archivo"); return; }
+        try {
+          await api("lic-anexos-listo", { method: "POST", body: JSON.stringify({ codigo: cod }) });
+          toast(`📂 Carpeta absorbida (${ok} archivo${ok > 1 ? "s" : ""}${fallo ? `, ${fallo} con error` : ""}): el robot los está analizando`);
+          R.licTab = "prep"; await refrescar(); pintarHoja(true);
+        } catch (e) { toast(e.message); }
+      };
+      inp.click();
       return;
     }
     if (a === "lic-go") {
