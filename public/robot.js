@@ -3220,6 +3220,22 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
         ${r?.decirle_al_cliente ? `<div class="rb-sec">Dile al cliente</div><p>${esc(r.decirle_al_cliente)}</p>` : ""}
         ${r?.whatsapp ? `<div class="rb-row"><button class="btn small" type="button" data-rb="cp" data-v="${esc(r.whatsapp)}">Copiar WhatsApp</button><a class="btn small" href="${wa}" target="_blank" rel="noopener">💬 Enviar al cliente</a></div>` : ""}
       </div>
+      ${(() => {
+        const vta = Number(t.total) || 0, compra = Number(q.compraAnalisis) || 0;
+        const syn = { total: vta, op: { precio_acordado: compra, informe: {} } };
+        const X = (vta && compra) ? calcNeg(syn) : null, rt = X ? ratingNeg(X.final) : null;
+        const ocHay = !!(g.oc || t.op?.oc_codigo || t.oc_compra?.oc_codigo);
+        const resHTML = X ? `<div class="rb-verd" style="font-size:1.4rem">${rt.emoji} ${X.final > 0 ? "SÍ DA" : "NO DA"} · <span class="${X.final > 0 ? "rb-vivo-t" : "rb-neg-t"}">${clp(Math.round(X.final))}</span></div><div class="muted" style="font-size:.72rem">${esc(rt.txt)} · ganas ${clp(Math.round(X.final))} en este negocio</div>${excelVivo(syn, X)}` : `<div class="muted" style="font-size:.76rem">Pon tu costo y te digo al tiro si DA y cuánto ganas (Excel en vivo).</div>`;
+        return `<div class="rb-sec">🔬 Análisis del negocio — ¿me interesa?</div>
+      <div class="rb-card" style="border-color:rgba(120,180,255,.45)">
+        <div style="font-size:.82rem"><b>📦 ${esc(t.nombre || F?.nombre || "este proyecto")}</b></div>
+        <div class="rb-row" style="gap:6px;margin:6px 0;flex-wrap:wrap">
+          <span class="rb-pill ${ocHay ? "verde" : ""}">${ocHay ? "✅ Con Orden de Compra" : "⚠️ Aún sin OC emitida"}</span>
+          <span class="rb-pill">📋 ¿Piden ficha técnica? El robot lo confirma al leer las bases</span></div>
+        <div class="rb-kv"><span>🏷️ Te pagan (venta) <b>${clp(vta)}</b> c/IVA</span></div>
+        <label class="rb-lab">💸 ¿Cuánto te cuesta a ti? (con IVA — lo del proveedor)<input class="rb-in" id="rbCll" inputmode="numeric" value="${compra ? compra.toLocaleString("es-CL") : ""}" placeholder="Ej: 4.800.000"></label>
+        <div id="cllResult" style="margin-top:8px">${resHTML}</div></div>`;
+      })()}
       <div class="rb-sec">🏪 A quién comprarle</div>
       ${provs.length ? provs.map((o, i) => `<label class="rb-op ${elegidos[i] ? "on" : ""}" style="display:block"><div class="rb-env"><span><input type="checkbox" data-prov="${i}" ${elegidos[i] ? "checked" : ""} ${o.email ? "" : "disabled"}> <b>${esc(o.nombre)}</b></span>${o.precio_aprox ? `<b>${clp(o.precio_aprox)}</b>` : ""}</div>
           <div class="muted" style="font-size:.7rem">${o.email ? "✉ " + esc(o.email) : "sin correo"}${o.telefono ? " · 📞 " + esc(o.telefono) : ""}${o.nota ? " · " + esc(String(o.nota).slice(0, 80)) : ""}</div></label>`).join("")
@@ -4178,6 +4194,17 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (el.id === "rbPropTel") q.cliTel = el.value;
     else if (el.id === "rbPropMail") q.cliMail = el.value;
     else if (el.id === "rbProp") q.propCuerpo = el.value;
+  });
+  // 🔬 Análisis del negocio en la llamada: pones tu costo y ves al tiro si DA y cuánto ganas (Excel en vivo, sin robot)
+  sheet.addEventListener("input", (ev) => {
+    const el = ev.target; if (el.id !== "rbCll") return; const q = R.llamada; if (!q) return;
+    const compra = +(el.value || "").replace(/\D/g, "") || 0; q.compraAnalisis = compra;
+    const t = trabajoG(q.confirmado) || {}, vta = Number(t.total) || 0;
+    const syn = { total: vta, op: { precio_acordado: compra, informe: {} } };
+    const res = sheet.querySelector("#cllResult"); if (!res) return;
+    if (vta && compra) { const X = calcNeg(syn), rt = ratingNeg(X.final);
+      res.innerHTML = `<div class="rb-verd" style="font-size:1.4rem">${rt.emoji} ${X.final > 0 ? "SÍ DA" : "NO DA"} · <span class="${X.final > 0 ? "rb-vivo-t" : "rb-neg-t"}">${clp(Math.round(X.final))}</span></div><div class="muted" style="font-size:.72rem">${esc(rt.txt)} · ganas ${clp(Math.round(X.final))} en este negocio</div>` + excelVivo(syn, X);
+    } else res.innerHTML = `<div class="muted" style="font-size:.76rem">Pon tu costo y te digo al tiro si DA y cuánto ganas (Excel en vivo).</div>`;
   });
   // 📊 Analizador de proyectos: recalcula el Excel en vivo al teclear (sin re-render, para no perder el foco)
   sheet.addEventListener("input", (ev) => {
