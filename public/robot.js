@@ -2927,7 +2927,10 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
   ];
   const esDueno = () => legado();
   const miPlan = () => esDueno() ? "premium" : (R.plan?.estado === "activo" ? R.plan.plan : null);
-  const tienePlan = (min) => (NIVEL[miPlan()] || 0) >= NIVEL[min];
+  // 🔓 Modo abierto: mientras lo usamos para ofertar, todo queda desbloqueado para todos.
+  //    Al lanzar en App Store, pon ABIERTO_PARA_TODOS = false y vuelven los planes.
+  const ABIERTO_PARA_TODOS = true;
+  const tienePlan = (min) => ABIERTO_PARA_TODOS || (NIVEL[miPlan()] || 0) >= NIVEL[min];
   async function cargarPlan() {
     if (R._cargPlan) return; R._cargPlan = true;
     try { const r = await api("plan?jugador=" + miJug() + (esDueno() ? "&admin=1" : "")); R.plan = r.plan; R.planLinks = r.links || {}; R.planesTodos = r.todos || null; R.planT = Date.now(); pintarHojaSiAbierta(); } catch {} finally { R._cargPlan = false; }
