@@ -3221,9 +3221,9 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
           <button class="btn small" type="button" data-rb="cp" data-v="${esc(its.map((it, i) => `${i + 1}. ${desc(it)}${can(it) ? " — " + can(it) + (uni(it) ? " " + uni(it) : "") : ""}`).join("\n"))}" style="margin-top:6px">📋 Copiar lista para el cliente</button>
         </details>`; })()}
       <div class="rb-resp ${verd ? verd[1] : finalLocal == null ? "dep" : finalLocal > 0 ? "si" : "no"}">
-        <div class="rb-verd">${verd ? verd[0] : finalLocal == null ? "🤔 Calculando…" : finalLocal > 0 ? "✅ SÍ DA" : "❌ NO DA"}</div>
+        <div class="rb-verd">${verd ? verd[0] : finalLocal == null ? (R.data?.robot?.conectado ? "🤔 Calculando…" : "⏸️ Robot apagado") : finalLocal > 0 ? "✅ SÍ DA" : "❌ NO DA"}</div>
         ${finalLocal != null ? `<div class="rb-tit">Utilidad ${inf.final != null ? "según informe" : "con tu costo"}: <span class="${finalLocal < 0 ? "rb-neg-t" : "rb-vivo-t"}">${clp(finalLocal)}</span></div>` : ""}
-        ${r?.por_que ? `<p>${esc(r.por_que)}</p>` : q.id && !r && !q.error ? `<p class="muted"><span class="spinner"></span> El robot está revisando proveedores y precios…</p>` : ""}
+        ${r?.por_que ? `<p>${esc(r.por_que)}</p>` : q.id && !r && !q.error && R.data?.robot?.conectado ? `<p class="muted"><span class="spinner"></span> El robot está revisando proveedores y precios…</p>` : finalLocal == null && !R.data?.robot?.conectado ? `<p class="muted" style="font-size:.74rem">⚠️ El robot está apagado — por eso no sale el veredicto automático. Usa el <b>🔬 Análisis del negocio</b> de aquí abajo: pones tu costo y te dice al tiro si DA y cuánto ganas (funciona sin robot).</p>` : ""}
         ${q.error ? `<p style="color:#ffb3b9">${esc(q.error)}</p>` : ""}
         ${r?.aviso ? `<div class="muted" style="font-size:.7rem">${esc(r.aviso)}</div>` : ""}
         ${r?.decirle_al_cliente ? `<div class="rb-sec">Dile al cliente</div><p>${esc(r.decirle_al_cliente)}</p>` : ""}
