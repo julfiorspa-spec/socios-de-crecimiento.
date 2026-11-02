@@ -1820,7 +1820,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       ${cajas}</div>`;
   }
   // 🧮 el Excel del inversionista, en vivo (mismas fórmulas que la planilla: factoring, IVA, impuesto 27 %, comisión y reparto)
-  const PARAM_NEG = { factoring: 0.03, impuesto: 0.27, comision: 0.04, aplica_comision: true, julfior: 0.844, inversionista: 0.156, recargo_sin_factura: 0.25, anticipo: 0.90, transporte: 0, ejecutador: 0.10 };
+  const PARAM_NEG = { factoring: 0.03, impuesto: 0.25, comision: 0.04, aplica_comision: true, julfior: 0.844, inversionista: 0.156, recargo_sin_factura: 0.25, anticipo: 0.90, transporte: 0, ejecutador: 0.10 };
   function calcNeg(t) {
     const op = t.op || {}, inf = op.informe || {}, p = { ...PARAM_NEG, ...(op.param || {}) };
     const total = Number(t.oc_compra?.total || t.total) || 0;
