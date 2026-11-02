@@ -3205,6 +3205,12 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
         <div class="rb-kv"><span>Ofertamos <b>${clp(t.total)}</b></span>${g.ganada ? `<span>🏆 ganada${g.oc ? " · OC " + esc(g.oc) : ""}</span>` : g.glosa ? `<span>${esc(g.glosa)}</span>` : ""}${g.mi_lugar ? `<span>${g.mi_lugar}° de ${g.competidores}</span>` : ""}</div>
         ${t.comprobante ? `<div class="rb-row"><button class="btn small" type="button" data-rb="comprobante" data-c="${esc(cod)}">🧾 Comprobante</button></div>` : ""}
         ${barraAcciones(t)}</div>
+      ${(() => { const its = (Array.isArray(t.items) && t.items.length ? t.items : (F?.items || [])); if (!its.length) return "";
+        const desc = (it) => it.d || it.descripcion || it.nombre || "", can = (it) => it.q || it.cantidad || "", uni = (it) => it.unidad || "", pre = (it) => it.p || it.precio || 0;
+        return `<details class="rb-det" open><summary>📋 Requerimientos — ${its.length} ítem${its.length > 1 ? "s" : ""} (enumerados y detallados)</summary>
+          <ol style="margin:6px 0 0;padding-left:20px;font-size:.82rem">${its.slice(0, 60).map((it) => `<li>${esc(desc(it))}${can(it) ? ` · <b>${esc(can(it))}</b>${uni(it) ? " " + esc(uni(it)) : ""}` : ""}${pre(it) ? ` · ${clp(pre(it))} c/u` : ""}</li>`).join("")}</ol>
+          <button class="btn small" type="button" data-rb="cp" data-v="${esc(its.map((it, i) => `${i + 1}. ${desc(it)}${can(it) ? " — " + can(it) + (uni(it) ? " " + uni(it) : "") : ""}`).join("\n"))}" style="margin-top:6px">📋 Copiar lista para el cliente</button>
+        </details>`; })()}
       <div class="rb-resp ${verd ? verd[1] : finalLocal == null ? "dep" : finalLocal > 0 ? "si" : "no"}">
         <div class="rb-verd">${verd ? verd[0] : finalLocal == null ? "🤔 Calculando…" : finalLocal > 0 ? "✅ SÍ DA" : "❌ NO DA"}</div>
         ${finalLocal != null ? `<div class="rb-tit">Utilidad ${inf.final != null ? "según informe" : "con tu costo"}: <span class="${finalLocal < 0 ? "rb-neg-t" : "rb-vivo-t"}">${clp(finalLocal)}</span></div>` : ""}
@@ -3224,6 +3230,25 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
       <div class="rb-row"><a class="btn rb-oro" style="flex:1" href="${gmail}" data-rb="llam-gmail" data-bcc="${esc(bcc)}">✉ Abrir en Gmail</a><a class="btn small" href="${mailto}" data-rb="llam-mail" data-bcc="${esc(bcc)}">Otro correo</a>
         <button class="btn small" type="button" data-rb="cp" data-v="${esc(asunto + "\n\n" + cuerpo)}">Copiar</button></div>
       <div class="muted" style="font-size:.7rem;margin-top:4px">Se abre tu Gmail con el correo listo y los proveedores en copia oculta: tú revisas y presionas Enviar.</div>
+      ${(() => {
+        const empNom = empresaActual()?.razon_social || "nuestra empresa";
+        const noDa = finalLocal != null && finalLocal <= 0;
+        const prop = q.propCuerpo ?? `Estimado/a,
+
+De parte de ${empNom}, agradecemos su contacto por "${t.nombre || F?.nombre || cod}" (${cod}).
+
+${noDa ? "Lamentamos que el presupuesto no alcanzara para lo solicitado tal cual. Le proponemos una alternativa que sí se ajusta y mantiene la calidad:" : "Le hacemos llegar nuestra propuesta:"}${t.total ? "\n\nValor total: " + clp(t.total) + " (con IVA)." : ""}
+
+Quedamos atentos para avanzar.
+
+Saludos cordiales,
+${empNom}`;
+        return `<div class="rb-sec">📝 Armar propuesta para el cliente</div>
+      <div class="muted" style="font-size:.72rem;margin-bottom:4px">Mándasela al tiro por WhatsApp o correo. Ideal cuando el presupuesto no alcanza: le propones una alternativa y el cliente queda con buena experiencia.</div>
+      <div class="rb-row"><input class="rb-in" id="rbPropTel" inputmode="tel" placeholder="📞 WhatsApp del cliente" value="${esc(q.cliTel || "")}"><input class="rb-in" id="rbPropMail" inputmode="email" placeholder="✉ Correo del cliente" value="${esc(q.cliMail || "")}"></div>
+      <textarea id="rbProp" rows="8" style="margin-top:6px">${esc(prop)}</textarea>
+      <div class="rb-row"><button class="btn rb-oro" style="flex:1" type="button" data-rb="prop-wa">💬 Enviar por WhatsApp</button><button class="btn small" type="button" data-rb="prop-mail">✉ Correo</button><button class="btn small" type="button" data-rb="prop-cp">📋 Copiar</button></div>
+      <div class="muted" style="font-size:.68rem;margin-top:4px">Se abre WhatsApp/correo con la propuesta lista: tú revisas y presionas Enviar.</div>`; })()}
       <div class="rb-sec">⏰ Recuérdamelo</div>
       <div class="rb-row"><button class="btn small" type="button" data-rb="recordar" data-min="120" data-t="${esc("Revisar respuestas de proveedores · " + cod)}" data-c="${esc(cod)}">Respuestas de proveedores en 2 h</button>
         <button class="btn small" type="button" data-rb="recordar" data-min="manana" data-t="${esc("Responder al cliente · " + (t.nombre || cod)).slice(0, 120)}" data-c="${esc(cod)}">Responder al cliente mañana 9:00</button></div>
@@ -3686,6 +3711,12 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "llamada-cod") { R.pantalla = "llamada"; R.llamada = { texto: "Me están llamando por la compra " + b.dataset.c }; sheet.scrollTop = 0; confirmarLlamada(b.dataset.c); return pintarHoja(true); }
     if (a === "llamada-cerrar") { R.pantalla = null; return pintarHoja(true); }
     if (a === "analizador") { R.pantalla = "analizador"; R.anl = R.anl || { prod: "", cant: 0, compra: 0, venta: 0 }; sheet.scrollTop = 0; return pintarHoja(true); }
+    if (a === "prop-wa") { const msg = ($("#rbProp")?.value || "").trim(); if (!msg) { toast("Escribe la propuesta"); return; }
+      const tel = waNum(($("#rbPropTel")?.value || "").trim());
+      window.open(tel ? `https://wa.me/${tel}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank"); return; }
+    if (a === "prop-mail") { const msg = ($("#rbProp")?.value || "").trim(); const mail = ($("#rbPropMail")?.value || "").trim();
+      location.href = `mailto:${encodeURIComponent(mail)}?subject=${encodeURIComponent("Propuesta comercial")}&body=${encodeURIComponent(msg)}`; return; }
+    if (a === "prop-cp") { const msg = ($("#rbProp")?.value || "").trim(); if (msg) { copiar(msg); toast("📋 Propuesta copiada"); } return; }
     if (a === "llamada-preguntar") return preguntarRobot(($("#rbLlamada")?.value || "").trim());
     if (a === "llamada-buscar") return buscarLlamada(($("#rbLlamada")?.value || "").trim());
     if (a === "llamada-mic") return dictar();
@@ -4141,6 +4172,13 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
   let rafSel = 0;
   sheet.addEventListener("input", (ev) => { const c = ev.target.closest?.(".rb-sel"); if (!c || !ev.target.classList.contains("rb-range")) return;
     delete c.dataset.v; R.toque = Date.now(); if (!rafSel) rafSel = requestAnimationFrame(() => { rafSel = 0; pintarSel(c, true); }); });
+  // 📝 Armar propuesta: guarda lo que escribes (tel, correo, texto) para que no se borre al refrescar la pantalla
+  sheet.addEventListener("input", (ev) => {
+    const el = ev.target, q = R.llamada; if (!q) return;
+    if (el.id === "rbPropTel") q.cliTel = el.value;
+    else if (el.id === "rbPropMail") q.cliMail = el.value;
+    else if (el.id === "rbProp") q.propCuerpo = el.value;
+  });
   // 📊 Analizador de proyectos: recalcula el Excel en vivo al teclear (sin re-render, para no perder el foco)
   sheet.addEventListener("input", (ev) => {
     const el = ev.target; if (!el.classList?.contains("anl-in")) return;
