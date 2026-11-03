@@ -567,6 +567,7 @@
   async function cargarEmpresas() {
     if (R._cargEmp) return; R._cargEmp = true;
     try { R.empresas = (await api("empresas")).empresas || {}; } catch (e) { R.empresas = R.empresas || {}; }
+    try { if (!miEmp()) { const pj = Object.values(R.empresas || {}).find((e) => /pjanic/i.test(e.razon_social || "") || (e.rut || "").replace(/[.\-]/g, "") === "784931145"); if (pj) guardar({ empresa: pj.id }); } } catch {}
     R._cargEmp = false; pintarHoja(true);
   }
 
@@ -2781,6 +2782,7 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
     return `<div class="rb-portada">
       <div class="rb-p-brillo"></div>
       <div class="rb-p-top"><span class="rb-p-logo">◆ Socios de Crecimiento</span><button type="button" class="rb-p-cambiar" data-rb="rol-cambiar">${RC.ico} ${RC.corto} · cambiar</button></div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:.8rem;margin:2px 0 6px;opacity:.9">🏢 <b>${esc(corta(emp?.razon_social) || "PJANIC")}</b>${persona()?.nombre ? ` · <button type="button" data-rb="persona-editar" style="background:none;border:none;color:inherit;font:inherit;padding:0;cursor:pointer">👤 usuario <b>${esc(persona().nombre.split(" ")[0])}</b></button>` : ` · <button type="button" data-rb="persona-editar" style="background:none;border:none;color:inherit;font:inherit;padding:0;cursor:pointer;text-decoration:underline">👤 ¿quién juega? →</button>`}</div>
       <h1 class="rb-p-h">${RC.h}</h1>
       <div class="rb-p-sub">${RC.sub}</div>
       <div class="rb-p-stats"><div><b>${L.length || "…"}</b><small>compras abiertas</small></div><div><b>${total ? fmt(total) : "…"}</b><small>en juego hoy</small></div><div><b>${seg || "…"}</b><small>🔥 2° llamado</small></div></div>
@@ -3373,7 +3375,7 @@ ${empNom}`;
       if (!R.empresas) cargarEmpresas();
       const cab = `<div class="rb-top2">
         <button class="rb-emp" type="button" data-rb="empresa-editar">🏢 <span>${esc(corta(emp?.razon_social) || "Mi empresa")}</span> ▾</button>
-        <button class="rb-yo" type="button" data-rb="persona-editar" title="Quién usa este celular">👤 ${esc((persona()?.nombre || "¿quién?").split(" ")[0].slice(0, 12))}</button>
+        <button class="rb-yo" type="button" data-rb="persona-editar" title="Quién usa este celular">👤 ${persona()?.nombre ? "usuario " + esc(persona().nombre.split(" ")[0].slice(0, 12)) : "¿quién?"}</button>
         <button type="button" class="rb-pcs" data-rb="ver-roles" title="¿Qué quieres hacer? · ${conectado ? "Robot conectado" : "Robot apagado"}"><i class="${conectado ? "on" : ""}"></i>${/nube/i.test(r?.equipo || "") ? "☁️" : "Robot"}</button><button type="button" class="rb-pcs" data-rb="conectar-mp" title="${mp?.conectado ? "Mercado Público conectado" : "Entrar a Mercado Público desde la app"}"><i class="${mp?.conectado ? "on" : ""}"></i>MP${mp?.conectado ? "" : " ▸"}</button>
         <button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button><button class="rb-ico" type="button" data-rb="analizador" aria-label="Analizador de proyectos" title="Analizador de proyectos — Excel en vivo">📊</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
         <button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
