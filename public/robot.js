@@ -1946,10 +1946,14 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   const SALDO = "sdc:saldo";
   const saldoInv = () => { try { return Math.max(0, Number(JSON.parse(localStorage.getItem(SALDO))?.disp) || 0); } catch { return 0; } };
   const setSaldo = (d) => { try { localStorage.setItem(SALDO, JSON.stringify({ disp: Math.max(0, Math.round(d)) })); } catch {} };
+  const INVS = "sdc:inversiones";
+  const inversiones = () => { try { return JSON.parse(localStorage.getItem(INVS)) || []; } catch { return []; } };
+  const setInversiones = (a) => { try { localStorage.setItem(INVS, JSON.stringify(a)); } catch {} };
+  const invTrab = () => inversiones().filter((x) => x.estado === "trabajando").map((x) => ({ t: { codigo: x.codigo, nombre: x.nombre }, X: { capital: x.capital, invGan: x.invGan } }));
   // 📲 mensaje claro para el inversionista: invierte X → recibe Y (+Z%) en ~5 días, con OC y link en vivo
   function msgOportunidad(t, X) {
     const emp = empresaActual() || {}, pct = Math.round((X.invPct || 0) * 1000) / 10;
-    return `💰 OPORTUNIDAD DE INVERSIÓN\n${(t.nombre || t.codigo)}\n\n• Inviertes: ${clp(Math.round(X.capital))}\n• Recibes: ${clp(Math.round(X.invRecibe))}  (+${pct}%)\n• Plazo: ~5 días (cuando se paga la factura)\n\nNegocio YA GANADO en Mercado Público${t.op?.oc_codigo ? " · OC " + t.op.oc_codigo : ""} por ${emp.razon_social || "la empresa"}. Tu plata paga solo los costos reales del proyecto.\n\n▶ Míralo en vivo y simula: ${location.origin}/#robot\n\nCuando confirmes te paso los datos para transferir${emp.banco ? ":\n" + emp.banco : "."}`;
+    return `💰 OPORTUNIDAD DE INVERSIÓN\n${(t.nombre || t.codigo)}\n\n• Inviertes: ${clp(Math.round(X.capital))}\n• Recibes: ${clp(Math.round(X.invRecibe))}  (+${pct}%)\n• Plazo: ~5 días — te paga el FACTORING (no esperas al Estado)\n\nNegocio YA GANADO en Mercado Público${t.op?.oc_codigo ? " · OC " + t.op.oc_codigo : ""} por ${emp.razon_social || "la empresa"}. Tu plata paga solo los costos reales del proyecto.\n\n▶ Míralo en vivo y simula: ${location.origin}/#robot\n\nCuando confirmes te paso los datos para transferir${emp.banco ? ":\n" + emp.banco : "."}`;
   }
   // 💳 panel de saldo (cargar / retirar) — estilo Betano
   function panelSaldo() {
@@ -1981,6 +1985,19 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         <tr><td><b>Total</b></td><td class="n"><b>${clp(Math.round(recInv))}</b></td><td class="n"><b class="rb-vivo-t">${clp(Math.round(comBroker))}</b></td></tr></table>` : `<div class="muted" style="font-size:.72rem;margin-top:4px">Cuando haya inversión activa, aquí ves cuánto recibe el inversionista (capital + su parte) y cuánto queda para ti como broker.</div>`}
       <div class="muted" style="font-size:.66rem;margin-top:4px">De la ganancia del inversionista, <b>${bp}%</b> es tu comisión como broker. Ajusta con − / +.</div></details>`;
   }
+  // 🟢 Mi plata trabajando: inversiones hechas desde el saldo (se liquidan con el factoring)
+  function panelMisInversiones() {
+    const trab = inversiones().filter((x) => x.estado === "trabajando");
+    if (!trab.length) return "";
+    const bp = brokerPct() / 100;
+    return `<div class="rb-sec">🟢 Mi plata trabajando</div>${trab.map((x) => {
+      const recibe = Math.round(x.capital + x.invGan * (1 - bp)), pct = x.capital ? Math.round((x.invGan * (1 - bp)) / x.capital * 1000) / 10 : 0;
+      return `<div class="rb-inv activo"><div class="rb-env"><div style="min-width:0"><b>${esc((x.nombre || x.codigo).slice(0, 50))}</b><div class="muted" style="font-size:.68rem">Invertido ${hace(x.ts)}</div></div><div style="text-align:right"><div class="muted" style="font-size:.6rem">INVERTISTE</div><b>${clp(x.capital)}</b></div></div>
+        <div class="rb-inv-flecha"><span>Recibirás</span><b class="rb-vivo-t">${clp(recibe)}</b><span class="rb-pill verde">+${pct}%</span></div>
+        <div class="muted" style="font-size:.66rem">Lo paga el factoring, no esperas al Estado.</div>
+        <div class="rb-row" style="margin-top:4px"><button class="btn small rb-oro" type="button" data-rb="inv-liquidar" data-id="${esc(x.id)}">✅ Liquidar — pagó el factoring</button></div></div>`;
+    }).join("")}`;
+  }
   // 💼 PORTAL INVERSIONISTA: los negocios que necesitan capital, en vivo
   // 💡 Onboarding del inversor: ejemplo con números + por qué es real + saldo (estilo Betano)
   function inversorDidactico(L, tot, emp) {
@@ -1995,10 +2012,10 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         1️⃣ 💸 <b>Inviertes</b> en un negocio <b>ya ganado</b> en Mercado Público por ${nombreEmp}. Tu dinero paga directo los costos del proyecto (proveedor, transporte, logística); no se usa para otra cosa.<br>
         2️⃣ 🛠 El <b>proveedor ejecuta y entrega</b>. Lo ves <b>en vivo</b> y te llegan notificaciones del estado de tu dinero.<br>
         3️⃣ 🧾 Se emite y <b>firma la factura</b> (la IA estima que ocurre al ~4º día).<br>
-        4️⃣ 💰 Al <b>5º día</b>, por transferencia electrónica, se <b>abona a tu saldo</b> tu capital + tu ganancia.
+        4️⃣ 💰 Al <b>5º día</b>, el <b>factoring</b> (no el Estado) adelanta el pago y se <b>abona a tu saldo</b> tu capital + tu ganancia.
       </div>
       <div class="rb-sec">🔒 Por qué es seguro</div>
-      <div class="muted" style="font-size:.72rem;line-height:1.55">El negocio <b>ya está adjudicado</b> antes de que pongas un peso · tu dinero <b>solo paga costos reales</b> del proyecto · ves <b>cada movimiento en tiempo real</b> · el Estado paga la factura (o se adelanta con factoring).</div>
+      <div class="muted" style="font-size:.72rem;line-height:1.55">El negocio <b>ya está adjudicado</b> antes de que pongas un peso · tu dinero <b>solo paga costos reales</b> del proyecto · ves <b>cada movimiento en tiempo real</b> · <b>el factoring</b> adelanta el pago de la factura (no esperas al Estado).</div>
       <div style="display:flex;gap:10px;margin-top:8px"><div style="flex:1;background:rgba(63,220,138,.12);border:1px solid rgba(63,220,138,.4);border-radius:12px;padding:8px 12px"><span style="font-size:.64rem;opacity:.8;display:block">Tu saldo trabajando</span><b style="font-size:1.1rem">${clp(Math.round(tot.c))}</b></div><div style="flex:1;background:rgba(245,207,107,.12);border:1px solid rgba(245,207,107,.4);border-radius:12px;padding:8px 12px"><span style="font-size:.64rem;opacity:.8;display:block">Por cobrar</span><b class="rb-vivo-t" style="font-size:1.1rem">+${clp(Math.round(tot.g))}</b></div></div>
       <div class="muted" style="font-size:.64rem;margin-top:4px">⚠️ Rentabilidad estimada, no garantizada. Las transferencias las autoriza el dueño de la empresa desde su banco.</div></details>`;
   }
@@ -2023,11 +2040,13 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
           <button class="btn small rb-oro" type="button" data-rb="inv-transferi" data-c="${esc(t.codigo)}">✅ Ya transferí</button></div>` : ""}
       ${t.op.en_vivo && t.op.twitch_canal ? `<a class="btn small" href="https://www.twitch.tv/${encodeURIComponent(t.op.twitch_canal)}" target="_blank" rel="noopener">🔴 Ver la entrega en vivo</a>` : ""}
       ${brokers().length ? `<div class="rb-row" style="flex-wrap:wrap;margin-top:4px"><span class="muted" style="font-size:.66rem;align-self:center">📲 Enviar a:</span>${brokers().map((bk) => `<button class="btn small" type="button" data-rb="inv-enviar" data-c="${esc(t.codigo)}" data-tel="${esc(bk.tel || "")}" data-nom="${esc(bk.nombre)}">${esc(bk.nombre)}</button>`).join("")}<button class="btn small rb-link" type="button" data-rb="broker-nuevo" title="Agregar inversionista">➕</button></div>` : `<div class="rb-row" style="margin-top:4px"><button class="btn small" type="button" data-rb="broker-nuevo">📲 Enviar a un inversionista</button></div>`}
+      ${(modo === "toca" || modo === "prox") ? `<div class="rb-row" style="margin-top:4px"><button class="btn small rb-oro" type="button" data-rb="inv-poner" data-c="${esc(t.codigo)}">💸 Invertir ${clp(Math.round(X.capital))} desde mi saldo</button></div>` : ""}
       ${modo !== "activo" ? `<div class="rb-row" style="margin-top:4px"><button class="btn small rb-link" type="button" data-rb="inv-descartar" data-c="${esc(t.codigo)}" style="opacity:.65;margin-left:auto">✖ No me interesa</button></div>` : ""}</div>`;
     return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">💼 Inversión</h2><span class="muted" style="font-size:.7rem">en vivo</span></div>
       ${inversorDidactico(L, tot, emp)}
       ${panelSaldo()}
-      ${panelLiquidacion(activos)}
+      ${panelLiquidacion(activos.concat(invTrab()))}
+      ${panelMisInversiones()}
       ${R.brokerForm ? `<div class="rb-card" style="padding:12px"><div class="rb-sec">➕ Nuevo inversionista / broker</div>
         <label class="rb-lab">Nombre<input class="rb-in" id="rbBkNom" placeholder="Ej: Nicolás"></label>
         <label class="rb-lab">WhatsApp (opcional)<input class="rb-in" id="rbBkTel" inputmode="tel" placeholder="+56 9 ..."></label>
@@ -3815,6 +3834,8 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "saldo-cargar") { R.saldoForm = "cargar"; return pintarHoja(true); }
     if (a === "saldo-retirar") { R.saldoForm = "retirar"; return pintarHoja(true); }
     if (a === "saldo-cancelar") { R.saldoForm = null; return pintarHoja(true); }
+    if (a === "inv-poner") { const tr = (R.ejec || []).find((x) => x.codigo === cod); if (!tr) return; const X = calcNeg(tr); const cap = Math.round(X.capital); if (!cap) { toast("Este negocio aún no tiene monto"); return; } const d = saldoInv(); if (cap > d) { toast("Te falta saldo. Carga primero con ➕ Cargar."); return; } setSaldo(d - cap); const L2 = inversiones(); L2.push({ id: "i" + Date.now(), codigo: tr.codigo, nombre: tr.nombre || tr.codigo, capital: cap, invGan: Math.round(X.invGan), ts: Date.now(), estado: "trabajando" }); setInversiones(L2); toast("💸 Invertiste " + clp(cap) + " · tu plata está trabajando"); return pintarHoja(true); }
+    if (a === "inv-liquidar") { const L2 = inversiones(); const e = L2.find((x) => x.id === b.dataset.id); if (!e || e.estado !== "trabajando") return; const bp = brokerPct() / 100; const netInv = Math.round(e.capital + e.invGan * (1 - bp)), com = Math.round(e.invGan * bp); e.estado = "liquidado"; e.ts_liq = Date.now(); setInversiones(L2); setSaldo(saldoInv() + netInv); toast("💰 Pagó el factoring: +" + clp(netInv) + " a tu saldo" + (com ? " · comisión broker " + clp(com) : "")); return pintarHoja(true); }
     if (a === "liq-mas") { setBrokerPct(brokerPct() + 5); R.liqAbierto = true; return pintarHoja(true); }
     if (a === "liq-menos") { setBrokerPct(brokerPct() - 5); R.liqAbierto = true; return pintarHoja(true); }
     if (a === "saldo-ok") { const v = Math.round(Number(($("#rbSaldoMonto")?.value || "").replace(/\D/g, "")) || 0); if (!v) { toast("Pon un monto"); return; } const modo = R.saldoForm, d = saldoInv(); if (modo === "retirar" && v > d) { toast("No tienes saldo suficiente"); return; } setSaldo(modo === "cargar" ? d + v : d - v); R.saldoForm = null; toast(modo === "cargar" ? "💳 Saldo cargado: " + clp(v) : "✅ Retiro registrado: " + clp(v)); return pintarHoja(true); }
