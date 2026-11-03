@@ -1814,11 +1814,37 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       caja("docs", "🧾 Guía, factura y recepción", (op.docs || []).some((d) => d.tipo === "guia") ? "✓ guía firmada" : "guía, factura y firma del cliente", est("entrega"), etapaHTML("entrega"), E === "entrega"),
       caja("fact", "💸 Factoring y reparto", repartoListo(op) ? "🥇 repartido" : op.cobrado ? "💰 llegó la plata · repartir" : op.cerrado ? "esperando el factoring" : "al cerrar", repartoListo(op) || E === "cerrado" ? "oro" : op.cobrado ? "ahora" : "luego", repartoFinal(t, X) + eerrNegocio(t), E === "cerrado" || !!op.cobrado),
     ].join("");
-    return `<div class="rb-neg ${E === "cerrado" ? "cerrado" : ""}">
-      <div class="rb-env" data-rb="ej-cerrar-card" data-c="${esc(cod)}" style="cursor:pointer"><div style="min-width:0"><div style="font-size:.74rem"><b>${esc(cod)}</b>${ocN ? " · OC " + esc(ocN) : ""} <span class="muted">▲ cerrar</span></div><div class="rb-fnom">${esc(t.nombre || "")}</div>
+    const negHead = `<div class="rb-env" data-rb="ej-cerrar-card" data-c="${esc(cod)}" style="cursor:pointer"><div style="min-width:0"><div style="font-size:.74rem"><b>${esc(cod)}</b>${ocN ? " · OC " + esc(ocN) : ""} <span class="muted">▲ cerrar</span></div><div class="rb-fnom">${esc(t.nombre || "")}</div>
         <div class="muted" style="font-size:.72rem">${esc(t.oc_compra?.organismo || t.organismo || "")}${dir ? " · " + esc(dir.slice(0, 60)) : ""}</div></div>
-        <div style="text-align:right"><div style="font-size:.62rem;opacity:.75">VENTA</div><b>${clp(k.venta)}</b></div></div>
-      ${cajas}</div>`;
+        <div style="text-align:right"><div style="font-size:.62rem;opacity:.75">VENTA</div><b>${clp(k.venta)}</b></div></div>`;
+    const envoltorio = (cuerpoHtml, pill) => `<div class="rb-neg ${E === "cerrado" ? "cerrado" : ""}">${negHead}${pill ? `<div class="rb-row" style="margin:6px 0"><button class="btn small rb-link" type="button" data-rb="ej-modo" data-m="" data-c="${esc(cod)}">← elegir</button>${pill}</div>` : ""}${cuerpoHtml}</div>`;
+    if (!R.ejModo) {
+      return `<div class="rb-neg ${E === "cerrado" ? "cerrado" : ""}">${negHead}
+        <div class="rb-sec" style="margin-top:8px">¿Qué quieres ver de este negocio?</div>
+        <div class="rb-card" data-rb="ej-modo" data-m="simulada" data-c="${esc(cod)}" style="cursor:pointer;border-color:#5aa9ff;background:rgba(90,169,255,.08)">
+          <div class="rb-env"><b>🔵 Ejecución simulada</b><span class="muted">la del robot →</span></div>
+          <div class="muted" style="font-size:.74rem">Lo que haría yo: me geolocalizo, busco los precios más baratos del producto y armo la ficha completa (Excel en vivo, inversionista, factoring y reparto). ¿Da o no da?</div></div>
+        <div class="rb-card" data-rb="ej-modo" data-m="real" data-c="${esc(cod)}" style="cursor:pointer;border-color:#5ef0b0;background:rgba(63,220,138,.08);margin-top:8px">
+          <div class="rb-env"><b>🟢 Ejecución real</b><span class="muted">la de ustedes →</span></div>
+          <div class="muted" style="font-size:.74rem">Lo que se hizo de verdad: la OC, lo que se compró, la fecha comprometida de entrega y los contactos con el proveedor.</div></div></div>`;
+    }
+    if (R.ejModo === "simulada") return envoltorio(ejSimulada(t, X), `<span class="rb-pill" style="background:rgba(90,169,255,.15);color:#5aa9ff">🔵 Simulada</span>`);
+    return envoltorio(cajas, `<span class="rb-pill" style="background:rgba(63,220,138,.15);color:#3fdc8a">🟢 Real</span>`);
+  }
+  // 🔵 Ejecución simulada: la hace el robot (geolocaliza, busca el más barato) y arma la misma ficha
+  function ejSimulada(t, X) {
+    const op = t.op || {}, inf = op.informe || {}, dir = lugarDe(t) || inf.direccion || "";
+    const prods = queComprar(t), r = ratingNeg(X.final);
+    const precioItem = (x) => (x.precio_unitario || x.precio || x.valor || null);
+    const filas = prods.map((x) => { const pu = precioItem(x); return `<div class="rb-qc"><span class="n">${esc(x.cantidad ?? "")}<small>${esc(x.unidad || "")}</small></span><div><b>${esc(x.que)}</b>${pu ? `<div class="rb-vivo-t" style="font-size:.78rem">más barato ≈ ${clp(pu)} c/u</div>` : `<div class="muted" style="font-size:.68rem">🤖 buscando el más barato geolocalizado…</div>`}</div></div>`; }).join("");
+    return `<div class="rb-sug" style="border-color:#5aa9ff">📍 Me geolocalizo en <b>${esc(dir || "la zona de la OC")}</b> y busco en internet los precios más baratos de lo que pide la orden de compra.</div>
+      <div class="rb-comprar"><div class="rb-env"><b>🔎 Lo que busco y su precio simulado</b></div>${filas || '<div class="muted">—</div>'}
+        <div class="muted" style="font-size:.72rem;margin-top:4px">Costo estimado por el robot: <b>${X.compras ? clp(Math.round(X.compras)) : "buscando…"}</b>${X.fuente ? " · " + esc(X.fuente) : ""}</div></div>
+      <div class="rb-card" style="margin-top:8px"><div class="rb-env"><b>${r.emoji} ¿Da o no da?</b><b class="${X.final > 0 ? "rb-vivo-t" : "rb-neg-t"}">${clp(Math.round(X.final))}</b></div><div class="muted" style="font-size:.74rem">${r.txt}</div></div>
+      <div class="rb-sec">📊 Excel en vivo (simulado)</div>${excelVivo(t, X)}
+      <div class="rb-sec">💼 Inversionista (simulado)</div>${bloqueInversion(t, X)}
+      <div class="rb-sec">💸 Factoring y reparto (simulado)</div>${repartoFinal(t, X)}
+      <div class="muted" style="font-size:.68rem;margin-top:8px">🚚 Terreno, 🧾 guía y factura se simulan aquí y se activan de verdad en la ejecución real. Esta simulación la ven el inversionista y el ejecutador.</div>`;
   }
   // 🧮 el Excel del inversionista, en vivo (mismas fórmulas que la planilla: factoring, IVA, impuesto 27 %, comisión y reparto)
   const PARAM_NEG = { factoring: 0.03, impuesto: 0.25, comision: 0.04, aplica_comision: true, julfior: 0.844, inversionista: 0.156, recargo_sin_factura: 0.25, anticipo: 0.90, transporte: 0, ejecutador: 0.10 };
@@ -2777,7 +2803,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       if (c.dataset.modo === "ej") {
         c.classList.add("vuela"); c.style.transform = ""; c.querySelectorAll(".rb-sello").forEach((x) => (x.style.opacity = 0));
         const cc = c.dataset.c, l = leerLuego();
-        if (derecha) { R.ejAbierto = cc; delete l[cc]; try { localStorage.setItem(EJ_LUEGO, JSON.stringify(l)); } catch {} navigator.vibrate?.(10); setTimeout(() => pintarHoja(true), 120); }
+        if (derecha) { R.ejAbierto = cc; R.ejModo = null; delete l[cc]; try { localStorage.setItem(EJ_LUEGO, JSON.stringify(l)); } catch {} navigator.vibrate?.(10); setTimeout(() => pintarHoja(true), 120); }
         else if (izquierda) { l[cc] = Date.now(); try { localStorage.setItem(EJ_LUEGO, JSON.stringify(l)); } catch {} sacarTarjeta(c, -1); setTimeout(() => pintarHoja(true), 360); }
         return fin();
       }
@@ -3779,10 +3805,11 @@ ${empNom}`;
       return;
     }
     const tEj = () => (R.ejec || []).find((x) => x.codigo === cod);
-    if (a === "ej-ver") { R.ejAbierto = cod; sheet.scrollTop = 0; { const tt = (R.ejec || []).find((x) => x.codigo === cod); if (tt) R.ejTab = etEj(tt); } const l = leerLuego(); delete l[cod]; try { localStorage.setItem(EJ_LUEGO, JSON.stringify(l)); } catch {}
+    if (a === "ej-ver") { R.ejAbierto = cod; R.ejModo = null; sheet.scrollTop = 0; { const tt = (R.ejec || []).find((x) => x.codigo === cod); if (tt) R.ejTab = etEj(tt); } const l = leerLuego(); delete l[cod]; try { localStorage.setItem(EJ_LUEGO, JSON.stringify(l)); } catch {}
       api("correo-visto", { method: "POST", body: JSON.stringify({ codigo: cod }) }).catch(() => {}); return pintarHoja(true); }
     if (a === "ej-luego") { const l = leerLuego(); l[cod] = Date.now(); try { localStorage.setItem(EJ_LUEGO, JSON.stringify(l)); } catch {} if (R.ejAbierto === cod) R.ejAbierto = null; toast("⏰ Queda para después"); return pintarHoja(true); }
     if (a === "ej-cerrar-card") { R.ejAbierto = null; return pintarHoja(true); }
+    if (a === "ej-modo") { R.ejModo = b.dataset.m || null; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "ej-mail") { const t = tEj(), o = t && candsDe(t).find((x) => x.k === b.dataset.k); if (!o) return;
       return enviarCorreos(cod, [{ to: o.email, asunto: `Cotización con factura · ${t.nombre || cod}`, cuerpo: cuerpoCot(t, o), k: o.k, nombre: o.proveedor, tipo: "cotizacion" }]); }
     if (a === "ej-mail-todos") { const t = tEj(); if (!t) return; const cont = t.op?.contactados || {};
@@ -3898,7 +3925,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "inv-volver") { R.invVer = null; return pintarHoja(true); }
     if (a === "inv-cargar-op") { R.saldoForm = "cargar"; R.saldoPrefill = Number(b.dataset.m) || 0; R.invVer = null; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "inv-avanzar") { const L2 = inversiones(); const e = L2.find((x) => x.id === b.dataset.id); if (e) { e.paso = Math.min(2, Math.max(pasoDe(e.codigo), e.paso || 0) + 1); setInversiones(L2); } return pintarHoja(true); }
-    if (a === "inv-ejecutar") { guardar({ portal: "ejecuta" }); R.invVer = null; R.ejAbierto = cod; const t = (R.ejec || []).find((x) => x.codigo === cod); if (t) R.ejTab = etEj(t); R.ejecT = 0; sheet.scrollTop = 0; toast("🛠 Vamos a ejecutar este negocio"); return pintarHoja(true); }
+    if (a === "inv-ejecutar") { guardar({ portal: "ejecuta" }); R.invVer = null; R.ejAbierto = cod; R.ejModo = null; const t = (R.ejec || []).find((x) => x.codigo === cod); if (t) R.ejTab = etEj(t); R.ejecT = 0; sheet.scrollTop = 0; toast("🛠 Vamos a ejecutar este negocio"); return pintarHoja(true); }
     if (a === "inv-poner") { const tr = (R.ejec || []).find((x) => x.codigo === cod); if (!tr) return; const X = calcNeg(tr); const cap = Math.round(X.capital); if (!cap) { toast("Este negocio aún no tiene monto"); return; } const d = saldoInv(); if (cap > d) { toast("Te falta saldo. Carga primero con ➕ Cargar."); return; } setSaldo(d - cap); const L2 = inversiones(); L2.push({ id: "i" + Date.now(), codigo: tr.codigo, nombre: tr.nombre || tr.codigo, capital: cap, invGan: Math.round(X.invGan), ts: Date.now(), estado: "trabajando" }); setInversiones(L2); R.invVer = null; toast("💸 Invertiste " + clp(cap) + " · tu plata está trabajando"); return pintarHoja(true); }
     if (a === "inv-liquidar") { const L2 = inversiones(); const e = L2.find((x) => x.id === b.dataset.id); if (!e || e.estado !== "trabajando") return; const bp = brokerPct() / 100; const netInv = Math.round(e.capital + e.invGan * (1 - bp)), com = Math.round(e.invGan * bp); e.estado = "liquidado"; e.ts_liq = Date.now(); e.neto = netInv; e.com = com; setInversiones(L2); setSaldo(saldoInv() + netInv); toast("💰 Pagó el factoring: +" + clp(netInv) + " a tu saldo" + (com ? " · comisión broker " + clp(com) : "")); return pintarHoja(true); }
     if (a === "hist-limpiar") { setInversiones(inversiones().filter((x) => x.estado !== "liquidado")); toast("Historial borrado"); return pintarHoja(true); }
