@@ -3643,7 +3643,7 @@ ${empNom}`;
     // el repintado cada pocos segundos no debe cerrar lo que la persona abrió
     const abiertos = new Set($$("details", box).map((d, i) => d.open && (d.closest("[id]")?.id || "") + d.className + i).filter(Boolean));
     const tabX = $(".rb-tablero", box)?.scrollLeft || 0;
-    const mplV = $$("input[id^=rbMpl]", box).map((i) => [i.id, i.value, document.activeElement === i]);   // 🔐 no borrar lo que escribes
+    const mplV = $$("input[id^=rbMpl], input[id^=rbCap-]", box).map((i) => [i.id, i.value, document.activeElement === i]);   // 🔐 no borrar lo que escribes (incluye el código del captcha)
     box.innerHTML = html;
     mplV.forEach(([id, v, f]) => { const i = $("#" + id, box); if (i) { i.value = v; if (f) i.focus(); } });
     contar(box);
@@ -3659,6 +3659,10 @@ ${empNom}`;
       const el = document.getElementById("rb-" + R.foco);
       if (el) { el.scrollIntoView({ block: "center" }); R.foco = null; }
     }
+    // 🧩 apenas aparece el captcha, te lleva ahí y deja el cursor listo para escribirlo
+    const cap = box.querySelector('input[id^="rbCap-"]');
+    if (cap) { if (R._capFoco !== cap.id) { R._capFoco = cap.id; cap.scrollIntoView({ block: "center" }); setTimeout(() => { try { cap.focus({ preventScroll: true }); } catch {} }, 60); } }
+    else R._capFoco = null;
   }
 
   /* ---------------- acciones ---------------- */
@@ -4077,7 +4081,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       const m = v.toUpperCase().replace(/\s+/g, "").match(/\d{1,8}-\d{1,6}-[A-Z][A-Z0-9]{1,2}\d{2}/);
       if (!m) { if (a === "lic-codigo") toast("Ese código no se ve como una licitación (ej: 2585-77-LE26)"); return; }
       try { const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: m[0], accion: "licitar" }) });
-        toast(r._status === 409 ? "Ya está en manos del robot" : "🚀 " + m[0] + ": el robot baja las bases y las lee"); R.licTab = "prep"; await refrescar(); pintarHoja(true); } catch (e) { toast(e.message); }
+        toast(r._status === 409 ? "Ya está en manos del robot" : "🚀 " + m[0] + ": el robot baja las bases y las lee"); R.licTab = "prep"; R.foco = m[0]; await refrescar(); pintarHoja(true); } catch (e) { toast(e.message); }
       return;
     }
     if (a === "lic-ir") { const ok = await copiar(cod); toast(ok ? "📋 Código copiado: pégalo en el buscador si te lo pide" : cod);
@@ -4162,7 +4166,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       const m = raw.match(/\d{1,8}-\d{1,6}-[A-Z][A-Z0-9]{1,2}\d{2}/);
       if (!m) { toast("Ese código no se ve como una licitación (ej: 2585-77-LE26)"); return; }
       try { const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: m[0], accion: "licitar" }) });
-        toast(r._status === 409 ? "Ya está en manos del robot" : "📥 " + m[0] + ": el robot baja las bases; te pedirá el código de la imagen"); R.licTab = "prep"; await refrescar(); pintarHoja(true); }
+        toast(r._status === 409 ? "Ya está en manos del robot" : "📥 " + m[0] + ": el robot baja las bases; te pedirá el código de la imagen"); R.licTab = "prep"; R.foco = m[0]; await refrescar(); pintarHoja(true); }
       catch (e) { toast(e.message); }
       return;
     }
