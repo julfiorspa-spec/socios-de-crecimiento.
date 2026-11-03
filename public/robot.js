@@ -4144,14 +4144,18 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
         let ok = 0, fallo = 0;
         for (let i = 0; i < fs.length; i++) {
           const f = fs[i];
-          toast(`Subiendo ${i + 1}/${fs.length}: ${f.name.slice(0, 24)}…`);
           try {
-            const b64 = await achicar(f);
-            await api("lic-archivo", { method: "POST", body: JSON.stringify({ codigo: cod, tipo: "anexo", nombre: f.name, mime: b64.mime, b64: b64.data }) });
+            if (f.size > 4_300_000 && !f.type.startsWith("image/")) {     // 📦 pesado: sube por partes y el servidor lo arma
+              await subirPorPartes(cod, f, (p, tot) => toast(`Subiendo ${i + 1}/${fs.length}: ${f.name.slice(0, 16)}… parte ${p}/${tot}`));
+            } else {
+              toast(`Subiendo ${i + 1}/${fs.length}: ${f.name.slice(0, 24)}…`);
+              const b64 = await achicar(f);
+              await api("lic-archivo", { method: "POST", body: JSON.stringify({ codigo: cod, tipo: "anexo", nombre: f.name, mime: b64.mime, b64: b64.data }) });
+            }
             ok++;
           } catch (e) { fallo++; toast(`${f.name.slice(0, 20)}: ${e.message}`); }
         }
-        if (!ok) { toast("No subió ninguno (los archivos pesan más de 4,5 MB). Súbelos de a uno, comprímelos, o usa 📥 Bajar y analizar con el código."); return; }
+        if (!ok) { toast("No subió ninguno. Reintenta, o usa 📥 Bajar y analizar con el código."); return; }
         try {
           await api("lic-anexos-listo", { method: "POST", body: JSON.stringify({ codigo: cod }) });
           toast(`📂 Carpeta absorbida (${ok} archivo${ok > 1 ? "s" : ""}${fallo ? `, ${fallo} con error` : ""}): el robot los está analizando`);
@@ -4387,6 +4391,18 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
   sheet.addEventListener("focusin", (ev) => { if (ev.target.classList?.contains("rb-costo") || ev.target.classList?.contains("rb-neg-in")) R.barra = true; });
   sheet.addEventListener("focusout", (ev) => { if (ev.target.classList?.contains("rb-costo") || ev.target.classList?.contains("rb-neg-in")) setTimeout(() => { R.barra = false; }, 300); });
   // fotos grandes se achican antes de subir (máx. ~1600 px, JPEG), los PDF van tal cual
+  // 📦 sube un archivo pesado en pedazos (el servidor los junta): así entran los anexos de más de 4,5 MB
+  function bytesAB64(u8) { let s = ""; const CH = 0x8000; for (let i = 0; i < u8.length; i += CH) s += String.fromCharCode.apply(null, u8.subarray(i, i + CH)); return btoa(s); }
+  async function subirPorPartes(cod, f, aviso) {
+    const u8 = new Uint8Array(await f.arrayBuffer());
+    const TROZO = 3_000_000;                        // ~3 MB crudos → ~4 MB en base64, bajo el límite de la request
+    const total = Math.ceil(u8.length / TROZO) || 1;
+    const up = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    for (let idx = 0; idx < total; idx++) {
+      aviso && aviso(idx + 1, total);
+      await api("lic-archivo", { method: "POST", body: JSON.stringify({ codigo: cod, tipo: "anexo", nombre: f.name, mime: f.type || "application/pdf", up, idx, total, b64: bytesAB64(u8.subarray(idx * TROZO, (idx + 1) * TROZO)) }) });
+    }
+  }
   async function achicar(f) {
     const leerB64 = (blob) => new Promise((ok, mal) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = mal; r.readAsDataURL(blob); });
     if (!f.type.startsWith("image/") || f.size < 900_000) { if (f.size > 4_500_000) throw new Error("pesa " + (f.size / 1e6).toFixed(1) + " MB (máx 4,5 — comprime o sube por separado)"); return { data: await leerB64(f), mime: f.type || "application/pdf" }; }
