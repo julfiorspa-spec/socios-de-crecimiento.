@@ -1965,6 +1965,22 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         <div class="rb-row"><button class="btn small rb-oro" type="button" data-rb="saldo-cargar">➕ Cargar</button><button class="btn small" type="button" data-rb="saldo-retirar">➖ Retirar</button></div>
       </div>${form}</div>`;
   }
+  // 🧮 Liquidación: reparto configurable de la ganancia entre inversionista y broker
+  const BROKPCT = "sdc:brokerpct";
+  const brokerPct = () => { try { const v = Number(localStorage.getItem(BROKPCT)); return isFinite(v) && v >= 0 && v <= 90 ? v : 30; } catch { return 30; } };
+  const setBrokerPct = (p) => { try { localStorage.setItem(BROKPCT, String(Math.max(0, Math.min(90, Math.round(p))))); } catch {} };
+  function panelLiquidacion(activos) {
+    const bp = brokerPct(), f = bp / 100;
+    const totCap = activos.reduce((a, x) => a + x.X.capital, 0), totG = activos.reduce((a, x) => a + x.X.invGan, 0);
+    const comBroker = totG * f, recInv = totCap + totG * (1 - f);
+    const filas = activos.map(({ t, X }) => `<tr><td>${esc((t.nombre || t.codigo).slice(0, 26))}</td><td class="n">${clp(Math.round(X.capital + X.invGan * (1 - f)))}</td><td class="n rb-vivo-t">${clp(Math.round(X.invGan * f))}</td></tr>`).join("");
+    return `<details class="rb-det" ${R.liqAbierto ? "open" : ""}><summary>🧮 Liquidación · tu comisión de broker ${clp(Math.round(comBroker))}</summary>
+      <div class="rb-sec">Reparto de la ganancia</div>
+      <div class="rb-row" style="align-items:center;gap:10px;flex-wrap:wrap"><span class="muted" style="font-size:.74rem">Inversionista <b>${100 - bp}%</b></span><button class="btn small" type="button" data-rb="liq-menos">−</button><b>Broker ${bp}%</b><button class="btn small" type="button" data-rb="liq-mas">+</button></div>
+      ${activos.length ? `<table class="rb-copias"><tr><td><b>Negocio</b></td><td class="n"><b>Inversionista</b></td><td class="n"><b>Tú (broker)</b></td></tr>${filas}
+        <tr><td><b>Total</b></td><td class="n"><b>${clp(Math.round(recInv))}</b></td><td class="n"><b class="rb-vivo-t">${clp(Math.round(comBroker))}</b></td></tr></table>` : `<div class="muted" style="font-size:.72rem;margin-top:4px">Cuando haya inversión activa, aquí ves cuánto recibe el inversionista (capital + su parte) y cuánto queda para ti como broker.</div>`}
+      <div class="muted" style="font-size:.66rem;margin-top:4px">De la ganancia del inversionista, <b>${bp}%</b> es tu comisión como broker. Ajusta con − / +.</div></details>`;
+  }
   // 💼 PORTAL INVERSIONISTA: los negocios que necesitan capital, en vivo
   // 💡 Onboarding del inversor: ejemplo con números + por qué es real + saldo (estilo Betano)
   function inversorDidactico(L, tot, emp) {
@@ -2011,6 +2027,7 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
     return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">💼 Inversión</h2><span class="muted" style="font-size:.7rem">en vivo</span></div>
       ${inversorDidactico(L, tot, emp)}
       ${panelSaldo()}
+      ${panelLiquidacion(activos)}
       ${R.brokerForm ? `<div class="rb-card" style="padding:12px"><div class="rb-sec">➕ Nuevo inversionista / broker</div>
         <label class="rb-lab">Nombre<input class="rb-in" id="rbBkNom" placeholder="Ej: Nicolás"></label>
         <label class="rb-lab">WhatsApp (opcional)<input class="rb-in" id="rbBkTel" inputmode="tel" placeholder="+56 9 ..."></label>
@@ -3798,6 +3815,8 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "saldo-cargar") { R.saldoForm = "cargar"; return pintarHoja(true); }
     if (a === "saldo-retirar") { R.saldoForm = "retirar"; return pintarHoja(true); }
     if (a === "saldo-cancelar") { R.saldoForm = null; return pintarHoja(true); }
+    if (a === "liq-mas") { setBrokerPct(brokerPct() + 5); R.liqAbierto = true; return pintarHoja(true); }
+    if (a === "liq-menos") { setBrokerPct(brokerPct() - 5); R.liqAbierto = true; return pintarHoja(true); }
     if (a === "saldo-ok") { const v = Math.round(Number(($("#rbSaldoMonto")?.value || "").replace(/\D/g, "")) || 0); if (!v) { toast("Pon un monto"); return; } const modo = R.saldoForm, d = saldoInv(); if (modo === "retirar" && v > d) { toast("No tienes saldo suficiente"); return; } setSaldo(modo === "cargar" ? d + v : d - v); R.saldoForm = null; toast(modo === "cargar" ? "💳 Saldo cargado: " + clp(v) : "✅ Retiro registrado: " + clp(v)); return pintarHoja(true); }
     if (a === "nube-aprobar" || a === "nube-rechazar") {
       try { await api("nube-aprobar", { method: "POST", body: JSON.stringify({ id: b.dataset.v, rechazar: a === "nube-rechazar" }) }); toast(a === "nube-aprobar" ? "✅ Servidor aprobado: se está instalando" : "Solicitud rechazada"); R.nubeT = 0; await cargarNube(); } catch (e) { toast(e.message); } return; }
