@@ -1022,8 +1022,8 @@
         <img src="data:image/png;base64,${esc(t.captcha)}" alt="Código" style="display:block;margin:8px 0;max-width:100%;background:#fff;border-radius:6px">
         <div class="row" style="gap:6px"><input id="rbCap-${c}" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="send" style="flex:1;min-width:120px;font-size:1.1rem;letter-spacing:.08em" placeholder="Pega el código aquí">
         <button class="btn small rb-firmar" data-rb="lic-captcha" data-c="${c}" type="button">Enviar</button></div></div>` : "";
-    const codigoBox = ["requiere", "error", "cancelada"].includes(t.estado) ? `<div class="rb-alertas" style="border-color:#7c4dff">
-        <b>📥 Baja las bases y te las analizo</b>
+    const codigoBox = ["requiere", "error", "cancelada", "lic_bajando", "en_cola", "tomado"].includes(t.estado) ? `<div class="rb-alertas" style="border-color:#7c4dff">
+        <b>📥 Baja las bases en Safari y súbelas — yo las analizo</b>
         <div class="muted" style="font-size:.72rem;margin:3px 0 6px">Mercado Público pide verificación humana (un código de imagen) para bajar los anexos — por eso el robot no puede solo. Pega el código de la licitación y dale: cuando aparezca la imagen, escribes el código. Ahí leo las bases, calculo el precio y la paso a la Mesa de juego.</div>
         <div class="row" style="gap:6px"><input id="rbLicGo-${c}" value="${c}" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="send" style="flex:1;min-width:120px;letter-spacing:.04em" placeholder="Código de la licitación (ej: 2585-77-LE26)">
         <button class="btn small rb-firmar" data-rb="lic-go" data-c="${c}" type="button">📥 Bajar y analizar</button></div>
@@ -1031,7 +1031,7 @@
         <div class="muted" style="font-size:.68rem;margin-top:4px">Abre la ficha en Safari → «Archivos adjuntos»: ahí ves la imagen del código. Léelo y escríbelo cuando el robot te lo pida.</div>
         <div class="rb-env" style="margin:10px 0 4px;border-top:1px solid #2a2350;padding-top:8px"><b>📱 Para el celular</b></div>
         <div class="muted" style="font-size:.72rem;margin-bottom:6px">¿Ya bajaste los anexos desde Mercado Público (tú escribiste el código de la imagen en el portal)? Súbelos acá y yo los absorbo y los analizo — sin volver a pedirte el código.</div>
-        <button class="btn small rb-oro" data-rb="lic-anexos" data-c="${c}" type="button" style="width:100%">📎 ${anexN ? `${anexN} anexo${anexN > 1 ? "s" : ""} cargado${anexN > 1 ? "s" : ""} · agregar o reenviar` : "Ingresa los documentos acá"}</button></div>` : "";
+        <button class="btn small rb-oro" data-rb="lic-anexos" data-c="${c}" type="button" style="width:100%">📎 ${anexN ? `${anexN} anexo${anexN > 1 ? "s" : ""} cargado${anexN > 1 ? "s" : ""} · agregar o reenviar` : "Ingresa los documentos descargados"}</button></div>` : "";
     const precio = L.precio_unit ? `<div class="rb-figs">
         <span>Precio <b>${clp(L.precio_unit)}</b> neto${L.unidad ? " / " + esc(L.unidad) : ""}</span>
         <span>Total <b>${clp(L.total)}</b> con IVA</span>
