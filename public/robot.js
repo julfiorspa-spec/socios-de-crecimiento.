@@ -1960,7 +1960,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const d = saldoInv(), emp = empresaActual() || {};
     const form = R.saldoForm ? `<div style="margin-top:8px;border-top:1px solid rgba(127,127,127,.2);padding-top:8px">
       <div class="rb-sec">${R.saldoForm === "cargar" ? "➕ Cargar saldo" : "➖ Retirar"}</div>
-      <label class="rb-lab">Monto<input class="rb-in" id="rbSaldoMonto" inputmode="numeric" placeholder="$ 0"></label>
+      <label class="rb-lab">Monto<input class="rb-in" id="rbSaldoMonto" inputmode="numeric" placeholder="$ 0" value="${R.saldoForm === "cargar" && R.saldoPrefill ? R.saldoPrefill : ""}"></label>
       ${R.saldoForm === "cargar" ? `<div class="muted" style="font-size:.7rem;line-height:1.5">Transfiere a <b>${esc(emp.razon_social || "la empresa")}</b>${emp.banco ? "<br>" + esc(emp.banco) : ""}. Al confirmarse, se abona a tu saldo.<br><span style="opacity:.7">Pago con tarjeta / WebPay: próximamente.</span></div>` : `<div class="muted" style="font-size:.7rem">Se descuenta de tu saldo y la empresa te transfiere.</div>`}
       <div class="rb-row" style="margin-top:6px"><button class="btn small rb-oro" type="button" data-rb="saldo-ok">${R.saldoForm === "cargar" ? "Confirmar carga" : "Confirmar retiro"}</button><button class="btn small rb-link" type="button" data-rb="saldo-cancelar">Cancelar</button></div></div>` : "";
     return `<div class="rb-card" style="border-color:#5ef0b0;background:rgba(63,220,138,.06)">
@@ -2035,45 +2035,86 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       <div style="display:flex;gap:10px;margin-top:8px"><div style="flex:1;background:rgba(63,220,138,.12);border:1px solid rgba(63,220,138,.4);border-radius:12px;padding:8px 12px"><span style="font-size:.64rem;opacity:.8;display:block">Tu saldo trabajando</span><b style="font-size:1.1rem">${clp(Math.round(tot.c))}</b></div><div style="flex:1;background:rgba(245,207,107,.12);border:1px solid rgba(245,207,107,.4);border-radius:12px;padding:8px 12px"><span style="font-size:.64rem;opacity:.8;display:block">Por cobrar</span><b class="rb-vivo-t" style="font-size:1.1rem">+${clp(Math.round(tot.g))}</b></div></div>
       <div class="muted" style="font-size:.64rem;margin-top:4px">⚠️ Rentabilidad estimada, no garantizada. Las transferencias las autoriza el dueño de la empresa desde su banco.</div></details>`;
   }
+  // --- Portal del inversionista estilo Betano: login → oportunidades → detalle → tracker ---
+  const INVSES = "sdc:invsesion";
+  const invSesion = () => { try { return JSON.parse(localStorage.getItem(INVSES)) || null; } catch { return null; } };
+  function pantallaInvLogin() {
+    return `<div class="rb-paso" style="max-width:420px;margin:0 auto">
+      <div style="text-align:center;margin:12px 0"><div style="font-size:2.6rem">💼</div><h2 class="rb-h" style="margin:4px 0">Portal del Inversionista</h2><div class="muted" style="font-size:.78rem">Inicia sesión para ver las oportunidades de inversión.</div></div>
+      <label class="rb-lab">Usuario<input class="rb-in" id="rbInvUsr" placeholder="Tu nombre" autocomplete="username"></label>
+      <label class="rb-lab">Clave<input class="rb-in" id="rbInvPwd" type="password" placeholder="••••" autocomplete="current-password"></label>
+      <button class="btn rb-oro rb-big-btn" type="button" data-rb="inv-entrar">Iniciar sesión</button>
+      <div class="muted" style="font-size:.68rem;text-align:center;margin-top:6px">¿Primera vez? Pon un usuario y una clave: quedan registrados en este dispositivo.</div></div>`;
+  }
+  function pasoDe(cod) {
+    const t = (R.ejec || []).find((x) => x.codigo === cod), op = (t && t.op) || {};
+    let p = 0;
+    if (["transporte", "despacho", "entrega"].includes(op.etapa)) p = 1;
+    if (op.cobrado || ["documentos", "cerrado"].includes(op.etapa) || (op.transferido && op.proveedor_pagado)) p = 2;
+    return p;
+  }
+  function trackerCards() {
+    const trab = inversiones().filter((x) => x.estado === "trabajando");
+    if (!trab.length) return "";
+    const pasos = ["🛒 Preparando depósito a proveedor", "🚚 Productos despachados", "🏦 Dinero en banco"];
+    return `<div class="rb-sec">📍 ¿Dónde está mi plata?</div>${trab.map((x) => {
+      const paso = Math.max(pasoDe(x.codigo), x.paso || 0), recibe = Math.round(x.capital + x.invGan * (1 - brokerPct() / 100));
+      return `<div class="rb-inv activo"><div class="rb-env"><div style="min-width:0"><b>${esc((x.nombre || x.codigo).slice(0, 46))}</b><div class="muted" style="font-size:.68rem">Invertiste ${clp(x.capital)} · recibirás ${clp(recibe)}</div></div></div>
+        <div style="margin:8px 0">${pasos.map((pz, i) => `<div style="display:flex;align-items:center;gap:8px;opacity:${i <= paso ? 1 : .4};margin:3px 0"><span>${i < paso ? "✅" : i === paso ? "🔵" : "⚪"}</span><span style="font-size:.82rem;${i === paso ? "font-weight:700" : ""}">${pz}</span></div>`).join("")}</div>
+        ${paso >= 2 ? `<button class="btn rb-oro rb-big-btn" type="button" data-rb="inv-liquidar" data-id="${esc(x.id)}">💰 Dinero en banco — cargar ${clp(recibe)} a mi saldo</button>` : `<div class="rb-row"><span class="muted" style="font-size:.68rem;align-self:center">Cuando el factoring pague, cargas tu saldo.</span><button class="btn small rb-link" type="button" data-rb="inv-avanzar" data-id="${esc(x.id)}" style="margin-left:auto">avanzar estado ▸</button></div>`}</div>`;
+    }).join("")}`;
+  }
+  // 💼 Betano puro: el inversionista solo mete y saca; el seguimiento lo hace el broker
+  function misInvSimple() {
+    const trab = inversiones().filter((x) => x.estado === "trabajando");
+    if (!trab.length) return "";
+    return `<div class="rb-sec">💼 Mis inversiones</div>${trab.map((x) => {
+      const cobra = Math.round(x.capital + x.invGan * (1 - brokerPct() / 100));
+      return `<div class="rb-inv activo"><div class="rb-env"><div style="min-width:0"><b>${esc((x.nombre || x.codigo).slice(0, 46))}</b><div class="muted" style="font-size:.68rem">Invertiste ${clp(x.capital)} · 💰 en ~5 días</div></div><div style="text-align:right"><div class="muted" style="font-size:.6rem">COBRAS</div><b class="rb-vivo-t">${clp(cobra)}</b></div></div>
+        <div class="rb-row" style="margin-top:4px"><button class="btn small rb-oro" type="button" data-rb="inv-liquidar" data-id="${esc(x.id)}">💰 Cobrar a mi saldo</button></div></div>`;
+    }).join("")}`;
+  }
+  function invDetalle(cod) {
+    const t = (R.ejec || []).find((x) => x.codigo === cod);
+    if (!t) { R.invVer = null; return portalInversion(); }
+    const X = calcNeg(t), emp = empresaActual() || {}, cap = Math.round(X.capital), rec = Math.round(X.invRecibe), d = saldoInv();
+    return `<div class="rb-paso">
+      <button class="btn small rb-link" type="button" data-rb="inv-volver">← Oportunidades</button>
+      <div class="rb-card" style="border-color:#5ef0b0;overflow:hidden;padding:0">
+        <div style="height:96px;background:linear-gradient(135deg,#0b7d5b,#12b886);display:grid;place-items:center;color:#fff;font-size:2.4rem">📦</div>
+        <div style="padding:14px">
+          <h2 class="rb-h" style="margin:0 0 2px">${esc((t.nombre || t.codigo).slice(0, 60))}</h2>
+          <div class="muted" style="font-size:.72rem">${esc((t.oc_compra?.organismo || t.organismo || "").slice(0, 50))}${t.op?.oc_codigo ? " · OC " + esc(t.op.oc_codigo) : ""}</div>
+          <div class="rb-inv-flecha" style="margin:10px 0"><span>Inviertes</span><b>${clp(cap)}</b><span>recibes</span><b class="rb-vivo-t">${clp(rec)}</b><span class="rb-pill verde">+${Math.round(X.invPct * 1000) / 10}%</span></div>
+          <div class="muted" style="font-size:.72rem;margin-bottom:8px">Te paga el <b>factoring</b> en ~5 días (no esperas al Estado). Tu plata paga solo los costos reales del proyecto.</div>
+          ${d >= cap ? `<button class="btn rb-oro rb-big-btn" type="button" data-rb="inv-poner" data-c="${esc(cod)}">💸 Invertir ${clp(cap)} desde mi saldo</button>` : `<div class="rb-sug" style="border-color:#f5cf6b">💳 Te faltan ${clp(cap - d)} en tu saldo. Carga tu saldo para invertir en esta oportunidad.</div>
+          <button class="btn rb-oro rb-big-btn" type="button" data-rb="inv-cargar-op" data-c="${esc(cod)}" data-m="${cap}">💳 Cargar mi saldo → transferir a ${esc(corta(emp.razon_social) || "PJANIC")}</button>`}
+          ${brokers().length ? `<div class="rb-row" style="flex-wrap:wrap;margin-top:8px"><span class="muted" style="font-size:.66rem;align-self:center">📲 Enviar a:</span>${brokers().map((bk) => `<button class="btn small" type="button" data-rb="inv-enviar" data-c="${esc(t.codigo)}" data-tel="${esc(bk.tel || "")}" data-nom="${esc(bk.nombre)}">${esc(bk.nombre)}</button>`).join("")}<button class="btn small rb-link" type="button" data-rb="broker-nuevo">➕</button></div>` : `<div class="rb-row" style="margin-top:8px"><button class="btn small rb-link" type="button" data-rb="broker-nuevo">📲 Enviar a un inversionista</button></div>`}
+          ${R.brokerForm ? `<div class="rb-card" style="padding:12px;margin-top:8px"><div class="rb-sec">➕ Nuevo inversionista</div><label class="rb-lab">Nombre<input class="rb-in" id="rbBkNom" placeholder="Ej: Nicolás"></label><label class="rb-lab">WhatsApp (opcional)<input class="rb-in" id="rbBkTel" inputmode="tel" placeholder="+56 9 ..."></label><div class="rb-row"><button class="btn small rb-oro" type="button" data-rb="broker-add">Guardar</button><button class="btn small rb-link" type="button" data-rb="broker-cancelar">Cancelar</button></div></div>` : ""}
+        </div></div></div>`;
+  }
   function portalInversion() {
     if (!tienePlan("premium")) return candado("premium", "💼 Inversión");
-    if (!R.ejec) { cargarEjecuta(); return `<div class="empty"><span class="spinner"></span> Cargando negocios…</div>`; }
+    const ses = invSesion();
+    if (!ses) return pantallaInvLogin();
+    if (!R.ejec) { cargarEjecuta(); return `<div class="empty"><span class="spinner"></span> Cargando oportunidades…</div>`; }
     const emp = empresaActual() || {};
     const noInt = (() => { try { return JSON.parse(localStorage.getItem("sdc:invno")) || {}; } catch { return {}; } })();
     const L = (R.ejec || []).filter((t) => t.op && t.op.etapa !== "rechazada").map((t) => ({ t, X: calcNeg(t) })).filter((x) => x.X.compras);
-    const toca = L.filter(({ t, X }) => t.op.pedido_transferencia && !t.op.transferido && X.final > 0 && !noInt[t.codigo]), activos = L.filter(({ t }) => t.op.transferido && !t.op.cerrado), abiertos = L.filter(({ t, X }) => !t.op.pedido_transferencia && X.final > 0 && !noInt[t.codigo]);
-    const tot = activos.reduce((a, x) => ({ c: a.c + x.X.capital, g: a.g + x.X.invGan }), { c: 0, g: 0 });
-    const card = ({ t, X }, modo) => `<div class="rb-inv ${modo}"><div class="rb-env"><div style="min-width:0"><b>${esc((t.nombre || t.codigo).slice(0, 60))}</b><div class="muted" style="font-size:.7rem">${esc((t.oc_compra?.organismo || t.organismo || "").slice(0, 50))}${t.op.oc_codigo ? " · OC " + esc(t.op.oc_codigo) : ""}</div></div>
-        <div style="text-align:right"><div class="muted" style="font-size:.6rem">INVIERTES</div><b>${clp(Math.round(X.capital))}</b></div></div>
-      <div class="rb-inv-flecha"><span>Recibes</span><b>${clp(Math.round(X.invRecibe))}</b><span class="rb-pill verde">+${Math.round(X.invPct * 1000) / 10}%</span></div>
-      <div class="muted" style="font-size:.68rem">Proveedor: ${esc(t.op.proveedor || "negociando…")} · ${esc(X.fuente)} · ${t.op.en_vivo ? "🔴 en vivo ahora" : esc(({ operacion: "🤝 proveedores", pago: "💸 pago", transporte: "🚚 despacho", despacho: "🛣 en trayecto", entrega: "📦 recepción", cerrado: "🥇 cerrado" })[etEj(t)] || "")}</div>
-      ${modo === "toca" ? `<div class="rb-sug" style="border-color:#f5cf6b">🏦 Transfiere a <b>${esc(emp.razon_social || "la empresa")}</b>${emp.banco ? "<br>" + esc(emp.banco) : ""}</div>
-        <div class="rb-row"><button class="btn small" type="button" data-rb="cp" data-v="${esc(`Inversión ${t.codigo}
-${clp(Math.round(X.capital))}
-${emp.razon_social || ""}
-${emp.banco || ""}`)}">📋 Copiar datos</button>
-          <button class="btn small" type="button" data-rb="neg-subir" data-tipo="comprobante" data-c="${esc(t.codigo)}">📎 Comprobante</button>
-          <button class="btn small rb-oro" type="button" data-rb="inv-transferi" data-c="${esc(t.codigo)}">✅ Ya transferí</button></div>` : ""}
-      ${t.op.en_vivo && t.op.twitch_canal ? `<a class="btn small" href="https://www.twitch.tv/${encodeURIComponent(t.op.twitch_canal)}" target="_blank" rel="noopener">🔴 Ver la entrega en vivo</a>` : ""}
-      ${brokers().length ? `<div class="rb-row" style="flex-wrap:wrap;margin-top:4px"><span class="muted" style="font-size:.66rem;align-self:center">📲 Enviar a:</span>${brokers().map((bk) => `<button class="btn small" type="button" data-rb="inv-enviar" data-c="${esc(t.codigo)}" data-tel="${esc(bk.tel || "")}" data-nom="${esc(bk.nombre)}">${esc(bk.nombre)}</button>`).join("")}<button class="btn small rb-link" type="button" data-rb="broker-nuevo" title="Agregar inversionista">➕</button></div>` : `<div class="rb-row" style="margin-top:4px"><button class="btn small" type="button" data-rb="broker-nuevo">📲 Enviar a un inversionista</button></div>`}
-      ${(modo === "toca" || modo === "prox") ? `<div class="rb-row" style="margin-top:4px"><button class="btn small rb-oro" type="button" data-rb="inv-poner" data-c="${esc(t.codigo)}">💸 Invertir ${clp(Math.round(X.capital))} desde mi saldo</button></div>` : ""}
-      ${modo !== "activo" ? `<div class="rb-row" style="margin-top:4px"><button class="btn small rb-link" type="button" data-rb="inv-descartar" data-c="${esc(t.codigo)}" style="opacity:.65;margin-left:auto">✖ No me interesa</button></div>` : ""}</div>`;
-    return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">💼 Inversión</h2><span class="muted" style="font-size:.7rem">en vivo</span></div>
-      ${inversorDidactico(L, tot, emp)}
+    const ids = new Set(inversiones().filter((x) => x.estado !== "liquidado").map((x) => x.codigo));
+    const oportun = L.filter(({ t, X }) => X.final > 0 && !noInt[t.codigo] && !ids.has(t.codigo));
+    if (R.invVer) return invDetalle(R.invVer);
+    const opCard = ({ t, X }) => `<div class="rb-inv"><div class="rb-env"><div style="min-width:0"><b>${esc((t.nombre || t.codigo).slice(0, 52))}</b><div class="muted" style="font-size:.7rem">${esc((t.oc_compra?.organismo || t.organismo || "").slice(0, 44))}</div></div><span class="rb-pill verde">+${Math.round(X.invPct * 1000) / 10}%</span></div>
+      <div class="rb-inv-flecha"><span>Inviertes</span><b>${clp(Math.round(X.capital))}</b><span>cobras</span><b class="rb-vivo-t">${clp(Math.round(X.invRecibe))}</b></div>
+      <div class="muted" style="font-size:.68rem;margin:2px 0 6px">💰 Cobras en ~5 días · pagado por el factoring</div>
+      <button class="btn rb-oro rb-big-btn" type="button" data-rb="inv-ver" data-c="${esc(t.codigo)}">Ver inversión →</button></div>`;
+    return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">💼 Inversión</h2><button class="btn small rb-link" type="button" data-rb="inv-salir">👤 ${esc(ses.usuario)} · salir</button></div>
       ${panelSaldo()}
-      ${panelLiquidacion(activos.concat(invTrab()))}
-      ${panelMisInversiones()}
+      ${misInvSimple()}
+      ${oportun.length ? `<div class="rb-sec">🔥 Oportunidades de inversión</div>${oportun.map(opCard).join("")}` : `<div class="empty">No hay oportunidades con precio ahora. Cuando un negocio tenga proveedor, aparecen aquí.</div>`}
       ${panelHistorial()}
-      ${R.brokerForm ? `<div class="rb-card" style="padding:12px"><div class="rb-sec">➕ Nuevo inversionista / broker</div>
-        <label class="rb-lab">Nombre<input class="rb-in" id="rbBkNom" placeholder="Ej: Nicolás"></label>
-        <label class="rb-lab">WhatsApp (opcional)<input class="rb-in" id="rbBkTel" inputmode="tel" placeholder="+56 9 ..."></label>
-        <div class="rb-row"><button class="btn small rb-oro" type="button" data-rb="broker-add">Guardar inversionista</button><button class="btn small rb-link" type="button" data-rb="broker-cancelar">Cancelar</button></div></div>` : ""}
-      <div class="rb-tira"><span>💰 <b>${cortoG(tot.c)}</b> invertido</span><span>📈 <b>+${cortoG(tot.g)}</b> por cobrar</span><span>🔔 <b>${toca.length}</b> por invertir</span></div>
-      ${toca.length ? `<div class="rb-sec">🔔 Te toca invertir</div>${toca.map((x) => card(x, "toca")).join("")}` : ""}
-      ${activos.length ? `<div class="rb-sec">🟢 Tu plata trabajando</div>${activos.map((x) => card(x, "activo")).join("")}` : ""}
-      ${abiertos.length ? `<div class="rb-sec">👀 Próximos negocios (negociando proveedor)</div>${abiertos.map((x) => card(x, "prox")).join("")}` : ""}
-      ${!L.length ? `<div class="empty">Aún no hay negocios con precio. Cuando un proveedor cotice, aparece aquí cuánto inviertes y cuánto recibes.</div>` : ""}
-      <div class="muted" style="font-size:.66rem;margin-top:8px">Montos según el Excel del negocio (factoring ${PARAM_NEG.factoring * 100}%, impuesto ${PARAM_NEG.impuesto * 100}%, inversionista ${PARAM_NEG.inversionista * 100}% de la utilidad final). Rentabilidad estimada, no garantizada.</div></div>`;
+      ${panelLiquidacion(invTrab())}
+      <div class="muted" style="font-size:.64rem;margin-top:8px">Montos según el Excel del negocio (inversionista ${PARAM_NEG.inversionista * 100}% de la utilidad final). Rentabilidad estimada; las transferencias las autoriza el dueño desde su banco.</div></div>`;
   }
   const FACT = "sdc:factorings";
   const factorings = () => { try { return JSON.parse(localStorage.getItem(FACT)) || []; } catch { return []; } };
@@ -3850,13 +3891,19 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "inv-enviar") { const t = (R.ejec || []).find((x) => x.codigo === cod); if (!t) return; const X = calcNeg(t); const msg = msgOportunidad(t, X); const n = waNum(b.dataset.tel); window.open(n ? `https://wa.me/${n}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank"); toast("📲 Oportunidad enviada a " + (b.dataset.nom || "inversionista")); return; }
     if (a === "saldo-cargar") { R.saldoForm = "cargar"; return pintarHoja(true); }
     if (a === "saldo-retirar") { R.saldoForm = "retirar"; return pintarHoja(true); }
-    if (a === "saldo-cancelar") { R.saldoForm = null; return pintarHoja(true); }
-    if (a === "inv-poner") { const tr = (R.ejec || []).find((x) => x.codigo === cod); if (!tr) return; const X = calcNeg(tr); const cap = Math.round(X.capital); if (!cap) { toast("Este negocio aún no tiene monto"); return; } const d = saldoInv(); if (cap > d) { toast("Te falta saldo. Carga primero con ➕ Cargar."); return; } setSaldo(d - cap); const L2 = inversiones(); L2.push({ id: "i" + Date.now(), codigo: tr.codigo, nombre: tr.nombre || tr.codigo, capital: cap, invGan: Math.round(X.invGan), ts: Date.now(), estado: "trabajando" }); setInversiones(L2); toast("💸 Invertiste " + clp(cap) + " · tu plata está trabajando"); return pintarHoja(true); }
+    if (a === "saldo-cancelar") { R.saldoForm = null; R.saldoPrefill = 0; return pintarHoja(true); }
+    if (a === "inv-entrar") { const u = ($("#rbInvUsr")?.value || "").trim(); if (!u) { toast("Pon tu usuario"); return; } try { localStorage.setItem(INVSES, JSON.stringify({ usuario: u, t: Date.now() })); } catch {} toast("Bienvenido, " + u); return pintarHoja(true); }
+    if (a === "inv-salir") { try { localStorage.removeItem(INVSES); } catch {} R.invVer = null; return pintarHoja(true); }
+    if (a === "inv-ver") { R.invVer = cod; sheet.scrollTop = 0; return pintarHoja(true); }
+    if (a === "inv-volver") { R.invVer = null; return pintarHoja(true); }
+    if (a === "inv-cargar-op") { R.saldoForm = "cargar"; R.saldoPrefill = Number(b.dataset.m) || 0; R.invVer = null; sheet.scrollTop = 0; return pintarHoja(true); }
+    if (a === "inv-avanzar") { const L2 = inversiones(); const e = L2.find((x) => x.id === b.dataset.id); if (e) { e.paso = Math.min(2, Math.max(pasoDe(e.codigo), e.paso || 0) + 1); setInversiones(L2); } return pintarHoja(true); }
+    if (a === "inv-poner") { const tr = (R.ejec || []).find((x) => x.codigo === cod); if (!tr) return; const X = calcNeg(tr); const cap = Math.round(X.capital); if (!cap) { toast("Este negocio aún no tiene monto"); return; } const d = saldoInv(); if (cap > d) { toast("Te falta saldo. Carga primero con ➕ Cargar."); return; } setSaldo(d - cap); const L2 = inversiones(); L2.push({ id: "i" + Date.now(), codigo: tr.codigo, nombre: tr.nombre || tr.codigo, capital: cap, invGan: Math.round(X.invGan), ts: Date.now(), estado: "trabajando" }); setInversiones(L2); R.invVer = null; toast("💸 Invertiste " + clp(cap) + " · tu plata está trabajando"); return pintarHoja(true); }
     if (a === "inv-liquidar") { const L2 = inversiones(); const e = L2.find((x) => x.id === b.dataset.id); if (!e || e.estado !== "trabajando") return; const bp = brokerPct() / 100; const netInv = Math.round(e.capital + e.invGan * (1 - bp)), com = Math.round(e.invGan * bp); e.estado = "liquidado"; e.ts_liq = Date.now(); e.neto = netInv; e.com = com; setInversiones(L2); setSaldo(saldoInv() + netInv); toast("💰 Pagó el factoring: +" + clp(netInv) + " a tu saldo" + (com ? " · comisión broker " + clp(com) : "")); return pintarHoja(true); }
     if (a === "hist-limpiar") { setInversiones(inversiones().filter((x) => x.estado !== "liquidado")); toast("Historial borrado"); return pintarHoja(true); }
     if (a === "liq-mas") { setBrokerPct(brokerPct() + 5); R.liqAbierto = true; return pintarHoja(true); }
     if (a === "liq-menos") { setBrokerPct(brokerPct() - 5); R.liqAbierto = true; return pintarHoja(true); }
-    if (a === "saldo-ok") { const v = Math.round(Number(($("#rbSaldoMonto")?.value || "").replace(/\D/g, "")) || 0); if (!v) { toast("Pon un monto"); return; } const modo = R.saldoForm, d = saldoInv(); if (modo === "retirar" && v > d) { toast("No tienes saldo suficiente"); return; } setSaldo(modo === "cargar" ? d + v : d - v); R.saldoForm = null; toast(modo === "cargar" ? "💳 Saldo cargado: " + clp(v) : "✅ Retiro registrado: " + clp(v)); return pintarHoja(true); }
+    if (a === "saldo-ok") { const v = Math.round(Number(($("#rbSaldoMonto")?.value || "").replace(/\D/g, "")) || 0); if (!v) { toast("Pon un monto"); return; } const modo = R.saldoForm, d = saldoInv(); if (modo === "retirar" && v > d) { toast("No tienes saldo suficiente"); return; } setSaldo(modo === "cargar" ? d + v : d - v); R.saldoForm = null; R.saldoPrefill = 0; toast(modo === "cargar" ? "💳 Saldo cargado: " + clp(v) : "✅ Retiro registrado: " + clp(v)); return pintarHoja(true); }
     if (a === "nube-aprobar" || a === "nube-rechazar") {
       try { await api("nube-aprobar", { method: "POST", body: JSON.stringify({ id: b.dataset.v, rechazar: a === "nube-rechazar" }) }); toast(a === "nube-aprobar" ? "✅ Servidor aprobado: se está instalando" : "Solicitud rechazada"); R.nubeT = 0; await cargarNube(); } catch (e) { toast(e.message); } return; }
     if (a === "robot-mando") { try { await api("robot-mando", { method: "POST", body: JSON.stringify({ preferido: b.dataset.v || null }) }); toast(b.dataset.v ? `🎖 Manda ${b.dataset.v === "nube" ? "la nube" : "el PC"} (cambia en ~10 s)` : "⚙ Automático"); R.nubeT = 0; await cargarNube(); } catch (e) { toast(e.message); } return; }
