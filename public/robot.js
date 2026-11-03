@@ -1940,6 +1940,31 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       <div class="muted" style="font-size:.7rem">+${Math.round(X.invPct * 1000) / 10}% · el Estado paga a 30 días (o antes con factoring). Paga a ${esc(emp.razon_social || "la empresa")} y la empresa le paga al proveedor.</div>
       ${op.pedido_transferencia && !op.transferido ? `<div class="rb-sug" style="border-color:#f5cf6b">🏦 ${emp.banco ? esc(emp.banco) : "Faltan los datos de transferencia de la empresa (🏢 empresa → banco)."}</div>` : ""}</div>`;
   }
+  // 👥 Inversionistas/brokers guardados + 💳 saldo estilo Betano (por dispositivo)
+  const BROK = "sdc:brokers";
+  const brokers = () => { try { return JSON.parse(localStorage.getItem(BROK)) || []; } catch { return []; } };
+  const SALDO = "sdc:saldo";
+  const saldoInv = () => { try { return Math.max(0, Number(JSON.parse(localStorage.getItem(SALDO))?.disp) || 0); } catch { return 0; } };
+  const setSaldo = (d) => { try { localStorage.setItem(SALDO, JSON.stringify({ disp: Math.max(0, Math.round(d)) })); } catch {} };
+  // 📲 mensaje claro para el inversionista: invierte X → recibe Y (+Z%) en ~5 días, con OC y link en vivo
+  function msgOportunidad(t, X) {
+    const emp = empresaActual() || {}, pct = Math.round((X.invPct || 0) * 1000) / 10;
+    return `💰 OPORTUNIDAD DE INVERSIÓN\n${(t.nombre || t.codigo)}\n\n• Inviertes: ${clp(Math.round(X.capital))}\n• Recibes: ${clp(Math.round(X.invRecibe))}  (+${pct}%)\n• Plazo: ~5 días (cuando se paga la factura)\n\nNegocio YA GANADO en Mercado Público${t.op?.oc_codigo ? " · OC " + t.op.oc_codigo : ""} por ${emp.razon_social || "la empresa"}. Tu plata paga solo los costos reales del proyecto.\n\n▶ Míralo en vivo y simula: ${location.origin}/#robot\n\nCuando confirmes te paso los datos para transferir${emp.banco ? ":\n" + emp.banco : "."}`;
+  }
+  // 💳 panel de saldo (cargar / retirar) — estilo Betano
+  function panelSaldo() {
+    const d = saldoInv(), emp = empresaActual() || {};
+    const form = R.saldoForm ? `<div style="margin-top:8px;border-top:1px solid rgba(127,127,127,.2);padding-top:8px">
+      <div class="rb-sec">${R.saldoForm === "cargar" ? "➕ Cargar saldo" : "➖ Retirar"}</div>
+      <label class="rb-lab">Monto<input class="rb-in" id="rbSaldoMonto" inputmode="numeric" placeholder="$ 0"></label>
+      ${R.saldoForm === "cargar" ? `<div class="muted" style="font-size:.7rem;line-height:1.5">Transfiere a <b>${esc(emp.razon_social || "la empresa")}</b>${emp.banco ? "<br>" + esc(emp.banco) : ""}. Al confirmarse, se abona a tu saldo.<br><span style="opacity:.7">Pago con tarjeta / WebPay: próximamente.</span></div>` : `<div class="muted" style="font-size:.7rem">Se descuenta de tu saldo y la empresa te transfiere.</div>`}
+      <div class="rb-row" style="margin-top:6px"><button class="btn small rb-oro" type="button" data-rb="saldo-ok">${R.saldoForm === "cargar" ? "Confirmar carga" : "Confirmar retiro"}</button><button class="btn small rb-link" type="button" data-rb="saldo-cancelar">Cancelar</button></div></div>` : "";
+    return `<div class="rb-card" style="border-color:#5ef0b0;background:rgba(63,220,138,.06)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <div><div class="muted" style="font-size:.64rem">💳 Tu saldo para invertir</div><b style="font-size:1.3rem">${clp(d)}</b></div>
+        <div class="rb-row"><button class="btn small rb-oro" type="button" data-rb="saldo-cargar">➕ Cargar</button><button class="btn small" type="button" data-rb="saldo-retirar">➖ Retirar</button></div>
+      </div>${form}</div>`;
+  }
   // 💼 PORTAL INVERSIONISTA: los negocios que necesitan capital, en vivo
   // 💡 Onboarding del inversor: ejemplo con números + por qué es real + saldo (estilo Betano)
   function inversorDidactico(L, tot, emp) {
@@ -1981,9 +2006,15 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
           <button class="btn small" type="button" data-rb="neg-subir" data-tipo="comprobante" data-c="${esc(t.codigo)}">📎 Comprobante</button>
           <button class="btn small rb-oro" type="button" data-rb="inv-transferi" data-c="${esc(t.codigo)}">✅ Ya transferí</button></div>` : ""}
       ${t.op.en_vivo && t.op.twitch_canal ? `<a class="btn small" href="https://www.twitch.tv/${encodeURIComponent(t.op.twitch_canal)}" target="_blank" rel="noopener">🔴 Ver la entrega en vivo</a>` : ""}
+      ${brokers().length ? `<div class="rb-row" style="flex-wrap:wrap;margin-top:4px"><span class="muted" style="font-size:.66rem;align-self:center">📲 Enviar a:</span>${brokers().map((bk) => `<button class="btn small" type="button" data-rb="inv-enviar" data-c="${esc(t.codigo)}" data-tel="${esc(bk.tel || "")}" data-nom="${esc(bk.nombre)}">${esc(bk.nombre)}</button>`).join("")}<button class="btn small rb-link" type="button" data-rb="broker-nuevo" title="Agregar inversionista">➕</button></div>` : `<div class="rb-row" style="margin-top:4px"><button class="btn small" type="button" data-rb="broker-nuevo">📲 Enviar a un inversionista</button></div>`}
       ${modo !== "activo" ? `<div class="rb-row" style="margin-top:4px"><button class="btn small rb-link" type="button" data-rb="inv-descartar" data-c="${esc(t.codigo)}" style="opacity:.65;margin-left:auto">✖ No me interesa</button></div>` : ""}</div>`;
     return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">💼 Inversión</h2><span class="muted" style="font-size:.7rem">en vivo</span></div>
       ${inversorDidactico(L, tot, emp)}
+      ${panelSaldo()}
+      ${R.brokerForm ? `<div class="rb-card" style="padding:12px"><div class="rb-sec">➕ Nuevo inversionista / broker</div>
+        <label class="rb-lab">Nombre<input class="rb-in" id="rbBkNom" placeholder="Ej: Nicolás"></label>
+        <label class="rb-lab">WhatsApp (opcional)<input class="rb-in" id="rbBkTel" inputmode="tel" placeholder="+56 9 ..."></label>
+        <div class="rb-row"><button class="btn small rb-oro" type="button" data-rb="broker-add">Guardar inversionista</button><button class="btn small rb-link" type="button" data-rb="broker-cancelar">Cancelar</button></div></div>` : ""}
       <div class="rb-tira"><span>💰 <b>${cortoG(tot.c)}</b> invertido</span><span>📈 <b>+${cortoG(tot.g)}</b> por cobrar</span><span>🔔 <b>${toca.length}</b> por invertir</span></div>
       ${toca.length ? `<div class="rb-sec">🔔 Te toca invertir</div>${toca.map((x) => card(x, "toca")).join("")}` : ""}
       ${activos.length ? `<div class="rb-sec">🟢 Tu plata trabajando</div>${activos.map((x) => card(x, "activo")).join("")}` : ""}
@@ -3760,6 +3791,14 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       el.href = url; el.download = `Nomina_${cod}.csv`; document.body.append(el); el.click(); el.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); toast("⬇ Nómina descargada"); return; }
     if (a === "inv-descartar") { const n = (() => { try { return JSON.parse(localStorage.getItem("sdc:invno")) || {}; } catch { return {}; } })(); n[cod] = Date.now(); try { localStorage.setItem("sdc:invno", JSON.stringify(n)); } catch {} toast("Quitada de tus oportunidades"); return pintarHoja(true); }
     if (a === "inv-transferi") return ejOpVivo(cod, { transferido: true }, "✅ Inversión registrada: la empresa paga al proveedor");
+    if (a === "broker-nuevo") { R.brokerForm = true; sheet.scrollTop = 0; return pintarHoja(true); }
+    if (a === "broker-cancelar") { R.brokerForm = false; return pintarHoja(true); }
+    if (a === "broker-add") { const nom = ($("#rbBkNom")?.value || "").trim(), tel = ($("#rbBkTel")?.value || "").trim(); if (!nom) { toast("Falta el nombre"); return; } const Lb = brokers(); if (!Lb.some((x) => (x.nombre || "").toLowerCase() === nom.toLowerCase())) Lb.push({ nombre: nom, tel }); try { localStorage.setItem(BROK, JSON.stringify(Lb)); } catch {} R.brokerForm = false; toast("👥 Inversionista guardado: " + nom); return pintarHoja(true); }
+    if (a === "inv-enviar") { const t = (R.ejec || []).find((x) => x.codigo === cod); if (!t) return; const X = calcNeg(t); const msg = msgOportunidad(t, X); const n = waNum(b.dataset.tel); window.open(n ? `https://wa.me/${n}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank"); toast("📲 Oportunidad enviada a " + (b.dataset.nom || "inversionista")); return; }
+    if (a === "saldo-cargar") { R.saldoForm = "cargar"; return pintarHoja(true); }
+    if (a === "saldo-retirar") { R.saldoForm = "retirar"; return pintarHoja(true); }
+    if (a === "saldo-cancelar") { R.saldoForm = null; return pintarHoja(true); }
+    if (a === "saldo-ok") { const v = Math.round(Number(($("#rbSaldoMonto")?.value || "").replace(/\D/g, "")) || 0); if (!v) { toast("Pon un monto"); return; } const modo = R.saldoForm, d = saldoInv(); if (modo === "retirar" && v > d) { toast("No tienes saldo suficiente"); return; } setSaldo(modo === "cargar" ? d + v : d - v); R.saldoForm = null; toast(modo === "cargar" ? "💳 Saldo cargado: " + clp(v) : "✅ Retiro registrado: " + clp(v)); return pintarHoja(true); }
     if (a === "nube-aprobar" || a === "nube-rechazar") {
       try { await api("nube-aprobar", { method: "POST", body: JSON.stringify({ id: b.dataset.v, rechazar: a === "nube-rechazar" }) }); toast(a === "nube-aprobar" ? "✅ Servidor aprobado: se está instalando" : "Solicitud rechazada"); R.nubeT = 0; await cargarNube(); } catch (e) { toast(e.message); } return; }
     if (a === "robot-mando") { try { await api("robot-mando", { method: "POST", body: JSON.stringify({ preferido: b.dataset.v || null }) }); toast(b.dataset.v ? `🎖 Manda ${b.dataset.v === "nube" ? "la nube" : "el PC"} (cambia en ~10 s)` : "⚙ Automático"); R.nubeT = 0; await cargarNube(); } catch (e) { toast(e.message); } return; }
