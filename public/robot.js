@@ -2953,6 +2953,24 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     ejecuta:   { ico: "🛠", corto: "Ejecutor", portal: "ejecuta",   h: "Tú ejecutas los negocios.<br><span>Haces la pega y cobras.</span>", sub: "Ejecutas órdenes de compra ya ganadas: compras, entregas, instalas, y muestras el avance en vivo.", cta: "▶ ENTRAR A EJECUTAR" },
     inversion: { ico: "💰", corto: "Inversor", portal: "inversion", h: "Pones la plata.<br><span>El negocio ya está ganado.</span>", sub: "Inviertes en negocios ya adjudicados y ves tu inversión crecer en tiempo real. Sin ClaveÚnica.", cta: "▶ ENTRAR A INVERTIR" },
   };
+  // 👤 UX por roles: cada perfil ve SOLO sus portales (el inversor no ve licitaciones, etc.). El dueño ve todo.
+  const PORTALES_ROL = { juego: ["juego"], licita: ["licita"], ejecuta: ["ejecuta", "inversion"], inversion: ["inversion"] };
+  const TABS_PORTAL = [["juego", "🎮 Juego"], ["licita", "📑 Licita"], ["ejecuta", "🛠 Ejecuta"], ["inversion", "💼 Inversión"]];
+  function portalesVisibles() {
+    if (esDueno()) return ["juego", "licita", "ejecuta", "inversion"];       // el dueño/admin ve todos
+    const r = rolActual();
+    return (r && PORTALES_ROL[r]) ? PORTALES_ROL[r] : ["juego", "licita", "ejecuta", "inversion"];
+  }
+  function portalActivo() {
+    const vis = portalesVisibles(), p = leer().portal || "juego";
+    return vis.includes(p) ? p : vis[0];
+  }
+  function barraPortales() {
+    const vis = portalesVisibles();
+    if (vis.length <= 1) return "";                                          // un solo portal → entras directo, sin tabs
+    const act = portalActivo();
+    return `<div class="rb-portal">${TABS_PORTAL.filter(([p]) => vis.includes(p)).map(([p, lbl]) => `<button type="button" class="${act === p ? "on" : ""}" data-rb="portal" data-v="${p}">${lbl}</button>`).join("")}</div>`;
+  }
   function selectorRol() {
     const puerta = (v, ico, t, sub) => `<button type="button" class="rb-puerta" data-rb="rol-elegir" data-v="${v}"><span class="rb-puerta-i">${ico}</span><span class="rb-puerta-t"><b>${t}</b><small>${sub}</small></span><span class="rb-puerta-f">›</span></button>`;
     return `<div class="rb-portada">
@@ -3577,7 +3595,7 @@ ${empNom}`;
         <button type="button" class="rb-pcs" data-rb="ver-roles" title="¿Qué quieres hacer? · ${conectado ? "Robot conectado" : "Robot apagado"}"><i class="${conectado ? "on" : ""}"></i>${/nube/i.test(r?.equipo || "") ? "☁️" : "Robot"}</button><button type="button" class="rb-pcs" data-rb="conectar-mp" title="${mp?.conectado ? "Mercado Público conectado" : "Entrar a Mercado Público desde la app"}"><i class="${mp?.conectado ? "on" : ""}"></i>MP${mp?.conectado ? "" : " ▸"}</button>
         <button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button><button class="rb-ico" type="button" data-rb="analizador" aria-label="Analizador de proyectos" title="Analizador de proyectos — Excel en vivo">📊</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
         <button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
-        <div class="rb-portal"><button type="button" class="${!["ejecuta", "licita", "inversion"].includes(leer().portal) ? "on" : ""}" data-rb="portal" data-v="juego">🎮 Juego</button><button type="button" class="${leer().portal === "licita" ? "on" : ""}" data-rb="portal" data-v="licita">📑 Licita</button><button type="button" class="${leer().portal === "ejecuta" ? "on" : ""}" data-rb="portal" data-v="ejecuta">🛠 Ejecuta</button><button type="button" class="${leer().portal === "inversion" ? "on" : ""}" data-rb="portal" data-v="inversion">💼 Inversión</button></div>${esDueno() ? (setTimeout(() => { if (!R.nubeT || Date.now() - R.nubeT > 60000) cargarNube(); inicioLoginMP(); }, 0), barraMando(r, mp, conectado)) : ""}`;
+        ${barraPortales()}${esDueno() ? (setTimeout(() => { if (!R.nubeT || Date.now() - R.nubeT > 60000) cargarNube(); inicioLoginMP(); }, 0), barraMando(r, mp, conectado)) : ""}`;
       // 🏆 portada: cada vez que abres la app (y siempre que no haya empresa). Sin formularios: RUT → jugar.
       if (R.verRoles) return selectorRol();
       if (!miEmp() || !portadaVista()) { if (!R.oport) cargarOport(); return pantallaPortada(); }
@@ -3592,7 +3610,7 @@ ${empNom}`;
       else if (R.pantalla === "planes") cuerpo = pantallaPlanes();
       else if (R.pantalla === "mplogin") cuerpo = pantallaLoginMP();
       else { if (!esDueno() && (!R.planT || Date.now() - R.planT > 300000)) setTimeout(cargarPlan, 0);
-        cuerpo = (leer().portal === "ejecuta" ? (tienePlan("medio") ? portalEjecuta() : candado("medio", "🛠 Ejecuta")) : leer().portal === "licita" ? (tienePlan("medio") ? portalLicita() : candado("medio", "📑 Licitaciones")) : leer().portal === "inversion" ? portalInversion() : vistaOport()); }
+        const pa = portalActivo(); cuerpo = (pa === "ejecuta" ? (tienePlan("medio") ? portalEjecuta() : candado("medio", "🛠 Ejecuta")) : pa === "licita" ? (tienePlan("medio") ? portalLicita() : candado("medio", "📑 Licitaciones")) : pa === "inversion" ? portalInversion() : vistaOport()); }
       const mas = `<details class="rb-ajustes rb-mas"><summary>⚙ Más opciones</summary>
         ${!conectado ? `<div class="rb-alertas"><b>Robot apagado</b>${r?.visto ? "Visto " + esc(hace(r.visto)) + ". " : ""}Revisa 💎 Planes → ☁️ Robot en la nube.</div>` : ""}
         ${mp?.conectado ? "" : `<button class="btn small rb-oro" data-rb="conectar-mp" type="button" style="margin:8px 0">${/nube/i.test(r?.equipo || "") ? "☁️ Falta tu sesión de Mercado Público en la nube · abrir" : "Conectar tu Mercado Público"}</button>`}
