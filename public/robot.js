@@ -2967,7 +2967,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   }
   function barraPortales() {
     const vis = portalesVisibles();
-    if (vis.length <= 1) return "";                                          // un solo portal → entras directo, sin tabs
+    if (vis.length <= 1) return `<div class="rb-portal" style="justify-content:center"><button type="button" data-rb="ver-roles" style="flex:0 1 auto;padding:7px 16px">⇄ Cambiar perfil</button></div>`;   // sectorizado: SIEMPRE un escape para cambiar de rol/portal
     const act = portalActivo();
     return `<div class="rb-portal">${TABS_PORTAL.filter(([p]) => vis.includes(p)).map(([p, lbl]) => `<button type="button" class="${act === p ? "on" : ""}" data-rb="portal" data-v="${p}">${lbl}</button>`).join("")}</div>`;
   }
