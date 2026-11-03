@@ -522,13 +522,72 @@ async function nubePedir(req) {
   return json({ estado: sol.estado });
 }
 
+// ---------- 💳 WebPay Plus (Transbank) ----------
+const WP_ENV = process.env.WEBPAY_ENV || "integracion";                               // "produccion" cuando PJANIC tenga su cuenta real
+const WP_BASE = WP_ENV === "produccion" ? "https://webpay3g.transbank.cl" : "https://webpay3gint.transbank.cl";
+const WP_CC = process.env.WEBPAY_CC || "597055555532";                                // producción: commerce code de PJANIC (variable de entorno WEBPAY_CC)
+const WP_KEY = process.env.WEBPAY_KEY || "579B532A7440BB0C9079DED94D31EA1615BACEB56610332264630D42D0A36B1C";  // prod: WEBPAY_KEY
+const WP_HEAD = () => ({ "Tbk-Api-Key-Id": WP_CC, "Tbk-Api-Key-Secret": WP_KEY, "Content-Type": "application/json" });
+const WP_SITIO = process.env.URL || "https://cotizagil.netlify.app";
+
+async function webpayRetorno(req) {                                                   // ← lo llama Transbank (sin token), por eso va antes del autorizado
+  const u = new URL(req.url);
+  let token = u.searchParams.get("token_ws");
+  if (req.method === "POST") { try { const fd = await req.formData(); token = token || fd.get("token_ws") || fd.get("TBK_TOKEN"); } catch {} }
+  const volver = (q) => new Response(null, { status: 302, headers: { location: `${WP_SITIO}/?webpay=${q}#robot` } });
+  if (!token) return volver("cancelado");
+  const store = getStore({ name: "robot", consistency: "strong" });
+  try {
+    const r = await fetch(`${WP_BASE}/rswebpaytransaction/api/webpay/v1.2/transactions/${encodeURIComponent(token)}`, { method: "PUT", headers: WP_HEAD() });
+    const j = await r.json().catch(() => ({}));
+    const ok = j.response_code === 0 && j.status === "AUTHORIZED";
+    const reg = j.buy_order ? (await store.get(`wp/${j.buy_order}`, { type: "json" })) : null;
+    if (ok && reg && reg.estado !== "pagada") {
+      reg.estado = "pagada"; reg.t_pago = ahora(); await store.setJSON(`wp/${reg.orden}`, reg);
+      const key = `wpcredito/${reg.jug}`, cr = (await store.get(key, { type: "json" })) || { total: 0, items: [] };
+      cr.total = (cr.total || 0) + reg.monto; cr.items = [...(cr.items || []), { monto: reg.monto, orden: reg.orden, t: ahora() }].slice(-20);
+      await store.setJSON(key, cr);
+      return volver("ok&monto=" + reg.monto);
+    }
+    return volver(ok ? "ok" : "rechazado");
+  } catch { return volver("error"); }
+}
+
 async function atender(req) {
   if (/^\/bot\/wa\/?$/.test(new URL(req.url).pathname)) return waWebhook(req);
   if (/^\/bot\/nube-pedir\/?$/.test(new URL(req.url).pathname)) return nubePedir(req);
+  if (/^\/bot\/webpay-retorno\/?$/.test(new URL(req.url).pathname)) return webpayRetorno(req);
   if (!autorizado(req)) return json({ error: "Código de enlace inválido o no configurado." }, 401);
   const store = getStore({ name: "robot", consistency: "strong" });
   const url = new URL(req.url);
   const ruta = url.pathname.replace(/^\/bot\/?/, "").replace(/\/$/, "") || "estado";
+
+  // ---------- 💳 WebPay: crear el pago y cobrar el abono confirmado ----------
+  if (ruta === "webpay-crear" && req.method === "POST") {
+    const b = await cuerpo(req);
+    const monto = Math.round(Number(b.monto) || 0);
+    if (monto < 50 || monto > 10_000_000) return json({ error: "El monto debe estar entre $50 y $10.000.000." }, 400);
+    const jug = texto(b.jugador, 60) || "inv";
+    const orden = ("SC" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5)).slice(0, 26);
+    let j = {};
+    try {
+      const r = await fetch(`${WP_BASE}/rswebpaytransaction/api/webpay/v1.2/transactions`, {
+        method: "POST", headers: WP_HEAD(),
+        body: JSON.stringify({ buy_order: orden, session_id: jug.slice(0, 61), amount: monto, return_url: `${WP_SITIO}/bot/webpay-retorno` }),
+      });
+      j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.token || !j.url) return json({ error: "WebPay no respondió (" + r.status + ")." }, 502);
+    } catch (e) { return json({ error: "No se pudo contactar WebPay." }, 502); }
+    await store.setJSON(`wp/${orden}`, { orden, monto, jug, token: j.token, estado: "creada", t: ahora() });
+    return json({ url: j.url, token: j.token });
+  }
+  if (ruta === "webpay-cobrar" && req.method === "POST") {
+    const b = await cuerpo(req);
+    const key = `wpcredito/${texto(b.jugador, 60) || "inv"}`;
+    const cr = (await store.get(key, { type: "json" })) || { total: 0, items: [] };
+    if (cr.total > 0) await store.setJSON(key, { total: 0, items: [] });
+    return json({ abonado: cr.total || 0, items: cr.items || [] });
+  }
 
   // ---------- celular ----------
   if (ruta === "estado" && req.method === "GET") {
