@@ -1826,8 +1826,12 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
           <div class="muted" style="font-size:.74rem">Lo que haría yo: me geolocalizo, busco los precios más baratos del producto y armo la ficha completa (Excel en vivo, inversionista, factoring y reparto). ¿Da o no da?</div></div>
         <div class="rb-card" data-rb="ej-modo" data-m="real" data-c="${esc(cod)}" style="cursor:pointer;border-color:#5ef0b0;background:rgba(63,220,138,.08);margin-top:8px">
           <div class="rb-env"><b>🟢 Ejecución real</b><span class="muted">la de ustedes →</span></div>
-          <div class="muted" style="font-size:.74rem">Lo que se hizo de verdad: la OC, lo que se compró, la fecha comprometida de entrega y los contactos con el proveedor.</div></div></div>`;
+          <div class="muted" style="font-size:.74rem">Lo que se hizo de verdad: la OC, lo que se compró, la fecha comprometida de entrega y los contactos con el proveedor.</div></div>
+        <div class="rb-card" data-rb="ej-modo" data-m="revision" data-c="${esc(cod)}" style="cursor:pointer;border-color:#f5cf6b;background:rgba(245,207,107,.08);margin-top:8px">
+          <div class="rb-env"><b>🔍 Revisión</b><span class="muted">simulado vs real →</span></div>
+          <div class="muted" style="font-size:.74rem">Lo que hicimos: compara la simulación con lo real, el ahorro o sobrecosto, la utilidad final y si se cumplió el plazo.</div></div></div>`;
     }
+    if (R.ejModo === "revision") return envoltorio(ejRevision(t, X), `<span class="rb-pill" style="background:rgba(245,207,107,.15);color:#f5cf6b">🔍 Revisión</span>`);
     if (R.ejModo === "simulada") return envoltorio(ejSimulada(t, X), `<span class="rb-pill" style="background:rgba(90,169,255,.15);color:#5aa9ff">🔵 Simulada</span>`);
     return envoltorio(cajas, `<span class="rb-pill" style="background:rgba(63,220,138,.15);color:#3fdc8a">🟢 Real</span>`);
   }
@@ -1845,6 +1849,28 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       <div class="rb-sec">💼 Inversionista (simulado)</div>${bloqueInversion(t, X)}
       <div class="rb-sec">💸 Factoring y reparto (simulado)</div>${repartoFinal(t, X)}
       <div class="muted" style="font-size:.68rem;margin-top:8px">🚚 Terreno, 🧾 guía y factura se simulan aquí y se activan de verdad en la ejecución real. Esta simulación la ven el inversionista y el ejecutador.</div>`;
+  }
+  // 🔍 Revisión: compara lo simulado con lo real (ahorro/sobrecosto, utilidad, plazo cumplido)
+  function ejRevision(t, X) {
+    const op = t.op || {}, inf = op.informe || {}, k = cuentasDe(t), venta = k.venta;
+    const costoSim = Number(inf.compras) || null, costoReal = Number(op.precio_acordado) || null;
+    const dif = (costoSim != null && costoReal != null) ? costoSim - costoReal : null;
+    const prov = op.proveedor || null, r = ratingNeg(X.final);
+    const fecha = (d) => d ? new Date((String(d).length <= 10 ? d + "T12:00" : d)).toLocaleDateString("es-CL", { day: "numeric", month: "short" }) : null;
+    const plazoOk = op.plazo_fecha && op.cerrado ? (Date.parse(op.cerrado) <= Date.parse(op.plazo_fecha + "T23:59")) : null;
+    const fila = (a, v, cls) => `<tr><td>${a}</td><td class="n ${cls || ""}">${v}</td></tr>`;
+    return `<div class="rb-card"><div class="rb-sec" style="margin-top:0">🔍 Lo que hicimos</div>
+      <table class="rb-copias">
+        ${fila("🧾 Venta (OC)", clp(venta))}
+        ${fila("🔵 Costo simulado", costoSim != null ? clp(Math.round(costoSim)) : "—")}
+        ${fila("🟢 Costo real (acordado)", costoReal != null ? clp(costoReal) : "aún no se cierra")}
+        ${dif != null ? fila(dif >= 0 ? "✅ Ahorro vs simulación" : "⚠ Sobrecosto vs simulación", clp(Math.abs(Math.round(dif))), dif >= 0 ? "rb-vivo-t" : "rb-neg-t") : ""}
+        ${fila("💰 Utilidad final", clp(Math.round(X.final)), X.final >= 0 ? "rb-vivo-t" : "rb-neg-t")}
+      </table>
+      <div class="rb-env" style="margin-top:6px"><b>${r.emoji} ${r.txt}</b></div>
+      ${prov ? `<div class="muted" style="font-size:.74rem;margin-top:4px">🤝 Proveedor: <b>${esc(prov)}</b></div>` : ""}
+      ${op.plazo_fecha ? `<div class="muted" style="font-size:.74rem">⏱ Comprometido: ${fecha(op.plazo_fecha)}${op.cerrado ? " · Cerrado: " + fecha(op.cerrado) : ""}${plazoOk === true ? " · ✅ a tiempo" : plazoOk === false ? " · 🔴 atrasado" : ""}</div>` : ""}
+      <div class="muted" style="font-size:.68rem;margin-top:6px">Comparo la simulación (lo que estimé) con lo real (lo que se hizo): así vemos si el negocio salió como se planeó.</div></div>`;
   }
   // 🧮 el Excel del inversionista, en vivo (mismas fórmulas que la planilla: factoring, IVA, impuesto 27 %, comisión y reparto)
   const PARAM_NEG = { factoring: 0.03, impuesto: 0.25, comision: 0.04, aplica_comision: true, julfior: 0.844, inversionista: 0.156, recargo_sin_factura: 0.25, anticipo: 0.90, transporte: 0, ejecutador: 0.10 };
