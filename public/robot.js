@@ -4147,7 +4147,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
             ok++;
           } catch (e) { fallo++; toast(`${f.name.slice(0, 20)}: ${e.message}`); }
         }
-        if (!ok) { toast("No se pudo subir ningún archivo"); return; }
+        if (!ok) { toast("No subió ninguno (los archivos pesan más de 4,5 MB). Súbelos de a uno, comprímelos, o usa 📥 Bajar y analizar con el código."); return; }
         try {
           await api("lic-anexos-listo", { method: "POST", body: JSON.stringify({ codigo: cod }) });
           toast(`📂 Carpeta absorbida (${ok} archivo${ok > 1 ? "s" : ""}${fallo ? `, ${fallo} con error` : ""}): el robot los está analizando`);
@@ -4385,7 +4385,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
   // fotos grandes se achican antes de subir (máx. ~1600 px, JPEG), los PDF van tal cual
   async function achicar(f) {
     const leerB64 = (blob) => new Promise((ok, mal) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = mal; r.readAsDataURL(blob); });
-    if (!f.type.startsWith("image/") || f.size < 900_000) { if (f.size > 4_400_000) throw new Error("El archivo pesa más de 4 MB"); return { data: await leerB64(f), mime: f.type || "application/pdf" }; }
+    if (!f.type.startsWith("image/") || f.size < 900_000) { if (f.size > 4_500_000) throw new Error("pesa " + (f.size / 1e6).toFixed(1) + " MB (máx 4,5 — comprime o sube por separado)"); return { data: await leerB64(f), mime: f.type || "application/pdf" }; }
     const img = await createImageBitmap(f); const k = Math.min(1, 1600 / Math.max(img.width, img.height));
     const cv = document.createElement("canvas"); cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
     cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
