@@ -865,6 +865,29 @@ async function atender(req) {
     const b = await cuerpo(req);
     const t = await leer(store, limpiaCodigo(b.codigo));
     if (!t) return json({ error: "No existe." }, 404);
+    // 📦 subida por partes: un archivo pesado (> 4,5 MB) llega en pedazos y aquí se arma completo (sin tope)
+    if (b.up && b.total) {
+      const up = String(b.up).replace(/[^a-z0-9]/gi, "").slice(0, 40);
+      const idx = Math.max(0, parseInt(b.idx, 10) || 0), total = Math.min(60, Math.max(1, parseInt(b.total, 10) || 1));
+      const parte = Buffer.from(String(b.b64 || ""), "base64");
+      if (!parte.length || parte.length > MAX_PDF) return json({ error: "Pedazo vacío o muy grande." }, 400);
+      await store.set(`chunk/${t.codigo}/${up}/${idx}`, parte);
+      if (idx + 1 < total) return json({ ok: true, parte: idx + 1, de: total });
+      const trozos = [];
+      for (let i = 0; i < total; i++) {
+        const p = await store.get(`chunk/${t.codigo}/${up}/${i}`, { type: "arrayBuffer" });
+        if (!p) return json({ error: `Faltó el pedazo ${i + 1} de ${total}: reenvía ese archivo.` }, 400);
+        trozos.push(Buffer.from(p));
+      }
+      const full = Buffer.concat(trozos);
+      const idc = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+      await store.set(`doc/${t.codigo}/${idc}`, full);
+      t.lic_docs = [...(t.lic_docs || []), { id: idc, tipo: texto(b.tipo, 20) || "anexo", nombre: texto(b.nombre, 120) || "archivo",
+        mime: texto(b.mime, 60) || "application/pdf", kb: Math.round(full.length / 1024), fecha: ahora() }].slice(-20);
+      const rr = await escribir(store, t);
+      for (let i = 0; i < total; i++) await store.delete(`chunk/${t.codigo}/${up}/${i}`).catch(() => {});
+      return json({ trabajo: rr, armado: true, kb: Math.round(full.length / 1024) });
+    }
     const bytes = Buffer.from(String(b.b64 || ""), "base64");
     if (!bytes.length || bytes.length > MAX_PDF) return json({ error: "Archivo vacío o muy grande." }, 400);
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
