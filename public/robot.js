@@ -1998,6 +1998,22 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         <div class="rb-row" style="margin-top:4px"><button class="btn small rb-oro" type="button" data-rb="inv-liquidar" data-id="${esc(x.id)}">✅ Liquidar — pagó el factoring</button></div></div>`;
     }).join("")}`;
   }
+  // 📊 Historial/estadísticas del inversionista (estilo Betano): invertiste, recibiste, ROI
+  function panelHistorial() {
+    const liq = inversiones().filter((x) => x.estado === "liquidado");
+    if (!liq.length) return "";
+    const inv = liq.reduce((a, x) => a + x.capital, 0), rec = liq.reduce((a, x) => a + (x.neto || x.capital), 0);
+    const gan = rec - inv, roi = inv ? Math.round(gan / inv * 1000) / 10 : 0, com = liq.reduce((a, x) => a + (x.com || 0), 0);
+    return `<details class="rb-det"><summary>📊 Mi historial · ${liq.length} liquidada${liq.length > 1 ? "s" : ""} · +${clp(gan)} ganados</summary>
+      <div style="display:flex;gap:8px;margin:6px 0;flex-wrap:wrap">
+        <div style="flex:1;min-width:88px;background:rgba(127,127,127,.08);border-radius:10px;padding:8px"><div class="muted" style="font-size:.6rem">Invertiste</div><b>${clp(inv)}</b></div>
+        <div style="flex:1;min-width:88px;background:rgba(63,220,138,.12);border-radius:10px;padding:8px"><div class="muted" style="font-size:.6rem">Recibiste</div><b class="rb-vivo-t">${clp(rec)}</b></div>
+        <div style="flex:1;min-width:64px;background:rgba(245,207,107,.12);border-radius:10px;padding:8px"><div class="muted" style="font-size:.6rem">ROI</div><b>+${roi}%</b></div></div>
+      <table class="rb-copias"><tr><td><b>Negocio</b></td><td class="n"><b>Invertiste</b></td><td class="n"><b>Recibiste</b></td></tr>
+      ${liq.slice().reverse().map((x) => `<tr><td>${esc((x.nombre || x.codigo).slice(0, 24))}<div class="muted" style="font-size:.6rem">${hace(x.ts_liq || x.ts)}</div></td><td class="n">${clp(x.capital)}</td><td class="n rb-vivo-t">${clp(x.neto || x.capital)}</td></tr>`).join("")}</table>
+      ${com ? `<div class="muted" style="font-size:.66rem;margin-top:4px">Comisión de broker acumulada: <b>${clp(com)}</b></div>` : ""}
+      <div class="rb-row" style="margin-top:6px"><button class="btn small rb-link" type="button" data-rb="hist-limpiar">Borrar historial</button></div></details>`;
+  }
   // 💼 PORTAL INVERSIONISTA: los negocios que necesitan capital, en vivo
   // 💡 Onboarding del inversor: ejemplo con números + por qué es real + saldo (estilo Betano)
   function inversorDidactico(L, tot, emp) {
@@ -2047,6 +2063,7 @@ ${emp.banco || ""}`)}">📋 Copiar datos</button>
       ${panelSaldo()}
       ${panelLiquidacion(activos.concat(invTrab()))}
       ${panelMisInversiones()}
+      ${panelHistorial()}
       ${R.brokerForm ? `<div class="rb-card" style="padding:12px"><div class="rb-sec">➕ Nuevo inversionista / broker</div>
         <label class="rb-lab">Nombre<input class="rb-in" id="rbBkNom" placeholder="Ej: Nicolás"></label>
         <label class="rb-lab">WhatsApp (opcional)<input class="rb-in" id="rbBkTel" inputmode="tel" placeholder="+56 9 ..."></label>
@@ -3835,7 +3852,8 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "saldo-retirar") { R.saldoForm = "retirar"; return pintarHoja(true); }
     if (a === "saldo-cancelar") { R.saldoForm = null; return pintarHoja(true); }
     if (a === "inv-poner") { const tr = (R.ejec || []).find((x) => x.codigo === cod); if (!tr) return; const X = calcNeg(tr); const cap = Math.round(X.capital); if (!cap) { toast("Este negocio aún no tiene monto"); return; } const d = saldoInv(); if (cap > d) { toast("Te falta saldo. Carga primero con ➕ Cargar."); return; } setSaldo(d - cap); const L2 = inversiones(); L2.push({ id: "i" + Date.now(), codigo: tr.codigo, nombre: tr.nombre || tr.codigo, capital: cap, invGan: Math.round(X.invGan), ts: Date.now(), estado: "trabajando" }); setInversiones(L2); toast("💸 Invertiste " + clp(cap) + " · tu plata está trabajando"); return pintarHoja(true); }
-    if (a === "inv-liquidar") { const L2 = inversiones(); const e = L2.find((x) => x.id === b.dataset.id); if (!e || e.estado !== "trabajando") return; const bp = brokerPct() / 100; const netInv = Math.round(e.capital + e.invGan * (1 - bp)), com = Math.round(e.invGan * bp); e.estado = "liquidado"; e.ts_liq = Date.now(); setInversiones(L2); setSaldo(saldoInv() + netInv); toast("💰 Pagó el factoring: +" + clp(netInv) + " a tu saldo" + (com ? " · comisión broker " + clp(com) : "")); return pintarHoja(true); }
+    if (a === "inv-liquidar") { const L2 = inversiones(); const e = L2.find((x) => x.id === b.dataset.id); if (!e || e.estado !== "trabajando") return; const bp = brokerPct() / 100; const netInv = Math.round(e.capital + e.invGan * (1 - bp)), com = Math.round(e.invGan * bp); e.estado = "liquidado"; e.ts_liq = Date.now(); e.neto = netInv; e.com = com; setInversiones(L2); setSaldo(saldoInv() + netInv); toast("💰 Pagó el factoring: +" + clp(netInv) + " a tu saldo" + (com ? " · comisión broker " + clp(com) : "")); return pintarHoja(true); }
+    if (a === "hist-limpiar") { setInversiones(inversiones().filter((x) => x.estado !== "liquidado")); toast("Historial borrado"); return pintarHoja(true); }
     if (a === "liq-mas") { setBrokerPct(brokerPct() + 5); R.liqAbierto = true; return pintarHoja(true); }
     if (a === "liq-menos") { setBrokerPct(brokerPct() - 5); R.liqAbierto = true; return pintarHoja(true); }
     if (a === "saldo-ok") { const v = Math.round(Number(($("#rbSaldoMonto")?.value || "").replace(/\D/g, "")) || 0); if (!v) { toast("Pon un monto"); return; } const modo = R.saldoForm, d = saldoInv(); if (modo === "retirar" && v > d) { toast("No tienes saldo suficiente"); return; } setSaldo(modo === "cargar" ? d + v : d - v); R.saldoForm = null; toast(modo === "cargar" ? "💳 Saldo cargado: " + clp(v) : "✅ Retiro registrado: " + clp(v)); return pintarHoja(true); }
