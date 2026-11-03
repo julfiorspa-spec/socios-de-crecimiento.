@@ -1998,6 +1998,25 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   const SALDO = "sdc:saldo";
   const saldoInv = () => { try { return Math.max(0, Number(JSON.parse(localStorage.getItem(SALDO))?.disp) || 0); } catch { return 0; } };
   const setSaldo = (d) => { try { localStorage.setItem(SALDO, JSON.stringify({ disp: Math.max(0, Math.round(d)) })); } catch {} };
+  // 💳 WebPay: redirige a pagar y, al volver, cobra el abono confirmado por el servidor
+  function irWebpay(url, token) {
+    const f = document.createElement("form"); f.method = "POST"; f.action = url;
+    const i = document.createElement("input"); i.type = "hidden"; i.name = "token_ws"; i.value = token; f.appendChild(i);
+    document.body.appendChild(f); f.submit();
+  }
+  async function revisarWebpay() {
+    const q = new URLSearchParams(location.search), w = q.get("webpay"); if (!w) return;
+    try { history.replaceState(null, "", location.pathname + location.hash); } catch {}
+    if (w === "ok") {
+      try {
+        const r = await api("webpay-cobrar", { method: "POST", body: JSON.stringify({ jugador: miJug() }) });
+        const ab = Math.round(Number(r?.abonado) || 0);
+        if (ab > 0) { setSaldo(saldoInv() + ab); guardar({ portal: "inversion" }); toast("💳 Pago aprobado: +" + clp(ab) + " a tu saldo"); }
+        else toast("Pago aprobado. Si no ves el saldo, recarga la app.");
+      } catch { toast("Pago aprobado — recarga la app para ver tu saldo."); }
+    } else toast(w === "rechazado" ? "❌ El pago fue rechazado. Intenta de nuevo." : w === "cancelado" ? "Pago cancelado." : "No se pudo confirmar el pago.");
+    pintarHoja(true);
+  }
   const INVS = "sdc:inversiones";
   const inversiones = () => { try { return JSON.parse(localStorage.getItem(INVS)) || []; } catch { return []; } };
   const setInversiones = (a) => { try { localStorage.setItem(INVS, JSON.stringify(a)); } catch {} };
@@ -2013,8 +2032,10 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const form = R.saldoForm ? `<div style="margin-top:8px;border-top:1px solid rgba(127,127,127,.2);padding-top:8px">
       <div class="rb-sec">${R.saldoForm === "cargar" ? "➕ Cargar saldo" : "➖ Retirar"}</div>
       <label class="rb-lab">Monto<input class="rb-in" id="rbSaldoMonto" inputmode="numeric" placeholder="$ 0" value="${R.saldoForm === "cargar" && R.saldoPrefill ? R.saldoPrefill : ""}"></label>
-      ${R.saldoForm === "cargar" ? `<div class="muted" style="font-size:.7rem;line-height:1.5">Transfiere a <b>${esc(emp.razon_social || "la empresa")}</b>${emp.banco ? "<br>" + esc(emp.banco) : ""}. Al confirmarse, se abona a tu saldo.<br><span style="opacity:.7">Pago con tarjeta / WebPay: próximamente.</span></div>` : `<div class="muted" style="font-size:.7rem">Se descuenta de tu saldo y la empresa te transfiere.</div>`}
-      <div class="rb-row" style="margin-top:6px"><button class="btn small rb-oro" type="button" data-rb="saldo-ok">${R.saldoForm === "cargar" ? "Confirmar carga" : "Confirmar retiro"}</button><button class="btn small rb-link" type="button" data-rb="saldo-cancelar">Cancelar</button></div></div>` : "";
+      ${R.saldoForm === "cargar" ? `<div class="muted" style="font-size:.7rem;line-height:1.5">Paga con tarjeta por <b>WebPay</b> y se abona al tiro a tu saldo. La plata va a la cuenta de <b>${esc(corta(emp.razon_social) || "PJANIC")}</b>.</div>
+      <div class="rb-row" style="margin-top:6px"><button class="btn small rb-oro" type="button" data-rb="saldo-webpay">💳 Pagar con WebPay</button><button class="btn small rb-link" type="button" data-rb="saldo-cancelar">Cancelar</button></div>
+      <div class="muted" style="font-size:.64rem;margin-top:5px;opacity:.75">¿Transferiste a mano? <a data-rb="saldo-ok" style="text-decoration:underline;cursor:pointer">Confirmar carga manual</a></div></div>` : `<div class="muted" style="font-size:.7rem">Se descuenta de tu saldo y la empresa te transfiere.</div>
+      <div class="rb-row" style="margin-top:6px"><button class="btn small rb-oro" type="button" data-rb="saldo-ok">Confirmar retiro</button><button class="btn small rb-link" type="button" data-rb="saldo-cancelar">Cancelar</button></div></div>`}` : "";
     return `<div class="rb-card" style="border-color:#5ef0b0;background:rgba(63,220,138,.06)">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
         <div><div class="muted" style="font-size:.64rem">💳 Tu saldo para invertir</div><b style="font-size:1.3rem">${clp(d)}</b></div>
@@ -3947,6 +3968,15 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "broker-add") { const nom = ($("#rbBkNom")?.value || "").trim(), tel = ($("#rbBkTel")?.value || "").trim(); if (!nom) { toast("Falta el nombre"); return; } const Lb = brokers(); if (!Lb.some((x) => (x.nombre || "").toLowerCase() === nom.toLowerCase())) Lb.push({ nombre: nom, tel }); try { localStorage.setItem(BROK, JSON.stringify(Lb)); } catch {} R.brokerForm = false; toast("👥 Inversionista guardado: " + nom); return pintarHoja(true); }
     if (a === "inv-enviar") { const t = (R.ejec || []).find((x) => x.codigo === cod); if (!t) return; const X = calcNeg(t); const msg = msgOportunidad(t, X); const n = waNum(b.dataset.tel); window.open(n ? `https://wa.me/${n}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank"); toast("📲 Oportunidad enviada a " + (b.dataset.nom || "inversionista")); return; }
     if (a === "saldo-cargar") { R.saldoForm = "cargar"; return pintarHoja(true); }
+    if (a === "saldo-webpay") {
+      const v = Math.round(Number(($("#rbSaldoMonto")?.value || "").replace(/\D/g, "")) || 0);
+      if (v < 50) { toast("Pon un monto (mínimo $50)"); return; }
+      toast("Abriendo WebPay…");
+      try { const r = await api("webpay-crear", { method: "POST", body: JSON.stringify({ monto: v, jugador: miJug() }) });
+        if (r && r.url && r.token) irWebpay(r.url, r.token); else toast(r?.error || "WebPay no disponible ahora"); }
+      catch (e) { toast(e.message); }
+      return;
+    }
     if (a === "saldo-retirar") { R.saldoForm = "retirar"; return pintarHoja(true); }
     if (a === "saldo-cancelar") { R.saldoForm = null; R.saldoPrefill = 0; return pintarHoja(true); }
     if (a === "inv-entrar") { const u = ($("#rbInvUsr")?.value || "").trim(); if (!u) { toast("Pon tu usuario"); return; } try { localStorage.setItem(INVSES, JSON.stringify({ usuario: u, t: Date.now() })); } catch {} toast("Bienvenido, " + u); return pintarHoja(true); }
@@ -4561,6 +4591,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
   pintar();
   refrescar();
   desdeHash();
+  setTimeout(revisarWebpay, 500);               // 💳 si volvemos de WebPay, cobra el abono y lo suma al saldo
   // app del inicio (iPhone/Android): abre directo en el robot, que es donde se trabaja
   if (instalada() && !location.hash.includes("robot")) setTimeout(() => { if (!sheet.classList.contains("on")) abrir(); }, 250);
   // si ya dio permiso antes, renueva la suscripción en silencio (por si el teléfono la cambió)
