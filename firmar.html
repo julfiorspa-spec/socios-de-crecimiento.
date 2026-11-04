@@ -14,5 +14,5 @@ a{color:#d9c9ff}</style></head>
   document.getElementById("t").textContent = conectar ? "Conectando tu Mercado Público…" : "Abriendo la compra " + cod + "…";
   if (conectar) document.querySelector("p").innerHTML = "Inicia sesión y <b>deja esta pestaña abierta</b>.<br>En la app verás «🟢 Mercado Público conectado».";
   document.getElementById("ir").href = url;
-  if (conectar || /-COT\d+$/.test(cod)) setTimeout(() => location.replace(url), 2000);
+  if (conectar || cod) setTimeout(() => location.replace(url), 1200);   // siempre rebota a la compra (cualquier formato de código), nunca se queda pegado
 </script></body></html>

@@ -2,7 +2,7 @@
    - Hace la app instalable en el celular (Android e iPhone) y que abra aunque no haya señal.
    - Recibe los avisos push del robot aunque la app esté cerrada.
    Nunca guarda en caché las llamadas al robot (/bot/...). */
-const CACHE = "cotizagil-v4";
+const CACHE = "cotizagil-v5";
 const BASICOS = ["/", "/public/robot.js", "/manifest.webmanifest", "/icon-180.png", "/icon-512.png"];
 
 self.addEventListener("install", (e) => {
@@ -22,7 +22,7 @@ self.addEventListener("fetch", (e) => {
   const req = e.request;
   const url = new URL(req.url);
   if (req.method !== "GET" || url.origin !== location.origin || url.pathname.startsWith("/bot")
-      || url.pathname.startsWith("/.netlify")) return;
+      || url.pathname.startsWith("/.netlify") || url.pathname === "/firmar.html") return;   // firmar.html es el puente a Mercado Público: nunca lo reemplaces por el inicio
   e.respondWith((async () => {
     try {
       const r = await fetch(req, { cache: "no-cache" });   // siempre revisa si hay versión nueva
