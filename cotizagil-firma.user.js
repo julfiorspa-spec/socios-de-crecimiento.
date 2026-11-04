@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      2.5
+// @version      2.6
 // @description  Al abrir una Compra Ágil desde «Ir a firmar», carga sola los precios, el detalle y el PDF de tu oferta. NO envía, NO declara y NO firma: eso lo haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -130,7 +130,7 @@
   const pintar = () => {
     caja.innerHTML = mini
       ? "<div data-cz='abrir' style='cursor:pointer;text-align:center'>✍ CotizÁgil <span style='opacity:.7'>(ver)</span></div>"
-      : "<div style='display:flex;justify-content:space-between;gap:8px'><b>CotizÁgil <span style='opacity:.6;font-weight:400'>v2.5</span></b><span data-cz='mini' style='cursor:pointer;padding:0 6px;font-size:15px;line-height:1'>–</span></div><div style='margin-top:3px'>" + ultimo + "</div>";
+      : "<div style='display:flex;justify-content:space-between;gap:8px'><b>CotizÁgil <span style='opacity:.6;font-weight:400'>v2.6</span></b><span data-cz='mini' style='cursor:pointer;padding:0 6px;font-size:15px;line-height:1'>–</span></div><div style='margin-top:3px'>" + ultimo + "</div>";
     caja.style.width = mini ? "auto" : "min(92vw,340px)";
     if (!caja.isConnected) document.body.append(caja);
   };
@@ -169,6 +169,24 @@
       set.call(el, s.slice(0, i + 1));
       el.dispatchEvent(new Event("input", { bubbles: true }));
       await espera(28);
+    }
+    el.dispatchEvent(new Event("change", { bubbles: true })); el.blur(); await espera(220);
+  };
+  // 📋 PEGAR de una (como un Ctrl+V humano): el detalle es texto largo y Mercado Público NO mira "velocidad de pegado",
+  // solo la velocidad de TECLEO. Así el detalle entra instantáneo sin que lo detecte. Los montos sí se teclean lento (poner).
+  const pegar = async (el, v) => {
+    el.focus();
+    try { el.select(); } catch (e) {}
+    setTa.call(el, ""); el.dispatchEvent(new Event("input", { bubbles: true }));
+    const s = String(v);
+    let hecho = false;
+    try { hecho = document.execCommand("insertText", false, s); } catch (e) {}   // inserta todo de golpe, como un pegado
+    if (!hecho || el.value !== s) {                                              // respaldo: evento paste + setter nativo
+      try {
+        const dt = new DataTransfer(); dt.setData("text/plain", s);
+        el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+      } catch (e) {}
+      if (el.value !== s) { setTa.call(el, s); el.dispatchEvent(new Event("input", { bubbles: true })); }
     }
     el.dispatchEvent(new Event("change", { bubbles: true })); el.blur(); await espera(220);
   };
@@ -274,7 +292,7 @@
     for (let k = 0; k < items.length; k++) await poner(items[k], t.firma.precios[k], setIn);
     if (desp[0]) await poner(desp[0], t.firma.despacho || 0, setIn);
     const area = document.querySelector("main textarea");
-    if (area && t.firma.detalle) await poner(area, t.firma.detalle.slice(0, 255), setTa);
+    if (area && t.firma.detalle) await pegar(area, t.firma.detalle.slice(0, 255));   // 📋 el detalle se PEGA de una, no se teclea
 
     // adjunta el PDF de la oferta
     let adj = "⚠ Adjunta el PDF a mano (descárgalo en la app).";
@@ -298,9 +316,9 @@
     const m = [...document.body.innerText.matchAll(/Monto total\s*\n*\s*\$\s*([\d.]+)/g)].pop();
     const tp = m ? +m[1].replace(/\./g, "") : null;
     const ok = tp != null && Math.abs(tp - t.firma.total) <= 50 && !malos.length;
-    decir((ok ? "✓ Precios y detalle cargados. Total " + clp(tp) + " = oferta." :
+    decir((ok ? "✅ <b>Listo para enviar.</b> Precios y detalle cargados · Total " + clp(tp) + " = oferta." :
       "⚠ Revisa: " + (malos.length ? "corrige " + malos.join(", ") + ". " : "") + "Total portal " + (tp == null ? "?" : clp(tp)) + " · oferta " + clp(t.firma.total) + ".") +
-      "<br>" + adj + "<br><b>Ahora tú:</b> Enviar cotización → declaración → firma.");
+      "<br>" + adj + "<br>👉 <b>Ahora tú:</b> Enviar cotización → declaración → firma. (Te llevé al botón verde)");
     // ⬇ te lleva al botón verde «Enviar cotización» (y otra vez por si la página se movió al cargar el PDF)
     setTimeout(irAlBoton, 700); setTimeout(irAlBoton, 2500);
     if (ok) setTimeout(() => { mini = true; pintar(); }, 2500);   // todo bien: se achica solo para dejarte firmar
