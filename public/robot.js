@@ -1002,12 +1002,14 @@
       : `<div class="empty">${R.oport ? "No hay licitaciones nuevas que calcen con tu rubro. El robot sigue buscando." : `<span class="spinner"></span>`}</div>`;
     else { const L = { prep, mesa, lista: listas, ofer }[tab] || [];
       cuerpo = L.length ? L.map((t) => tab === "prep" || tab === "ofer" ? tarjetaLic(t) : mesaLic(t)).join("") : `<div class="empty">${{ prep: "Nada preparándose. En 💘 Match elige una con «Vamos».", mesa: "Cuando el robot termine de leer las bases, aquí juegan tú y él: precio, garantías, plazos y cómo quedará el proyecto.", lista: "Aún no hay ofertas listas.", ofer: "Aún no hay ofertas ingresadas." }[tab]}</div>`; }
-    const ingreso = `<div class="rb-mision rb-licod"><div class="rb-env"><b>⚡ ¿Ya tienes el código?</b></div>
-      <div class="rb-row"><input class="rb-in" id="rbLicCod" placeholder="Ej: 2585-77-LE26" autocapitalize="characters" autocorrect="off" spellcheck="false" style="flex:1">
-        <button class="btn rb-oro" type="button" data-rb="lic-codigo">🚀 Empezar</button></div>
-      <div class="rb-row"><a class="btn small" href="https://www.mercadopublico.cl/Home/BusquedaLicitacion" target="_blank" rel="noopener">🔎 Buscar el código en Mercado Público</a>
-        <button class="btn small" type="button" data-rb="lic-pegar">📋 Pegar código</button></div></div>`;
-    return `${cajaFirma()}${ingreso}<div class="rb-etapas">${TABS.map(([k, n, q]) => `<button type="button" class="${tab === k ? "on" : ""}" data-rb="lic-tab" data-e="${k}">${n} ${q}</button>`).join("")}</div>${cuerpo}`;
+    const ingreso = `<details class="rb-licod-sec" style="margin-top:12px">
+      <summary class="muted" style="font-size:.74rem;cursor:pointer;list-style:none">⚡ ¿Ya tienes el código a mano? Pégalo tú mismo</summary>
+      <div class="rb-mision rb-licod" style="margin-top:8px">
+        <div class="rb-row"><input class="rb-in" id="rbLicCod" placeholder="Ej: 2585-77-LE26" autocapitalize="characters" autocorrect="off" spellcheck="false" style="flex:1">
+          <button class="btn rb-oro" type="button" data-rb="lic-codigo">🚀 Empezar</button></div>
+        <div class="rb-row"><a class="btn small" href="https://www.mercadopublico.cl/Home/BusquedaLicitacion" target="_blank" rel="noopener">🔎 Buscar en Mercado Público</a>
+          <button class="btn small" type="button" data-rb="lic-pegar">📋 Pegar código</button></div></div></details>`;
+    return `${cajaFirma()}<div class="rb-etapas">${TABS.map(([k, n, q]) => `<button type="button" class="${tab === k ? "on" : ""}" data-rb="lic-tab" data-e="${k}">${n} ${q}</button>`).join("")}</div>${cuerpo}${ingreso}`;
   }
 
   /* ---------- licitaciones ---------- */
@@ -1028,15 +1030,13 @@
         <div class="row" style="gap:6px"><input id="rbCap-${c}" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="send" style="flex:1;min-width:120px;font-size:1.1rem;letter-spacing:.08em" placeholder="Pega el código aquí">
         <button class="btn small rb-firmar" data-rb="lic-captcha" data-c="${c}" type="button">Enviar</button></div></div>` : "";
     const codigoBox = ["requiere", "error", "cancelada", "lic_bajando", "en_cola", "tomado"].includes(t.estado) ? `<div class="rb-alertas" style="border-color:#7c4dff">
-        <b>📥 Baja las bases en Safari y súbelas — yo las analizo</b>
-        <div class="muted" style="font-size:.72rem;margin:3px 0 6px">Mercado Público pide verificación humana (un código de imagen) para bajar los anexos — por eso el robot no puede solo. Pega el código de la licitación y dale: cuando aparezca la imagen, escribes el código. Ahí leo las bases, calculo el precio y la paso a la Mesa de juego.</div>
-        <div class="row" style="gap:6px"><input id="rbLicGo-${c}" value="${c}" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="send" style="flex:1;min-width:120px;letter-spacing:.04em" placeholder="Código de la licitación (ej: 2585-77-LE26)">
-        <button class="btn small rb-firmar" data-rb="lic-go" data-c="${c}" type="button">📥 Bajar y analizar</button></div>
-        <div class="row" style="gap:6px;margin-top:6px"><a class="btn small rb-firmar" href="${fichaUrl}" target="_blank" rel="noopener noreferrer" style="flex:1;text-align:center">⬇️ Descarga los documentos en Safari</a></div>
-        <div class="muted" style="font-size:.68rem;margin-top:4px">Toca → en Safari abre «Archivos adjuntos» → marca los archivos, escribe el captcha y descárgalos. Después vuelve y toca «📎 Ingresa los documentos descargados».</div>
-        <div class="rb-env" style="margin:10px 0 4px;border-top:1px solid #2a2350;padding-top:8px"><b>📱 Para el celular</b></div>
-        <div class="muted" style="font-size:.72rem;margin-bottom:6px">¿Ya bajaste los anexos desde Mercado Público (tú escribiste el código de la imagen en el portal)? Súbelos acá y yo los absorbo y los analizo — sin volver a pedirte el código.</div>
-        <button class="btn small rb-oro" data-rb="lic-anexos" data-c="${c}" type="button" style="width:100%">📎 ${anexN ? `${anexN} anexo${anexN > 1 ? "s" : ""} cargado${anexN > 1 ? "s" : ""} · agregar o reenviar` : "Ingresa los documentos descargados"}</button></div>` : "";
+        <b>📥 Así preparamos esta licitación</b>
+        <ol style="margin:6px 0 10px;padding-left:20px;font-size:.74rem;line-height:1.55">
+          <li><b>Descarga los documentos</b>: entras como humano, escribes el código de imagen que pide Mercado Público y se te baja el ZIP con las bases y anexos.</li>
+          <li><b>Me lo subes</b> acá abajo → yo lo absorbo, leo las bases, reconozco los criterios y la paso a la Mesa de juego.</li>
+        </ol>
+        <a class="btn rb-firmar" href="${fichaUrl}" target="_blank" rel="noopener noreferrer" style="display:block;text-align:center;margin-bottom:8px">⬇ Descargar documentos en Mercado Público</a>
+        <button class="btn rb-oro" data-rb="lic-anexos" data-c="${c}" type="button" style="width:100%">📎 ${anexN ? `${anexN} documento${anexN > 1 ? "s" : ""} cargado${anexN > 1 ? "s" : ""} · agregar o reenviar` : "Subir documentos (ZIP)"}</button></div>` : "";
     const precio = L.precio_unit ? `<div class="rb-figs">
         <span>Precio <b>${clp(L.precio_unit)}</b> neto${L.unidad ? " / " + esc(L.unidad) : ""}</span>
         <span>Total <b>${clp(L.total)}</b> con IVA</span>
