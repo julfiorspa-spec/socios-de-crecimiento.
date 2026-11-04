@@ -1347,7 +1347,7 @@ async function atender(req) {
   if (ruta === "ejecuta" && req.method === "GET") {      // los negocios que te asignaron para ejecutar
     const id = jug(url.searchParams.get("ejecutor"));
     const todas = url.searchParams.get("todos") === "1";     // ⚓ todas las OC y «vas 1°» quedan ancladas en Ejecuta
-    const lista = (await todos(store)).filter((t) => t.op && t.op.etapa !== "rechazada" && (todas ? (t.op.oc_codigo || t.op.oc || t.op.etapa === "previa" || (id && t.op.ejecutor === id)) : id && t.op.ejecutor === id))
+    const lista = (await todos(store)).filter((t) => t.op && t.op.etapa !== "rechazada" && !/cancelad|anulad/i.test(t.op.oc_estado || "") && (todas ? (t.op.oc_codigo || t.op.oc || t.op.etapa === "previa" || (id && t.op.ejecutor === id)) : id && t.op.ejecutor === id))
       .map(({ firma, historial, envios, ...t }) => t);
     return json({ negocios: lista });
   }
