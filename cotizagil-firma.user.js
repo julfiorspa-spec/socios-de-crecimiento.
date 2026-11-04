@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      2.2
+// @version      2.3
 // @description  Al abrir una Compra Ágil desde «Ir a firmar», carga sola los precios, el detalle y el PDF de tu oferta. NO envía, NO declara y NO firma: eso lo haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -130,7 +130,7 @@
   const pintar = () => {
     caja.innerHTML = mini
       ? "<div data-cz='abrir' style='cursor:pointer;text-align:center'>✍ CotizÁgil <span style='opacity:.7'>(ver)</span></div>"
-      : "<div style='display:flex;justify-content:space-between;gap:8px'><b>CotizÁgil <span style='opacity:.6;font-weight:400'>v2.0</span></b><span data-cz='mini' style='cursor:pointer;padding:0 6px;font-size:15px;line-height:1'>–</span></div><div style='margin-top:3px'>" + ultimo + "</div>";
+      : "<div style='display:flex;justify-content:space-between;gap:8px'><b>CotizÁgil <span style='opacity:.6;font-weight:400'>v2.3</span></b><span data-cz='mini' style='cursor:pointer;padding:0 6px;font-size:15px;line-height:1'>–</span></div><div style='margin-top:3px'>" + ultimo + "</div>";
     caja.style.width = mini ? "auto" : "min(92vw,340px)";
     if (!caja.isConnected) document.body.append(caja);
   };
@@ -256,8 +256,10 @@
     // espera hasta 3 minutos a que esté el formulario (por si hay que presionar Participar o iniciar sesión)
     let items = [], desp = [];
     for (let k = 0; k < 360; k++) {
-      // 🚫 compra ya decidida: si MP muestra «Proveedor seleccionado», no hay nada que cotizar → se detiene (no come donde no hay alimento)
-      if (/proveedor\s+seleccionado/i.test(document.body.innerText || "")) {
+      // 🚫 compra YA decidida: solo frena si el comprador ya justificó la selección de un proveedor.
+      // Ese texto («Justificación de selección indicada por el comprador») NO existe en compras abiertas;
+      // «proveedor seleccionado» a secas aparece como sección vacía aunque esté abierta, por eso no sirve de señal.
+      if (/justificaci[oó]n de selecci[oó]n/i.test(textoPagina())) {
         decir("🚫 Esta compra <b>ya tiene proveedor seleccionado</b> (ya está decidida). No hay nada que cotizar — vuelve a la app y elige otra."); return;
       }
       const campos = [...document.querySelectorAll("main input[type=text]:not([disabled]), main input[type=number]:not([disabled]), main input[type=tel]:not([disabled]), main input[inputmode=numeric]:not([disabled]), main input:not([type]):not([disabled])")];
