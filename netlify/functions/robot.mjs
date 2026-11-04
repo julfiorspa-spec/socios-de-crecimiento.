@@ -854,6 +854,13 @@ async function atender(req) {
       const k = texto(d.cotizacion.k, 80), v = Math.max(0, Math.round(Number(d.cotizacion.v) || 0));
       if (k) { op.cotizaciones = { ...(op.cotizaciones || {}) }; if (v) op.cotizaciones[k] = { v, nombre: texto(d.cotizacion.nombre, 120), t: ahora() }; else delete op.cotizaciones[k]; }
     }
+    if (d.cerrados && typeof d.cerrados === "object") {              // 🤝 varios proveedores que SUMAN en la misma misión
+      const c = {}; let i = 0;
+      for (const kk of Object.keys(d.cerrados)) { if (i++ >= 12) break; const x = d.cerrados[kk] || {};
+        c[texto(kk, 80)] = { proveedor: texto(x.proveedor, 120), k: texto(x.k, 80), email: texto(x.email, 120),
+          tel: texto(x.tel, 40), precio: Math.max(0, Math.round(Number(x.precio) || 0)), banco: texto(x.banco, 400) }; }
+      op.cerrados = c;
+    }
     if (d.descartar_k) op.descartados = { ...(op.descartados || {}), [texto(d.descartar_k, 80)]: ahora() };
     if (d.quitar_doc) {                                   // 🗑 quitar un archivo mal subido (ej. un PDF que era una página de error)
       const id = String(d.quitar_doc).replace(/[^a-z0-9]/gi, "");
