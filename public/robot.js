@@ -2041,7 +2041,8 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       <div class="rb-sec">${R.saldoForm === "cargar" ? "➕ Cargar saldo" : "➖ Retirar"}</div>
       <label class="rb-lab">Monto<input class="rb-in" id="rbSaldoMonto" inputmode="numeric" placeholder="$ 0" value="${R.saldoForm === "cargar" && R.saldoPrefill ? R.saldoPrefill : ""}"></label>
       ${R.saldoForm === "cargar" ? `<div class="muted" style="font-size:.7rem;line-height:1.5">Paga con tarjeta por <b>WebPay</b> y se abona al tiro a tu saldo. La plata va a la cuenta de <b>${esc(corta(emp.razon_social) || "PJANIC")}</b>.</div>
-      <div class="rb-row" style="margin-top:6px"><button class="btn small rb-oro" type="button" data-rb="saldo-webpay">💳 Pagar con WebPay</button><button class="btn small rb-link" type="button" data-rb="saldo-cancelar">Cancelar</button></div>
+      <button class="btn small rb-oro" type="button" data-rb="saldo-simular" style="width:100%;margin-top:6px">🧪 Simular carga (modo prueba, sin WebPay)</button>
+      <div class="rb-row" style="margin-top:6px"><button class="btn small" type="button" data-rb="saldo-webpay">💳 Pagar con WebPay</button><button class="btn small rb-link" type="button" data-rb="saldo-cancelar">Cancelar</button></div>
       <div class="muted" style="font-size:.64rem;margin-top:5px;opacity:.75">¿Transferiste a mano? <a data-rb="saldo-ok" style="text-decoration:underline;cursor:pointer">Confirmar carga manual</a></div></div>` : `<div class="muted" style="font-size:.7rem">Se descuenta de tu saldo y la empresa te transfiere.</div>
       <div class="rb-row" style="margin-top:6px"><button class="btn small rb-oro" type="button" data-rb="saldo-ok">Confirmar retiro</button><button class="btn small rb-link" type="button" data-rb="saldo-cancelar">Cancelar</button></div></div>`}` : "";
     return `<div class="rb-card" style="border-color:#5ef0b0;background:rgba(63,220,138,.06)">
@@ -4028,6 +4029,12 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
         if (r && r.url && r.token) irWebpay(r.url, r.token); else toast(r?.error || "WebPay no disponible ahora"); }
       catch (e) { toast(e.message); }
       return;
+    }
+    if (a === "saldo-simular") {   // 🧪 modo prueba: carga el saldo al tiro, sin pasar por WebPay
+      const v = Math.round(Number(($("#rbSaldoMonto")?.value || "").replace(/\D/g, "")) || 0);
+      if (v < 50) { toast("Pon un monto (mínimo $50)"); return; }
+      setSaldo(saldoInv() + v); guardar({ portal: "inversion" }); R.saldoForm = null; R.saldoPrefill = 0;
+      toast("🧪 Carga simulada: +" + clp(v) + " a tu saldo"); return pintarHoja(true);
     }
     if (a === "saldo-retirar") { R.saldoForm = "retirar"; return pintarHoja(true); }
     if (a === "saldo-cancelar") { R.saldoForm = null; R.saldoPrefill = 0; return pintarHoja(true); }
