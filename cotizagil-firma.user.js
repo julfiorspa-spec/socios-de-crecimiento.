@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      2.0
+// @version      2.1
 // @description  Al abrir una Compra Ágil desde «Ir a firmar», carga sola los precios, el detalle y el PDF de tu oferta. NO envía, NO declara y NO firma: eso lo haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -161,13 +161,20 @@
   const setIn = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
   const setTa = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
   const poner = async (el, v, set) => {
+    // dígito por dígito (como tecleo humano): los campos con máscara de miles de MP ("$ ...")
+    // rechazan el valor puesto de un viaje; escrito de a poco, lo aceptan sin atascarse.
     el.focus(); set.call(el, ""); el.dispatchEvent(new Event("input", { bubbles: true }));
-    set.call(el, String(v)); el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true })); el.blur(); await espera(200);
+    const s = String(v);
+    for (let i = 0; i < s.length; i++) {
+      set.call(el, s.slice(0, i + 1));
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      await espera(28);
+    }
+    el.dispatchEvent(new Event("change", { bubbles: true })); el.blur(); await espera(220);
   };
   const tipo = (e) => {
     for (let x = e, k = 0; k < 9 && x; k++, x = x.parentElement) {
-      const s = x.innerText || "", vu = /Valor unitario/.test(s), de = /Despacho/i.test(s);
+      const s = x.innerText || "", vu = /(valor|precio) unitario/i.test(s), de = /Despacho/i.test(s);
       if (vu && !de) return "i"; if (de && !vu) return "d"; if (vu && de) return "?";
     }
     return "";
@@ -249,7 +256,7 @@
     // espera hasta 3 minutos a que esté el formulario (por si hay que presionar Participar o iniciar sesión)
     let items = [], desp = [];
     for (let k = 0; k < 360; k++) {
-      const campos = [...document.querySelectorAll("main input[type=text]:not([disabled]), main input:not([type]):not([disabled])")];
+      const campos = [...document.querySelectorAll("main input[type=text]:not([disabled]), main input[type=number]:not([disabled]), main input[type=tel]:not([disabled]), main input[inputmode=numeric]:not([disabled]), main input:not([type]):not([disabled])")];
       items = campos.filter((e) => tipo(e) === "i"); desp = campos.filter((e) => tipo(e) === "d");
       if (items.length) break;
       await espera(500);
