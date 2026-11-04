@@ -551,6 +551,11 @@
   const trabajo = (cod) => R.data?.trabajos?.find((t) => t.codigo === String(cod).toUpperCase());
   // 🌍 el asistente y el informe global ven TODOS los juegos (cada juego sigue siendo independiente para jugar)
   const trabajoG = (cod) => { const c = String(cod).toUpperCase(); return trabajo(c) || (R.todos || []).find((t) => t.codigo === c) || (R.ejec || []).find((t) => t.codigo === c) || (R.global?.trabajos || []).find((t) => t.codigo === c); };
+  // 🤝 2 (o más) jugadores conectados: lo que OTRO juego ya tomó/envió NO se le repite a este. Devuelve el nombre del que la tiene, o null.
+  const LIBRE_OTRO = new Set(["cancelada", "rechazada", "descartada"]);
+  const tomadaOtro = (cod) => { const c = String(cod).toUpperCase(), mio = miJug();
+    const t = (R.todos || []).find((t) => t.codigo === c && t.jugador && t.jugador !== mio && !LIBRE_OTRO.has(t.estado));
+    return t ? (t.persona || t.dispositivo || "otro jugador") : null; };
   // 🏢 cada celular ve y oferta solo con su empresa ("principal" = la del robot del PC)
   const miEmp = () => leer().empresa || null;
   const deMiEmpresa = (x) => !miEmp() || (x?.empresa || "principal") === miEmp();
@@ -988,7 +993,7 @@
     const prep = lics.filter((t) => enP.includes(t.estado)), mesa = lics.filter((t) => t.estado === "lic_revisar"),
       listas = lics.filter((t) => ["lic_lista", "lic_ingresando"].includes(t.estado)), ofer = lics.filter((t) => ["enviada", "confirmada"].includes(t.estado));
     const no = licNo(), ya = new Set(lics.map((t) => t.codigo));
-    const match = (R.oport?.lista || []).filter((x) => x.fuente === "licitacion" && Date.parse(x.cierre) - Date.now() > 36 * 3600e3 && !no[x.codigo] && !ya.has(x.codigo))
+    const match = (R.oport?.lista || []).filter((x) => x.fuente === "licitacion" && Date.parse(x.cierre) - Date.now() > 36 * 3600e3 && !no[x.codigo] && !ya.has(x.codigo) && !tomadaOtro(x.codigo))
       .sort((a, b) => (b.ganancia || 0) - (a.ganancia || 0));
     const tab = R.licTab || (mesa.length ? "mesa" : "match");
     const TABS = [["match", "💘 Match", match.length], ["prep", "🧩 Preparando", prep.length], ["mesa", "🎯 Mesa de juego", mesa.length], ["lista", "✅ Listas", listas.length], ["ofer", "📤 Ofertadas", ofer.length]];
@@ -2299,7 +2304,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const trabajos = R.data?.trabajos || [];
     const vigente = (x) => Date.parse(x.cierre) - ahora > 30 * 60000;
     const lista = o.lista || [];
-    const nuevas = lista.filter((x) => vigente(x) && !descartada(x.codigo) && !trabajo(x.codigo) && !x.ya_ofertada && !x.trabajada && !esSel(x.codigo));
+    const nuevas = lista.filter((x) => vigente(x) && !descartada(x.codigo) && !trabajo(x.codigo) && !x.ya_ofertada && !x.trabajada && !esSel(x.codigo) && !tomadaOtro(x.codigo));
     const ocultas = leerOcultas();
     const cierreDe = (t) => t.cierre || (lista.find((x) => x.codigo === t.codigo) || {}).cierre || (leerSel()[t.codigo] || {}).cierre;
     const cerrada = (t) => /\bCERRADA\b/.test(t.mensaje || "") || /(compra|cotizaci[oó]n|convocatoria)[^.]{0,30}cerrad|ya no (recibe|acepta) (cotizaciones|ofertas)|fuera de plazo/i.test(t.mensaje || "")
@@ -2389,7 +2394,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const selCerr = Object.keys(selObj).filter((c) => { const x = { ...selObj[c], ...(lista.find((y) => y.codigo === c) || {}) }; return x.cierre && Date.parse(x.cierre) < ahora; });
     if (selCerr.length && !R._limpSel) { R._limpSel = true;
       setTimeout(async () => { for (const c of selCerr) await quitarSel(c).catch(() => {}); toast(`🗑 Saqué ${selCerr.length} compra${selCerr.length > 1 ? "s" : ""} ya cerrada${selCerr.length > 1 ? "s" : ""}`); R._limpSel = false; pintarHoja(); }, 0); }
-    const sel = Object.keys(selObj).filter((c) => !selCerr.includes(c) && deMiEmpresa(selObj[c]) && !(R.selFuera || {})[c] && !enviadasCods.has(c) && !trabajo(c) && !lista.find((x) => x.codigo === c && x.ya_ofertada))
+    const sel = Object.keys(selObj).filter((c) => !selCerr.includes(c) && deMiEmpresa(selObj[c]) && !(R.selFuera || {})[c] && !enviadasCods.has(c) && !trabajo(c) && !tomadaOtro(c) && !lista.find((x) => x.codigo === c && x.ya_ofertada))
       .map((c) => ({ ...selObj[c], ...(lista.find((x) => x.codigo === c) || {}), codigo: c, _sel: selObj[c] }))
       .sort((a, b) => (b._sel.desde || "").localeCompare(a._sel.desde || ""));        // la última que elegiste, primero
     if (!R.sel && !R._selPedido) { R._selPedido = true; cargarSel().then(pintarHoja); }
