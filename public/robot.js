@@ -1529,7 +1529,7 @@
       <div class="muted" style="font-size:.72rem">${esc((t.oc_compra?.organismo || t.organismo || "").slice(0, 60))}${dir ? " · 📍 " + esc(dir.slice(0, 40)) : ""}</div>
       ${q ? `<div class="rb-qc mini"><span class="n">${esc(q.cantidad ?? "")}<small>${esc(q.unidad || "")}</small></span><div><b>${esc(q.que.slice(0, 90))}</b>${queComprar(t).length > 1 ? ` <span class="muted">+${queComprar(t).length - 1} más</span>` : ""}</div></div>` : ""}
       <div class="rb-kv"><span>Venta <b>${clp(k.venta)}</b></span>${mejor != null ? `<span class="${mejor > 0 ? "rb-vivo-t" : "rb-neg-t"}">Mejor oferta deja <b>${clp(mejor)}</b></span>` : `<span class="muted">${candsDe(t).length} proveedores</span>`}</div>
-      <div class="rb-row"><button class="btn small" type="button" data-rb="ej-luego" data-c="${esc(t.codigo)}">⏰ Después</button><button class="btn small rb-oro" type="button" style="flex:1" data-rb="ej-ver" data-c="${esc(t.codigo)}">👀 Ver ahora</button></div></div>`;
+      <div class="rb-row"><button class="btn small" type="button" data-rb="ej-luego" data-c="${esc(t.codigo)}">⏰ Después</button>${op.oc_codigo ? `<button class="btn small" type="button" data-rb="ej-rechazar" data-c="${esc(t.codigo)}" data-oc="${esc(op.oc_codigo)}">✖ Rechazar</button>` : ""}<button class="btn small rb-oro" type="button" style="flex:1" data-rb="ej-ver" data-c="${esc(t.codigo)}">👀 Ver ahora</button></div></div>`;
   }
   // 📄 guía de despacho con acta de recepción conforme / factura (borrador): se abre lista para imprimir o compartir en PDF
   function docNegocio(t, tipo) {
@@ -1724,13 +1724,18 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
           ${c && !r && c.estado !== "rebotó" ? `<div class="muted" style="font-size:.68rem">${c.via === "correo" ? (c.estado === "en_cola" ? "📤 saliendo por tu Gmail…" : c.estado === "error" ? "⚠ no salió: " + esc(/ascii|codec/.test(c.error || "") ? "el correo del PC está mal configurado (panel → 📧 Correo)" : c.error || "") : "📤 correo enviado") : c.via === "llamada" ? "📞 llamado" : c.via === "marketplace" ? "🛒 Marketplace" : "💬 WhatsApp"} ${esc(hace(c.t))} · esperando respuesta</div>` : ""}
           ${(() => { const _cb = chatBox(t, o); return _cb ? `<details class="rb-det"><summary>💬 Conversación con ${esc((o.proveedor || "").split(" ")[0])}</summary>${_cb}</details>` : ""; })()}
           <label class="rb-lab" style="margin-top:4px">💲 Precio que te dio (total con IVA)<input class="rb-cot-in" inputmode="numeric" data-c="${esc(cod)}" data-k="${esc(o.k)}" data-n="${esc(o.proveedor)}" value="${q ? Number(q.v).toLocaleString("es-CL") : ""}" placeholder="${o.total_con_iva ? Number(o.total_con_iva).toLocaleString("es-CL") : "Ej: 850.000"}"></label>
-          ${(q || r) && !desc[o.k] ? `<div class="rb-cerraste"><span>🤝 ¿Cerraste con ${esc(o.proveedor.split(" ")[0])}?</span><button class="btn small rb-oro" type="button" data-rb="ej-cerre" data-c="${esc(cod)}" data-k="${esc(o.k)}">Sí, cerré</button><button class="btn small" type="button" data-rb="ej-descartar" data-c="${esc(cod)}" data-k="${esc(o.k)}">No</button></div>` : ""}</div>`; };
+          ${(q || r) && !desc[o.k] ? ((op.cerrados || {})[o.k]
+            ? `<div class="rb-cerraste"><span>✅ Cerrado con ${esc(o.proveedor.split(" ")[0])} · <b>${clp(op.cerrados[o.k].precio)}</b></span><button class="btn small" type="button" data-rb="ej-descerrar" data-c="${esc(cod)}" data-k="${esc(o.k)}">Quitar</button></div>`
+            : `<div class="rb-cerraste"><span>🤝 ¿Cerraste con ${esc(o.proveedor.split(" ")[0])}?</span><button class="btn small rb-oro" type="button" data-rb="ej-cerre" data-c="${esc(cod)}" data-k="${esc(o.k)}">Sí, cerré</button><button class="btn small" type="button" data-rb="ej-descartar" data-c="${esc(cod)}" data-k="${esc(o.k)}">No</button></div>`) : ""}</div>`; };
       cuerpoS = (op.etapa === "previa" ? `<div class="rb-sug" style="border-color:#5ef0b0">📞 <b>Aún sin OC:</b> vas 1°. Adelanta precios y stock con un toque, sin comprar todavía.</div>` : "") + bloqueCliente + `
       <div class="rb-mision"><div class="rb-env"><b>🔎 El robot cotiza con ${meta} proveedores por ti</b><b>${Math.min(hechos, meta)}/${meta}</b></div>
         <div class="rb-barra"><i style="width:${Math.min(100, hechos / meta * 100)}%"></i></div>
         ${conMail.length ? `<button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-mail-todos" data-c="${esc(cod)}">📨 Que el robot les pida precio (${conMail.length}) · 1 toque</button>` : ""}
         <div class="muted" style="font-size:.7rem">${R.mailPC ? "El robot escribe y envía desde tu Gmail con la descripción exacta. Cuando respondan se enciende la luz 🟢 y lee el precio solo — tú no pides nada." : "Conecta el correo en el panel del PC (📧 Correo) para que el robot cotice y lea las respuestas solo."}</div></div>
       ${ord.map(tarj).join("") || `<div class="muted" style="font-size:.74rem">⟳ El robot está buscando proveedores… mientras, agrega uno o búscalo en Marketplace.</div>`}
+      ${(() => { const cz = op.cerrados || {}, ks = Object.keys(cz); if (!ks.length) return ""; const tot = ks.reduce((s, kk) => s + (Number(cz[kk].precio) || 0), 0);
+        return `<div class="rb-sug" style="border-color:#5ef0b0;margin-top:8px">🤝 <b>${ks.length} proveedor${ks.length > 1 ? "es" : ""} en esta misión</b> · ${ks.length > 1 ? "suman " : ""}<b>${clp(tot)}</b>${ks.length > 1 ? `<div class="muted" style="font-size:.7rem;margin-top:2px">${ks.map((kk) => cz[kk].proveedor.split(" ")[0] + " " + clp(cz[kk].precio)).join("  +  ")}</div>` : ""}
+          <button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-etapa" data-e="pago" data-c="${esc(cod)}" style="margin-top:6px">✅ Listo, ir a pagar ${clp(tot)}</button></div>`; })()}
       <details class="rb-det" ${C.length < 2 ? "open" : ""}><summary>➕ Agregar proveedor</summary>
         <label class="rb-lab">Nombre<input class="rb-in" id="rbPxN-${esc(cod)}" placeholder="Ej: Ferretería Castro"></label>
         <div class="rb-row"><label class="rb-lab" style="flex:1">Teléfono<input class="rb-in" id="rbPxT-${esc(cod)}" inputmode="tel" placeholder="+56 9 ..."></label><label class="rb-lab" style="flex:1">Correo<input class="rb-in" id="rbPxE-${esc(cod)}" inputmode="email" placeholder="ventas@..."></label></div>
@@ -3912,6 +3917,10 @@ ${empNom}`;
     if (a === "ej-ver") { R.ejAbierto = cod; R.ejModo = null; sheet.scrollTop = 0; { const tt = (R.ejec || []).find((x) => x.codigo === cod); if (tt) R.ejTab = etEj(tt); } const l = leerLuego(); delete l[cod]; try { localStorage.setItem(EJ_LUEGO, JSON.stringify(l)); } catch {}
       api("correo-visto", { method: "POST", body: JSON.stringify({ codigo: cod }) }).catch(() => {}); return pintarHoja(true); }
     if (a === "ej-luego") { const l = leerLuego(); l[cod] = Date.now(); try { localStorage.setItem(EJ_LUEGO, JSON.stringify(l)); } catch {} if (R.ejAbierto === cod) R.ejAbierto = null; toast("⏰ Queda para después"); return pintarHoja(true); }
+    if (a === "ej-rechazar") {   // ✖ no dio: abre Mercado Público para que el dueño rechace la OC ahí (acto legal, no lo hace el robot)
+      const oc = b.dataset.oc, url = oc ? `https://www.mercadopublico.cl/PurchaseOrder/Modules/PO/DetailsPurchaseOrder.aspx?codigoOC=${encodeURIComponent(oc)}` : portalDe(cod);
+      try { window.open(url, "_blank", "noopener"); } catch { location.href = url; }
+      toast("🧑 Abriendo Mercado Público: rechaza la OC ahí mismo (es tu decisión)"); return; }
     if (a === "ej-cerrar-card") { R.ejAbierto = null; return pintarHoja(true); }
     if (a === "ej-modo") { R.ejModo = b.dataset.m || null; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "ej-mail") { const t = tEj(), o = t && candsDe(t).find((x) => x.k === b.dataset.k); if (!o) return;
@@ -3923,10 +3932,24 @@ ${empNom}`;
       const q = (op.cotizaciones || {})[b.dataset.k], r = (op.respuestas || []).filter((x) => x.k === b.dataset.k && x.precio).pop();
       const v = q?.v || (r ? (r.incluye_iva ? r.precio : Math.round(r.precio * 1.19)) : null);
       if (!v) { toast("Anota primero el precio que te dio"); return; }
-      const banco = r?.cuenta ? [r.cuenta.banco, r.cuenta.tipo, r.cuenta.numero, r.cuenta.rut && "RUT " + r.cuenta.rut, r.cuenta.titular, r.cuenta.email].filter(Boolean).join(" · ") : undefined;
+      const banco = r?.cuenta ? [r.cuenta.banco, r.cuenta.tipo, r.cuenta.numero, r.cuenta.rut && "RUT " + r.cuenta.rut, r.cuenta.titular, r.cuenta.email].filter(Boolean).join(" · ") : "";
+      // 🤝 ACUMULA: varios proveedores pueden sumar en la misma misión (no reemplaza, suma)
+      const cerr = { ...(op.cerrados || {}) };
+      cerr[b.dataset.k] = { proveedor: o.proveedor || q?.nombre || "Proveedor", k: b.dataset.k, email: o.email || "", tel: o.telefono || "", precio: v, banco };
+      const ks = Object.keys(cerr), total = ks.reduce((s, kk) => s + (Number(cerr[kk].precio) || 0), 0);
+      const nombres = ks.map((kk) => cerr[kk].proveedor).join(" + ");
+      const bancos = ks.map((kk) => cerr[kk].banco ? cerr[kk].proveedor + ": " + cerr[kk].banco : "").filter(Boolean).join("\n");
       R.ejAbierto = cod;
-      return ejOp({ proveedor: o.proveedor || q?.nombre, proveedor_k: b.dataset.k, proveedor_email: o.email || "", proveedor_tel: o.telefono || "", precio_acordado: v,
-        ...(banco ? { banco_proveedor: banco } : {}), ...(r?.despacha ? { despacho_modo: "proveedor" } : {}) }, "pago", "🤝 ¡Cerraste! Ahora el pago"); }
+      return ejOp({ cerrados: cerr, proveedor: nombres, proveedor_k: ks[0], proveedor_email: cerr[ks[0]].email, proveedor_tel: cerr[ks[0]].tel, precio_acordado: total,
+        ...(bancos ? { banco_proveedor: bancos } : {}), ...(r?.despacha ? { despacho_modo: "proveedor" } : {}) }, null,
+        ks.length > 1 ? `🤝 ${ks.length} proveedores · suman ${clp(total)}` : "🤝 Cerraste con " + (o.proveedor || "proveedor").split(" ")[0]); }
+    if (a === "ej-descerrar") { const t = tEj(); if (!t) return; const op = t.op || {};
+      const cerr = { ...(op.cerrados || {}) }; delete cerr[b.dataset.k];
+      const ks = Object.keys(cerr), total = ks.reduce((s, kk) => s + (Number(cerr[kk].precio) || 0), 0);
+      const nombres = ks.map((kk) => cerr[kk].proveedor).join(" + ");
+      const bancos = ks.map((kk) => cerr[kk].banco ? cerr[kk].proveedor + ": " + cerr[kk].banco : "").filter(Boolean).join("\n");
+      R.ejAbierto = cod;
+      return ejOp({ cerrados: cerr, proveedor: nombres, proveedor_k: ks[0] || "", precio_acordado: total || null, banco_proveedor: bancos }, null, "Quitado de la misión"); }
     if (a === "ej-descartar") return ejOp({ descartar_k: b.dataset.k }, null, "Descartado");
     if (a === "ej-modo") return ejOp({ despacho_modo: b.dataset.m }, null, null);
     if (a === "ej-fact-guardar") { const L = ($("#rbFactorings")?.value || "").split(/\n+/).map((l) => l.split("|").map((x) => x.trim())).filter((x) => x[0] && /@/.test(x[1] || "")).map(([nombre, email]) => ({ nombre, email }));
