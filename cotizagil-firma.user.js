@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      2.4
+// @version      2.5
 // @description  Al abrir una Compra Ágil desde «Ir a firmar», carga sola los precios, el detalle y el PDF de tu oferta. NO envía, NO declara y NO firma: eso lo haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -130,7 +130,7 @@
   const pintar = () => {
     caja.innerHTML = mini
       ? "<div data-cz='abrir' style='cursor:pointer;text-align:center'>✍ CotizÁgil <span style='opacity:.7'>(ver)</span></div>"
-      : "<div style='display:flex;justify-content:space-between;gap:8px'><b>CotizÁgil <span style='opacity:.6;font-weight:400'>v2.4</span></b><span data-cz='mini' style='cursor:pointer;padding:0 6px;font-size:15px;line-height:1'>–</span></div><div style='margin-top:3px'>" + ultimo + "</div>";
+      : "<div style='display:flex;justify-content:space-between;gap:8px'><b>CotizÁgil <span style='opacity:.6;font-weight:400'>v2.5</span></b><span data-cz='mini' style='cursor:pointer;padding:0 6px;font-size:15px;line-height:1'>–</span></div><div style='margin-top:3px'>" + ultimo + "</div>";
     caja.style.width = mini ? "auto" : "min(92vw,340px)";
     if (!caja.isConnected) document.body.append(caja);
   };
@@ -161,20 +161,16 @@
   const setIn = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
   const setTa = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
   const poner = async (el, v, set) => {
-    // EXPLOSIVO pero no invasivo: el detalle (texto largo) entra de un viaje; los campos con máscara de miles ("$ …")
-    // van dígito por dígito pero rápido (10ms), para que la máscara los acepte sin atascarse. Nunca instantáneo en los números.
+    // PAUSADO a propósito (dígito por dígito, 28ms): a ESTA velocidad Mercado Público NO reconoce el script y podemos firmar.
+    // Más rápido lo detecta como bot. La pausa es nuestro disfraz humano — lenta pero invisible. NO subir esta velocidad.
     el.focus(); set.call(el, ""); el.dispatchEvent(new Event("input", { bubbles: true }));
     const s = String(v);
-    if (set === setTa || s.length > 24) {
-      set.call(el, s); el.dispatchEvent(new Event("input", { bubbles: true }));
-    } else {
-      for (let i = 0; i < s.length; i++) {
-        set.call(el, s.slice(0, i + 1));
-        el.dispatchEvent(new Event("input", { bubbles: true }));
-        await espera(10);
-      }
+    for (let i = 0; i < s.length; i++) {
+      set.call(el, s.slice(0, i + 1));
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      await espera(28);
     }
-    el.dispatchEvent(new Event("change", { bubbles: true })); el.blur(); await espera(120);
+    el.dispatchEvent(new Event("change", { bubbles: true })); el.blur(); await espera(220);
   };
   const tipo = (e) => {
     for (let x = e, k = 0; k < 9 && x; k++, x = x.parentElement) {
