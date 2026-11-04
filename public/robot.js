@@ -2013,12 +2013,15 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const q = new URLSearchParams(location.search), w = q.get("webpay"); if (!w) return;
     try { history.replaceState(null, "", location.pathname + location.hash); } catch {}
     if (w === "ok") {
+      const montoRet = Math.round(Number(q.get("monto")) || 0);   // el servidor solo lo manda si el pago quedó AUTORIZADO y abonado
+      let ab = 0;
       try {
         const r = await api("webpay-cobrar", { method: "POST", body: JSON.stringify({ jugador: miJug() }) });
-        const ab = Math.round(Number(r?.abonado) || 0);
-        if (ab > 0) { setSaldo(saldoInv() + ab); guardar({ portal: "inversion" }); toast("💳 Pago aprobado: +" + clp(ab) + " a tu saldo"); }
-        else toast("Pago aprobado. Si no ves el saldo, recarga la app.");
-      } catch { toast("Pago aprobado — recarga la app para ver tu saldo."); }
+        ab = Math.round(Number(r?.abonado) || 0);
+      } catch {}
+      if (!ab && montoRet) ab = montoRet;   // 💳 respaldo: si el jugador no calza (PWA→Safari), usa el monto confirmado en el retorno
+      if (ab > 0) { setSaldo(saldoInv() + ab); guardar({ portal: "inversion" }); toast("💳 Pago aprobado: +" + clp(ab) + " a tu saldo"); }
+      else toast("Pago aprobado. Si no ves el saldo, recarga la app.");
     } else toast(w === "rechazado" ? "❌ El pago fue rechazado. Intenta de nuevo." : w === "cancelado" ? "Pago cancelado." : "No se pudo confirmar el pago.");
     pintarHoja(true);
   }
