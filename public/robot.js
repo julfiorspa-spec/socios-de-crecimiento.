@@ -2166,6 +2166,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
           ${R.brokerForm ? `<div class="rb-card" style="padding:12px;margin-top:8px"><div class="rb-sec">➕ Nuevo inversionista</div><label class="rb-lab">Nombre<input class="rb-in" id="rbBkNom" placeholder="Ej: Nicolás"></label><label class="rb-lab">WhatsApp (opcional)<input class="rb-in" id="rbBkTel" inputmode="tel" placeholder="+56 9 ..."></label><div class="rb-row"><button class="btn small rb-oro" type="button" data-rb="broker-add">Guardar</button><button class="btn small rb-link" type="button" data-rb="broker-cancelar">Cancelar</button></div></div>` : ""}
         </div></div></div>`;
   }
+  const esLicNeg = (t) => t.fuente === "licitacion" || /-L[A-Z]{1,2}\d{2}$/i.test(t.codigo || "");
   // 💼 Paso 1 del inversor: elegir EN QUÉ EMPRESA invertir (resumen + riesgo + oportunidades)
   function invEmpresas(opps) {
     const grupos = {};
@@ -2175,9 +2176,11 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       const n = arr.length, fuego = arr.filter((x) => x.X.final >= 800000).length;
       const mejor = Math.round(Math.max(...arr.map((x) => x.X.invPct)) * 1000) / 10;
       const cap = arr.reduce((s, x) => s + x.X.capital, 0);
+      const nLic = arr.filter((x) => esLicNeg(x.t)).length, nCa = n - nLic;
       return `<button type="button" class="rb-inv" style="width:100%;text-align:left;cursor:pointer;display:block" data-rb="inv-empresa" data-e="${esc(id)}">
         <div class="rb-env"><div style="min-width:0"><b>🏢 ${esc(nomEmp(id))}</b><div class="muted" style="font-size:.7rem">${n} oportunidad${n !== 1 ? "es" : ""} para invertir</div></div><span class="rb-pill verde">hasta +${mejor}%</span></div>
         <div class="rb-row" style="gap:6px;margin-top:6px;flex-wrap:wrap">${fuego ? `<span class="rb-pill" style="background:rgba(245,190,70,.18);color:#f5cf6b">🔥 ${fuego} negocio${fuego !== 1 ? "s" : ""} fuego</span>` : ""}<span class="rb-pill">💰 ${clp(Math.round(cap))} disponible</span></div>
+        <div class="rb-row" style="gap:6px;margin-top:5px;flex-wrap:wrap">${nLic ? `<span class="rb-pill">📑 ${nLic} licitación</span>` : ""}${nCa ? `<span class="rb-pill">🛒 ${nCa} compra ágil</span>` : ""}</div>
         <div class="muted" style="font-size:.63rem;margin-top:6px">Riesgo del comprador (ranking Mercado Público): <b>por evaluar</b> · tu plata la paga el factoring en ~5 días.</div></button>`;
     }).join("");
     return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">💼 ¿En qué empresa inviertes?</h2><button class="btn small rb-link" type="button" data-rb="inv-salir">salir</button></div>
@@ -2200,7 +2203,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     if (!R.invEmpSel) return invEmpresas(oportun);
     const oportun2 = oportun.filter(({ t }) => (t.empresa || "principal") === R.invEmpSel);
     const empSel = corta((R.empresas || {})[R.invEmpSel]?.razon_social) || (empresaActual() || {}).razon_social || "la empresa";
-    const opCard = ({ t, X }) => `<div class="rb-inv"><div class="rb-env"><div style="min-width:0"><b>${esc((t.nombre || t.codigo).slice(0, 52))}</b><div class="muted" style="font-size:.7rem">${esc((t.oc_compra?.organismo || t.organismo || "").slice(0, 44))}</div></div><span class="rb-pill verde">+${Math.round(X.invPct * 1000) / 10}%</span></div>
+    const opCard = ({ t, X }) => `<div class="rb-inv"><div class="rb-env"><div style="min-width:0"><b>${esc((t.nombre || t.codigo).slice(0, 52))}</b><div class="muted" style="font-size:.7rem">${esLicNeg(t) ? "📑 Licitación · " : "🛒 Compra Ágil · "}${esc((t.oc_compra?.organismo || t.organismo || "").slice(0, 38))}</div></div><span class="rb-pill verde">+${Math.round(X.invPct * 1000) / 10}%</span></div>
       <div class="rb-inv-flecha"><span>Inviertes</span><b>${clp(Math.round(X.capital))}</b><span>cobras</span><b class="rb-vivo-t">${clp(Math.round(X.invRecibe))}</b></div>
       <div class="muted" style="font-size:.68rem;margin:2px 0 6px">💰 Cobras en ~5 días · pagado por el factoring</div>
       <button class="btn rb-oro rb-big-btn" type="button" data-rb="inv-ver" data-c="${esc(t.codigo)}">Ver inversión →</button></div>`;
