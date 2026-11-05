@@ -1622,7 +1622,7 @@ async function atender(req) {
       if (t.estado === "tomado" && Date.now() - Date.parse(t.actualizado) > TOMADO_VENCE_MS) {
         anotar(t, "en_cola", "El robot no alcanzó a empezarla; vuelve a la cola.");
         await escribir(store, t);
-      } else if (t.estado === "preparando" && Date.now() - Date.parse(t.actualizado) > 30 * 60_000) {
+      } else if (t.estado === "preparando" && Date.now() - Date.parse(t.actualizado) > 8 * 60_000) {
         anotar(t, "en_cola", "Se cortó mientras se preparaba (el robot se reinició); vuelve a la cola.");   // 🔁 preparación colgada
         await escribir(store, t);
       }
@@ -1639,6 +1639,15 @@ async function atender(req) {
     let cola2 = lista.filter((t) => t.estado === "en_cola" && mioT(t));
     if (agilOcupado) cola2 = cola2.filter(esLic);
     if (licOcupado) cola2 = cola2.filter((t) => !esLic(t));
+    // 🆘 RESCATE: este robot está libre (si no, ya salió arriba por b.ocupado). Si por el reparto no le toca ninguna,
+    // igual toma las que están ESPERANDO: más vale un robot libre trabajando que cotizaciones en cola porque el equipo
+    // "dueño" quedó ocupado o colgado. Respeta el carril (ágiles/licitaciones) y solo toma una por latido.
+    if (!cola2.length) {
+      let rescate = lista.filter((t) => t.estado === "en_cola");
+      if (agilOcupado) rescate = rescate.filter(esLic);
+      if (licOcupado) rescate = rescate.filter((t) => !esLic(t));
+      cola2 = rescate;
+    }
     // 🌿 RAMIFICAR por equipo/jugador: reparto JUSTO (round-robin). Los pedidos de tu iPhone, el de Cristopher y el
     // compu grande no se tapan entre sí: va primero el equipo que fue atendido hace más rato, así cada uno avanza por turno.
     const servido = (await store.get("cola/servido", { type: "json" })) || {};
