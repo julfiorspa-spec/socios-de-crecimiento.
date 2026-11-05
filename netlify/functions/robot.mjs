@@ -1717,6 +1717,16 @@ async function atender(req) {
       if (z.length <= MAX_PDF && z.subarray(0, 2).toString() === "PK") { await store.set("lic/" + t.codigo, z); t.zip = true; }
     }
     const enviado = (e) => e === "enviada" || e === "confirmada";
+    // 🔁 VERIFICACIÓN DE FIRMA: cuando revisaste una firma y el robot miró Mercado Público, hay dos caminos.
+    //   · Si quedó enviada → sigue de largo (se marca enviada abajo) y pasas a la siguiente.
+    //   · Si NO quedó enviada (error, o MP «aún no la muestra como enviada») → NO la dejamos trabada «en cola»:
+    //     vuelve a «por firmar» (lista) para que la firmes de nuevo. Así reconoce si se firmó o no y la enruta sola.
+    if (t.accion === "verificar" && b.estado && !enviado(b.estado)
+        && !["en_cola", "tomado", "preparando"].includes(b.estado)
+        && (b.estado === "error" || /no\s+(la\s+)?(muestra|aparece|qued[oó]).*enviad|a[uú]n\s+no|no\s+enviad/i.test(String(b.mensaje || "")))) {
+      b.estado = "lista";
+      b.mensaje = "Mercado Público aún no la muestra enviada: queda lista para firmar de nuevo.";
+    }
     if (enviado(b.estado) && !enviado(t.estado)) t.envios = (t.envios || 0) + 1;
     if (b.comp_b64) {                                   // comprobante / registro del envío
       const c = Buffer.from(String(b.comp_b64), "base64");
