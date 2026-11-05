@@ -1639,8 +1639,17 @@ async function atender(req) {
     let cola2 = lista.filter((t) => t.estado === "en_cola" && mioT(t));
     if (agilOcupado) cola2 = cola2.filter(esLic);
     if (licOcupado) cola2 = cola2.filter((t) => !esLic(t));
-    const siguiente = cola2.sort((a, b) => (humano(b) - humano(a)) || a.creado.localeCompare(b.creado))[0];
+    // 🌿 RAMIFICAR por equipo/jugador: reparto JUSTO (round-robin). Los pedidos de tu iPhone, el de Cristopher y el
+    // compu grande no se tapan entre sí: va primero el equipo que fue atendido hace más rato, así cada uno avanza por turno.
+    const servido = (await store.get("cola/servido", { type: "json" })) || {};
+    const quien = (t) => texto(t.jugador || t.dispositivo || "_", 60) || "_";
+    const siguiente = cola2.sort((a, b) => (humano(b) - humano(a))
+      || (servido[quien(a)] || "").localeCompare(servido[quien(b)] || "")   // equipo menos atendido primero
+      || a.creado.localeCompare(b.creado))[0];
     if (!siguiente) return json({ siguiente: null, ...op });
+    servido[quien(siguiente)] = ahora();                                     // este equipo pasa al final de su turno
+    for (const k of Object.keys(servido)) if (Date.now() - Date.parse(servido[k]) > 864e5) delete servido[k];
+    await store.setJSON("cola/servido", servido);
     anotar(siguiente, "tomado", "El robot la tomó.");
     return json({ siguiente: await escribir(store, siguiente), ...op });
   }
