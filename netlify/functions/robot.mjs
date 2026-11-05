@@ -1630,12 +1630,15 @@ async function atender(req) {
     // 🛣️ DOS CARRILES: la "tarea" del latido es el carril de COMPRAS ÁGILES. Si va ocupado, solo ofrecemos
     // licitaciones (que corren en su carril aparte); si ya hay una licitación procesándose, no ofrecemos otra.
     // Así una licitación nunca espera detrás de una compra ágil, y no se marcan trabajos "tomado" sin ejecutarse.
-    const agilOcupado = !!texto(b.tarea, 200);
-    const licActiva = lista.some((t) => ["lic_bajando", "lic_captcha", "lic_analizando", "lic_ingresando"].includes(t.estado));
+    // 🚦 el robot nos dice el estado EXACTO de cada carril (busy_agil / busy_lic): usamos ese mismo semáforo,
+    // así no ofrecemos una compra que el robot no va a tomar. (Clientes viejos: caemos a la señal por «tarea».)
+    const agilOcupado = b.busy_agil !== undefined ? !!b.busy_agil : !!texto(b.tarea, 200);
+    const licOcupado = b.busy_lic !== undefined ? !!b.busy_lic
+      : lista.some((t) => ["lic_bajando", "lic_captcha", "lic_analizando", "lic_ingresando"].includes(t.estado));
     const esLic = (t) => String(t.accion || "").startsWith("lic") || t.tipo === "licitacion";
     let cola2 = lista.filter((t) => t.estado === "en_cola" && mioT(t));
     if (agilOcupado) cola2 = cola2.filter(esLic);
-    if (licActiva) cola2 = cola2.filter((t) => !esLic(t));
+    if (licOcupado) cola2 = cola2.filter((t) => !esLic(t));
     const siguiente = cola2.sort((a, b) => (humano(b) - humano(a)) || a.creado.localeCompare(b.creado))[0];
     if (!siguiente) return json({ siguiente: null, ...op });
     anotar(siguiente, "tomado", "El robot la tomó.");
