@@ -29,8 +29,12 @@
   <p class="muted">El mismo código con que enlazas el celular al robot. Se guarda solo en este navegador.</p>
 </div>
 <div class="lab">
-  <button onclick="sim('lista',5)">➕ Crear 5 cotizaciones «por firmar»</button>
-  <button onclick="sim('en_cola',5)">➕ Crear 5 «en cola»</button>
+  <button onclick="demo('on')">▶ Iniciar DEMO de carga — el robot produce sin parar</button>
+  <p class="muted" style="margin:.2rem 0 10px">El robot simulado toma trabajo y tira una «por firmar» cada ~4 s. Un humano simulado firma 1 cada 25 s → verás <b>crecer la cola en Firmar</b>.</p>
+  <button class="gris" onclick="demo('off')">⏹ Detener demo</button>
+  <hr style="border:0;border-top:1px solid #2b3d5f;margin:14px 0">
+  <button onclick="sim('en_cola',5)">➕ Crear 5 «en cola» (sueltas)</button>
+  <button onclick="sim('lista',5)">➕ Crear 5 «por firmar» (sueltas)</button>
   <button class="gris" onclick="limpiar()">🗑 Limpiar todas las simuladas</button>
 </div>
 <p class="muted">Después abre la app (misma URL, sin <code>/simulador.html</code>) para ver cómo fluyen.</p>
@@ -55,6 +59,7 @@
   }
   function sim(estado,n){ llamar({n:n,estado:estado}); }
   function limpiar(){ llamar({limpiar:true}); }
+  function demo(m){ llamar({demo:m}); }
 </script>
 </body>
 </html>

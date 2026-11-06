@@ -91,23 +91,57 @@ async function todos(store) {
   return Object.values(m).map((x) => x.d).sort((a, b) => (b.actualizado || "").localeCompare(a.actualizado || ""));
 }
 
-// 🧪 ROBOT SIMULADO (solo staging, NUNCA producción). Hace que las cotizaciones ficticias avancen SOLAS hasta
-// «lista para firmar» (en_cola → preparando → lista), así la COLA SE ACUMULA EN FIRMAR, no antes — justo el flujo
-// productor/consumidor que buscamos: el robot produce sin parar y tú siempre tienes un montón listo para firmar.
-// Además finge robot + MP "verdes" para que el simulador se vea vivo sin un PC real detrás.
+// 🧪 fábrica de cotizaciones ficticias (solo staging)
+const SIM_NOMBRES = ["Implementos deportivos", "Insumos de aseo", "Artículos de oficina", "Equipos computacionales",
+  "Mobiliario escolar", "Herramientas", "Material eléctrico", "Textiles", "Señalética", "Equipos médicos"];
+function nuevaSim(estado) {
+  const total = 100000 + Math.floor(Math.random() * 5000000);
+  const nom = SIM_NOMBRES[Math.floor(Math.random() * SIM_NOMBRES.length)];
+  const t = {
+    codigo: `SIM-${Date.now().toString().slice(-7)}${Math.floor(Math.random() * 90 + 10)}-COT26`, accion: "firmar", descuento: 0.08, sim: true,
+    nombre: nom + " (simulada)", organismo: "MUNICIPALIDAD DE PRUEBA", monto: total, creado: ahora(), estado: null, mensaje: null, historial: [],
+    total, neto: Math.round(total / 1.19), plazo: "5 días", detalle: "Cotización de prueba — sin Mercado Público real.",
+    items: [{ id: "1", nombre: nom, cantidad: 10, precio: Math.round(total / 10) }], pdf: false, envios: 0, jugador: "sim", dispositivo: "simulador", empresa: null,
+  };
+  anotar(t, estado, "🧪 Simulada.");
+  return t;
+}
+
+// 🧪 ROBOT SIMULADO (solo staging, NUNCA producción). (1) Avanza las ficticias SOLAS y RÁPIDO hasta «por firmar»
+// (en_cola → preparando → lista), así la COLA SE ACUMULA EN FIRMAR. (2) En «demo de carga» el robot TOMA trabajo
+// nuevo sin parar (se mantiene produciendo) y un HUMANO SIMULADO firma una cada 25 s → ves al robot producir más
+// rápido de lo que un humano firma. Finge robot + MP verdes para que el simulador se vea vivo sin un PC real.
 async function simTick(store) {
   await store.setJSON("robot/latido", { visto: ahora(), libre: true, tarea: "🧪 Robot simulado produciendo fichas", version: "sim", cola: {} });
   await store.setJSON("mp/latido", { visto: ahora(), logueado: true });
-  const lista = await todos(store);
+  let lista = await todos(store);
   const now = Date.now();
+  // 1) avance RÁPIDO: en_cola → preparando (1.2 s) → lista/por firmar (2.5 s)
   const sig = { en_cola: "preparando", tomado: "preparando", preparando: "lista" };
-  const espera = { en_cola: 3500, tomado: 3500, preparando: 7000 };   // ms en cada paso: se siente "trabajando"
+  const espera = { en_cola: 1200, tomado: 1200, preparando: 2500 };
   for (const t of lista) {
     if (!t.sim || !sig[t.estado]) continue;
-    if (now - Date.parse(t.actualizado || t.creado || 0) < (espera[t.estado] || 5000)) continue;
+    if (now - Date.parse(t.actualizado || t.creado || 0) < (espera[t.estado] || 2000)) continue;
     const nxt = sig[t.estado];
-    anotar(t, nxt, nxt === "lista" ? "🧪 Lista para firmar (simulada)." : "🧪 Preparando la ficha (simulada)…");
+    anotar(t, nxt, nxt === "lista" ? "🧪 ✍️ Lista para firmar." : "🧪 Preparando la ficha…");
     await escribir(store, t);
+  }
+  // 2) DEMO DE CARGA
+  const demo = (await store.get("sim/demo", { type: "json" })) || null;
+  if (demo && demo.on) {
+    lista = await todos(store);
+    const sims = lista.filter((t) => t.sim);
+    const activas = sims.filter((t) => ["en_cola", "preparando", "tomado"].includes(t.estado)).length;
+    const porFirmar = sims.filter((t) => t.estado === "lista");
+    if (activas < 4 && sims.length < 40) await escribir(store, nuevaSim("en_cola"));   // el robot nunca se queda sin qué hacer
+    if (porFirmar.length && now - Date.parse(demo.firmo || demo.t0 || 0) > 25000) {    // humano simulado: 1 firma / 25 s
+      const vieja = porFirmar.sort((a, b) => (a.actualizado || "").localeCompare(b.actualizado || ""))[0];
+      anotar(vieja, "enviada", "🧪 Firmada por el humano simulado (25 s).");
+      vieja.envios = (vieja.envios || 0) + 1;
+      await escribir(store, vieja);
+      demo.firmo = ahora();
+      await store.setJSON("sim/demo", demo);
+    }
   }
 }
 // 🎮 cada celular juega su propio juego: sus seleccionadas y descartes van en su propio cajón
@@ -600,31 +634,22 @@ async function atender(req) {
     if (b.limpiar) {
       const { blobs } = await store.list({ prefix: "trabajo/SIM-" });
       await Promise.all(blobs.map((x) => store.delete(x.key)));
+      await store.delete("sim/demo").catch(() => {});
       return json({ ok: true, borradas: blobs.length, entorno: STORE });
+    }
+    if (b.demo === "on") {                                   // ▶ demo de carga: el robot produce sin parar + humano 25 s
+      await store.setJSON("sim/demo", { on: true, t0: ahora(), firmo: ahora() });
+      for (let i = 0; i < 6; i++) await escribir(store, nuevaSim("en_cola"));
+      return json({ ok: true, demo: "on", entorno: STORE });
+    }
+    if (b.demo === "off") {
+      await store.setJSON("sim/demo", { on: false });
+      return json({ ok: true, demo: "off", entorno: STORE });
     }
     const n = Math.min(50, Math.max(1, Number(b.n) || 5));
     const estado = ["en_cola", "preparando", "lista"].includes(b.estado) ? b.estado : "lista";
-    const NOMBRES = ["Implementos deportivos", "Insumos de aseo", "Artículos de oficina", "Equipos computacionales",
-                     "Mobiliario escolar", "Herramientas", "Material eléctrico", "Textiles", "Señalética", "Equipos médicos"];
     const creadas = [];
-    for (let i = 0; i < n; i++) {
-      const cod = `SIM-${Date.now().toString().slice(-7)}${i}-COT26`;
-      const total = 100000 + Math.floor(Math.random() * 5000000);
-      const nom = NOMBRES[Math.floor(Math.random() * NOMBRES.length)];
-      const t = {
-        codigo: cod, accion: "firmar", descuento: 0.08, sim: true,
-        nombre: nom + " (simulada)", organismo: "MUNICIPALIDAD DE PRUEBA", monto: total,
-        creado: ahora(), estado: null, mensaje: null, historial: [],
-        total, neto: Math.round(total / 1.19), plazo: "5 días",
-        detalle: "Cotización de prueba generada por el simulador — sin Mercado Público real.",
-        items: [{ id: "1", nombre: nom, cantidad: 10, precio: Math.round(total / 10) }],
-        pdf: false, envios: 0, jugador: texto(b.jugador, 60) || "sim", dispositivo: "simulador",
-        empresa: texto(b.empresa, 40) || null,
-      };
-      anotar(t, estado, estado === "lista" ? "🧪 Simulada: lista para firmar (prueba)."
-        : estado === "preparando" ? "🧪 Simulada: preparándose (prueba)." : "🧪 Simulada: en cola (prueba).");
-      creadas.push(await escribir(store, t));
-    }
+    for (let i = 0; i < n; i++) creadas.push(await escribir(store, nuevaSim(estado)));
     return json({ ok: true, creadas: creadas.length, estado, entorno: STORE });
   }
 
