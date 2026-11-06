@@ -90,6 +90,15 @@ async function todos(store) {
   if (cambiados.length || borrados) await store.setJSON("cache/todos", m).catch(() => {});
   return Object.values(m).map((x) => x.d).sort((a, b) => (b.actualizado || "").localeCompare(a.actualizado || ""));
 }
+// Lector SIN caché: el simulador vive en su propio store aislado ("robot-sim"). No puede usar todos() porque ese
+// MEMO.mapa es un caché compartido por clave de blob; mezclarlo entre el store real y el simulado corrompería ambos.
+async function todosSim(store) {
+  const { blobs } = await store.list({ prefix: "trabajo/" });
+  const out = await Promise.all(blobs.map((b) => store.get(b.key, { type: "json" }).catch(() => null)));
+  return out.filter(Boolean).sort((a, b) => (b.actualizado || "").localeCompare(a.actualizado || ""));
+}
+// El store del simulador es SIEMPRE "robot-sim", en cualquier entorno. Nunca toca los datos reales ("robot").
+const storeSim = () => getStore({ name: "robot-sim", consistency: "strong" });
 
 // 🧪 fábrica de cotizaciones ficticias (solo staging)
 const SIM_NOMBRES = ["Implementos deportivos", "Insumos de aseo", "Artículos de oficina", "Equipos computacionales",
@@ -114,7 +123,7 @@ function nuevaSim(estado) {
 async function simTick(store) {
   await store.setJSON("robot/latido", { visto: ahora(), libre: true, tarea: "🧪 Robot simulado produciendo fichas", version: "sim", cola: {} });
   await store.setJSON("mp/latido", { visto: ahora(), logueado: true });
-  let lista = await todos(store);
+  let lista = await todosSim(store);
   const now = Date.now();
   // 1) avance RÁPIDO: en_cola → preparando (1.2 s) → lista/por firmar (2.5 s)
   const sig = { en_cola: "preparando", tomado: "preparando", preparando: "lista" };
@@ -129,7 +138,7 @@ async function simTick(store) {
   // 2) DEMO DE CARGA
   const demo = (await store.get("sim/demo", { type: "json" })) || null;
   if (demo && demo.on) {
-    lista = await todos(store);
+    lista = await todosSim(store);
     const sims = lista.filter((t) => t.sim);
     const activas = sims.filter((t) => ["en_cola", "preparando", "tomado"].includes(t.estado)).length;
     const porFirmar = sims.filter((t) => t.estado === "lista");
@@ -624,33 +633,46 @@ async function atender(req) {
   const url = new URL(req.url);
   const ruta = url.pathname.replace(/^\/bot\/?/, "").replace(/\/$/, "") || "estado";
 
-  // ---------- 🧪 SIMULADOR (solo staging) ----------
+  // ---------- 🧪 SIMULADOR (autocontenido, en cualquier entorno) ----------
   // Inyecta cotizaciones FICTICIAS para probar el flujo (cola → por firmar → firma) SIN Mercado Público real.
-  // Doble blindaje: (1) este candado rechaza producción; (2) el store ya está aislado por entorno, así que ni
-  // siquiera comparte datos con producción. Las simuladas llevan sim:true y código SIM-… para poder borrarlas.
+  // Blindaje total: el simulador SIEMPRE usa su propio store "robot-sim", nunca el real ("robot"). Por eso puede
+  // correr incluso en producción sin tocar un solo dato verdadero. Las simuladas llevan sim:true y código SIM-….
   if (ruta === "simular" && req.method === "POST") {
-    if (_CTX === "production") return json({ error: "El simulador no corre en producción." }, 403);
+    const sim = storeSim();
     const b = await cuerpo(req);
     if (b.limpiar) {
-      const { blobs } = await store.list({ prefix: "trabajo/SIM-" });
-      await Promise.all(blobs.map((x) => store.delete(x.key)));
-      await store.delete("sim/demo").catch(() => {});
-      return json({ ok: true, borradas: blobs.length, entorno: STORE });
+      const { blobs } = await sim.list();
+      await Promise.all(blobs.map((x) => sim.delete(x.key)));
+      return json({ ok: true, borradas: blobs.length, entorno: "robot-sim" });
     }
     if (b.demo === "on") {                                   // ▶ demo de carga: el robot produce sin parar + humano 25 s
-      await store.setJSON("sim/demo", { on: true, t0: ahora(), firmo: ahora() });
-      for (let i = 0; i < 6; i++) await escribir(store, nuevaSim("en_cola"));
-      return json({ ok: true, demo: "on", entorno: STORE });
+      await sim.setJSON("sim/demo", { on: true, t0: ahora(), firmo: ahora() });
+      for (let i = 0; i < 6; i++) await escribir(sim, nuevaSim("en_cola"));
+      return json({ ok: true, demo: "on", entorno: "robot-sim" });
     }
     if (b.demo === "off") {
-      await store.setJSON("sim/demo", { on: false });
-      return json({ ok: true, demo: "off", entorno: STORE });
+      await sim.setJSON("sim/demo", { on: false });
+      return json({ ok: true, demo: "off", entorno: "robot-sim" });
     }
     const n = Math.min(50, Math.max(1, Number(b.n) || 5));
     const estado = ["en_cola", "preparando", "lista"].includes(b.estado) ? b.estado : "lista";
     const creadas = [];
-    for (let i = 0; i < n; i++) creadas.push(await escribir(store, nuevaSim(estado)));
-    return json({ ok: true, creadas: creadas.length, estado, entorno: STORE });
+    for (let i = 0; i < n; i++) creadas.push(await escribir(sim, nuevaSim(estado)));
+    return json({ ok: true, creadas: creadas.length, estado, entorno: "robot-sim" });
+  }
+  // Estado en vivo del simulador: avanza el robot simulado (tick) y devuelve el tablero. El tablero lo consulta en bucle.
+  if (ruta === "sim-estado" && req.method === "GET") {
+    const sim = storeSim();
+    await simTick(sim);
+    const lista = await todosSim(sim);
+    const demo = (await sim.get("sim/demo", { type: "json" })) || null;
+    const n = (e) => lista.filter((t) => t.estado === e).length;
+    return json({
+      ok: true, demo: !!(demo && demo.on),
+      conteo: { en_cola: n("en_cola"), preparando: n("preparando") + n("tomado"), lista: n("lista"),
+        enviada: n("enviada") + n("confirmada"), total: lista.length },
+      trabajos: lista.slice(0, 120).map(({ historial, ...t }) => t),
+    });
   }
 
   // ---------- 💳 WebPay: crear el pago y cobrar el abono confirmado ----------
@@ -682,7 +704,6 @@ async function atender(req) {
 
   // ---------- celular ----------
   if (ruta === "estado" && req.method === "GET") {
-    if (_CTX !== "production") await simTick(store);   // 🧪 staging: el robot simulado avanza las ficticias a «por firmar»
     const robot = (await store.get("robot/latido", { type: "json" })) || null;
     const lista = await todos(store);
     const mpl = (await store.get("mp/latido", { type: "json" })) || null;
