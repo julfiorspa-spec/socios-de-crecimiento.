@@ -13,6 +13,14 @@ import {
 
 export const config = { path: ["/bot", "/bot/*"] };
 
+// 🧪 AISLAMIENTO DE ENTORNOS (producción vs. simulador/staging). Producción usa el store de siempre, "robot", INTACTO.
+// Cualquier deploy de rama o preview (staging) usa un store APARTE ("robot-<rama>") → las pruebas NUNCA tocan los datos
+// reales (tu cola, tus enviadas). Fail-safe: si Netlify no da contexto, se asume producción y se usa "robot".
+const _CTX = process.env.CONTEXT || "production";
+const STORE = _CTX === "production"
+  ? "robot"
+  : "robot-" + String(process.env.BRANCH || _CTX).replace(/[^a-z0-9_-]/gi, "-").slice(0, 40);
+
 const ESTADOS_ACTIVOS = new Set(["en_cola", "tomado", "preparando", "lista", "lic_bajando", "lic_captcha", "lic_analizando", "lic_ingresando"]);
 const COD_LIC = /^\d{1,8}-\d{1,8}-[A-Z][A-Z0-9]\d{2}$/;      // licitaciones: 2736-46-LE26, 1234-5-LP26, 99-1-L126…
 const MP_INACTIVO_MS = 45000;          // la pestaña de Mercado Público late cada ~10 s mientras está abierta
@@ -483,7 +491,7 @@ async function waWebhook(req) {
   const esp = "sha256=" + createHmac("sha256", sec).update(crudo).digest("hex");
   if (firma.length !== esp.length || !timingSafeEqual(Buffer.from(firma), Buffer.from(esp))) return new Response("firma", { status: 403 });
   let j = {}; try { j = JSON.parse(crudo); } catch {}
-  const store = getStore({ name: "robot", consistency: "strong" });
+  const store = getStore({ name: STORE, consistency: "strong" });
   const mapa = (await store.get("chat/tel", { type: "json" })) || {};
   for (const e of j.entry || []) for (const ch of e.changes || []) for (const m of ch.value?.messages || []) {
     const de = waTel(m.from), dest = mapa[de];
@@ -501,7 +509,7 @@ async function waWebhook(req) {
 
 // ☁️ un servidor nuevo pide conectarse SIN conocer el código: el dueño lo aprueba con un toque en la app
 async function nubePedir(req) {
-  const store = getStore({ name: "robot", consistency: "strong" });
+  const store = getStore({ name: STORE, consistency: "strong" });
   const url = new URL(req.url);
   const L = ((await store.get("nube/solicitudes", { type: "json" })) || []).filter((x) => Date.now() - Date.parse(x.t) < 3 * 3600_000);
   if (req.method === "POST") {
@@ -536,7 +544,7 @@ async function webpayRetorno(req) {                                             
   if (req.method === "POST") { try { const fd = await req.formData(); token = token || fd.get("token_ws") || fd.get("TBK_TOKEN"); } catch {} }
   const volver = (q) => new Response(null, { status: 302, headers: { location: `${WP_SITIO}/?webpay=${q}#robot` } });
   if (!token) return volver("cancelado");
-  const store = getStore({ name: "robot", consistency: "strong" });
+  const store = getStore({ name: STORE, consistency: "strong" });
   try {
     const r = await fetch(`${WP_BASE}/rswebpaytransaction/api/webpay/v1.2/transactions/${encodeURIComponent(token)}`, { method: "PUT", headers: WP_HEAD() });
     const j = await r.json().catch(() => ({}));
@@ -558,7 +566,7 @@ async function atender(req) {
   if (/^\/bot\/nube-pedir\/?$/.test(new URL(req.url).pathname)) return nubePedir(req);
   if (/^\/bot\/webpay-retorno\/?$/.test(new URL(req.url).pathname)) return webpayRetorno(req);
   if (!autorizado(req)) return json({ error: "Código de enlace inválido o no configurado." }, 401);
-  const store = getStore({ name: "robot", consistency: "strong" });
+  const store = getStore({ name: STORE, consistency: "strong" });
   const url = new URL(req.url);
   const ruta = url.pathname.replace(/^\/bot\/?/, "").replace(/\/$/, "") || "estado";
 
