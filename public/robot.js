@@ -1245,9 +1245,9 @@
   const FIRMADAS = "sdc:firmadas";
   const leerFirmadas = () => { try { const o = JSON.parse(localStorage.getItem(FIRMADAS)) || {}; for (const k in o) if (Date.now() - o[k] > 12 * 3600e3) delete o[k]; return o; } catch { return {}; } };
   const yaFirmada = (t) => { if (!t || HECHA.includes(t.estado)) return false;
-    const c = Date.parse(t.creado || 0) || 0, l = leerFirmadas()[t.codigo], v = Date.parse(t.enviada_vista || 0) || 0;
+    const c = Date.parse(t.creado || 0) || 0, act = Date.parse(t.actualizado || 0) || c, l = leerFirmadas()[t.codigo], v = Date.parse(t.enviada_vista || 0) || 0;
     if (t.accion === "verificar" && ["en_cola", "tomado", "preparando"].includes(t.estado)) return true;   // el robot está confirmando el envío
-    return (l && l >= c) || (v && v >= c); };
+    return (l && l >= act) || (v && v >= c); };   // si el robot la volvió a dejar lista (actualizó) DESPUÉS de firmar, reaparece
   function marcarFirmada(cod, avisar) {
     cod = String(cod || "").toUpperCase(); if (!cod) return;
     const o = leerFirmadas(); const nueva = !o[cod]; o[cod] = Date.now(); try { localStorage.setItem(FIRMADAS, JSON.stringify(o)); } catch {}
@@ -2362,8 +2362,10 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const cierreDe = (t) => t.cierre || (lista.find((x) => x.codigo === t.codigo) || {}).cierre || (leerSel()[t.codigo] || {}).cierre;
     const cerrada = (t) => /\bCERRADA\b/.test(t.mensaje || "") || /(compra|cotizaci[oó]n|convocatoria)[^.]{0,30}cerrad|ya no (recibe|acepta) (cotizaciones|ofertas)|fuera de plazo/i.test(t.mensaje || "")
       || (cierreDe(t) && Date.parse(cierreDe(t)) < ahora);
-    const enFirma = trabajos.filter((t) => EN_FIRMA.includes(t.estado) && !ocultas[t.codigo] && !yaFirmada(t) && !(cerrada(t) && !["tomado", "preparando"].includes(t.estado)));
-    const aLimpiar = trabajos.filter((t) => EN_FIRMA.includes(t.estado) && !ocultas[t.codigo] && !yaFirmada(t) && cerrada(t) && !["tomado", "preparando"].includes(t.estado));
+    const ultAct = (t) => Date.parse(t.actualizado || t.creado || 0) || 0;
+    const oculto = (t) => { const o = ocultas[t.codigo]; return !!(o && (Date.parse(o) || 0) >= ultAct(t)); };   // si la ocultaste pero el robot la volvió a dejar lista DESPUÉS, reaparece
+    const enFirma = trabajos.filter((t) => EN_FIRMA.includes(t.estado) && !oculto(t) && !yaFirmada(t) && !(cerrada(t) && !["tomado", "preparando"].includes(t.estado)));
+    const aLimpiar = trabajos.filter((t) => EN_FIRMA.includes(t.estado) && !oculto(t) && !yaFirmada(t) && cerrada(t) && !["tomado", "preparando"].includes(t.estado));
     if (aLimpiar.length && !R._limpiando) { R._limpiando = true;
       setTimeout(async () => { for (const t of aLimpiar) await quitarFirma(t.codigo, null, "cerrada");
         toast(`🗑 Quité ${aLimpiar.length} compra${aLimpiar.length > 1 ? "s" : ""} ya cerrada${aLimpiar.length > 1 ? "s" : ""} de Firmar`); R._limpiando = false; }, 0); }
