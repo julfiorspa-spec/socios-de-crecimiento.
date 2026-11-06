@@ -63,9 +63,11 @@
     <button class="gris" onclick="demo('off')">⏹ Detener demo</button>
   </div>
   <p class="muted" style="margin:.2rem 0 10px">El robot simulado produce sin parar (~1 «por firmar» cada pocos segundos). Un humano simulado firma 1 cada 25 s → verás <b>crecer la cola en «Por firmar»</b>, igual que en la realidad.</p>
+  <button class="verde" onclick="reales(10)">🌐 Traer 10 compras REALES por fuera (API, sin sesión)</button>
+  <p class="muted" style="margin:.2rem 0 10px">Lee compras ágiles de verdad publicadas en Mercado Público (las mismas que ves en el portal) <b>sin iniciar sesión</b> y las mete en cola. Verás nombres reales fluir hasta «Por firmar».</p>
   <div class="fila">
-    <button onclick="sim('en_cola',5)">➕ 5 en cola</button>
-    <button onclick="sim('lista',5)">➕ 5 por firmar</button>
+    <button onclick="sim('en_cola',5)">➕ 5 falsas en cola</button>
+    <button onclick="sim('lista',5)">➕ 5 falsas por firmar</button>
     <button class="gris" onclick="limpiar()">🗑 Limpiar</button>
   </div>
 </div>
@@ -87,6 +89,7 @@
   function sim(estado,n){post({n:n,estado:estado}).then(refrescar);}
   function limpiar(){post({limpiar:true}).then(refrescar);}
   function demo(m){post({demo:m}).then(refrescar);}
+  function reales(n){post({reales:n,estado:'en_cola'}).then(refrescar);}
 
   var ETIQ={en_cola:['En cola','e-cola'],tomado:['Preparando','e-prep'],preparando:['Preparando','e-prep'],lista:['Por firmar','e-lista'],enviada:['Firmada','e-env'],confirmada:['Firmada','e-env']};
   async function refrescar(){

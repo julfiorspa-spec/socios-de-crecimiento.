@@ -99,6 +99,46 @@ async function todosSim(store) {
 }
 // El store del simulador es SIEMPRE "robot-sim", en cualquier entorno. Nunca toca los datos reales ("robot").
 const storeSim = () => getStore({ name: "robot-sim", consistency: "strong" });
+// 🌐 Compras ágiles REALES publicadas (API oficial v2 vía puente RadarPúblico), leídas POR FUERA, sin sesión.
+// El simulador las usa para que el latido se vea con datos de verdad — pero siempre en el store aislado "robot-sim".
+// (RADAR_CA ya está declarado arriba: mismo puente a la API oficial v2.)
+async function traerRealesCA(limite = 20) {
+  try {
+    const tam = Math.min(50, Math.max(10, limite));
+    const r = await fetch(`${RADAR_CA}?estado=publicada&tamano_pagina=${tam}&ordenar_por=FechaCierre&numero_pagina=1`,
+      { headers: { "user-agent": "CotizAgil-Sim/1.0", accept: "application/json" } });
+    const j = await r.json().catch(() => ({}));
+    const items = (j && j.payload && j.payload.items) || [];
+    return items.map((p) => {
+      const m = p.montos || {}, ins = p.institucion || {};
+      const total = Math.round(Number(m.monto_disponible_clp || m.monto_disponible || 0)) || 0;
+      return { codigo: p.codigo, nombre: (p.nombre || "").trim() || p.codigo,
+        organismo: (ins.unidad_compra || ins.organismo_comprador || "").trim() || "Organismo público",
+        total, cierre: (p.fechas || {}).fecha_cierre || "", region: (ins.nombre_region || "").trim() };
+    }).filter((x) => x.codigo);
+  } catch { return []; }
+}
+function nuevaSimReal(base, estado) {
+  const total = base.total || (100000 + Math.floor(Math.random() * 3000000));
+  const t = {
+    codigo: base.codigo, accion: "firmar", descuento: 0.08, sim: true, real: true, origen: "api",
+    nombre: base.nombre, organismo: base.organismo, monto: total, creado: ahora(), estado: null, mensaje: null, historial: [],
+    total, neto: Math.round(total / 1.19), plazo: "5 días", cierre: base.cierre || "",
+    detalle: "Compra ágil REAL leída por fuera (API, sin sesión). Flujo simulado — sin Mercado Público, sin firma real.",
+    items: [{ id: "1", nombre: base.nombre, cantidad: 1, precio: total }], pdf: false, envios: 0,
+    jugador: "sim", dispositivo: "simulador", empresa: null,
+  };
+  anotar(t, estado, "🌐 Leída por fuera (API oficial). En cola.");
+  return t;
+}
+// Saca una compra real del pool cacheado (se rellena desde la API cuando se vacía).
+async function tomarDelPool(store) {
+  let pool = (await store.get("sim/pool", { type: "json" })) || [];
+  if (!pool.length) pool = await traerRealesCA(30);
+  const base = pool.shift();
+  await store.setJSON("sim/pool", pool);
+  return base || null;
+}
 
 // 🧪 fábrica de cotizaciones ficticias (solo staging)
 const SIM_NOMBRES = ["Implementos deportivos", "Insumos de aseo", "Artículos de oficina", "Equipos computacionales",
@@ -142,7 +182,10 @@ async function simTick(store) {
     const sims = lista.filter((t) => t.sim);
     const activas = sims.filter((t) => ["en_cola", "preparando", "tomado"].includes(t.estado)).length;
     const porFirmar = sims.filter((t) => t.estado === "lista");
-    if (activas < 4 && sims.length < 40) await escribir(store, nuevaSim("en_cola"));   // el robot nunca se queda sin qué hacer
+    if (activas < 4 && sims.length < 40) {                                              // el robot nunca se queda sin qué hacer
+      const base = await tomarDelPool(store);                                           // prefiere compras REALES leídas por fuera
+      await escribir(store, base ? nuevaSimReal(base, "en_cola") : nuevaSim("en_cola"));
+    }
     if (porFirmar.length && now - Date.parse(demo.firmo || demo.t0 || 0) > 25000) {    // humano simulado: 1 firma / 25 s
       const vieja = porFirmar.sort((a, b) => (a.actualizado || "").localeCompare(b.actualizado || ""))[0];
       anotar(vieja, "enviada", "🧪 Firmada por el humano simulado (25 s).");
@@ -647,8 +690,18 @@ async function atender(req) {
     }
     if (b.demo === "on") {                                   // ▶ demo de carga: el robot produce sin parar + humano 25 s
       await sim.setJSON("sim/demo", { on: true, t0: ahora(), firmo: ahora() });
-      for (let i = 0; i < 6; i++) await escribir(sim, nuevaSim("en_cola"));
-      return json({ ok: true, demo: "on", entorno: "robot-sim" });
+      const pool = await traerRealesCA(30);                  // arranca con compras REALES leídas por fuera (API)
+      await sim.setJSON("sim/pool", pool.slice(6));
+      for (let i = 0; i < 6; i++) await escribir(sim, pool[i] ? nuevaSimReal(pool[i], "en_cola") : nuevaSim("en_cola"));
+      return json({ ok: true, demo: "on", reales: pool.length, entorno: "robot-sim" });
+    }
+    if (b.reales) {                                          // 🌐 traer N compras REALES por fuera (API), al estado pedido
+      const pool = await traerRealesCA(50);
+      const n = Math.min(20, Math.max(1, Number(b.reales) || 10));
+      const estado = ["en_cola", "preparando", "lista"].includes(b.estado) ? b.estado : "en_cola";
+      const creadas = [];
+      for (let i = 0; i < n && i < pool.length; i++) creadas.push(await escribir(sim, nuevaSimReal(pool[i], estado)));
+      return json({ ok: true, reales: creadas.length, estado, entorno: "robot-sim" });
     }
     if (b.demo === "off") {
       await sim.setJSON("sim/demo", { on: false });
