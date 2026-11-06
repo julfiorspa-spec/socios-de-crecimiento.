@@ -1636,7 +1636,13 @@ async function atender(req) {
     const licOcupado = b.busy_lic !== undefined ? !!b.busy_lic
       : lista.some((t) => ["lic_bajando", "lic_captcha", "lic_analizando", "lic_ingresando"].includes(t.estado));
     const esLic = (t) => String(t.accion || "").startsWith("lic") || t.tipo === "licitacion";
+    // 🚧 LICITACIONES EN PAUSA (hasta que Felipe diga). El licitador abre una SEGUNDA sesión de Mercado Público (perfil
+    // aparte) y tener dos sesiones de MP abiertas confunde al portal y BOTA la sesión de compra ágil → "se sale de MP".
+    // Con esto el robot NO recibe NINGUNA tarea de licitación → nunca abre esa segunda sesión → MP queda estable.
+    // Para reactivar licitaciones: poner LICITADOR_OFF = false.
+    const LICITADOR_OFF = true;
     let cola2 = lista.filter((t) => t.estado === "en_cola" && mioT(t));
+    if (LICITADOR_OFF) cola2 = cola2.filter((t) => !esLic(t));
     if (agilOcupado) cola2 = cola2.filter(esLic);
     if (licOcupado) cola2 = cola2.filter((t) => !esLic(t));
     // 🆘 RESCATE: este robot está libre (si no, ya salió arriba por b.ocupado). Si por el reparto no le toca ninguna,
@@ -1644,6 +1650,7 @@ async function atender(req) {
     // "dueño" quedó ocupado o colgado. Respeta el carril (ágiles/licitaciones) y solo toma una por latido.
     if (!cola2.length) {
       let rescate = lista.filter((t) => t.estado === "en_cola");
+      if (LICITADOR_OFF) rescate = rescate.filter((t) => !esLic(t));
       if (agilOcupado) rescate = rescate.filter(esLic);
       if (licOcupado) rescate = rescate.filter((t) => !esLic(t));
       cola2 = rescate;
