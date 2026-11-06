@@ -1431,7 +1431,7 @@
   // ======================= 🛠 EJECUTA: el portal de los socios ejecutadores =======================
   // El que ganó deriva el negocio (o lo ejecuta él). El ejecutador negocia con proveedores, fija el precio de compra,
   // pide la transferencia al inversionista, prepara la entrega y cierra con la guía y la factura firmadas.
-  const ETAPAS_EJ = [["operacion", "🤝 Proveedores"], ["pago", "💸 Pago"], ["transporte", "🚚 Despacho"], ["despacho", "🛣 En trayecto"], ["entrega", "📦 Recepción"], ["cerrado", "🥇 Cerrados"]];
+  const ETAPAS_EJ = [["operacion", "💼 Oportunidades de negocio"], ["pago", "💸 Pago"], ["transporte", "🚚 Despacho"], ["despacho", "🛣 En trayecto"], ["entrega", "📦 Recepción"], ["cerrado", "🥇 Cerrados"]];
   const etEj = (t) => (["previa", "ganada", "inversionista"].includes(t.op?.etapa) ? "operacion" : t.op?.etapa === "documentos" ? "pago" : t.op?.etapa || "operacion");
   const TARIFA_KM_STGO = 900;            // 🚚 flete en Santiago: $900 por km
   const netoDe = (v) => (v ? Math.round(v / 1.19) : 0);
@@ -2291,6 +2291,12 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         const luego = leerLuego(), resp = (t) => (t.op?.respuestas || []).filter((r) => !r.visto).length;
         const enTab = L.filter((t) => et(t) === tab).sort((a, b) => resp(b) - resp(a) || diasPlazo(a.op?.plazo_fecha) - diasPlazo(b.op?.plazo_fecha));
         if (!enTab.length) return `<div class="empty">${L.length ? "Nada en esta etapa." : "Aún no hay órdenes de compra. Cuando llegue una (o vayas 1°), queda anclada aquí sola."}</div>`;
+        if (tab === "operacion") {   // 💼 Oportunidades de negocio: separadas en Con orden de compra vs Te pueden llamar
+          const conOC = enTab.filter((t) => t.op?.oc_codigo || t.op?.oc);
+          const llamar = enTab.filter((t) => !(t.op?.oc_codigo || t.op?.oc));
+          const grupo = (titulo, arr) => arr.length ? `<div class="rb-sec">${titulo} · ${arr.length}</div>${arr.map(portadaEj).join("")}` : "";
+          return grupo("📋 Con orden de compra", conOC) + grupo("📞 Te pueden llamar", llamar);
+        }
         const ahora_ = enTab.filter((t) => !luego[t.codigo]), despues = enTab.filter((t) => luego[t.codigo]);
         const top = ahora_[0];
         return (top ? `<div class="muted" style="font-size:.72rem;text-align:center;margin:6px 0">Negocio <b>1 de ${ahora_.length}</b> · 👉 derecha = <b>ver ahora</b> · 👈 izquierda = <b>en otro momento</b></div>` + portadaEj(top)
