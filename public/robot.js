@@ -2259,6 +2259,40 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         <button class="btn small" type="button" data-rb="ej-fact-guardar">Guardar</button></details>
       <div class="rb-row" style="margin-top:6px"><button class="btn small" type="button" data-rb="ej-csv">📊 Exportar libro (Excel / contador)</button><a class="btn small" href="https://www.sii.cl" target="_blank" rel="noopener">🏛 SII ↗</a></div></details>`;
   }
+  // 📦 CONSOLIDADO: junta los cerrados de un período (default 5 días) y reparte todo junto (repartijo automático).
+  //    Un "cerrado" es una compra que pasó por todo el proceso y el factoring YA te pagó.
+  function cerradosPeriodo(L, dias) {
+    const corte = Date.now() - dias * 864e5;
+    return L.filter((t) => etEj(t) === "cerrado" && t.op?.cerrado && Date.parse(t.op.cerrado) >= corte)
+            .sort((a, b) => Date.parse(b.op.cerrado) - Date.parse(a.op.cerrado));
+  }
+  function sumaConsolidado(items) {
+    const S = { vn: 0, cn: 0, flete: 0, bruta: 0, inv: 0, comision: 0, gestion: 0, impuesto: 0, factoring: 0, final: 0 };
+    for (const t of items) { const k = cuentasDe(t), inf = t.op?.informe || {};
+      S.vn += k.ventaN; S.cn += netoDe(k.compra); S.flete += k.flete; S.bruta += k.bruta;
+      S.inv += Number(inf.inversionista) || 0; S.comision += Number(inf.comision) || 0; S.gestion += Number(inf.julfior) || 0;
+      S.impuesto += Number(inf.impuesto) || 0; S.factoring += Number(inf.factoring) || 0; S.final += Number(inf.final) || 0; }
+    return S;
+  }
+  function barraConsolidado(L) {
+    const dias = R.consDias || 5, items = cerradosPeriodo(L, dias);
+    const btn = `<div class="rb-row" style="margin:8px 0"><button class="btn small ${R.consCerr ? "rb-oro" : ""}" type="button" data-rb="consolidar">📦 Consolidar últimos ${dias} días (${items.length})</button>${R.consCerr ? `<span class="rb-row" style="gap:4px">${[5, 7, 15, 30].map((d) => `<button class="btn small ${d === dias ? "rb-oro" : ""}" type="button" data-rb="cons-dias" data-d="${d}">${d}d</button>`).join("")}</span>` : ""}</div>`;
+    if (!R.consCerr) return btn;
+    if (!items.length) return btn + `<div class="empty">No hay cerrados en los últimos ${dias} días. Un «cerrado» es una compra que pasó por todo y el factoring ya te pagó.</div>`;
+    const S = sumaConsolidado(items), f = (es) => new Date(es).toLocaleDateString("es-CL", { day: "numeric", month: "short" });
+    const desde = f(items[items.length - 1].op.cerrado), hasta = f(items[0].op.cerrado);
+    const fila = (a, b, fuerte) => `<tr><td>${a}</td><td class="n">${fuerte ? `<b class="${b >= 0 ? "rb-vivo-t" : "rb-neg-t"}">${clp(b)}</b>` : clp(b)}</td></tr>`;
+    const rep = [["🏦 Inversionista", S.inv], ["🤝 Comisión", S.comision], ["🛠 Gestión", S.gestion], ["🏛 Impuesto estimado", S.impuesto], ["💰 Factoring", S.factoring]].filter((x) => x[1]);
+    return btn + `<div class="rb-eerr">
+      <div class="rb-env"><b>📦 Consolidado · ${items.length} cerrados</b><span class="muted">${desde} → ${hasta}</span></div>
+      <table class="rb-copias">${fila("Ingresos (venta neta)", S.vn)}${fila("− Costo de compra (neto)", -S.cn)}${fila("− Despacho / flete", -S.flete)}${fila("= Margen bruto", S.bruta, 1)}</table>
+      <div class="rb-sec">🤝 Repartijo automático</div>
+      <table class="rb-copias">${rep.map(([a, b]) => fila(a, Math.round(b))).join("")}${fila("= Utilidad final de la empresa", Math.round(S.final), 1)}</table>
+      <div class="rb-sec">Cerrados incluidos (${items.length})</div>
+      <table class="rb-copias">${items.map((t) => `<tr><td>${esc((t.nombre || t.codigo).slice(0, 40))}<div class="muted" style="font-size:.66rem">${esc(t.codigo)} · ${f(t.op.cerrado)}</div></td><td class="n">${clp(Math.round((t.op?.informe || {}).final || 0))}</td></tr>`).join("")}</table>
+      <div class="rb-row" style="margin-top:6px"><button class="btn small rb-firmar" type="button" data-rb="cons-csv" data-d="${dias}">📊 Exportar consolidado (Excel)</button></div>
+      <div class="muted" style="font-size:.66rem;margin-top:4px">El repartijo es automático <b>por consolidado</b> (cada ${dias} días), no negocio por negocio: cada ${dias} días cierras el corte y cada socio recibe un solo pago. La frecuencia la defines tú según la liquidez.</div></div>`;
+  }
   function portalEjecuta() {
     const yo = (R.ejecutores || {})[miJug()];
     if (!R.ejecutores) cargarEjecutores();
@@ -2287,6 +2321,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     return `<div class="rb-tira"><span>🛠 <b>${esc(yo.nombre)}</b></span><span>💰 <b class="${ahorro >= 0 ? "rb-vivo-t" : "rb-neg-t"}">${cortoG(ahorro)}</b> ahorro</span><span>🥇 <b>${cerr}</b>${cerr ? ` · ${cumplidos} a tiempo` : ""}</span><span>${atrasados ? `🔴 <b>${atrasados}</b> atrasado${atrasados > 1 ? "s" : ""}` : `⏳ <b>${L.length - cerr}</b>`}</span></div>
       ${libroERP(L)}
       <div class="rb-etapas">${ETAPAS_EJ.map(([k, n]) => `<button type="button" class="${tab === k ? "on" : ""}" data-rb="ej-tab" data-e="${k}">${n} ${L.filter((t) => et(t) === k).length}</button>`).join("")}</div>
+      ${tab === "cerrado" ? barraConsolidado(L) : ""}
       ${!R.ejec ? `<div class="empty"><span class="spinner"></span></div>` : (() => {
         const luego = leerLuego(), resp = (t) => (t.op?.respuestas || []).filter((r) => !r.visto).length;
         const enTab = L.filter((t) => et(t) === tab).sort((a, b) => resp(b) - resp(a) || diasPlazo(a.op?.plazo_fecha) - diasPlazo(b.op?.plazo_fecha));
@@ -3897,6 +3932,14 @@ ${empNom}`;
     }
     if (a === "portal") { guardar({ portal: b.dataset.v }); R.pantalla = null; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "ej-tab") { R.ejTab = b.dataset.e; return pintarHoja(true); }
+    if (a === "consolidar") { R.consCerr = !R.consCerr; return pintarHoja(true); }
+    if (a === "cons-dias") { R.consDias = +b.dataset.d || 5; R.consCerr = true; return pintarHoja(true); }
+    if (a === "cons-csv") {
+      const L = R.ejec || [], dias = +b.dataset.d || 5, items = cerradosPeriodo(L, dias);
+      const fila = (t) => { const k = cuentasDe(t), inf = t.op?.informe || {}; return [t.op?.oc_codigo || t.op?.oc || "", t.codigo, (t.oc_compra?.organismo || t.organismo || "").replace(/;/g, ","), t.op?.cerrado ? new Date(t.op.cerrado).toLocaleDateString("es-CL") : "", k.ventaN, netoDe(k.compra), k.flete, k.bruta, Math.round(inf.inversionista || 0), Math.round(inf.comision || 0), Math.round(inf.julfior || 0), Math.round(inf.impuesto || 0), Math.round(inf.factoring || 0), Math.round(inf.final || 0)].join(";"); };
+      const csv = "﻿OC;Compra Ágil;Cliente;Cerrado;Venta neta;Compra neta;Flete;Margen bruto;Inversionista;Comisión;Gestión;Impuesto;Factoring;Utilidad final\n" + items.map(fila).join("\n");
+      const u = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); const x = document.createElement("a"); x.href = u; x.download = "consolidado_" + dias + "dias.csv"; x.click(); return;
+    }
     const ejOp = async (datos, etapa, msg) => {
       try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos, ...(etapa ? { etapa } : {}), dispositivo: dispositivo(false) }) });
         if (msg) toast(msg); if (etapa) R.ejTab = etapa; R.ejecT = 0; await cargarEjecuta(); pintarHoja(true); } catch (e) { toast(e.message); }
