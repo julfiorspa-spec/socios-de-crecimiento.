@@ -1883,7 +1883,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       <div class="muted" style="font-size:.68rem;margin-top:6px">Comparo la simulación (lo que estimé) con lo real (lo que se hizo): así vemos si el negocio salió como se planeó.</div></div>`;
   }
   // 🧮 el Excel del inversionista, en vivo (mismas fórmulas que la planilla: factoring, IVA, impuesto 27 %, comisión y reparto)
-  const PARAM_NEG = { factoring: 0.03, impuesto: 0.25, comision: 0.04, aplica_comision: true, julfior: 0.844, inversionista: 0.156, recargo_sin_factura: 0.25, anticipo: 1, transporte: 0, ejecutador: 0.10 };
+  const PARAM_NEG = { factoring: 0.04, impuesto: 0.03, comision: 0.04, aplica_comision: true, julfior: 0.844, inversionista: 0.156, recargo_sin_factura: 0.25, anticipo: 1, transporte: 0, ejecutador: 0.10 };
   function calcNeg(t) {
     const op = t.op || {}, inf = op.informe || {}, p = { ...PARAM_NEG, ...(op.param || {}) };
     const total = Number(t.oc_compra?.total || t.total) || 0;
@@ -1892,11 +1892,13 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const fuente = op.precio_acordado ? "precio acordado" : cot ? "mejor cotización" : inf.compras ? "estimado" : "sin precio";
     const transporte = Number(op.costo_transporte) || p.transporte || 0;
     const neto = Math.round(total / 1.19), iva = total - neto, factoring = total * p.factoring, ingreso = total - factoring;
-    const iva_compra = compras - compras / 1.19, iva_pagar = Math.max(0, iva - iva_compra), recargo = 0;
-    const utilidad = ingreso - compras - iva_pagar - recargo - transporte, impuesto = Math.max(0, utilidad) * p.impuesto, repartir = utilidad - impuesto;
+    const conFactura = !op.sin_factura;                               // 🧾 sin factura = NO hay IVA crédito (no baja el IVA a pagar)
+    const iva_compra = conFactura ? compras - compras / 1.19 : 0, iva_pagar = Math.max(0, iva - iva_compra), recargo = 0;
+    const impuesto = Math.max(0, neto) * p.impuesto;                  // 🏛 PPM: % sobre la venta neta (no sobre la utilidad)
+    const utilidad = ingreso - compras - iva_pagar - recargo - transporte, repartir = utilidad - impuesto;
     const comision = p.aplica_comision ? Math.max(0, repartir) * p.comision : 0, final = repartir - comision;
     const capital = compras * p.anticipo, invGan = final * p.inversionista, ejec = Math.max(0, final) * p.ejecutador, empresa = final - invGan - ejec;
-    return { p, total, neto, iva, factoring, ingreso, compras, fuente, transporte, iva_compra, iva_pagar, recargo, utilidad, impuesto, repartir, comision, final,
+    return { p, total, neto, iva, factoring, ingreso, compras, fuente, conFactura, transporte, iva_compra, iva_pagar, recargo, utilidad, impuesto, repartir, comision, final,
       capital, invGan, invRecibe: capital + invGan, invPct: capital ? invGan / capital : 0, ejec, empresa, jugador: comision };
   }
   // 🔥 ¿qué tan bueno es el negocio? (para saber si vale traer inversores)
@@ -1914,8 +1916,9 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const _r = ratingNeg(X.final);
     return `<div class="rb-xl"><div class="rb-rating ${_r.cls}">${_r.emoji} <b>${_r.txt}</b><span>${clp(Math.round(X.final))} de utilidad final en este negocio</span></div><div class="rb-env"><b><i class="rb-luz"></i> NEGOCIO</b><span class="muted" style="font-size:.68rem">compras: ${esc(X.fuente)} · se recalcula con cada cambio</span></div>
       <table class="rb-copias">${f("Venta neta", X.neto)}${f("IVA (19 %)", X.iva)}${f("Total OC", X.total, "t")}${f("− Factoring", -X.factoring, "", pc(X.p.factoring))}${f("= Ingreso final", X.ingreso, "t")}
-        ${f("− Compras (con factura)", -X.compras)}${f("− IVA a pagar al SII", -X.iva_pagar, "", "débito − crédito")}${X.transporte ? f("− Transporte", -X.transporte) : ""}${f("= Utilidad", X.utilidad, "t")}
-        ${f("− Impuesto", -X.impuesto, "", pc(X.p.impuesto))}${f("= Utilidad a repartir", X.repartir, "t")}${f("− Comisión jugador", -X.comision, "", pc(X.p.comision))}${f("= Utilidad final", X.final, "oro")}</table>
+        ${f(X.conFactura ? "− Compras (con factura)" : "− Compras (sin factura)", -X.compras)}${f("− IVA a pagar al SII", -X.iva_pagar, "", X.conFactura ? "débito − crédito" : "sin crédito (sin factura)")}${X.transporte ? f("− Transporte", -X.transporte) : ""}${f("= Utilidad", X.utilidad, "t")}
+        ${f("− PPM", -X.impuesto, "", pc(X.p.impuesto) + " de la venta")}${f("= Utilidad a repartir", X.repartir, "t")}${f("− Comisión jugador", -X.comision, "", pc(X.p.comision))}${f("= Utilidad final", X.final, "oro")}</table>
+      <div class="rb-row" style="margin:6px 0"><span class="muted" style="font-size:.72rem;align-self:center">Pago al proveedor:</span><button class="btn small ${X.conFactura ? "rb-oro" : ""}" type="button" data-rb="ej-factura" data-c="${esc(t.codigo)}" data-f="1">🧾 Con factura</button><button class="btn small ${X.conFactura ? "" : "rb-oro"}" type="button" data-rb="ej-factura" data-c="${esc(t.codigo)}" data-f="0">🚫 Sin factura</button></div>
       ${repartoHTML(t, X, true)}
       <div class="rb-row"><button class="btn small rb-firmar" type="button" data-rb="neg-archivo" data-t="excel" data-c="${esc(t.codigo)}">📊 Descargar la planilla</button></div></div>`;
   }
@@ -3944,6 +3947,7 @@ ${empNom}`;
       try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos, ...(etapa ? { etapa } : {}), dispositivo: dispositivo(false) }) });
         if (msg) toast(msg); if (etapa) R.ejTab = etapa; R.ejecT = 0; await cargarEjecuta(); pintarHoja(true); } catch (e) { toast(e.message); }
     };
+    if (a === "ej-factura") return ejOp({ sin_factura: b.dataset.f === "0" }, null, b.dataset.f === "0" ? "🚫 Compra SIN factura · no baja el IVA" : "🧾 Compra CON factura · baja el IVA");
     if (a === "chat-envie" || a === "chat-pegar" || a === "mk-add") {
       const chatApi = async (x, msg) => { try { const r = await api("chat", { method: "POST", body: JSON.stringify({ codigo: cod, ...x }) }); if (msg) toast(r.enviado ? "🤖 Enviado por WhatsApp" : msg); R.ejecT = 0; await cargarEjecuta(); pintarHoja(true); } catch (e) { toast(e.message); } };
       if (a === "chat-envie") { if (b.dataset.canal === "mk") copiar(b.dataset.v); navigator.vibrate?.(10);
