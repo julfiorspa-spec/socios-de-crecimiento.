@@ -90,6 +90,26 @@ async function todos(store) {
   if (cambiados.length || borrados) await store.setJSON("cache/todos", m).catch(() => {});
   return Object.values(m).map((x) => x.d).sort((a, b) => (b.actualizado || "").localeCompare(a.actualizado || ""));
 }
+
+// 🧪 ROBOT SIMULADO (solo staging, NUNCA producción). Hace que las cotizaciones ficticias avancen SOLAS hasta
+// «lista para firmar» (en_cola → preparando → lista), así la COLA SE ACUMULA EN FIRMAR, no antes — justo el flujo
+// productor/consumidor que buscamos: el robot produce sin parar y tú siempre tienes un montón listo para firmar.
+// Además finge robot + MP "verdes" para que el simulador se vea vivo sin un PC real detrás.
+async function simTick(store) {
+  await store.setJSON("robot/latido", { visto: ahora(), libre: true, tarea: "🧪 Robot simulado produciendo fichas", version: "sim", cola: {} });
+  await store.setJSON("mp/latido", { visto: ahora(), logueado: true });
+  const lista = await todos(store);
+  const now = Date.now();
+  const sig = { en_cola: "preparando", tomado: "preparando", preparando: "lista" };
+  const espera = { en_cola: 3500, tomado: 3500, preparando: 7000 };   // ms en cada paso: se siente "trabajando"
+  for (const t of lista) {
+    if (!t.sim || !sig[t.estado]) continue;
+    if (now - Date.parse(t.actualizado || t.creado || 0) < (espera[t.estado] || 5000)) continue;
+    const nxt = sig[t.estado];
+    anotar(t, nxt, nxt === "lista" ? "🧪 Lista para firmar (simulada)." : "🧪 Preparando la ficha (simulada)…");
+    await escribir(store, t);
+  }
+}
 // 🎮 cada celular juega su propio juego: sus seleccionadas y descartes van en su propio cajón
 const jug = (v) => String(v || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
 const cajon = (base, j) => (j ? base + "/j/" + j : base);
@@ -637,6 +657,7 @@ async function atender(req) {
 
   // ---------- celular ----------
   if (ruta === "estado" && req.method === "GET") {
+    if (_CTX !== "production") await simTick(store);   // 🧪 staging: el robot simulado avanza las ficticias a «por firmar»
     const robot = (await store.get("robot/latido", { type: "json" })) || null;
     const lista = await todos(store);
     const mpl = (await store.get("mp/latido", { type: "json" })) || null;
