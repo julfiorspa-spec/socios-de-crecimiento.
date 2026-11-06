@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulador · CotizÁgil</title>
+<style>
+  body{font-family:system-ui,-apple-system,sans-serif;max-width:560px;margin:0 auto;padding:20px;background:#0b1220;color:#e7ecf3}
+  h1{font-size:1.3rem;margin:.2rem 0}
+  .lab{background:#1a2740;border:1px solid #2b3d5f;border-radius:12px;padding:16px;margin:14px 0}
+  label{font-size:.85rem;color:#9fb0c8}
+  input{width:100%;padding:10px;border-radius:8px;border:1px solid #2b3d5f;background:#0b1220;color:#e7ecf3;box-sizing:border-box;margin-top:6px}
+  button{display:block;width:100%;padding:12px;margin:8px 0;border:0;border-radius:10px;background:#2f6df6;color:#fff;font-weight:600;font-size:1rem;cursor:pointer}
+  button.gris{background:#39507a}
+  .muted{color:#9fb0c8;font-size:.85rem}
+  pre{background:#0b1220;border:1px solid #2b3d5f;border-radius:8px;padding:10px;white-space:pre-wrap;word-break:break-word;font-size:.78rem}
+  .env{font-size:.82rem;padding:7px 12px;border-radius:999px;display:inline-block;margin:6px 0}
+  .ok{background:#143a1f;color:#7ee29b}
+  .warn{background:#3a2a14;color:#e2c37e}
+</style>
+</head>
+<body>
+<h1>🧪 Simulador CotizÁgil</h1>
+<p class="muted">Inyecta cotizaciones <b>ficticias</b> para probar el flujo (cola → por firmar → firma) <b>sin Mercado Público real</b>. Los datos van a un almacén <b>aparte</b>: no tocan producción.</p>
+<div id="env"></div>
+<div class="lab">
+  <label>Código de enlace (token)</label>
+  <input id="tok" type="password" placeholder="pega tu código de enlace" autocomplete="off">
+  <p class="muted">El mismo código con que enlazas el celular al robot. Se guarda solo en este navegador.</p>
+</div>
+<div class="lab">
+  <button onclick="sim('lista',5)">➕ Crear 5 cotizaciones «por firmar»</button>
+  <button onclick="sim('en_cola',5)">➕ Crear 5 «en cola»</button>
+  <button class="gris" onclick="limpiar()">🗑 Limpiar todas las simuladas</button>
+</div>
+<p class="muted">Después abre la app (misma URL, sin <code>/simulador.html</code>) para ver cómo fluyen.</p>
+<pre id="out">Listo para probar.</pre>
+<script>
+  var out = document.getElementById('out');
+  var host = location.hostname;
+  var esProd = !/--|localhost|staging|deploy-preview/i.test(host);
+  document.getElementById('env').innerHTML = esProd
+    ? '<span class="env warn">⚠ Esto parece PRODUCCIÓN. El simulador está apagado aquí (el servidor lo rechaza). Abre la URL de staging.</span>'
+    : '<span class="env ok">✅ Ambiente de pruebas (' + host + ') — datos aparte de producción.</span>';
+  function tok(){ var t=document.getElementById('tok').value.trim(); if(t){ try{localStorage.setItem('sim_tok',t);}catch(e){} } return t; }
+  try{ var g=localStorage.getItem('sim_tok'); if(g) document.getElementById('tok').value=g; }catch(e){}
+  async function llamar(body){
+    var t=tok(); if(!t){ out.textContent='Pega tu código de enlace primero.'; return; }
+    out.textContent='Enviando…';
+    try{
+      var r=await fetch('/bot/simular',{method:'POST',headers:{'content-type':'application/json','x-robot-token':t},body:JSON.stringify(body)});
+      var j=await r.json().catch(function(){return {};});
+      out.textContent='HTTP '+r.status+'\n'+JSON.stringify(j,null,2);
+    }catch(e){ out.textContent='Error: '+e; }
+  }
+  function sim(estado,n){ llamar({n:n,estado:estado}); }
+  function limpiar(){ llamar({limpiar:true}); }
+</script>
+</body>
+</html>
