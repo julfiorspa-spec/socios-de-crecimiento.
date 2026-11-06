@@ -570,6 +570,44 @@ async function atender(req) {
   const url = new URL(req.url);
   const ruta = url.pathname.replace(/^\/bot\/?/, "").replace(/\/$/, "") || "estado";
 
+  // ---------- 🧪 SIMULADOR (solo staging) ----------
+  // Inyecta cotizaciones FICTICIAS para probar el flujo (cola → por firmar → firma) SIN Mercado Público real.
+  // Doble blindaje: (1) este candado rechaza producción; (2) el store ya está aislado por entorno, así que ni
+  // siquiera comparte datos con producción. Las simuladas llevan sim:true y código SIM-… para poder borrarlas.
+  if (ruta === "simular" && req.method === "POST") {
+    if (_CTX === "production") return json({ error: "El simulador no corre en producción." }, 403);
+    const b = await cuerpo(req);
+    if (b.limpiar) {
+      const { blobs } = await store.list({ prefix: "trabajo/SIM-" });
+      await Promise.all(blobs.map((x) => store.delete(x.key)));
+      return json({ ok: true, borradas: blobs.length, entorno: STORE });
+    }
+    const n = Math.min(50, Math.max(1, Number(b.n) || 5));
+    const estado = ["en_cola", "preparando", "lista"].includes(b.estado) ? b.estado : "lista";
+    const NOMBRES = ["Implementos deportivos", "Insumos de aseo", "Artículos de oficina", "Equipos computacionales",
+                     "Mobiliario escolar", "Herramientas", "Material eléctrico", "Textiles", "Señalética", "Equipos médicos"];
+    const creadas = [];
+    for (let i = 0; i < n; i++) {
+      const cod = `SIM-${Date.now().toString().slice(-7)}${i}-COT26`;
+      const total = 100000 + Math.floor(Math.random() * 5000000);
+      const nom = NOMBRES[Math.floor(Math.random() * NOMBRES.length)];
+      const t = {
+        codigo: cod, accion: "firmar", descuento: 0.08, sim: true,
+        nombre: nom + " (simulada)", organismo: "MUNICIPALIDAD DE PRUEBA", monto: total,
+        creado: ahora(), estado: null, mensaje: null, historial: [],
+        total, neto: Math.round(total / 1.19), plazo: "5 días",
+        detalle: "Cotización de prueba generada por el simulador — sin Mercado Público real.",
+        items: [{ id: "1", nombre: nom, cantidad: 10, precio: Math.round(total / 10) }],
+        pdf: false, envios: 0, jugador: texto(b.jugador, 60) || "sim", dispositivo: "simulador",
+        empresa: texto(b.empresa, 40) || null,
+      };
+      anotar(t, estado, estado === "lista" ? "🧪 Simulada: lista para firmar (prueba)."
+        : estado === "preparando" ? "🧪 Simulada: preparándose (prueba)." : "🧪 Simulada: en cola (prueba).");
+      creadas.push(await escribir(store, t));
+    }
+    return json({ ok: true, creadas: creadas.length, estado, entorno: STORE });
+  }
+
   // ---------- 💳 WebPay: crear el pago y cobrar el abono confirmado ----------
   if (ruta === "webpay-crear" && req.method === "POST") {
     const b = await cuerpo(req);
