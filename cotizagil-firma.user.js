@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      3.2.4
+// @version      3.2.5
 // @description  Te lleva a tu Compra Ágil (una navegación, por tu toque) y rellena precios/despacho/detalle al pulsar Rellenar, con confirmación. No envía, no declara, no firma, no navega solo, no oculta la automatización: el envío y la firma los haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -58,7 +58,7 @@
     return el;
   };
   const downloadLog = () => {
-    const blob = new Blob([JSON.stringify({ version: '3.2.4', records: sessionLog }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ version: '3.2.5', records: sessionLog }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'cotizagil-diagnostico.json'; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1500);
@@ -184,7 +184,7 @@
   panel.style.cssText = 'position:fixed;top:max(8px,env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:2147483000;width:min(94vw,392px);max-height:74vh;overflow:auto;background:linear-gradient(180deg,#17294c,#0f1d36);color:#eef2fb;border:1px solid #3b4d78;border-radius:18px;padding:15px 15px 13px;font:13px/1.45 -apple-system,system-ui,sans-serif;box-shadow:0 12px 36px rgba(0,0,0,.45)';
   const head = document.createElement('div');
   head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px';
-  const marca = text('div'); marca.innerHTML = "<b style='font-size:15.5px;letter-spacing:.2px'>CotizÁgil</b> <span style='opacity:.45;font-size:11px'>v3.2.4</span>";
+  const marca = text('div'); marca.innerHTML = "<b style='font-size:15.5px;letter-spacing:.2px'>CotizÁgil</b> <span style='opacity:.45;font-size:11px'>v3.2.5</span>";
   const chev = text('span', '–'); chev.style.cssText = 'cursor:pointer;font-size:22px;line-height:1;opacity:.6;padding:0 6px';
   head.append(marca, chev); panel.append(head);
   const message = text('div', 'Preparando oferta…'); message.style.cssText = 'margin-top:9px;opacity:.95'; panel.append(message);
@@ -296,14 +296,18 @@
     if (!b) return '';
     if (!estaGris(b)) return '';                      // ya está verde
     const faltan = [];
+    // 🎯 señal directa de Angular: los controles inválidos llevan la clase .ng-invalid
+    for (const el of document.querySelectorAll('input.ng-invalid,select.ng-invalid,textarea.ng-invalid,mat-select.ng-invalid')) {
+      if (visible(el) && !panel.contains(el)) faltan.push((etq(el) || 'un campo') + ' (en rojo)');
+    }
+    for (const mf of document.querySelectorAll('mat-form-field.ng-invalid,.mat-form-field-invalid,[class*="invalid"]')) {
+      if (!visible(mf) || panel.contains(mf)) continue;
+      const ctl = mf.querySelector('input,textarea,select,mat-select');
+      if (ctl) faltan.push((etq(ctl) || 'un campo') + ' (en rojo)');
+    }
     for (const s of document.querySelectorAll('select')) {
       if (!visible(s)) continue;
       if ((!s.value || s.selectedIndex <= 0) && (s.required || s.getAttribute('aria-required') === 'true' || /iva|impuesto/i.test(fieldText(s)))) faltan.push(etq(s) || 'un desplegable');
-    }
-    for (const ms of document.querySelectorAll('mat-select,[role=combobox],[role=listbox]')) {
-      if (!visible(ms)) continue;
-      const txt = (ms.textContent || '').trim();
-      if (!txt || /seleccion|elegir|--|^\s*$/i.test(txt)) faltan.push(etq(ms) || 'IVA / un desplegable');
     }
     for (const i of allFields()) {
       if ((i.required || i.getAttribute('aria-required') === 'true') && !String(i.value || '').trim()) faltan.push(etq(i) || 'un campo');
@@ -311,10 +315,11 @@
     for (const f of document.querySelectorAll('input[type=file]')) {
       if (visible(f) && (f.required || f.getAttribute('aria-required') === 'true') && !(f.files && f.files.length)) faltan.push('Adjuntar archivo');
     }
-    const u = [...new Set(faltan)].filter(Boolean).slice(0, 4);
+    const u = [...new Set(faltan)].filter(Boolean).slice(0, 5);
+    debug('porque_gris', u.join(' | ') || 'no-detectado');
     return u.length
-      ? '⚠ «Enviar» sigue gris porque falta: ' + u.join(' · ') + '. Complétalo tú y se pone verde.'
-      : '⚠ «Enviar» sigue gris. Suele ser el IVA (elige afecto/exento) o un campo marcado en rojo. Revísalos.';
+      ? '⚠ «Enviar» sigue gris por: ' + u.join(' · ') + '. Toca/corrige ese campo y se pone verde.'
+      : '⚠ «Enviar» sigue gris pero no detecté el campo. Suele ser un adjunto obligatorio o una casilla. Toca «🩺 Diagnóstico» y envíame el archivo.';
   };
 
   // 🔛 Interruptor del IVA: elige la opción de IVA que calza con la oferta (afecto si la oferta lleva IVA).
@@ -450,7 +455,10 @@
       say(`Oferta ${code} · ${Number(offer.total || 0).toLocaleString('es-CL')} CLP. Rellena, adjunta, y envía y firma tú.`);
       actions.append(button('✍ Rellenar', () => previewAndFill(offer, code)));
       actions.append(button('📎 Adjuntar archivos', () => adjuntar(offer, code)));
-      foot.replaceChildren(button('↻ Actualizar', () => { currentCode = ''; showWallet(code); }, 'ghost'), button('🩺 Diagnóstico', downloadLog, 'ghost'));
+      foot.replaceChildren(
+        button('🔎 ¿Enviar gris?', () => { const g = porQueGris(); say(g || '✅ «Enviar cotización» está habilitado. El envío y la firma los haces tú.'); }, 'ghost'),
+        button('↻ Actualizar', () => { currentCode = ''; showWallet(code); }, 'ghost'),
+        button('🩺 Diagnóstico', downloadLog, 'ghost'));
       debug('rellenado_disponible', code);
     } catch (e) { say(`No se pudo cargar la oferta (${e.message}). No se realizó ninguna acción en el portal.`); debug('error_carga', e.message); }
     finally { loading = false; }
