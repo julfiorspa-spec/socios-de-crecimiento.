@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      3.2.3
+// @version      3.2.4
 // @description  Te lleva a tu Compra Ágil (una navegación, por tu toque) y rellena precios/despacho/detalle al pulsar Rellenar, con confirmación. No envía, no declara, no firma, no navega solo, no oculta la automatización: el envío y la firma los haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -58,7 +58,7 @@
     return el;
   };
   const downloadLog = () => {
-    const blob = new Blob([JSON.stringify({ version: '3.2.3', records: sessionLog }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ version: '3.2.4', records: sessionLog }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'cotizagil-diagnostico.json'; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1500);
@@ -184,7 +184,7 @@
   panel.style.cssText = 'position:fixed;top:max(8px,env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:2147483000;width:min(94vw,392px);max-height:74vh;overflow:auto;background:linear-gradient(180deg,#17294c,#0f1d36);color:#eef2fb;border:1px solid #3b4d78;border-radius:18px;padding:15px 15px 13px;font:13px/1.45 -apple-system,system-ui,sans-serif;box-shadow:0 12px 36px rgba(0,0,0,.45)';
   const head = document.createElement('div');
   head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px';
-  const marca = text('div'); marca.innerHTML = "<b style='font-size:15.5px;letter-spacing:.2px'>CotizÁgil</b> <span style='opacity:.45;font-size:11px'>v3.2.3</span>";
+  const marca = text('div'); marca.innerHTML = "<b style='font-size:15.5px;letter-spacing:.2px'>CotizÁgil</b> <span style='opacity:.45;font-size:11px'>v3.2.4</span>";
   const chev = text('span', '–'); chev.style.cssText = 'cursor:pointer;font-size:22px;line-height:1;opacity:.6;padding:0 6px';
   head.append(marca, chev); panel.append(head);
   const message = text('div', 'Preparando oferta…'); message.style.cssText = 'margin-top:9px;opacity:.95'; panel.append(message);
@@ -317,9 +317,40 @@
       : '⚠ «Enviar» sigue gris. Suele ser el IVA (elige afecto/exento) o un campo marcado en rojo. Revísalos.';
   };
 
-  // ---- Botón RELLENAR: precios/despacho/detalle, con confirmación. Nunca la declaración ni el envío. ----
+  // 🔛 Interruptor del IVA: elige la opción de IVA que calza con la oferta (afecto si la oferta lleva IVA).
+  //    Eso hace que el portal calcule el «Monto total» y habilite «Enviar». No es una decisión tributaria
+  //    nueva: refleja lo que la oferta YA trae (el robot calculó el IVA). No envía nada.
+  const fijarIva = async (amounts, offer) => {
+    const neto = (amounts || []).reduce((a, s) => a + (parseInt(soloDig(s), 10) || 0), 0) + (parseInt(soloDig(offer.despacho || 0), 10) || 0);
+    const tot = parseInt(soloDig(offer.total || 0), 10) || 0;
+    const afecto = !neto || Math.abs(tot - Math.round(neto * 1.19)) <= Math.abs(tot - neto);
+    const quiere = afecto ? /afect|con\s*iva|19|grav/i : /exent|sin\s*iva|no\s*afect/i;
+    for (const s of document.querySelectorAll('select')) {        // <select> nativo
+      if (!visible(s) || !/iva|impuesto/i.test(fieldText(s))) continue;
+      const o = [...s.options].find(op => quiere.test(op.textContent || ''));
+      if (!o) return '';
+      if (o.selected) return 'IVA ✓ (' + (o.textContent || '').trim() + ')';
+      s.value = o.value; s.dispatchEvent(new Event('input', { bubbles: true })); s.dispatchEvent(new Event('change', { bubbles: true }));
+      return 'IVA elegido (' + (o.textContent || '').trim() + ')';
+    }
+    const ms = [...document.querySelectorAll('mat-select,[role=combobox],[role=listbox]')].find(e => visible(e) && /iva|impuesto/i.test(fieldText(e)));
+    if (ms) {                                                     // mat-select / combobox: abre y elige
+      const txt = (ms.textContent || '').trim();
+      if (txt && quiere.test(txt)) return 'IVA ✓ (' + txt + ')';
+      try { ms.click(); } catch (_) {}
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 120));
+        const op = [...document.querySelectorAll('mat-option,[role=option]')].find(o => o.offsetParent !== null && quiere.test(o.textContent || ''));
+        if (op) { op.click(); return 'IVA elegido (' + (op.textContent || '').trim() + ')'; }
+      }
+      try { document.body.click(); } catch (_) {}
+    }
+    return '';
+  };
+
+  // ---- Botón RELLENAR: precios/despacho/detalle + IVA, con confirmación. Nunca la declaración ni el envío. ----
   //      solo = 'precio' | 'despacho' | 'detalle' | null (todo)
-  const previewAndFill = (offer, code, solo) => {
+  const previewAndFill = async (offer, code, solo) => {
     if (hayBloqueoMP()) { mostrarBloqueo(); return; }
     if (hayDeclaracion()) { say('No rellenaré con la declaración jurada abierta: eso lo marcas y firmas tú.'); debug('rellenado_abortado', 'declaracion-' + code); return; }
     const fields = allFields();
@@ -372,11 +403,13 @@
       try { if (visible(task.el) && writeField(task.el, task.value)) completed++; else avisos.push(`${task.label}: no se confirmó la escritura.`); }
       catch (_) { avisos.push(`${task.label}: error al completar el campo.`); }
     }
-    const base = `${completed}/${run.length} campos completados para ${code}. ` + (avisos.length ? 'Avisos: ' + avisos.join(' ') + ' ' : '');
+    let ivaMsg = '';
+    if (!solo) { try { ivaMsg = await fijarIva(amounts, offer); } catch (_) {} }   // 🔛 enciende el IVA
+    const base = `${completed}/${run.length} campos para ${code}. ` + (ivaMsg ? ivaMsg + '. ' : '') + (avisos.length ? 'Avisos: ' + avisos.join(' ') + ' ' : '');
     say(base + 'Revisa los montos; el envío y la firma los haces tú.');
-    debug('rellenado_por_usuario', `${code} ${solo || 'todo'}=${completed}/${run.length}`);
+    debug('rellenado_por_usuario', `${code} ${solo || 'todo'}=${completed}/${run.length} ${ivaMsg}`);
     // tras un momento, revisa por qué «Enviar» sigue gris (si sigue gris)
-    setTimeout(() => { const g = porQueGris(); if (g) { say(base + g); debug('enviar_gris', g); } else say(base + '✅ «Enviar cotización» habilitado. El envío y la firma los haces tú.'); }, 900);
+    setTimeout(() => { const g = porQueGris(); if (g) { say(base + g); debug('enviar_gris', g); } else say(base + '✅ «Enviar cotización» habilitado. El envío y la firma los haces tú.'); }, 1100);
   };
 
   // ---- Botón ADJUNTAR ARCHIVO: baja el PDF de la app y lo pone en «Adjuntar archivos». No envía. ----
