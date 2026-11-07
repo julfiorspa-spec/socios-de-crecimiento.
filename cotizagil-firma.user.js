@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      2.6
-// @description  Al abrir una Compra Ágil desde «Ir a firmar», carga sola los precios, el detalle y el PDF de tu oferta. NO envía, NO declara y NO firma: eso lo haces tú.
+// @version      2.7
+// @description  Al abrir una Compra Ágil desde «Ir a firmar», te muestra tu oferta como BILLETERA (Copiar y pegas tú). No llena el formulario, no envía, no declara, no firma: eso lo haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
 // @match        https://www.mercadopublico.cl/*
@@ -130,7 +130,7 @@
   const pintar = () => {
     caja.innerHTML = mini
       ? "<div data-cz='abrir' style='cursor:pointer;text-align:center'>✍ CotizÁgil <span style='opacity:.7'>(ver)</span></div>"
-      : "<div style='display:flex;justify-content:space-between;gap:8px'><b>CotizÁgil <span style='opacity:.6;font-weight:400'>v2.6</span></b><span data-cz='mini' style='cursor:pointer;padding:0 6px;font-size:15px;line-height:1'>–</span></div><div style='margin-top:3px'>" + ultimo + "</div>";
+      : "<div style='display:flex;justify-content:space-between;gap:8px'><b>CotizÁgil <span style='opacity:.6;font-weight:400'>v2.7</span></b><span data-cz='mini' style='cursor:pointer;padding:0 6px;font-size:15px;line-height:1'>–</span></div><div style='margin-top:3px'>" + ultimo + "</div>";
     caja.style.width = mini ? "auto" : "min(92vw,340px)";
     if (!caja.isConnected) document.body.append(caja);
   };
@@ -138,7 +138,7 @@
   const hayVentana = () => /perjurio|art[ií]culo 210/i.test(document.body.innerText || "") ||
     [...document.querySelectorAll('[role="dialog"],[aria-modal="true"]')].some((e) => !caja.contains(e) && e.getBoundingClientRect().height > 0);
   setInterval(() => { if (caja.isConnected) caja.style.display = hayVentana() ? "none" : ""; }, 500);
-  caja.addEventListener("click", (e) => { const a = e.target.closest("[data-cz]")?.dataset.cz; if (a === "mini") { mini = true; pintar(); } if (a === "abrir") { mini = false; pintar(); } });
+  caja.addEventListener("click", (e) => { const el = e.target.closest("[data-cz]"); const a = el && el.dataset.cz; if (a === "mini") { mini = true; pintar(); } if (a === "abrir") { mini = false; pintar(); } if (a === "cp") { const v = el.dataset.v || ""; navigator.clipboard.writeText(v).then(() => { el.textContent = "✓ Copiado"; setTimeout(() => { el.textContent = "📋 Copiar"; }, 1200); }).catch(() => { el.textContent = "⚠ copia a mano"; }); } });
   const decir = (html) => { ultimo = html; pintar(); };
 
   const pedir = async (ruta, tipo, cuerpo) => {
@@ -268,59 +268,17 @@
       const est = await pedir("estado");
       t = (est.trabajos || []).find((x) => x.codigo === cod.toUpperCase());
     } catch (e) { decir("No pude leer tu oferta: " + e.message); return; }
-    if (!t || t.estado !== "firmar" || !t.firma) return;          // no hay oferta lista para esta compra: no hace nada
-    decir("Oferta " + clp(t.firma.total) + " lista. Esperando el formulario… (si no aparece, presiona <b>Participar</b>)");
-
-    // espera hasta 3 minutos a que esté el formulario (por si hay que presionar Participar o iniciar sesión)
-    let items = [], desp = [];
-    for (let k = 0; k < 360; k++) {
-      // 🚫 compra YA decidida: solo frena si el comprador ya justificó la selección de un proveedor.
-      // Ese texto («Justificación de selección indicada por el comprador») NO existe en compras abiertas;
-      // «proveedor seleccionado» a secas aparece como sección vacía aunque esté abierta, por eso no sirve de señal.
-      if (/justificaci[oó]n de selecci[oó]n/i.test(textoPagina())) {
-        decir("🚫 Esta compra <b>ya tiene proveedor seleccionado</b> (ya está decidida). No hay nada que cotizar — vuelve a la app y elige otra."); return;
-      }
-      const campos = [...document.querySelectorAll("main input[type=text]:not([disabled]), main input[type=number]:not([disabled]), main input[type=tel]:not([disabled]), main input[inputmode=numeric]:not([disabled]), main input:not([type]):not([disabled])")];
-      items = campos.filter((e) => tipo(e) === "i"); desp = campos.filter((e) => tipo(e) === "d");
-      if (items.length) break;
-      await espera(500);
-    }
-    if (!items.length) { decir("No apareció el formulario. Presiona <b>Participar</b> o <b>Enviar nueva cotización</b> y recarga la página."); return; }
-    if (items.length !== t.firma.precios.length) {
-      decir("⚠ El formulario tiene " + items.length + " ítems y la oferta " + t.firma.precios.length + ". No toqué nada: revisa la oferta en la app."); return;
-    }
-    for (let k = 0; k < items.length; k++) await poner(items[k], t.firma.precios[k], setIn);
-    if (desp[0]) await poner(desp[0], t.firma.despacho || 0, setIn);
-    const area = document.querySelector("main textarea");
-    if (area && t.firma.detalle) await pegar(area, t.firma.detalle.slice(0, 255));   // 📋 el detalle se PEGA de una, no se teclea
-
-    // adjunta el PDF de la oferta
-    let adj = "⚠ Adjunta el PDF a mano (descárgalo en la app).";
-    const archivo = t.firma.adjunto || "Oferta_" + cod + ".pdf";
-    try {
-      const yaEsta = document.body.innerText.includes(archivo);
-      const input = document.querySelector("input[type=file]");
-      if (yaEsta) adj = "✓ PDF ya estaba adjunto.";
-      else if (input && t.pdf) {
-        const blob = await pedir("pdf?codigo=" + encodeURIComponent(cod), "blob");
-        const dt = new DataTransfer(); dt.items.add(new File([blob], archivo, { type: "application/pdf" }));
-        input.files = dt.files; input.dispatchEvent(new Event("change", { bubbles: true }));
-        for (let k = 0; k < 40 && !document.body.innerText.includes(archivo); k++) await espera(500);
-        adj = document.body.innerText.includes(archivo) ? "✓ PDF adjunto: " + archivo : "⚠ Revisa que el PDF quedó adjunto.";
-      }
-    } catch (e) {}
-
-    await espera(600);
-    const dig = (s) => String(s || "").replace(/\D/g, "");
-    const malos = items.map((e, k) => dig(e.value) === dig(t.firma.precios[k]) ? null : "ítem " + (k + 1) + " = " + clp(t.firma.precios[k])).filter(Boolean);
-    const m = [...document.body.innerText.matchAll(/Monto total\s*\n*\s*\$\s*([\d.]+)/g)].pop();
-    const tp = m ? +m[1].replace(/\./g, "") : null;
-    const ok = tp != null && Math.abs(tp - t.firma.total) <= 50 && !malos.length;
-    decir((ok ? "✅ <b>Listo para enviar.</b> Precios y detalle cargados · Total " + clp(tp) + " = oferta." :
-      "⚠ Revisa: " + (malos.length ? "corrige " + malos.join(", ") + ". " : "") + "Total portal " + (tp == null ? "?" : clp(tp)) + " · oferta " + clp(t.firma.total) + ".") +
-      "<br>" + adj + "<br>👉 <b>Ahora tú:</b> Enviar cotización → declaración → firma. (Te llevé al botón verde)");
-    // ⬇ te lleva al botón verde «Enviar cotización» (y otra vez por si la página se movió al cargar el PDF)
-    setTimeout(irAlBoton, 700); setTimeout(irAlBoton, 2500);
-    if (ok) setTimeout(() => { mini = true; pintar(); }, 2500);   // todo bien: se achica solo para dejarte firmar
+    if (!t || t.estado !== "firmar" || !t.firma) return;          // no hay oferta lista para esta compra
+    const n = t.firma;
+    // 💳 BILLETERA: NO llena el formulario (eso es lo que Mercado Público marca como inusual). Te muestra tus valores para que TÚ copies y pegues.
+    const q = (x) => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\"/g, "&quot;");
+    const fila = (lab, val, disp) => "<div style='display:flex;align-items:center;justify-content:space-between;gap:6px;margin:4px 0'><span>" + lab + " · <b>" + disp + "</b></span><button data-cz='cp' data-v=\"" + q(val) + "\" style='background:#f5cf6b;color:#0b1c3c;border:0;border-radius:7px;padding:5px 11px;font:600 12px system-ui;cursor:pointer;flex:none'>📋 Copiar</button></div>";
+    let html = "💳 <b>Billetera · " + clp(n.total) + "</b><div style='opacity:.85;margin:2px 0 6px'>Toca <b>Copiar</b>, toca el campo del formulario y <b>pega</b> (mantén presionado → Pegar). Lo pegas tú, como persona.</div>";
+    n.precios.forEach((v, k) => html += fila("Ítem " + (k + 1), v, clp(v)));
+    if (n.despacho) html += fila("Despacho", n.despacho, clp(n.despacho));
+    if (n.detalle) html += fila("Detalle", n.detalle, n.detalle.length + " car.");
+    html += "<div style='margin-top:6px;opacity:.9'>Luego: adjunta <b>" + q(n.adjunto || ("Oferta_" + cod + ".pdf")) + "</b>, <b>Enviar cotización → declaración → firma.</b></div>";
+    decir(html);
+    setTimeout(irAlBoton, 800);
   }
 })();
