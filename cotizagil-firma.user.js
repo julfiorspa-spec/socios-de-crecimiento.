@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      3.2.1
+// @version      3.2.2
 // @description  Te lleva a tu Compra Ágil (una navegación, por tu toque) y rellena precios/despacho/detalle al pulsar Rellenar, con confirmación. No envía, no declara, no firma, no navega solo, no oculta la automatización: el envío y la firma los haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -58,7 +58,7 @@
     return el;
   };
   const downloadLog = () => {
-    const blob = new Blob([JSON.stringify({ version: '3.2.1', records: sessionLog }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ version: '3.2.2', records: sessionLog }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'cotizagil-diagnostico.json'; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1500);
@@ -184,7 +184,7 @@
   panel.style.cssText = 'position:fixed;top:max(8px,env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:2147483000;width:min(94vw,392px);max-height:74vh;overflow:auto;background:linear-gradient(180deg,#17294c,#0f1d36);color:#eef2fb;border:1px solid #3b4d78;border-radius:18px;padding:15px 15px 13px;font:13px/1.45 -apple-system,system-ui,sans-serif;box-shadow:0 12px 36px rgba(0,0,0,.45)';
   const head = document.createElement('div');
   head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px';
-  const marca = text('div'); marca.innerHTML = "<b style='font-size:15.5px;letter-spacing:.2px'>CotizÁgil</b> <span style='opacity:.45;font-size:11px'>v3.2.1</span>";
+  const marca = text('div'); marca.innerHTML = "<b style='font-size:15.5px;letter-spacing:.2px'>CotizÁgil</b> <span style='opacity:.45;font-size:11px'>v3.2.2</span>";
   const chev = text('span', '–'); chev.style.cssText = 'cursor:pointer;font-size:22px;line-height:1;opacity:.6;padding:0 6px';
   head.append(marca, chev); panel.append(head);
   const message = text('div', 'Preparando oferta…'); message.style.cssText = 'margin-top:9px;opacity:.95'; panel.append(message);
@@ -278,6 +278,45 @@
     return num ? soloDig(el.value) === soloDig(v) : (el.value || '').trim() === v;
   };
 
+  // ---- ¿Por qué «Enviar cotización» sigue gris? Revisa qué campo obligatorio falta. ----
+  const botonEnviar = () => [...document.querySelectorAll('button')].find(b => /enviar cotizaci/i.test(b.textContent || '') && b.getClientRects().length);
+  const estaGris = (b) => !!b && (b.disabled || b.getAttribute('aria-disabled') === 'true' || /mat-button-disabled|\bdisabled\b/.test(b.className || ''));
+  const etq = (el) => {
+    const t = fieldText(el);
+    if (/iva|impuesto/.test(t)) return 'IVA (elige afecto/exento)';
+    if (/(valor|precio|monto)\s*unitario/.test(t)) return 'Valor unitario';
+    if (/despacho|flete|transporte/.test(t)) return 'Despacho';
+    if (/detalle|descripci|observaci/.test(t)) return 'Detalle';
+    if (/vigencia|fecha/.test(t)) return 'Fecha de vigencia';
+    const lab = (el.getAttribute('aria-label') || el.placeholder || (el.labels && el.labels[0] && el.labels[0].textContent) || '').trim();
+    return lab ? lab.slice(0, 28) : null;
+  };
+  const porQueGris = () => {
+    const b = botonEnviar();
+    if (!b) return '';
+    if (!estaGris(b)) return '';                      // ya está verde
+    const faltan = [];
+    for (const s of document.querySelectorAll('select')) {
+      if (!visible(s)) continue;
+      if ((!s.value || s.selectedIndex <= 0) && (s.required || s.getAttribute('aria-required') === 'true' || /iva|impuesto/i.test(fieldText(s)))) faltan.push(etq(s) || 'un desplegable');
+    }
+    for (const ms of document.querySelectorAll('mat-select,[role=combobox],[role=listbox]')) {
+      if (!visible(ms)) continue;
+      const txt = (ms.textContent || '').trim();
+      if (!txt || /seleccion|elegir|--|^\s*$/i.test(txt)) faltan.push(etq(ms) || 'IVA / un desplegable');
+    }
+    for (const i of allFields()) {
+      if ((i.required || i.getAttribute('aria-required') === 'true') && !String(i.value || '').trim()) faltan.push(etq(i) || 'un campo');
+    }
+    for (const f of document.querySelectorAll('input[type=file]')) {
+      if (visible(f) && (f.required || f.getAttribute('aria-required') === 'true') && !(f.files && f.files.length)) faltan.push('Adjuntar archivo');
+    }
+    const u = [...new Set(faltan)].filter(Boolean).slice(0, 4);
+    return u.length
+      ? '⚠ «Enviar» sigue gris porque falta: ' + u.join(' · ') + '. Complétalo tú y se pone verde.'
+      : '⚠ «Enviar» sigue gris. Suele ser el IVA (elige afecto/exento) o un campo marcado en rojo. Revísalos.';
+  };
+
   // ---- Botón RELLENAR: precios/despacho/detalle, con confirmación. Nunca la declaración ni el envío. ----
   //      solo = 'precio' | 'despacho' | 'detalle' | null (todo)
   const previewAndFill = (offer, code, solo) => {
@@ -333,8 +372,11 @@
       try { if (visible(task.el) && writeField(task.el, task.value)) completed++; else avisos.push(`${task.label}: no se confirmó la escritura.`); }
       catch (_) { avisos.push(`${task.label}: error al completar el campo.`); }
     }
-    say(`${completed}/${run.length} campos completados para ${code}. ` + (avisos.length ? 'Avisos: ' + avisos.join(' ') : 'Revisa los montos; el envío y la firma los haces tú.'));
+    const base = `${completed}/${run.length} campos completados para ${code}. ` + (avisos.length ? 'Avisos: ' + avisos.join(' ') + ' ' : '');
+    say(base + 'Revisa los montos; el envío y la firma los haces tú.');
     debug('rellenado_por_usuario', `${code} ${solo || 'todo'}=${completed}/${run.length}`);
+    // tras un momento, revisa por qué «Enviar» sigue gris (si sigue gris)
+    setTimeout(() => { const g = porQueGris(); if (g) { say(base + g); debug('enviar_gris', g); } else say(base + '✅ «Enviar cotización» habilitado. El envío y la firma los haces tú.'); }, 900);
   };
 
   // ---- Botón ADJUNTAR ARCHIVO: baja el PDF de la app y lo pone en «Adjuntar archivos». No envía. ----
