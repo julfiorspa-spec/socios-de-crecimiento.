@@ -567,7 +567,9 @@
   }
   const legado = () => leer().legado === true;
   const deMiJuego = (t) => (t.jugador ? t.jugador === miJug() : legado()) && deMiEmpresa(t);
-  function filtrarEmpresa(d) { if (d) R.hayLegado = (d.trabajos || []).some((t) => !t.jugador); return d ? { ...d, trabajos: (d.trabajos || []).filter(deMiJuego) } : d; }
+  // Las LISTAS PARA FIRMAR (y lo que requiere tu atención) las ve el dueño de la cuenta aunque sean de otro juego: la firma es tuya.
+  const paraElDueno = (t) => ["firmar", "lista", "requiere", "error"].includes(t.estado) && deMiEmpresa(t);
+  function filtrarEmpresa(d) { if (d) R.hayLegado = (d.trabajos || []).some((t) => !t.jugador); return d ? { ...d, trabajos: (d.trabajos || []).filter((t) => deMiJuego(t) || paraElDueno(t)) } : d; }
   const empresaActual = () => (R.empresas || {})[miEmp()] || null;
   async function cargarEmpresas() {
     if (R._cargEmp) return; R._cargEmp = true;
