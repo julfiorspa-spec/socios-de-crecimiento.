@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      3.2.0
+// @version      3.2.1
 // @description  Te lleva a tu Compra Ágil (una navegación, por tu toque) y rellena precios/despacho/detalle al pulsar Rellenar, con confirmación. No envía, no declara, no firma, no navega solo, no oculta la automatización: el envío y la firma los haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -45,15 +45,20 @@
   const quoteUrl = (code) => `${MP}/resumen-cotizacion/${encodeURIComponent(code)}`;
 
   const text = (tag, content = '', className = '') => { const el = document.createElement(tag); el.textContent = String(content); if (className) el.className = className; return el; };
-  const button = (label, fn) => {
+  const button = (label, fn, kind) => {
     const el = text('button', label);
     el.type = 'button';
-    el.style.cssText = 'background:#f5cf6b;color:#0b1c3c;border:0;border-radius:7px;padding:7px 10px;font:600 12px system-ui;cursor:pointer;margin:3px';
+    el.style.cssText = kind === 'ghost'
+      ? 'background:transparent;color:#aebcdc;border:1px solid #33456b;border-radius:10px;padding:7px 12px;font:600 12px/1 system-ui;cursor:pointer'
+      : 'background:linear-gradient(180deg,#ffdd87,#f3c65a);color:#0b1c3c;border:0;border-radius:13px;padding:13px 16px;font:700 14.5px/1 system-ui;cursor:pointer;flex:1 1 140px;min-width:140px;box-shadow:0 2px 7px rgba(0,0,0,.28)';
+    el.addEventListener('pointerdown', () => { el.style.filter = 'brightness(.93)'; });
+    const up = () => { el.style.filter = ''; };
+    el.addEventListener('pointerup', up); el.addEventListener('pointerleave', up);
     el.addEventListener('click', fn);
     return el;
   };
   const downloadLog = () => {
-    const blob = new Blob([JSON.stringify({ version: '3.2.0', records: sessionLog }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ version: '3.2.1', records: sessionLog }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'cotizagil-diagnostico.json'; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1500);
@@ -176,13 +181,18 @@
   // ===================== En compra-agil.mercadopublico.cl: panel + rellenado asistido =====================
   const panel = document.createElement('aside');
   panel.dataset.cotizagil29 = '1';
-  panel.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483000;width:min(94vw,380px);max-height:70vh;overflow:auto;background:#10223d;color:white;border:1px solid #8064e0;border-radius:10px;padding:10px;font:12px/1.4 system-ui;box-shadow:0 5px 20px #0005';
-  panel.append(text('strong', 'CotizÁgil · v3.2'));
-  const message = text('div', 'Preparando oferta…'); message.style.marginTop = '8px'; panel.append(message);
-  const actions = document.createElement('div'); actions.style.marginTop = '7px'; panel.append(actions);
+  panel.style.cssText = 'position:fixed;top:max(8px,env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:2147483000;width:min(94vw,392px);max-height:74vh;overflow:auto;background:linear-gradient(180deg,#17294c,#0f1d36);color:#eef2fb;border:1px solid #3b4d78;border-radius:18px;padding:15px 15px 13px;font:13px/1.45 -apple-system,system-ui,sans-serif;box-shadow:0 12px 36px rgba(0,0,0,.45)';
+  const head = document.createElement('div');
+  head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px';
+  const marca = text('div'); marca.innerHTML = "<b style='font-size:15.5px;letter-spacing:.2px'>CotizÁgil</b> <span style='opacity:.45;font-size:11px'>v3.2.1</span>";
+  const chev = text('span', '–'); chev.style.cssText = 'cursor:pointer;font-size:22px;line-height:1;opacity:.6;padding:0 6px';
+  head.append(marca, chev); panel.append(head);
+  const message = text('div', 'Preparando oferta…'); message.style.cssText = 'margin-top:9px;opacity:.95'; panel.append(message);
+  const actions = document.createElement('div'); actions.style.cssText = 'margin-top:12px;display:flex;flex-wrap:wrap;gap:9px'; panel.append(actions);
+  const foot = document.createElement('div'); foot.style.cssText = 'margin-top:12px;padding-top:10px;border-top:1px solid #243459;display:flex;gap:8px;flex-wrap:wrap'; panel.append(foot);
+  foot.append(button('🩺 Diagnóstico', downloadLog, 'ghost'));
   let minimized = false;
-  panel.append(button('– / +', () => { minimized = !minimized; message.hidden = minimized; actions.hidden = minimized; }));
-  panel.append(button('Diagnóstico', downloadLog));
+  chev.addEventListener('click', () => { minimized = !minimized; message.hidden = actions.hidden = foot.hidden = minimized; chev.textContent = minimized ? '+' : '–'; });
   document.body.append(panel);
   const say = (t) => { message.textContent = String(t); };
 
@@ -245,16 +255,27 @@
   const validAmount = (v) => /^\d+(?:[.,]\d+)?$/.test(textValue(v));
 
   // Escritura directa (NO simula tecleo humano, NO oculta la automatización, NO envía).
+  // Dispara la secuencia de eventos estándar para que el formulario (Angular/React) reconozca
+  // el valor y HABILITE «Enviar cotización» (si no, el botón queda gris).
+  const soloDig = (s) => String(s).replace(/\D/g, '');
   const writeField = (el, value) => {
     const prototype = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
     if (!setter) throw new Error('Campo no compatible');
+    const v = textValue(value);
     el.focus();
-    setter.call(el, textValue(value));
+    el.dispatchEvent(new Event('focus', { bubbles: true }));
+    setter.call(el, '');
     el.dispatchEvent(new Event('input', { bubbles: true }));
+    setter.call(el, v);
+    try { el.dispatchEvent(new InputEvent('input', { bubbles: true, data: v, inputType: 'insertText' })); }
+    catch (_) { el.dispatchEvent(new Event('input', { bubbles: true })); }
     el.dispatchEvent(new Event('change', { bubbles: true }));
+    el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+    el.dispatchEvent(new Event('blur', { bubbles: true }));
     el.blur();
-    return el.value === textValue(value);
+    const num = /^\d+(?:[.,]\d+)?$/.test(v);               // el portal a veces agrega puntos de miles
+    return num ? soloDig(el.value) === soloDig(v) : (el.value || '').trim() === v;
   };
 
   // ---- Botón RELLENAR: precios/despacho/detalle, con confirmación. Nunca la declaración ni el envío. ----
@@ -351,10 +372,10 @@
       const work = (result.trabajos || []).find(t => cleanCode(t.codigo) === code);
       if (!work || work.estado !== 'firmar' || !work.firma) { say('Esta compra no tiene una oferta lista para firmar en CotizÁgil.'); return; }
       const offer = work.firma;
-      say(`Oferta ${code}. ${Array.isArray(offer.precios) ? offer.precios.length : 0} precios; total informado: ${Number(offer.total || 0).toLocaleString('es-CL')} CLP. Revisa el formulario.`);
-      actions.append(button('✍ Rellenar todo', () => previewAndFill(offer, code)));
-      actions.append(button('📎 Adjuntar archivo', () => adjuntar(offer, code)));
-      actions.append(button('↻ Actualizar', () => { currentCode = ''; showWallet(code); }));
+      say(`Oferta ${code} · ${Number(offer.total || 0).toLocaleString('es-CL')} CLP. Rellena, adjunta, y envía y firma tú.`);
+      actions.append(button('✍ Rellenar', () => previewAndFill(offer, code)));
+      actions.append(button('📎 Adjuntar archivos', () => adjuntar(offer, code)));
+      foot.replaceChildren(button('↻ Actualizar', () => { currentCode = ''; showWallet(code); }, 'ghost'), button('🩺 Diagnóstico', downloadLog, 'ghost'));
       debug('rellenado_disponible', code);
     } catch (e) { say(`No se pudo cargar la oferta (${e.message}). No se realizó ninguna acción en el portal.`); debug('error_carga', e.message); }
     finally { loading = false; }
