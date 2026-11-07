@@ -1104,12 +1104,15 @@
         <li><b>Ir a firmar</b> abre la compra en Mercado Público.</li>
         <li>Ahí toca tu marcador <b>Rellenar</b> (en el celular: escribe «Rellenar» en la barra de direcciones y toca el marcador). Se llenan solos el precio, el detalle y el <b>PDF</b>.</li>
         <li>Tú: <b>Enviar cotización</b> → <b>declaración</b> → <b>firmar</b>. Vuelve y toca <b>Ya la firmé</b>.</li></ol>
-      <button type="button" class="btn small" data-rb="copiar-marcador" style="margin-top:8px">¿Primera vez en este teléfono? Copiar marcador Rellenar</button>
-      <details class="rb-det"><summary>Copiar datos a mano</summary><table class="rb-copias">
-        ${t.firma.precios.map((v, k) => `<tr><td>Ítem ${k + 1}${t.items?.[k]?.d && t.items.length === t.firma.precios.length ? " · " + esc(t.items[k].d.slice(0, 40)) : ""}</td><td class="n">${clp(v)}</td><td><button type="button" class="rb-cp" data-rb="cp" data-v="${v}">Copiar</button></td></tr>`).join("")}
-        <tr><td>Despacho</td><td class="n">${clp(t.firma.despacho || 0)}</td><td><button type="button" class="rb-cp" data-rb="cp" data-v="${t.firma.despacho || 0}">Copiar</button></td></tr>
-        <tr><td colspan="2">Detalle (${(t.firma.detalle || "").length} car.)</td><td><button type="button" class="rb-cp" data-rb="cp" data-v="${esc(t.firma.detalle || "")}">Copiar</button></td></tr>
-        <tr><td>Total esperado</td><td class="n">${clp(t.firma.total)}</td><td></td></tr></table></details>` : "";
+      <details class="rb-det" style="margin-top:6px"><summary>Marcador «Rellenar» (opcional — llena solo, pero Mercado Público puede marcarlo como inusual)</summary><button type="button" class="btn small" data-rb="copiar-marcador" style="margin-top:6px">Copiar marcador Rellenar</button></details>` : "";
+    // 💳 BILLETERA: los datos de la compra listos para que TÚ copies y pegues en Mercado Público (tu dedo = humano, no lo marca)
+    const billetera = firmable ? `<div class="rb-env rb-sec" style="margin-top:10px">💳 Billetera · copia y pega en Mercado Público</div>
+      <div class="muted" style="font-size:.72rem;margin:2px 0 6px">Toca «Copiar», anda al campo en MP y <b>pega con tu dedo</b>. Lo pegas tú, como persona — así no te marca.</div>
+      <table class="rb-copias">
+        ${t.firma.precios.map((v, k) => `<tr><td>Ítem ${k + 1}${t.items?.[k]?.d && t.items.length === t.firma.precios.length ? " · " + esc(t.items[k].d.slice(0, 32)) : ""}</td><td class="n"><b>${clp(v)}</b></td><td><button type="button" class="rb-cp btn small rb-oro" data-rb="cp" data-v="${v}">📋 Copiar</button></td></tr>`).join("")}
+        <tr><td>Despacho</td><td class="n"><b>${clp(t.firma.despacho || 0)}</b></td><td><button type="button" class="rb-cp btn small rb-oro" data-rb="cp" data-v="${t.firma.despacho || 0}">📋 Copiar</button></td></tr>
+        <tr><td>Detalle</td><td class="n muted">${(t.firma.detalle || "").length} car.</td><td><button type="button" class="rb-cp btn small rb-oro" data-rb="cp" data-v="${esc(t.firma.detalle || "")}">📋 Copiar</button></td></tr>
+        <tr><td><b>Total</b></td><td class="n"><b>${clp(t.firma.total)}</b></td><td></td></tr></table>` : "";
     return `<div class="rb-card ${e.cls}" id="rb-${esc(t.codigo)}">
       <div class="rb-top"><span class="tag ag">${esc(t.codigo)}</span>${badge(t)}</div>
       <h3>${esc(t.nombre || "Compra Ágil")}</h3>
@@ -1124,7 +1127,7 @@
       ${msg ? `<div class="rb-msg">${esc(msg)}</div>` : ""}
       ${avisoIA}
       ${alertasHtml}
-      ${pasos}${declJurada}
+      ${billetera}${pasos}${declJurada}
       ${t.detalle || (t.items && t.items.length) ? `<details class="rb-det"><summary>Detalle de la oferta</summary><pre>${esc(
         (t.items || []).map((i, k) => `${k + 1}. ${i.d} — ${i.q} x ${clp(i.p)}`).join("\n") + (t.detalle ? "\n\n" + t.detalle : ""))}</pre></details>` : ""}
       <div class="rb-acts">${acts.join("")}</div>
