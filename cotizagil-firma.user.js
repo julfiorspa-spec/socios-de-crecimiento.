@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      3.1.1
+// @version      3.2.0
 // @description  Te lleva a tu Compra Ágil (una navegación, por tu toque) y rellena precios/despacho/detalle al pulsar Rellenar, con confirmación. No envía, no declara, no firma, no navega solo, no oculta la automatización: el envío y la firma los haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -53,7 +53,7 @@
     return el;
   };
   const downloadLog = () => {
-    const blob = new Blob([JSON.stringify({ version: '3.1.1', records: sessionLog }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ version: '3.2.0', records: sessionLog }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'cotizagil-diagnostico.json'; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1500);
@@ -111,6 +111,19 @@
     }
   };
 
+  const getBlob = async (path, tok) => {
+    const uri = `${APP}/bot/${path}`;
+    try {
+      const r = await fetch(uri, { headers: { 'x-robot-token': tok }, cache: 'no-store' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return await r.blob();
+    } catch (e) {
+      if (typeof GM_xmlhttpRequest !== 'function') throw e;
+      return new Promise((ok, mal) => GM_xmlhttpRequest({ method: 'GET', url: uri, headers: { 'x-robot-token': tok }, responseType: 'blob', timeout: 20000,
+        onload: (r) => r.status === 200 ? ok(r.response) : mal(new Error('HTTP ' + r.status)), onerror: () => mal(new Error('Error de conexión')), ontimeout: () => mal(new Error('Tiempo agotado')) }));
+    }
+  };
+
   // ===================== En CotizÁgil: sincroniza token y confirma firmadas =====================
   if (location.hostname === 'cotizagil.netlify.app') {
     const robot = parse(localStorage.getItem('sdc:robot') || '{}', {});
@@ -164,7 +177,7 @@
   const panel = document.createElement('aside');
   panel.dataset.cotizagil29 = '1';
   panel.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483000;width:min(94vw,380px);max-height:70vh;overflow:auto;background:#10223d;color:white;border:1px solid #8064e0;border-radius:10px;padding:10px;font:12px/1.4 system-ui;box-shadow:0 5px 20px #0005';
-  panel.append(text('strong', 'CotizÁgil · v3.1.1'));
+  panel.append(text('strong', 'CotizÁgil · v3.2'));
   const message = text('div', 'Preparando oferta…'); message.style.marginTop = '8px'; panel.append(message);
   const actions = document.createElement('div'); actions.style.marginTop = '7px'; panel.append(actions);
   let minimized = false;
@@ -303,6 +316,29 @@
     debug('rellenado_por_usuario', `${code} ${solo || 'todo'}=${completed}/${run.length}`);
   };
 
+  // ---- Botón ADJUNTAR ARCHIVO: baja el PDF de la app y lo pone en «Adjuntar archivos». No envía. ----
+  const adjuntar = async (offer, code) => {
+    if (hayBloqueoMP()) { mostrarBloqueo(); return; }
+    const nombre = (offer && offer.adjunto) || ('Oferta_' + code + '.pdf');
+    const fileInput = [...document.querySelectorAll('input[type=file]')].find(visible) || document.querySelector('input[type=file]');
+    if (!fileInput) { say('No veo el campo «Adjuntar archivos». Baja hasta esa sección y vuelve a tocar Adjuntar.'); debug('adjuntar_sin_campo', code); return; }
+    say(`Bajando ${nombre}…`);
+    let blob;
+    try { blob = await getBlob('pdf?codigo=' + encodeURIComponent(code), token); }
+    catch (e) { say(`No pude bajar el PDF (${e.message}). Súbelo a mano: ${nombre}.`); debug('pdf_error', e.message); return; }
+    try {
+      const dt = new DataTransfer();
+      dt.items.add(new File([blob], nombre, { type: 'application/pdf' }));
+      fileInput.files = dt.files;
+      fileInput.dispatchEvent(new Event('input', { bubbles: true }));
+      fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+    } catch (e) { say(`El navegador no dejó adjuntar el archivo (${e.message}). Súbelo a mano: ${nombre}.`); debug('adjuntar_error', e.message); return; }
+    let ok = false;
+    for (let i = 0; i < 24; i++) { if ((document.body.innerText || '').includes(nombre)) { ok = true; break; } await new Promise(r => setTimeout(r, 250)); }
+    say(ok ? `✓ ${nombre} adjunto. Revisa, y haz TÚ el envío y la firma.` : `Intenté adjuntar ${nombre}. Si no aparece en «Adjuntar archivos», súbelo a mano (el celular a veces no deja adjuntar por script).`);
+    debug('adjuntar', `${code} ${ok ? 'ok' : 'sin-confirmar'}`);
+  };
+
   // ---- Oferta desde CotizÁgil ----
   const showWallet = async (code) => {
     if (loading || code === currentCode) return;
@@ -317,9 +353,7 @@
       const offer = work.firma;
       say(`Oferta ${code}. ${Array.isArray(offer.precios) ? offer.precios.length : 0} precios; total informado: ${Number(offer.total || 0).toLocaleString('es-CL')} CLP. Revisa el formulario.`);
       actions.append(button('✍ Rellenar todo', () => previewAndFill(offer, code)));
-      actions.append(button('💲 Solo precios', () => previewAndFill(offer, code, 'precio')));
-      actions.append(button('📝 Solo detalle', () => previewAndFill(offer, code, 'detalle')));
-      if (offer.despacho !== undefined && offer.despacho !== null && String(offer.despacho).trim() !== '') actions.append(button('🚚 Solo despacho', () => previewAndFill(offer, code, 'despacho')));
+      actions.append(button('📎 Adjuntar archivo', () => adjuntar(offer, code)));
       actions.append(button('↻ Actualizar', () => { currentCode = ''; showWallet(code); }));
       debug('rellenado_disponible', code);
     } catch (e) { say(`No se pudo cargar la oferta (${e.message}). No se realizó ninguna acción en el portal.`); debug('error_carga', e.message); }
