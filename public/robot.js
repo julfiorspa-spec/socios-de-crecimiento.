@@ -574,7 +574,8 @@
   async function cargarEmpresas() {
     if (R._cargEmp) return; R._cargEmp = true;
     try { R.empresas = (await api("empresas")).empresas || {}; } catch (e) { R.empresas = R.empresas || {}; }
-    try { if (!miEmp()) { const pj = Object.values(R.empresas || {}).find((e) => /pjanic/i.test(e.razon_social || "") || (e.rut || "").replace(/[.\-]/g, "") === "784931145"); if (pj) guardar({ empresa: pj.id }); } } catch {}
+    // Solo autoselecciona PJANIC cuando hay UNA sola empresa (un único dueño). Con varias empresas, cada celular nuevo ELIGE la suya.
+    try { if (!miEmp() && Object.keys(R.empresas || {}).length <= 1) { const pj = Object.values(R.empresas || {}).find((e) => /pjanic/i.test(e.razon_social || "") || (e.rut || "").replace(/[.\-]/g, "") === "784931145"); if (pj) guardar({ empresa: pj.id }); } } catch {}
     R._cargEmp = false; pintarHoja(true);
   }
 
