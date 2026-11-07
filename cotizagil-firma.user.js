@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      3.1.0
+// @version      3.1.1
 // @description  Te lleva a tu Compra Ágil (una navegación, por tu toque) y rellena precios/despacho/detalle al pulsar Rellenar, con confirmación. No envía, no declara, no firma, no navega solo, no oculta la automatización: el envío y la firma los haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -53,7 +53,7 @@
     return el;
   };
   const downloadLog = () => {
-    const blob = new Blob([JSON.stringify({ version: '3.1.0', records: sessionLog }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ version: '3.1.1', records: sessionLog }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'cotizagil-diagnostico.json'; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1500);
@@ -164,7 +164,7 @@
   const panel = document.createElement('aside');
   panel.dataset.cotizagil29 = '1';
   panel.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483000;width:min(94vw,380px);max-height:70vh;overflow:auto;background:#10223d;color:white;border:1px solid #8064e0;border-radius:10px;padding:10px;font:12px/1.4 system-ui;box-shadow:0 5px 20px #0005';
-  panel.append(text('strong', 'CotizÁgil · v3.1'));
+  panel.append(text('strong', 'CotizÁgil · v3.1.1'));
   const message = text('div', 'Preparando oferta…'); message.style.marginTop = '8px'; panel.append(message);
   const actions = document.createElement('div'); actions.style.marginTop = '7px'; panel.append(actions);
   let minimized = false;
@@ -245,45 +245,62 @@
   };
 
   // ---- Botón RELLENAR: precios/despacho/detalle, con confirmación. Nunca la declaración ni el envío. ----
-  const previewAndFill = (offer, code) => {
+  //      solo = 'precio' | 'despacho' | 'detalle' | null (todo)
+  const previewAndFill = (offer, code, solo) => {
     if (hayBloqueoMP()) { mostrarBloqueo(); return; }
     if (hayDeclaracion()) { say('No rellenaré con la declaración jurada abierta: eso lo marcas y firmas tú.'); debug('rellenado_abortado', 'declaracion-' + code); return; }
     const fields = allFields();
+    const inputs = fields.filter(el => el.tagName === 'INPUT');
+    // clasifica cada input por el texto de sus ancestros: en el formulario de MP la etiqueta
+    // «Valor unitario»/«Despacho» está en un bloque superior, NO envolviendo al campo.
+    const clase = (el) => {
+      for (let x = el, k = 0; k < 9 && x; k++, x = x.parentElement) {
+        const s = x.innerText || '';
+        const vu = /(valor|precio|monto)\s*unitario/i.test(s);
+        const de = /despacho|flete|transporte/i.test(s);
+        if (vu && !de) return 'i';
+        if (de && !vu) return 'd';
+        if (vu && de) return '';   // ambos en este nivel: subimos demasiado, ambiguo
+      }
+      return '';
+    };
     const amounts = (Array.isArray(offer.precios) ? offer.precios : []).map(textValue);
     const problems = [], assigned = new Set(), tasks = [];
     if (!amounts.length) problems.push('La oferta no contiene precios por ítem.');
     if (amounts.some(x => !validAmount(x))) problems.push('Uno o más precios tienen formato no válido.');
 
-    const priceFields = fields.filter(el => el.tagName === 'INPUT' && /precio\s*unitario|valor\s*unitario|monto\s*unitario/i.test(fieldText(el)) && !/despacho|flete|transporte/i.test(fieldText(el)));
+    const priceFields = inputs.filter(el => clase(el) === 'i');
     if (priceFields.length !== amounts.length) {
       problems.push(`Se encontraron ${priceFields.length} campos de precio para ${amounts.length} ítems. No se completarán los precios hasta revisar esa diferencia.`);
     } else {
-      amounts.forEach((v, i) => { tasks.push({ label: `Ítem ${i + 1}`, el: priceFields[i], value: v }); assigned.add(priceFields[i]); });
+      amounts.forEach((v, i) => { tasks.push({ tipo: 'precio', label: `Ítem ${i + 1}`, el: priceFields[i], value: v }); assigned.add(priceFields[i]); });
     }
     const selectUnique = (pattern, exclude = null) => fields.filter(el => !assigned.has(el) && (!exclude || !exclude(el)) && pattern.test(fieldText(el)));
 
     if (offer.despacho !== undefined && offer.despacho !== null && textValue(offer.despacho) !== '') {
-      const matches = selectUnique(/despacho|flete|transporte/i, el => el.tagName !== 'INPUT');
-      if (matches.length === 1 && validAmount(offer.despacho)) { tasks.push({ label: 'Despacho', el: matches[0], value: offer.despacho }); assigned.add(matches[0]); }
+      const matches = inputs.filter(el => !assigned.has(el) && clase(el) === 'd');
+      if (matches.length === 1 && validAmount(offer.despacho)) { tasks.push({ tipo: 'despacho', label: 'Despacho', el: matches[0], value: offer.despacho }); assigned.add(matches[0]); }
       else problems.push(`Despacho: ${matches.length} campos compatibles; revisión manual.`);
     }
     if (textValue(offer.detalle)) {
       const matches = selectUnique(/detalle|descripci[oó]n|observacion|observaci[oó]n/i, el => el.tagName !== 'TEXTAREA');
-      if (matches.length === 1) { tasks.push({ label: 'Detalle', el: matches[0], value: offer.detalle }); assigned.add(matches[0]); }
+      if (matches.length === 1) { tasks.push({ tipo: 'detalle', label: 'Detalle', el: matches[0], value: offer.detalle }); assigned.add(matches[0]); }
       else problems.push(`Detalle: ${matches.length} campos compatibles; revisión manual.`);
     }
-    if (!tasks.length) { say(`No encontré campos inequívocos para ${code}. Revisa el formulario.`); debug('sin_campos_compatibles', code); return; }
+    const run = solo ? tasks.filter(t => t.tipo === solo) : tasks;
+    const avisos = solo ? problems.filter(p => new RegExp(solo, 'i').test(p)) : problems;
+    if (!run.length) { say(`No encontré campos de ${solo || 'oferta'} para ${code}. ` + (avisos.length ? avisos.join(' ') : 'Revisa el formulario.')); debug('sin_campos_compatibles', (solo || 'todo') + '-' + code); return; }
 
-    const confirmed = window.confirm(`CotizÁgil rellenará ${tasks.length} campos de ${code}:\n` + tasks.map(t => t.label).join(', ') + '.\n\n' + (problems.length ? 'Avisos:\n' + problems.join('\n') + '\n\n' : '') + 'Revisa TODOS los valores y haz tú el envío, la declaración y la firma. ¿Continuar?');
-    if (!confirmed) { debug('rellenado_cancelado', code); return; }
+    const confirmed = window.confirm(`CotizÁgil rellenará ${run.length} campo(s) de ${code}:\n` + run.map(t => t.label).join(', ') + '.\n\n' + (avisos.length ? 'Avisos:\n' + avisos.join('\n') + '\n\n' : '') + 'Revisa TODOS los valores y haz tú el envío, la declaración y la firma. ¿Continuar?');
+    if (!confirmed) { debug('rellenado_cancelado', (solo || 'todo') + '-' + code); return; }
 
     let completed = 0;
-    for (const task of tasks) {
-      try { if (visible(task.el) && writeField(task.el, task.value)) completed++; else problems.push(`${task.label}: no se confirmó la escritura.`); }
-      catch (_) { problems.push(`${task.label}: error al completar el campo.`); }
+    for (const task of run) {
+      try { if (visible(task.el) && writeField(task.el, task.value)) completed++; else avisos.push(`${task.label}: no se confirmó la escritura.`); }
+      catch (_) { avisos.push(`${task.label}: error al completar el campo.`); }
     }
-    say(`${completed}/${tasks.length} campos completados para ${code}. ` + (problems.length ? 'Avisos: ' + problems.join(' ') : 'Revisa los montos; el envío y la firma los haces tú.'));
-    debug('rellenado_por_usuario', `${code} campos=${completed}/${tasks.length}`);
+    say(`${completed}/${run.length} campos completados para ${code}. ` + (avisos.length ? 'Avisos: ' + avisos.join(' ') : 'Revisa los montos; el envío y la firma los haces tú.'));
+    debug('rellenado_por_usuario', `${code} ${solo || 'todo'}=${completed}/${run.length}`);
   };
 
   // ---- Oferta desde CotizÁgil ----
@@ -299,8 +316,11 @@
       if (!work || work.estado !== 'firmar' || !work.firma) { say('Esta compra no tiene una oferta lista para firmar en CotizÁgil.'); return; }
       const offer = work.firma;
       say(`Oferta ${code}. ${Array.isArray(offer.precios) ? offer.precios.length : 0} precios; total informado: ${Number(offer.total || 0).toLocaleString('es-CL')} CLP. Revisa el formulario.`);
-      actions.append(button('✍ Rellenar formulario', () => previewAndFill(offer, code)));
-      actions.append(button('Actualizar oferta', () => { currentCode = ''; showWallet(code); }));
+      actions.append(button('✍ Rellenar todo', () => previewAndFill(offer, code)));
+      actions.append(button('💲 Solo precios', () => previewAndFill(offer, code, 'precio')));
+      actions.append(button('📝 Solo detalle', () => previewAndFill(offer, code, 'detalle')));
+      if (offer.despacho !== undefined && offer.despacho !== null && String(offer.despacho).trim() !== '') actions.append(button('🚚 Solo despacho', () => previewAndFill(offer, code, 'despacho')));
+      actions.append(button('↻ Actualizar', () => { currentCode = ''; showWallet(code); }));
       debug('rellenado_disponible', code);
     } catch (e) { say(`No se pudo cargar la oferta (${e.message}). No se realizó ninguna acción en el portal.`); debug('error_carga', e.message); }
     finally { loading = false; }
