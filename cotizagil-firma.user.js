@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      2.7
+// @version      2.8
 // @description  Al abrir una Compra Ágil desde «Ir a firmar», te muestra tu oferta como BILLETERA (Copiar y pegas tú). No llena el formulario, no envía, no declara, no firma: eso lo haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -127,10 +127,11 @@
   caja.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);top:6px;z-index:2147483647;width:min(92vw,340px);background:rgba(11,28,60,.95);color:#f6f8fc;" +
     "border:1.5px solid #7c4dff;border-radius:10px;padding:6px 10px;font:12px/1.35 system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.3)";
   let mini = false, ultimo = "";
+  let cpSeq = [], cpIdx = 0, cpFn = null;   // billetera encadenada
   const pintar = () => {
     caja.innerHTML = mini
       ? "<div data-cz='abrir' style='cursor:pointer;text-align:center'>✍ CotizÁgil <span style='opacity:.7'>(ver)</span></div>"
-      : "<div style='display:flex;justify-content:space-between;gap:8px'><b>CotizÁgil <span style='opacity:.6;font-weight:400'>v2.7</span></b><span data-cz='mini' style='cursor:pointer;padding:0 6px;font-size:15px;line-height:1'>–</span></div><div style='margin-top:3px'>" + ultimo + "</div>";
+      : "<div style='display:flex;justify-content:space-between;gap:8px'><b>CotizÁgil <span style='opacity:.6;font-weight:400'>v2.8</span></b><span data-cz='mini' style='cursor:pointer;padding:0 6px;font-size:15px;line-height:1'>–</span></div><div style='margin-top:3px'>" + ultimo + "</div>";
     caja.style.width = mini ? "auto" : "min(92vw,340px)";
     if (!caja.isConnected) document.body.append(caja);
   };
@@ -138,7 +139,7 @@
   const hayVentana = () => /perjurio|art[ií]culo 210/i.test(document.body.innerText || "") ||
     [...document.querySelectorAll('[role="dialog"],[aria-modal="true"]')].some((e) => !caja.contains(e) && e.getBoundingClientRect().height > 0);
   setInterval(() => { if (caja.isConnected) caja.style.display = hayVentana() ? "none" : ""; }, 500);
-  caja.addEventListener("click", (e) => { const el = e.target.closest("[data-cz]"); const a = el && el.dataset.cz; if (a === "mini") { mini = true; pintar(); } if (a === "abrir") { mini = false; pintar(); } if (a === "cp") { const v = el.dataset.v || ""; navigator.clipboard.writeText(v).then(() => { el.textContent = "✓ Copiado"; setTimeout(() => { el.textContent = "📋 Copiar"; }, 1200); }).catch(() => { el.textContent = "⚠ copia a mano"; }); } });
+  caja.addEventListener("click", (e) => { const el = e.target.closest("[data-cz]"); const a = el && el.dataset.cz; if (a === "mini") { mini = true; pintar(); } if (a === "abrir") { mini = false; pintar(); } if (a === "cp") { const v = el.dataset.v || ""; navigator.clipboard.writeText(v).then(() => { el.textContent = "✓ Copiado"; setTimeout(() => { el.textContent = "📋 Copiar"; }, 1200); }).catch(() => { el.textContent = "⚠ copia a mano"; }); } if (a === "cpnext" && cpFn) cpFn(); if (a === "cpreset") { cpIdx = 0; cpFn && cpFn(true); } });
   const decir = (html) => { ultimo = html; pintar(); };
 
   const pedir = async (ruta, tipo, cuerpo) => {
@@ -270,15 +271,23 @@
     } catch (e) { decir("No pude leer tu oferta: " + e.message); return; }
     if (!t || t.estado !== "firmar" || !t.firma) return;          // no hay oferta lista para esta compra
     const n = t.firma;
-    // 💳 BILLETERA: NO llena el formulario (eso es lo que Mercado Público marca como inusual). Te muestra tus valores para que TÚ copies y pegues.
+    // 💳 BILLETERA ENCADENADA: NO llena el formulario (eso lo marca MP). Un botón que copia el siguiente valor; TÚ pegas cada uno.
     const q = (x) => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\"/g, "&quot;");
-    const fila = (lab, val, disp) => "<div style='display:flex;align-items:center;justify-content:space-between;gap:6px;margin:4px 0'><span>" + lab + " · <b>" + disp + "</b></span><button data-cz='cp' data-v=\"" + q(val) + "\" style='background:#f5cf6b;color:#0b1c3c;border:0;border-radius:7px;padding:5px 11px;font:600 12px system-ui;cursor:pointer;flex:none'>📋 Copiar</button></div>";
-    let html = "💳 <b>Billetera · " + clp(n.total) + "</b><div style='opacity:.85;margin:2px 0 6px'>Toca <b>Copiar</b>, toca el campo del formulario y <b>pega</b> (mantén presionado → Pegar). Lo pegas tú, como persona.</div>";
-    n.precios.forEach((v, k) => html += fila("Ítem " + (k + 1), v, clp(v)));
-    if (n.despacho) html += fila("Despacho", n.despacho, clp(n.despacho));
-    if (n.detalle) html += fila("Detalle", n.detalle, n.detalle.length + " car.");
-    html += "<div style='margin-top:6px;opacity:.9'>Luego: adjunta <b>" + q(n.adjunto || ("Oferta_" + cod + ".pdf")) + "</b>, <b>Enviar cotización → declaración → firma.</b></div>";
-    decir(html);
+    cpSeq = [];
+    n.precios.forEach((v, k) => cpSeq.push(["Ítem " + (k + 1), String(v), clp(v)]));
+    if (n.despacho) cpSeq.push(["Despacho", String(n.despacho), clp(n.despacho)]);
+    if (n.detalle) cpSeq.push(["Detalle", n.detalle, n.detalle.length + " car."]);
+    cpIdx = 0;
+    const render = () => {
+      const cur = cpSeq[cpIdx];
+      let h = "💳 <b>Billetera · " + clp(n.total) + "</b>";
+      if (cur) h += "<div style='margin:5px 0'><button data-cz='cpnext' style='width:100%;background:#f5cf6b;color:#0b1c3c;border:0;border-radius:9px;padding:9px;font:700 14px system-ui;cursor:pointer'>📋 Copiar " + cur[0] + " · " + cur[2] + " ▸</button></div><div style='opacity:.85;font-size:11px'>Tócalo → pega en el campo (mantén presionado → Pegar) → vuelve a tocarlo para el siguiente. " + (cpIdx + 1) + " de " + cpSeq.length + ".</div>";
+      else h += "<div style='margin:5px 0'>✅ Copiaste todos. Adjunta el PDF y <b>Enviar → declaración → firma.</b> <button data-cz='cpreset' style='background:#2a3a5c;color:#f6f8fc;border:0;border-radius:6px;padding:3px 9px;font-size:11px;cursor:pointer'>↺ Empezar de nuevo</button></div>";
+      h += "<div style='margin-top:5px;font-size:11px;opacity:.9'>" + cpSeq.map((x, i) => "<div style='display:flex;justify-content:space-between;gap:6px;margin:1px 0'><span>" + (i === cpIdx ? "▸ " : "") + x[0] + " · <b>" + x[2] + "</b></span><button data-cz='cp' data-v=\"" + q(x[1]) + "\" style='background:#2a3a5c;color:#f6f8fc;border:0;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer'>Copiar</button></div>").join("") + "</div>";
+      decir(h);
+    };
+    cpFn = (reset) => { if (reset) { render(); return; } const cur = cpSeq[cpIdx]; if (!cur) return; navigator.clipboard.writeText(cur[1]).catch(() => {}); if (cpIdx < cpSeq.length) cpIdx++; render(); };
+    render();
     setTimeout(irAlBoton, 800);
   }
 })();
