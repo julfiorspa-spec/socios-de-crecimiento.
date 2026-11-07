@@ -6,6 +6,12 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
+# El userscript nunca se cachea: Tampermonkey (PC) y Userscripts (iPhone) siempre bajan la última versión.
+[[headers]]
+  for = "/cotizagil-firma.user.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
 # Cualquier ruta (/app, /panel, ...) abre la app.
 [[redirects]]
   from = "/*"

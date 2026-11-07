@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      3.2.2
+// @version      3.2.3
 // @description  Te lleva a tu Compra Ágil (una navegación, por tu toque) y rellena precios/despacho/detalle al pulsar Rellenar, con confirmación. No envía, no declara, no firma, no navega solo, no oculta la automatización: el envío y la firma los haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -58,7 +58,7 @@
     return el;
   };
   const downloadLog = () => {
-    const blob = new Blob([JSON.stringify({ version: '3.2.2', records: sessionLog }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ version: '3.2.3', records: sessionLog }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'cotizagil-diagnostico.json'; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1500);
@@ -184,7 +184,7 @@
   panel.style.cssText = 'position:fixed;top:max(8px,env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:2147483000;width:min(94vw,392px);max-height:74vh;overflow:auto;background:linear-gradient(180deg,#17294c,#0f1d36);color:#eef2fb;border:1px solid #3b4d78;border-radius:18px;padding:15px 15px 13px;font:13px/1.45 -apple-system,system-ui,sans-serif;box-shadow:0 12px 36px rgba(0,0,0,.45)';
   const head = document.createElement('div');
   head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px';
-  const marca = text('div'); marca.innerHTML = "<b style='font-size:15.5px;letter-spacing:.2px'>CotizÁgil</b> <span style='opacity:.45;font-size:11px'>v3.2.2</span>";
+  const marca = text('div'); marca.innerHTML = "<b style='font-size:15.5px;letter-spacing:.2px'>CotizÁgil</b> <span style='opacity:.45;font-size:11px'>v3.2.3</span>";
   const chev = text('span', '–'); chev.style.cssText = 'cursor:pointer;font-size:22px;line-height:1;opacity:.6;padding:0 6px';
   head.append(marca, chev); panel.append(head);
   const message = text('div', 'Preparando oferta…'); message.style.cssText = 'margin-top:9px;opacity:.95'; panel.append(message);
