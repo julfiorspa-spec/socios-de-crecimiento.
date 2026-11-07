@@ -2366,6 +2366,9 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const oculto = (t) => { const o = ocultas[t.codigo]; return !!(o && (Date.parse(o) || 0) >= ultAct(t)); };   // si la ocultaste pero el robot la volvió a dejar lista DESPUÉS, reaparece
     const enFirma = trabajos.filter((t) => EN_FIRMA.includes(t.estado) && !oculto(t) && !yaFirmada(t) && !(cerrada(t) && !["tomado", "preparando"].includes(t.estado)));
     const aLimpiar = trabajos.filter((t) => EN_FIRMA.includes(t.estado) && !oculto(t) && !yaFirmada(t) && cerrada(t) && !["tomado", "preparando"].includes(t.estado));
+    // 👀 listas REALES (el robot las dejó listas, con firma, no enviadas ni cerradas) que el estado local del celular esconde
+    const ocultasListas = trabajos.filter((t) => ["firmar", "lista"].includes(t.estado) && t.firma?.precios?.length
+      && !HECHA.includes(t.estado) && !(cerrada(t) && !["tomado", "preparando"].includes(t.estado)) && (oculto(t) || yaFirmada(t)));
     if (aLimpiar.length && !R._limpiando) { R._limpiando = true;
       setTimeout(async () => { for (const t of aLimpiar) await quitarFirma(t.codigo, null, "cerrada");
         toast(`🗑 Quité ${aLimpiar.length} compra${aLimpiar.length > 1 ? "s" : ""} ya cerrada${aLimpiar.length > 1 ? "s" : ""} de Firmar`); R._limpiando = false; }, 0); }
@@ -2736,7 +2739,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         const k = Math.max(0, Math.min(L.length - 1, R.firIdx || 0)); R.firIdx = k;
         return `<div class="rb-env rb-sec"><button class="btn small" type="button" data-rb="fir-mover" data-d="-1" ${k ? "" : "disabled"}>‹</button><span>✍ Por firmar · <b>${k + 1}</b> de ${L.length}${enPrep ? ` <small style="opacity:.75">· ⏳ ${enPrep} preparándose</small>` : ""}</span><button class="btn small" type="button" data-rb="fir-mover" data-d="1" ${k < L.length - 1 ? "" : "disabled"}>›</button></div>
           <div class="muted" style="font-size:.72rem;text-align:center;margin-bottom:4px">👉 desliza a la derecha = <b>ir a firmar</b> · 👈 a la izquierda = <b>quitarla</b></div>${tarjetaFirma(L[k], k === 0)}`; })()
-      : `<div class="empty">Nada por firmar. Desliza a la derecha en «Por preparar».</div>`;
+      : `<div class="empty">Nada por firmar. Desliza a la derecha en «Por preparar».${ocultasListas.length ? `<br><br><button class="btn rb-oro" type="button" data-rb="recuperar-firmas">👀 Mostrar ${ocultasListas.length} lista${ocultasListas.length > 1 ? "s" : ""} para firmar</button>` : ""}</div>`;
     else if (tab === "sel") cuerpo = sel.length ? (() => { const k = Math.max(0, Math.min(sel.length - 1, R.selIdx || 0)); R.selIdx = k;
         return `<div class="rb-env rb-sec"><button class="btn small" type="button" data-rb="sel-mover" data-d="-1" ${k ? "" : "disabled"}>‹</button><span>⭐ Juega el precio · <b>${k + 1}</b> de ${sel.length}</span><button class="btn small" type="button" data-rb="sel-mover" data-d="1" ${k < sel.length - 1 ? "" : "disabled"}>›</button></div>
           <div class="muted" style="font-size:.72rem;text-align:center;margin-bottom:4px">👉 desliza a la derecha = <b>apuesto y firmo</b> · 👈 a la izquierda = <b>paso</b></div>${tarjetaSel(sel[k])}`; })()
@@ -4433,6 +4436,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "ir-firmar") return irFirmar(cod);
     if (a === "fir-quitar") return quitarFirma(cod, b.closest(".rb-firma"));
     if (a === "fir-mover") { R.firIdx = (R.firIdx || 0) + +b.dataset.d; return pintarHoja(true); }
+    if (a === "recuperar-firmas") { try { localStorage.removeItem(OCULTAS); localStorage.removeItem(FIRMADAS); } catch {} R.firIdx = 0; toast("👀 Recuperé las listas para firmar"); return pintarHoja(true); }
     if (a === "__ir-firmar-viejo") {
       const t = trabajo(cod); if (!t?.firma) return;
       // iPhone con la app en la pantalla de inicio: la ventana interna NO tiene la extensión ni tu sesión.
