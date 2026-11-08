@@ -398,6 +398,15 @@
   .rb-link{width:100%;margin-top:6px;background:none!important;border:0!important;box-shadow:none!important;opacity:.75}
   .rb-emp-c{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:8px 0}.rb-emp-c.on{border-color:rgba(245,207,107,.7)!important}
   .rb-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px}
+  .rb-chat{display:flex;flex-direction:column;gap:8px;padding:8px 0;min-height:40vh}
+  .rb-msg{max-width:88%;padding:9px 12px;border-radius:14px;font-size:.88rem;line-height:1.4;white-space:pre-wrap;word-break:break-word}
+  .rb-msg.yo{align-self:flex-end;background:rgba(245,207,107,.22);border:1px solid rgba(245,207,107,.45);border-bottom-right-radius:4px}
+  .rb-msg.cl{align-self:flex-start;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-bottom-left-radius:4px}
+  .rb-msg.err{align-self:stretch;background:rgba(255,120,120,.12);border:1px solid rgba(255,120,120,.4)}
+  .rb-chat-sug{display:flex;flex-wrap:wrap;gap:6px}
+  .rb-chat-in{display:flex;gap:8px;align-items:flex-end;position:sticky;bottom:0;padding:8px 0;background:inherit}
+  .rb-chat-in textarea{flex:1;min-width:0;border-radius:12px;padding:9px;font:inherit}
+  .rb-claude{background:linear-gradient(160deg,rgba(245,207,107,.35),rgba(245,207,107,.1))!important}
   .rb-llamar{border-radius:16px;padding:10px;background:linear-gradient(160deg,rgba(255,226,140,.12),rgba(255,255,255,.03));border:1px solid rgba(245,207,107,.35)}
   .btn.rb-mic.on{background:#e8313f!important;border-color:#e8313f!important;animation:pulse 1.2s ease-in-out infinite}
   .rb-resp{margin-top:12px;border-radius:18px;padding:14px;border:1px solid rgba(255,255,255,.16);background:linear-gradient(160deg,rgba(255,255,255,.10),rgba(255,255,255,.03))}
@@ -518,7 +527,7 @@
               oportTab: leer().oportTab || "nuevas", toque: 0, cnt: {} };
   try { const __ui = leerUI();                         // 💾 vuelve a donde estabas
     if (__ui.anl) R.anl = __ui.anl;
-    if (__ui.pantalla === "llamada" || __ui.pantalla === "analizador") R.pantalla = __ui.pantalla;
+    if (__ui.pantalla === "llamada" || __ui.pantalla === "analizador" || __ui.pantalla === "claude") R.pantalla = __ui.pantalla;
     if (__ui.llamada) R.llamada = __ui.llamada; } catch {}
   // ---- rapidez: lo último que se vio queda guardado y se muestra al instante; la red solo actualiza
   const CK = "sdc:cache:";
@@ -532,7 +541,7 @@
 
   async function api(ruta, opt = {}) {
     if (!R.token) throw new Error("Robot sin enlazar");
-    if (opt.body && /^(pedir|seleccionar|preguntar|oport-descartar|plan-links|nube-aprobar|robot-mando|mp-login|mp-login-resp)$/.test(ruta)) {      // cada pedido viaja con TU empresa, tu celular y tu juego
+    if (opt.body && /^(pedir|seleccionar|preguntar|chat|oport-descartar|plan-links|nube-aprobar|robot-mando|mp-login|mp-login-resp)$/.test(ruta)) {      // cada pedido viaja con TU empresa, tu celular y tu juego
       try { const o = JSON.parse(opt.body); if (!o.empresa && leer().empresa) o.empresa = leer().empresa; if (!o.dispositivo) o.dispositivo = dispositivo(false);
         o.jugador = miJug(); if (legado()) o.legado = true; if (!o.persona && typeof persona === "function" && persona()?.nombre) o.persona = persona().nombre; opt = { ...opt, body: JSON.stringify(o) }; } catch {}
     }
@@ -3191,6 +3200,31 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         <button class="btn rb-big-btn" type="button" data-rb="empresa-form">＋ Agregar otra empresa</button>`}
     </div>`;
   }
+  // ---------- 💬 Chat con Claude: el cerebro de la app responde aquí mismo, con tu empresa y tus compras como contexto ----------
+  const CHAT = "sdc:chat";
+  const cargarChat = () => { try { return JSON.parse(localStorage.getItem(CHAT)) || { mensajes: [], codigo: null }; } catch { return { mensajes: [], codigo: null }; } };
+  const guardarChat = () => { try { localStorage.setItem(CHAT, JSON.stringify({ ...R.chat, mensajes: (R.chat.mensajes || []).slice(-40) })); } catch {} };
+  async function enviarClaude(txt) {
+    R.chat = R.chat || cargarChat(); R.chat.mensajes.push({ rol: "yo", texto: txt, t: Date.now() }); R.chat.cargando = true; R.chat.error = null; guardarChat(); pintarHoja(true);
+    try {
+      const r = await api("chat", { method: "POST", body: JSON.stringify({ mensajes: R.chat.mensajes.slice(-16).map((m) => ({ rol: m.rol, texto: m.texto })), codigo: R.chat.codigo || null }) });
+      R.chat.mensajes.push({ rol: "claude", texto: r.respuesta || "…", t: Date.now() }); try { navigator.vibrate?.(12); } catch {}
+    } catch (e) { R.chat.error = e.message; }
+    R.chat.cargando = false; guardarChat(); pintarHoja(true);
+    setTimeout(() => { const f = $("#rbChatFin"); if (f) f.scrollIntoView({ block: "end" }); }, 30);
+  }
+  function pantallaClaude() {
+    const c = R.chat || (R.chat = cargarChat());
+    const emp = empresaActual();
+    const t = c.codigo ? (R.data?.trabajos || []).find((x) => x.codigo === c.codigo) : null;
+    const md = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\n/g, "<br>");
+    const sug = [t ? `¿Cómo oferto ${t.codigo} para ganar sin perder plata?` : "¿Qué oportunidad me conviene jugar hoy?", "Calcúlame costos, HH y utilidad de esta compra", "¿Qué me falta para la licitación y cómo la ejecuto?", emp?.comision ? "¿Cuánto llevo en comisiones y qué OC faltan?" : "¿Qué servicio nuevo puedo vender con lo que ya hago?"];
+    return `<div class="rb-env"><h2 class="rb-h" style="margin:0">💬 Claude</h2><div class="rb-row"><button class="btn small" type="button" data-rb="claude-limpiar" title="Borrar conversación">🗑</button><button class="btn small" type="button" data-rb="claude-cerrar">← Volver</button></div></div>
+      <div class="muted rb-sub">Soy el cerebro de la app. Sé de ${emp ? "<b>" + esc(corta(emp.razon_social)) + "</b>" : "tu empresa"}${t ? " y de la compra <b>" + esc(t.codigo) + "</b>" : " y de tus compras"}. Pregúntame lo que le preguntarías a tu socio.</div>
+      <div class="rb-chat">${(c.mensajes || []).map((m) => `<div class="rb-msg ${m.rol === "yo" ? "yo" : "cl"}">${md(m.texto)}</div>`).join("") || `<div class="rb-chat-sug">${sug.map((q) => `<button type="button" class="rb-rchip" data-rb="claude-sug" data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>`}
+        ${c.cargando ? `<div class="rb-msg cl"><span class="spinner"></span> pensando…</div>` : ""}${c.error ? `<div class="rb-msg err">⚠ ${esc(c.error)}</div>` : ""}<div id="rbChatFin"></div></div>
+      <div class="rb-chat-in"><textarea id="rbChatIn" rows="2" placeholder="Escríbeme…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.closest('.rb-chat-in').querySelector('[data-rb=claude-enviar]').click()}"></textarea><button class="btn rb-oro" type="button" data-rb="claude-enviar">Enviar</button></div>`;
+  }
   // ---------- 📞 «Me llamaron»: escribe o graba qué te dijeron y el robot te dice si da o no ----------
   const HIST = "sdc:llamadas";
   const leerHist = () => { try { return JSON.parse(localStorage.getItem(HIST)) || []; } catch { return []; } };
@@ -3688,7 +3722,7 @@ ${empNom}`;
         <button class="rb-emp" type="button" data-rb="empresa-editar">🏢 <span>${esc(corta(emp?.razon_social) || "Mi empresa")}</span> ▾</button>
         <button class="rb-yo" type="button" data-rb="persona-editar" title="Quién usa este celular">👤 ${persona()?.nombre ? "usuario " + esc(persona().nombre.split(" ")[0].slice(0, 12)) : "¿quién?"}</button>
         <button type="button" class="rb-pcs" data-rb="ver-roles" title="¿Qué quieres hacer? · ${conectado ? "Robot conectado" : "Robot apagado"}"><i class="${conectado ? "on" : ""}"></i>${/nube/i.test(r?.equipo || "") ? "☁️" : "Robot"}</button><button type="button" class="rb-pcs" data-rb="conectar-mp" title="${mp?.conectado ? "Mercado Público conectado" : "Entrar a Mercado Público desde la app"}"><i class="${mp?.conectado ? "on" : ""}"></i>MP${mp?.conectado ? "" : " ▸"}</button>
-        <button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button><button class="rb-ico" type="button" data-rb="analizador" aria-label="Analizador de proyectos" title="Analizador de proyectos — Excel en vivo">📊</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
+        <button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button><button class="rb-ico" type="button" data-rb="analizador" aria-label="Analizador de proyectos" title="Analizador de proyectos — Excel en vivo">📊</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico rb-claude" type="button" data-rb="claude" aria-label="Chatear con Claude" title="Chatea con Claude, el cerebro de la app">💬</button><button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
         <button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
         ${barraPortales()}${esDueno() ? (setTimeout(() => { if (!R.nubeT || Date.now() - R.nubeT > 60000) cargarNube(); inicioLoginMP(); }, 0), barraMando(r, mp, conectado)) : ""}`;
       // 🏆 portada: cada vez que abres la app (y siempre que no haya empresa). Sin formularios: RUT → jugar.
@@ -3699,6 +3733,7 @@ ${empNom}`;
       else if (R.empresaEditar) cuerpo = pantallaEmpresa();
       else if (R.rubroEditar) { if (!R.oport) cargarOport(); cuerpo = `<div class="rb-paso-n" style="text-align:center;margin-top:10px">Paso 3 de 3</div>` + pantallaRubro(R.oport?.lista || []); }
       else if (R.pantalla === "llamada") cuerpo = pantallaLlamada();
+      else if (R.pantalla === "claude") cuerpo = pantallaClaude();
       else if (R.pantalla === "analizador") cuerpo = pantallaAnalizador();
       else if (R.pantalla === "correos") cuerpo = pantallaCorreos();
       else if (R.pantalla === "global") cuerpo = pantallaGlobal();
@@ -3720,7 +3755,7 @@ ${empNom}`;
         <div class="rb-row" style="margin-top:8px"><button class="btn small" type="button" data-rb="copiar-marcador">Copiar marcador «Rellenar» (sin extensión)</button>
           ${R.push ? `<button class="btn small" type="button" data-rb="push-probar">Probar aviso</button>` : ""}<button class="btn small" type="button" data-rb="desenlazar">Desenlazar</button></div>
       </details>`;
-      return cab + cuerpo + (R.pantalla === "llamada" || R.pantalla === "analizador" || R.empresaEditar || R.rubroEditar || R.personaEditar ? "" : mas);
+      return cab + cuerpo + (R.pantalla === "llamada" || R.pantalla === "claude" || R.pantalla === "analizador" || R.empresaEditar || R.rubroEditar || R.personaEditar ? "" : mas);
     }
     return `
       <div class="rb-sheet-head"><h2 style="margin:0">Robot de ofertas</h2><button class="rb-x" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
@@ -4079,6 +4114,11 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     }
     if (a === "legado") { guardar({ legado: b.dataset.v === "1" }); R.ver = null; R.sel = null; R._selPedido = false; R.oport = null; toast(b.dataset.v === "1" ? "Este celular ve también lo anterior" : "🎮 Juego nuevo en este celular"); refrescar(); return pintarHoja(true); }
     if (a === "llamada") { R.pantalla = "llamada"; sheet.scrollTop = 0; return pintarHoja(true); }
+    if (a === "claude") { R.pantalla = "claude"; R.chat = R.chat || cargarChat(); if (cod) R.chat.codigo = cod; sheet.scrollTop = 0; return pintarHoja(true); }
+    if (a === "claude-cerrar") { R.pantalla = null; return pintarHoja(true); }
+    if (a === "claude-limpiar") { R.chat = { mensajes: [], codigo: null }; guardarChat(); return pintarHoja(true); }
+    if (a === "claude-enviar") { const el = $("#rbChatIn"); const txt = (el?.value || "").trim(); if (!txt) return; el.value = ""; return enviarClaude(txt); }
+    if (a === "claude-sug") { return enviarClaude(b.dataset.q || ""); }
     if (a === "llamada-cod") { R.pantalla = "llamada"; R.llamada = { texto: "Me están llamando por la compra " + b.dataset.c }; sheet.scrollTop = 0; confirmarLlamada(b.dataset.c); return pintarHoja(true); }
     if (a === "llamada-cerrar") { R.pantalla = null; return pintarHoja(true); }
     if (a === "analizador") { R.pantalla = "analizador"; R.anl = R.anl || { prod: "", cant: 0, compra: 0, venta: 0 }; sheet.scrollTop = 0; return pintarHoja(true); }

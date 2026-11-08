@@ -1619,6 +1619,36 @@ async function atender(req) {
   if (ruta === "recordatorios" && req.method === "GET") return json({ recordatorios: (await store.get("recordatorios", { type: "json" })) || [] });
 
   // ---------- 📞 «Me llamaron»: el celular pregunta (texto o audio) y el robot del PC responde con IA ----------
+  // ---------- 💬 chat con Claude dentro de la app: el cerebro responde directo desde la nube (sin pasar por el PC) ----------
+  if (ruta === "chat" && req.method === "POST") {
+    const key = process.env.ANTHROPIC_API_KEY || "";
+    if (!key) return json({ error: "Falta ANTHROPIC_API_KEY en Netlify (Site configuration → Environment variables). Con eso Claude responde aquí mismo." }, 503);
+    const b = await cuerpo(req);
+    const msgs = (Array.isArray(b.mensajes) ? b.mensajes : []).slice(-16)
+      .map((m) => ({ role: m.rol === "claude" ? "assistant" : "user", content: texto(m.texto, 4000) })).filter((m) => m.content);
+    if (!msgs.length || msgs[msgs.length - 1].role !== "user") return json({ error: "Falta tu mensaje" }, 400);
+    const L = (await store.get("empresas/lista", { type: "json" })) || {};
+    const e = L[texto(b.empresa, 40)] || null;
+    const cod = limpiaCodigo(b.codigo) || null;
+    const t = cod ? await leer(store, cod) : null;
+    const mios = e ? (await todos(store)).filter((x) => (x.empresa || "principal") === e.id).slice(0, 25)
+      .map((x) => `- ${x.codigo} · ${x.nombre || ""} · ${x.organismo || ""} · estado ${x.estado}${x.total ? " · $" + x.total : ""}${x.op?.oc_codigo ? " · OC " + x.op.oc_codigo : ""}`).join("\n") : "";
+    const sistema = [
+      "Eres Claude, el cerebro de CotizÁgil (app «Socios de Crecimiento» de PJANIC SpA) que ayuda a pymes chilenas a vender al Estado por Mercado Público: Compra Ágil (<100 UTM) y licitaciones.",
+      "Hablas en español de Chile, directo y corto (es un celular). Das números cuando los pides; si falta un dato, dices cuál y propones un supuesto.",
+      "Nunca firmas, envías ni declaras nada en Mercado Público: eso lo hace la persona. No manejas claves ni pagos.",
+      e ? `Empresa del usuario: ${e.razon_social} (RUT ${e.rut || "?"}), giro: ${e.giro || "?"}, comuna: ${e.comuna || e.ciudad || "?"}.${e.comision ? ` Es socia comercial: CotizÁgil recibe ${e.comision}% del neto de cada OC concretada por la app.` : ""}${e.perfil?.rubros?.length ? " Rubros: " + e.perfil.rubros.map((r) => r.rubro || r).join(", ") + "." : ""}` : "El usuario aún no eligió empresa.",
+      t ? `Compra en pantalla: ${t.codigo} · ${t.nombre || ""} · ${t.organismo || ""} · estado ${t.estado} · total ofertado ${t.total || "?"}. Ítems: ${(t.items || []).slice(0, 12).map((i) => `${i.nombre || i.descripcion} x${i.cantidad}${i.precio_unit ? " a $" + i.precio_unit : ""}`).join("; ")}` : "",
+      mios ? "Compras recientes de esta empresa en la app:\n" + mios : "",
+    ].filter(Boolean).join("\n\n");
+    const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST",
+      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5", max_tokens: 900, system: sistema, messages: msgs }) });
+    if (!r.ok) { const err = await r.text().catch(() => ""); return json({ error: "Claude no respondió (" + r.status + "): " + err.slice(0, 200) }, 502); }
+    const d = await r.json();
+    const out = (d.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n").trim();
+    return json({ ok: true, respuesta: out || "…" });
+  }
   if (ruta === "preguntar" && req.method === "POST") {
     const b = await cuerpo(req);
     const id = idCorto();
