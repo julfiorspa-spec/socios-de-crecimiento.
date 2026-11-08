@@ -411,6 +411,59 @@
         "escenario",
         "mobiliario"
       ]
+    },
+    "generadores": {
+      "nombre": "Grupos electrógenos, mantención y energía de respaldo",
+      "corto": "Generadores",
+      "kw": "\\b(grupos? electr[oó]genos?|generador(es)? (el[eé]ctricos?|di[eé]sel|diesel)|generador(es)?|motogenerador(es)?|genset|tablero de transferencia|transferencia autom[aá]tica|tta|ats|banco de carga|planta el[eé]ctrica|respaldo el[eé]ctrico|energ[ií]a de respaldo|mantenci[oó]n (de )?(grupos? electr[oó]genos?|generador(es)?)|arriendo de generador(es)?|kva)\\b",
+      "expansion": {
+        "gamas": [
+          {
+            "titulo": "Venta e instalación de grupos electrógenos 10–750 kVA",
+            "porque": "El Estado compra el equipo con instalación, TTA y puesta en marcha en una sola licitación."
+          },
+          {
+            "titulo": "Tableros de transferencia automática y bancos de carga",
+            "porque": "Van en la misma compra que el generador o en su mantención anual."
+          },
+          {
+            "titulo": "Baterías, filtros y repuestos",
+            "porque": "Cada equipo instalado consume insumos todos los años: venta recurrente."
+          }
+        ],
+        "servicios": [
+          {
+            "titulo": "Mantención preventiva y correctiva (contrato anual)",
+            "porque": "Hospitales, Poder Judicial, FF.AA. y municipios la licitan todos los años a $2–60 M; es la utilidad recurrente."
+          },
+          {
+            "titulo": "Arriendo de generadores para eventos y emergencias",
+            "porque": "Compra ágil rápida: elecciones, fiestas comunales, cortes de luz."
+          },
+          {
+            "titulo": "Emergencias 24/7 y diagnóstico",
+            "porque": "Quien atiende la emergencia se queda con la mantención."
+          }
+        ],
+        "giros": [
+          {
+            "titulo": "Base instalada → mantención",
+            "porque": "Cada equipo vendido abre un contrato de mantención: la venta trae el servicio."
+          }
+        ]
+      },
+      "qca": [
+        "grupo electrógeno",
+        "generador eléctrico",
+        "generador",
+        "mantención grupo electrógeno",
+        "mantención generador",
+        "tablero de transferencia",
+        "banco de carga",
+        "arriendo generador",
+        "kva",
+        "reparación generador"
+      ]
     }
   }
 }

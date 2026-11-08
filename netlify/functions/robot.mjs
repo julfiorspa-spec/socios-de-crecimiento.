@@ -1517,6 +1517,29 @@ async function atender(req) {
       .map(({ firma, historial, envios, ...t }) => t);
     return json({ negocios: lista });
   }
+  // ---------- 🤝 comisiones: OC concretadas por la app para una empresa socia × su % (GENSA 28%) ----------
+  if (ruta === "comisiones" && req.method === "GET") {
+    const id = texto(url.searchParams.get("empresa"), 40) || "";
+    const L = (await store.get("empresas/lista", { type: "json" })) || {};
+    const e = L[id]; if (!e) return json({ error: "Empresa desconocida" }, 404);
+    const pct = Number(e.comision) || 0;
+    const filas = (await todos(store)).filter((t) => (t.empresa || "principal") === id && t.op && (t.op.oc_codigo || t.op.oc) && !/cancelad|anulad|rechazad/i.test(t.op.oc_estado || ""))
+      .map((t) => { const total = Number(t.total) || Number(t.monto) || 0; const neto = Number(t.neto) || Math.round(total / 1.19);
+        const fuera = !!t.externa;                       // cotizada fuera de la app: la OC no nació de CotizÁgil → se revisa a mano
+        const pagada = !!(t.op.comision_pagada);
+        return { codigo: t.codigo, nombre: t.nombre || "", organismo: t.organismo || "", oc: t.op.oc_codigo || t.op.oc, oc_estado: t.op.oc_estado || "", fecha: t.op.oc_fecha || t.actualizado || "",
+          total, neto, comision: fuera ? 0 : Math.round(neto * pct / 100), fuera_app: fuera, pagada }; })
+      .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+    const suma = (f) => filas.filter(f).reduce((s, x) => s + x.comision, 0);
+    return json({ empresa: { id, razon_social: e.razon_social, comision: pct, socio_desde: e.socio_desde || null }, ocs: filas,
+      resumen: { ocs: filas.length, neto: filas.reduce((s, x) => s + x.neto, 0), comision_total: suma(() => true), por_cobrar: suma((x) => !x.pagada), cobrada: suma((x) => x.pagada), revisar: filas.filter((x) => x.fuera_app).length } });
+  }
+  if (ruta === "comision-pagada" && req.method === "POST") {   // el dueño de la app marca una comisión como cobrada
+    const b = await cuerpo(req); const t = await leer(store, String(b.codigo || "").trim());
+    if (!t || !t.op) return json({ error: "Compra desconocida" }, 404);
+    t.op.comision_pagada = b.pagada === false ? null : { t: ahora(), nota: texto(b.nota, 200) }; await escribir(store, t);
+    return json({ ok: true, pagada: !!t.op.comision_pagada });
+  }
   // ---------- 🏢 empresas: cada celular oferta con su RUT y sus datos ----------
   if (ruta === "empresas" && req.method === "GET") {
     return json({ empresas: (await store.get("empresas/lista", { type: "json" })) || {} });
@@ -1532,6 +1555,9 @@ async function atender(req) {
     const e = { ...(L[id] || {}), id, actualizado: ahora() };
     for (const k of campos) if (b[k] !== undefined) e[k] = texto(b[k], 200);
     for (const k of ["descripcion", "web", "region", "nombre_fantasia"]) if (b[k] !== undefined) e[k] = texto(b[k], 400);
+    // 🤝 socio comercial: % de comisión para CotizÁgil sobre el neto de cada OC concretada por la app (ej. GENSA 28)
+    if (b.comision !== undefined) { const c = Number(String(b.comision).replace(",", ".")); e.comision = Number.isFinite(c) && c >= 0 && c <= 100 ? c : 0; if (e.comision && !e.socio_desde) e.socio_desde = ahora(); }
+    if (b.socio_nota !== undefined) e.socio_nota = texto(b.socio_nota, 300);
     if (b.perfil && typeof b.perfil === "object") {        // 🔎 lo que el robot descubrió con el RUT: rubros, subrubros y aperturas
       const L2 = (v, n, m) => (Array.isArray(v) ? v : []).slice(0, n).map((x) => (typeof x === "object" ? { rubro: texto(x.rubro, 80), por_que: texto(x.por_que, 200) } : texto(x, m)));
       e.perfil = { rubros: L2(b.perfil.rubros, 8, 80), subrubros: L2(b.perfil.subrubros, 14, 80), aperturas: L2(b.perfil.aperturas, 5, 80),
