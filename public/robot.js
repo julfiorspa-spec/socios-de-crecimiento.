@@ -299,6 +299,46 @@
   .rb-alertas li{margin:3px 0 3px 14px;color:var(--ink-dim)} .rb-alertas li.rojo{color:#ffc9cd}
   .rb-caja .rb-ojo{position:absolute;top:8px;right:8px;background:var(--red);color:#fff;border-radius:99px;font-size:.62rem;font-weight:700;padding:1px 6px}
   @media (min-width:560px){.rb-col{flex-basis:220px}}
+  /* ======== modo ejecutivo (grafito · Inter · color solo en estados) ======== */
+  #rbSheet.rb-exec{background:#121417;font-family:Inter,system-ui,sans-serif;--panel:#1d2127;--panel-2:#262b33;--bg-2:#181b20;--line:#363c47;--line-soft:#2a2f38;--oro:#f0c060;--oro-d:#c7961f;--vivo:#4fd18b;--ink-faint:#9aa3b2;color:#f3f4f6;padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+  #rbSheet.rb-exec::before{background:#121417}
+  #rbSheet.rb-exec .rb-card,#rbSheet.rb-exec .rb-sel,#rbSheet.rb-exec .rb-neg{background:#1d2127;border-color:#2a2f38;border-radius:12px}
+  #rbSheet.rb-exec h2.rb-h,#rbSheet.rb-exec .rb-h{font-family:Inter,system-ui,sans-serif;letter-spacing:-.02em;font-weight:800}
+  #rbSheet.rb-exec .btn{border-radius:12px;font-weight:700}
+  #rbSheet.rb-exec .rb-oro,#rbSheet.rb-exec .btn.rb-oro{background:#f3f4f6;color:#121417;border-color:#f3f4f6}
+  .rb-ex-nav{position:fixed;left:0;right:0;bottom:0;height:calc(70px + env(safe-area-inset-bottom,0px));padding:10px 0 env(safe-area-inset-bottom,0px);background:linear-gradient(180deg,rgba(18,20,23,0),#121417 30%);display:grid;grid-template-columns:repeat(4,1fr);z-index:30}
+  .rb-ex-nav button{background:none;border:0;color:#9aa3b2;font:600 .64rem Inter,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;gap:3px;position:relative;padding:0}
+  .rb-ex-nav button.on{color:#f3f4f6}
+  .rb-ex-nav button svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round}
+  .rb-ex-nav .n{position:absolute;top:-4px;right:calc(50% - 20px);background:#ff8a65;color:#121417;font-size:.6rem;font-weight:800;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 4px}
+  .rb-ex-h1{font-size:1.45rem;font-weight:800;letter-spacing:-.02em;margin:4px 0 2px}
+  .rb-ex-h2{font-size:1rem;font-weight:700;margin:20px 0 8px;display:flex;justify-content:space-between;align-items:baseline}
+  .rb-ex-h2 small{font-size:.72rem;color:#9aa3b2;font-weight:600}
+  .rb-ex-carr{display:flex;gap:12px;overflow-x:auto;margin:0 -14px;padding:2px 14px 6px;scroll-snap-type:x mandatory}
+  .rb-ex-carr::-webkit-scrollbar{display:none}
+  .rb-ex-cov{flex:0 0 146px;scroll-snap-align:start;cursor:pointer;text-align:left;background:none;border:0;color:inherit;padding:0;font:inherit}
+  .rb-ex-cov .art{width:146px;height:146px;border-radius:8px;position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:10px;box-sizing:border-box}
+  .rb-ex-cov .art b{font-size:.76rem;line-height:1.2;text-shadow:0 1px 2px rgba(0,0,0,.7);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .rb-ex-cov .tag{position:absolute;top:8px;left:8px;font-size:.6rem;font-weight:800;letter-spacing:.04em;padding:3px 7px;border-radius:4px;background:rgba(0,0,0,.6)}
+  .rb-ex-cov .t{font-size:.8rem;font-weight:600;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rb-ex-cov .m{font-size:.7rem;color:#9aa3b2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rb-ex-row{display:flex;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid #2a2f38;cursor:pointer}
+  .rb-ex-row:last-child{border-bottom:0}
+  .rb-ex-row .d{flex:0 0 50px;height:50px;border-radius:6px;background:#262b33;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+  .rb-ex-row .d b{font-size:1rem}.rb-ex-row .d small{font-size:.56rem;color:#9aa3b2;margin-top:3px;text-transform:uppercase}
+  .rb-ex-row .tx{flex:1;min-width:0}.rb-ex-row .tx b{display:block;font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rb-ex-row .tx span{display:block;font-size:.72rem;color:#9aa3b2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rb-ex-st{display:inline-block;font-size:.64rem;font-weight:700;padding:2px 7px;border-radius:999px;border:1px solid #363c47;color:#9aa3b2;margin:3px 4px 0 0}
+  .rb-ex-st.cierre{color:#ff8a65;border-color:#ff8a65}.rb-ex-st.doc{color:#f4c95d;border-color:#f4c95d}.rb-ex-st.env{color:#4fd18b;border-color:#4fd18b}.rb-ex-st.info{color:#6ea8ff;border-color:#6ea8ff}
+  .rb-ex-chips{display:flex;gap:8px;overflow-x:auto;margin:8px -14px 4px;padding:0 14px 4px}.rb-ex-chips::-webkit-scrollbar{display:none}
+  .rb-ex-chips button{flex:0 0 auto;height:32px;padding:0 12px;border-radius:16px;border:1px solid #363c47;background:#1d2127;color:#f3f4f6;font:600 .78rem Inter,sans-serif}
+  .rb-ex-chips button.on{background:#f3f4f6;color:#121417;border-color:#f3f4f6}
+  .rb-ex-search{display:flex;align-items:center;gap:10px;background:#f3f4f6;color:#121417;border-radius:10px;padding:0 12px;height:46px;margin-top:8px}
+  .rb-ex-search input{flex:1;min-width:0;background:none;border:0;outline:0;color:#121417;font:500 .9rem Inter,sans-serif}
+  .rb-ex-cont{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(74px + env(safe-area-inset-bottom,0px));width:min(560px,calc(100vw - 16px));z-index:29}
+  .rb-ex-cont button{width:100%;display:flex;align-items:center;gap:10px;background:#262b33;border:1px solid #363c47;border-radius:10px;padding:9px 10px;color:#f3f4f6;text-align:left;font:inherit;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+  .rb-ex-cont .bar{height:3px;background:#363c47;border-radius:2px;overflow:hidden;margin-top:5px}.rb-ex-cont .bar i{display:block;height:100%;background:#f4c95d}
+  .rb-ex-kv{display:grid;grid-template-columns:104px 1fr;gap:6px 10px;font-size:.86rem}.rb-ex-kv div:nth-child(odd){color:#9aa3b2}
+  .rb-ex-src{font-size:.66rem;color:#6ea8ff;font-weight:600;margin-left:6px;white-space:nowrap}
   /* ======== tema «cristal, oro, cielo, mar y luna» (solo en la hoja del robot) ======== */
   #rbSheet{top:0;max-height:none;height:100%;border:0;border-radius:0;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
     padding:calc(10px + env(safe-area-inset-top,0px)) 14px calc(28px + env(safe-area-inset-bottom,0px));background:#030713;
@@ -853,6 +893,7 @@
   back.addEventListener("click", cerrar);
 
   function abrir(foco, detalle) {
+    sheet.classList.toggle("rb-exec", execOn());
     R.foco = foco || null; R.conf = null; R.detalle = detalle || (foco && R.vista !== "lista" ? foco : null);
     sheet.classList.add("on"); back.classList.add("on");
     pintarHoja(); refrescar(); estadoPush().then(pintarHojaSiAbierta);
@@ -2488,24 +2529,6 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const enviadosT = enviadosAll.filter((t) => !segDe(t.codigo)?.ganada);
     const tabs = [["nuevas", "👆 Por preparar", nuevas.length], ["sel", "⭐ Seleccionadas", sel.length], ["firmar", "✍ Por firmar", enFirma.length],
       ["hechas", "📨 Enviadas", enviadosT.length], ["ganadas", "🏆 Ganadas", ganadasT.length], ["papelera", "🗑 No deseadas", papelera.length]];
-    // 📋 Borrador de trabajo: empresa · responsable · flete · plazo · última verificación · cambios por revisar
-    const tiraBorrador = (x) => {
-      const sel = x._sel || {}; const gente = [...new Set([persona()?.nombre, ...Object.values(R.ejecutores || {}).map((e) => e?.nombre)].filter(Boolean))];
-      if (sel.responsable && !gente.includes(sel.responsable)) gente.push(sel.responsable);
-      const ver = sel.ultima_verificacion || sel.verificado?.t || R.oport?.fecha; const hhmm = ver ? new Date(ver).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }) : "—";
-      const emp = (R.empresas || {})[sel.empresa || miEmp() || "principal"]?.razon_social;
-      const cambios = (sel.cambios || []).slice(-3).map((c) => c.campo === "cierre" ? `cierre ${String(c.antes).slice(5, 16).replace("T", " ")} → <b>${String(c.despues).slice(5, 16).replace("T", " ")}</b>` : c.campo === "presupuesto" ? `presupuesto ${clp(c.antes)} → <b>${clp(c.despues)}</b>` : "pasó a <b>2° llamado</b>");
-      return `<div class="rb-bor" data-c="${esc(x.codigo)}">
-        ${sel.revisar ? `<div class="rb-bor-al">⚠ <b>Cambió mientras cotizabas:</b> ${cambios.join(" · ")}. Tu borrador se conservó; revisa antes de aprobar. <button class="btn small" type="button" data-rb="sel-revisado" data-c="${esc(x.codigo)}">✓ Revisado</button></div>` : ""}
-        <div class="rb-bor-g">
-          <label>Empresa<b>${esc(corta(emp || "PJANIC"))}</b></label>
-          <label>Responsable<select class="rb-bor-resp"><option value="">— sin asignar —</option>${gente.map((g) => `<option ${sel.responsable === g ? "selected" : ""}>${esc(g)}</option>`).join("")}</select></label>
-          <label>Flete (neto)<input class="rb-bor-flete rb-in" inputmode="numeric" value="${sel.flete ? Number(sel.flete).toLocaleString("es-CL") : ""}" placeholder="0"></label>
-          <label>Plazo ofrecido<input class="rb-bor-plazo rb-in" value="${esc(sel.plazo || "")}" placeholder="ej. 3 días hábiles"></label>
-        </div>
-        <div class="muted" style="font-size:.7rem;margin-top:6px">Verificado en Mercado Público a las <b>${hhmm}</b>${sel.verificado?.cierre ? ` · cierre visto ${String(sel.verificado.cierre).slice(5, 16).replace("T", " ")}` : ""} · el borrador se guarda solo en la nube.</div>
-      </div>`;
-    };
     const tarjetaSel = (x) => {
       const pres = Number(x.monto) || 0;
       const margenRubro = Number(x._sel.margen ?? x.margen) || 0.2;
@@ -3797,6 +3820,123 @@ ${empNom}`;
     } catch (e) { toast("No pude usar el micrófono: " + (e.message || e)); }
   }
 
+  /* ============ ◧ MODO EJECUTIVO: Inicio · Buscar · Biblioteca · Actividad (sobre los mismos datos del motor) ============ */
+  const EXK = "sdc:exec";
+  const execOn = () => { try { return localStorage.getItem(EXK) !== "0"; } catch { return true; } };
+  const exTab = () => R.exTab || "inicio";
+  const EXI = {
+    inicio: '<svg viewBox="0 0 24 24"><path d="m3 11 9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>',
+    buscar: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
+    biblio: '<svg viewBox="0 0 24 24"><path d="M4 4v16M9 4v16M14 5l5 15"/></svg>',
+    activ: '<svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21a2 2 0 0 0 4 0"/></svg>',
+  };
+  const exSeg = (x) => /^segundo/i.test(x.llamado || "");
+  const exHoras = (x) => x.cierre ? (Date.parse(x.cierre) - Date.now()) / 36e5 : null;
+  const exCierreTxt = (x) => { const h = exHoras(x); if (h == null) return "sin fecha"; if (h < 0) return "cerrada"; if (h < 24) return "cierra hoy " + new Date(x.cierre).toTimeString().slice(0, 5); const d = Math.floor(h / 24); return `cierra en ${d} día${d > 1 ? "s" : ""}`; };
+  const exColor = (x) => { const h = Math.abs([...String(x.rubro || x.nombre || "")].reduce((a, c) => a * 31 + c.charCodeAt(0), 7)) % 360; return `linear-gradient(160deg,hsl(${h} 28% 30%),#15171b)`; };
+  const exMisOport = () => { const conf = leer(); const misR = new Set(conf.rubros || []), pal = (conf.palabras || "").split(/[,;\n]+/).map(norm).filter((w) => w.length > 2);
+    return (R.oport?.lista || []).filter((x) => x.fuente !== "licitacion" && exHoras(x) > 0.5 && !descartada(x.codigo) && !x.ya_ofertada && ((!misR.size && !pal.length) || misR.has(x.rubro) || pal.some((w) => norm(x.nombre).includes(w)))); };
+  const exCover = (x) => `<button type="button" class="rb-ex-cov" data-rb="ex-ficha" data-c="${esc(x.codigo)}"><div class="art" style="background:${exColor(x)}">${exSeg(x) ? '<span class="tag" style="color:#6ea8ff">2° LLAMADO</span>' : exHoras(x) < 30 ? '<span class="tag" style="color:#ff8a65">CIERRA PRONTO</span>' : esSel(x.codigo) ? '<span class="tag">★ GUARDADA</span>' : ""}<b>${esc(x.nombre || x.codigo)}</b></div><div class="t">${esc(x.organismo || "")}</div><div class="m">${x.monto ? clp(x.monto) + " · " : ""}${exCierreTxt(x)}</div></button>`;
+  const exFila = (x, extra) => { const d = x.cierre ? new Date(x.cierre) : null; const sel = leerSel()[x.codigo]; const t = trabajo(x.codigo);
+    return `<div class="rb-ex-row" data-rb="${t ? "det" : "ex-ficha"}" data-c="${esc(x.codigo)}"><div class="d">${d ? `<b>${d.getDate()}</b><small>${["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"][d.getMonth()]} ${d.toTimeString().slice(0, 5)}</small>` : "<b>—</b>"}</div><div class="tx"><b>${esc(x.nombre || x.codigo)}</b><span>${esc(x.organismo || "")}${x.region ? " · " + esc(String(x.region).replace("Región ", "").replace(" de Santiago", "")) : ""}</span><span>${esc(x.codigo)}${x.monto ? " · ppto. " + clp(x.monto) : ""}</span><div>${exSeg(x) ? '<span class="rb-ex-st info">2° llamado</span>' : ""}${exHoras(x) != null && exHoras(x) > 0 ? `<span class="rb-ex-st ${exHoras(x) < 30 ? "cierre" : ""}">${exCierreTxt(x)}</span>` : ""}${sel ? `<span class="rb-ex-st ${sel.revisar ? "doc" : ""}">${sel.revisar ? "⚠ revisar" : "guardada"}</span>` : ""}${t ? `<span class="rb-ex-st ${HECHA.includes(t.estado) ? "env" : t.estado === "firmar" ? "doc" : ""}">${HECHA.includes(t.estado) ? "oferta enviada" : t.estado === "firmar" ? "falta tu firma" : esc(t.estado)}</span>` : ""}${extra || ""}</div></div></div>`; };
+  function exPendientes() {      // tareas que requieren acción (para Actividad y el contador)
+    const out = []; const trabajos = R.data?.trabajos || []; const sel = leerSel();
+    for (const t of trabajos) { if (t.estado === "firmar" && !yaFirmada(t)) out.push({ tipo: "doc", c: t.codigo, texto: `Falta tu firma · ${t.nombre || t.codigo}`, det: true }); }
+    for (const [c, x] of Object.entries(sel)) if (x.revisar) out.push({ tipo: "cierre", c, texto: `Cambió mientras cotizabas · ${x.nombre || c}` });
+    for (const t of trabajos) { if (!t.op || !(t.op.oc_codigo || t.op.oc)) continue; const b = clasificarOC(t); if (b === "A" && !t.op.cobrado) out.push({ tipo: "env", c: t.codigo, texto: `Cobrar · ${t.nombre || t.codigo}`, det: true }); if (b === "B" && t.op.precio_acordado && !t.op.proveedor_pagado) out.push({ tipo: "doc", c: t.codigo, texto: `Pagar al proveedor ${clp(t.op.precio_acordado)} · ${t.nombre || t.codigo}`, det: true }); if (b === "C") out.push({ tipo: "info", c: t.codigo, texto: `Aceptar la OC en MP · ${t.nombre || t.codigo}`, det: true }); if (b === "D" && t.op.proveedor_pagado) out.push({ tipo: "cierre", c: t.codigo, texto: `OC cancelada con proveedor pagado · ${t.nombre || t.codigo}`, det: true }); }
+    for (const m of (R.mailAl || []).filter((x) => !x.visto).slice(0, 5)) out.push({ tipo: "info", c: m.codigo || "", texto: `Correo · ${m.asunto || m.resumen || ""}`.slice(0, 90), det: !!m.codigo });
+    return out;
+  }
+  function navExec() {
+    const n = exPendientes().length; const t = R.exFicha || R.detalle ? "" : exTab();
+    return `<nav class="rb-ex-nav">${[["inicio", "Inicio", EXI.inicio], ["buscar", "Buscar", EXI.buscar], ["biblio", "Tu biblioteca", EXI.biblio], ["activ", "Actividad", EXI.activ]].map(([k, l, ic]) => `<button type="button" class="${t === k ? "on" : ""}" data-rb="ex-tab" data-t="${k}">${ic}${l}${k === "activ" && n ? `<span class="n">${n}</span>` : ""}</button>`).join("")}</nav>` + exContinuar();
+  }
+  function exContinuar() {
+    const firmar = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t)); if (!firmar.length || R.detalle || R.exFicha) return "";
+    const t = firmar[0]; const otras = firmar.length - 1;
+    return `<div class="rb-ex-cont"><button type="button" data-rb="det" data-c="${esc(t.codigo)}"><div style="width:38px;height:38px;border-radius:6px;background:${exColor(t)}"></div><div style="flex:1;min-width:0"><div style="font-size:.8rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Continuar cotización · ${esc(t.nombre || t.codigo)}</div><div class="bar"><i style="width:70%"></i></div><div style="font-size:.68rem;color:#9aa3b2">${clp(t.total)} · lista para rellenar y firmar${otras ? ` · ${otras} más en Biblioteca` : ""}</div></div>›</button></div>`;
+  }
+  function pantallaExec() {
+    const tab = exTab(); if (!R.oport) cargarOport();
+    return `<div class="rb-paso">${({ inicio: exInicio, buscar: exBuscar, biblio: exBiblio, activ: exActiv })[tab]()}</div>`;
+  }
+  function exInicio() {
+    const nom = (persona()?.nombre || "").split(" ")[0]; const h = new Date().getHours(); const sal = h < 12 ? "Buenos días" : h < 20 ? "Buenas tardes" : "Buenas noches";
+    const op = exMisOport().sort((a, b) => exHoras(a) - exHoras(b)); const prox = op.slice(0, 3); const seg = op.filter(exSeg); const savedC = Object.keys(leerSel()).map((c) => (R.oport?.lista || []).find((x) => x.codigo === c) || { codigo: c, ...leerSel()[c] });
+    const n = exPendientes().length; const r = R.data?.robot;
+    return `<div class="rb-env"><div><div class="rb-ex-h1">${sal}${nom ? ", " + esc(nom) : ""}</div><div class="muted" style="font-size:.8rem">${new Date().toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long" })} · ${n ? `<b style="color:#ff8a65">${n} pendiente${n > 1 ? "s" : ""}</b>` : "sin pendientes"} · robot ${r?.conectado ? "🟢" : "⚫"}</div></div></div>
+      <div class="rb-ex-h2">Próximos cierres <small>en tus rubros</small></div><div class="rb-card" style="padding:4px 14px;margin:0">${prox.length ? prox.map((x) => exFila(x)).join("") : `<div class="muted" style="padding:10px 0;font-size:.85rem">${R.oport ? "Nada por cerrar en tus rubros. Toca Buscar para explorar." : "Cargando oportunidades…"}</div>`}</div>
+      <div class="rb-ex-h2">Segundos llamados <small>menos competencia</small></div>${seg.length ? `<div class="rb-ex-carr">${seg.slice(0, 12).map(exCover).join("")}</div>` : `<div class="muted" style="font-size:.85rem">Hoy no hay segundos llamados en tus rubros.</div>`}
+      <div class="rb-ex-h2">Oportunidades en tus rubros <small>${op.length}</small></div><div class="rb-ex-carr">${op.filter((x) => !exSeg(x)).slice(0, 14).map(exCover).join("") || `<div class="muted" style="font-size:.85rem">—</div>`}</div>
+      <div class="rb-ex-h2">Guardadas recientemente <small>${savedC.length}</small></div>${savedC.length ? `<div class="rb-ex-carr">${savedC.slice(0, 12).map(exCover).join("")}</div>` : `<div class="muted" style="font-size:.85rem">Guarda una compra con ★ desde su ficha y aparece aquí.</div>`}
+      <div style="margin-top:18px"><button class="btn rb-oro" type="button" data-rb="claude" style="width:100%">💬 Pregúntale a Claude sobre tu cartera</button></div>`;
+  }
+  function exBuscar() {
+    const q = norm(R.exQ || ""); const f = R.exF || {}; const lista = (R.oport?.lista || []).filter((x) => x.fuente !== "licitacion" && exHoras(x) > 0);
+    const rubros = [...new Set(lista.map((x) => x.rubro).filter(Boolean))].sort();
+    const regiones = [...new Set(lista.map((x) => String(x.region || "").replace("Región ", "").replace(" de Santiago", "")).filter(Boolean))].sort();
+    const L = lista.filter((x) => (!q || norm((x.nombre || "") + " " + (x.organismo || "") + " " + x.codigo + " " + (x.region || "")).includes(q)) && (!f.rubro || x.rubro === f.rubro) && (!f.seg || exSeg(x)) && (!f.reg || String(x.region || "").includes(f.reg)) && (!f.hoy || exHoras(x) < 24)).sort((a, b) => exHoras(a) - exHoras(b));
+    return `<div class="rb-ex-h1">Buscar</div><div class="muted" style="font-size:.8rem">Oportunidades abiertas por palabra, organismo o ID</div>
+      <div class="rb-ex-search">${EXI.buscar}<input id="rbExQ" placeholder="Áridos, hospital, 2466-512…" value="${esc(R.exQ || "")}" autocomplete="off"></div>
+      <div class="rb-ex-chips"><button type="button" class="${f.seg ? "on" : ""}" data-rb="ex-f" data-k="seg">2° llamado</button><button type="button" class="${f.hoy ? "on" : ""}" data-rb="ex-f" data-k="hoy">Cierra hoy</button>${rubros.map((r) => `<button type="button" class="${f.rubro === r ? "on" : ""}" data-rb="ex-f" data-k="rubro" data-v="${esc(r)}">${esc(r)}</button>`).join("")}</div>
+      <div class="rb-ex-chips">${regiones.map((r) => `<button type="button" class="${f.reg === r ? "on" : ""}" data-rb="ex-f" data-k="reg" data-v="${esc(r)}">${esc(r)}</button>`).join("")}</div>
+      <div class="rb-ex-h2">Resultados <small>${L.length}</small></div><div class="rb-card" style="padding:4px 14px;margin:0">${L.length ? L.slice(0, 80).map((x) => exFila(x)).join("") : `<div class="muted" style="padding:10px 0;font-size:.85rem">${R.oport ? "Nada con ese filtro." : "Cargando…"}</div>`}</div>`;
+  }
+  function exBiblio() {
+    const k = R.exLib || "todas"; const trabajos = R.data?.trabajos || []; const sel = leerSel(); const lista = R.oport?.lista || [];
+    const filas = [];
+    for (const [c, x] of Object.entries(sel)) { const t = trabajo(c); if (t) continue; const o = lista.find((y) => y.codigo === c) || { codigo: c, ...x }; filas.push({ k: "guardadas", t: Date.parse(x.actualizado || x.desde || 0), html: exFila(o, `<span class="rb-ex-st">MP: publicada</span><span class="rb-ex-st doc">${x.costo || x.flete || x.responsable ? "borrador" : "guardada"}</span>`) }); }
+    for (const t of trabajos) { const oc = t.op && (t.op.oc_codigo || t.op.oc); const b = oc ? clasificarOC(t) : null; const inter = oc ? ({ A: "Entregada", B: "En operación", C: "OC nueva", D: "Revisar" })[b] : t.estado === "firmar" ? "Lista para firmar" : HECHA.includes(t.estado) ? "Enviada" : esc(t.estado);
+      const mp = oc ? "OC " + (t.op.oc_estado || "emitida") : HECHA.includes(t.estado) ? "Oferta enviada" : "Publicada"; const kk = oc ? (b === "A" && !t.op.cobrado ? "cobrar" : b === "A" ? "cobradas" : "operacion") : t.estado === "firmar" ? "firmar" : HECHA.includes(t.estado) ? "enviadas" : "otras";
+      filas.push({ k: kk, t: Date.parse(t.actualizado || t.creado || 0), html: `<div class="rb-ex-row" data-rb="det" data-c="${esc(t.codigo)}"><div class="d" style="background:${exColor(t)}"><b style="font-size:.66rem">${esc(((R.empresas || {})[t.empresa || "principal"]?.razon_social || "PJANIC").split(" ")[0].slice(0, 8))}</b></div><div class="tx"><b>${esc(t.nombre || t.codigo)}</b><span>${esc(t.organismo || "")} · ${esc(t.codigo)}</span><div><span class="rb-ex-st">MP: ${esc(mp)}</span><span class="rb-ex-st ${kk === "cobrar" ? "doc" : kk === "cobradas" || kk === "enviadas" ? "env" : kk === "operacion" ? "info" : kk === "firmar" ? "doc" : ""}">${inter}</span>${t.total ? `<span class="rb-ex-st">${clp(t.total)}</span>` : ""}${oc && t.op.responsable ? `<span class="rb-ex-st">${esc(t.op.responsable)}</span>` : ""}</div></div></div>` }); }
+    const chips = [["todas", "Todas"], ["guardadas", "Guardadas"], ["firmar", "Por firmar"], ["enviadas", "Enviadas"], ["operacion", "En operación"], ["cobrar", "Por cobrar"], ["cobradas", "Cobradas"]];
+    const L = filas.filter((f) => k === "todas" || f.k === k).sort((a, b) => b.t - a.t);
+    return `<div class="rb-env"><div class="rb-ex-h1">Tu biblioteca</div><button class="btn small" type="button" data-rb="oc">📦 Caja de OC</button></div><div class="muted" style="font-size:.8rem">Estado oficial de Mercado Público · avance interno</div>
+      <div class="rb-ex-chips">${chips.map(([kk, l]) => `<button type="button" class="${k === kk ? "on" : ""}" data-rb="ex-lib" data-k="${kk}">${l}${kk !== "todas" ? ` <i style="opacity:.6">${filas.filter((f) => f.k === kk).length}</i>` : ""}</button>`).join("")}</div>
+      <div class="rb-card" style="padding:4px 14px;margin:0">${L.length ? L.slice(0, 120).map((f) => f.html).join("") : `<div class="muted" style="padding:10px 0;font-size:.85rem">Aún no hay compras aquí.</div>`}</div>`;
+  }
+  function exActiv() {
+    const P = exPendientes(); const col = { doc: "#f4c95d", cierre: "#ff8a65", env: "#4fd18b", info: "#6ea8ff" };
+    return `<div class="rb-env"><div class="rb-ex-h1">Actividad</div><span class="muted" style="font-size:.8rem">${P.length} tarea${P.length === 1 ? "" : "s"}</span></div><div class="muted" style="font-size:.8rem">Solo lo que requiere tu acción. Cada una abre la compra o la tarea.</div>
+      <div class="rb-card" style="padding:4px 14px;margin-top:10px">${P.length ? P.map((p) => `<div class="rb-ex-row" data-rb="${p.det ? "det" : "ex-ficha"}" data-c="${esc(p.c)}"><div class="d" style="color:${col[p.tipo] || "#fff"}">${p.tipo === "env" ? "💰" : p.tipo === "cierre" ? "⚠" : p.tipo === "info" ? "ℹ" : "✍"}</div><div class="tx"><b style="white-space:normal">${esc(p.texto)}</b><span>${esc(p.c)}</span></div></div>`).join("") : `<div class="muted" style="padding:14px 0;font-size:.85rem">Nada pendiente. 👌</div>`}</div>`;
+  }
+  function fichaExec(cod) {
+    const x = (R.oport?.lista || []).find((y) => y.codigo === cod) || { codigo: cod, ...(leerSel()[cod] || {}) }; const sel = leerSel()[cod]; const t = trabajo(cod);
+    if (t) { R.exFicha = null; R.detalle = cod; setTimeout(() => pintarHoja(true), 0); return ""; }
+    const ver = R.oport?.fecha ? new Date(R.oport.fecha).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }) : "—";
+    return `<div class="rb-env"><button class="btn small" type="button" data-rb="ex-volver">‹ Volver</button><div class="rb-row"><button class="btn small ${sel ? "rb-oro" : ""}" type="button" data-rb="oport-sel" data-c="${esc(cod)}">${sel ? "★ Guardada" : "☆ Guardar"}</button><button class="btn small" type="button" data-rb="claude" data-c="${esc(cod)}">💬 Claude</button></div></div>
+      <div style="height:150px;border-radius:12px;background:${exColor(x)};display:flex;align-items:flex-end;padding:14px;margin:10px 0 12px"><div><div>${exSeg(x) ? '<span class="rb-ex-st info">2° llamado</span>' : ""}<span class="rb-ex-st ${exHoras(x) < 30 ? "cierre" : ""}">${exCierreTxt(x)}</span>${x.ofertas != null ? `<span class="rb-ex-st">${x.ofertas === 0 ? "sin rivales aún" : x.ofertas + " oferta" + (x.ofertas === 1 ? "" : "s")}</span>` : ""}</div><div class="rb-ex-h1" style="font-size:1.2rem">${esc(x.nombre || cod)}</div><div class="muted" style="font-size:.8rem">${esc(x.organismo || "")} · ${esc(cod)}</div></div></div>
+      <div class="rb-card" style="margin:0"><div class="rb-ex-kv">
+        <div>Qué piden</div><div>${esc(x.descripcion || x.nombre || "—")}<span class="rb-ex-src">↳ Ficha MP</span></div>
+        <div>Cierra</div><div>${x.cierre ? new Date(x.cierre).toLocaleString("es-CL", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "—"}</div>
+        <div>Presupuesto</div><div>${x.monto ? clp(x.monto) + (x.monto_estimado && x.monto_estimado !== "False" ? " (estimado)" : " (publicado)") : "No publicado"}</div>
+        <div>Región</div><div>${esc(x.region || "—")}</div>
+        <div>Rubro</div><div>${esc(x.rubro || "—")}${x.etiqueta ? ` · ${esc(x.etiqueta)}` : ""}</div>
+        <div>Verificado</div><div>Lista de Mercado Público de las <b>${ver}</b>${sel?.verificado?.cierre ? ` · al guardar: cierre ${String(sel.verificado.cierre).slice(5, 16).replace("T", " ")}` : ""}</div>
+      </div></div>
+      ${sel ? `<div class="rb-card" style="margin-top:10px"><b>Borrador</b>${tiraBorradorPublica(x, sel)}</div>` : ""}
+      <div style="margin-top:12px" class="rb-row"><button class="btn rb-oro" type="button" data-rb="oport-si" data-c="${esc(cod)}" style="flex:1">✍ Preparar cotización con ${esc(corta((R.empresas || {})[miEmp() || "principal"]?.razon_social || "mi empresa"))}</button></div>
+      <div class="muted" style="font-size:.74rem;margin-top:6px">El robot arma la oferta (precio por ítem, PDF, ficha) y la deja en «Por firmar». El envío y la firma los haces tú en Mercado Público.</div>`;
+  }
+  // 📋 Borrador de trabajo: empresa · responsable · flete · plazo · última verificación · cambios por revisar
+  const tiraBorrador = (x) => {
+    const sel = x._sel || {}; const gente = [...new Set([persona()?.nombre, ...Object.values(R.ejecutores || {}).map((e) => e?.nombre)].filter(Boolean))];
+    if (sel.responsable && !gente.includes(sel.responsable)) gente.push(sel.responsable);
+    const ver = sel.ultima_verificacion || sel.verificado?.t || R.oport?.fecha; const hhmm = ver ? new Date(ver).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }) : "—";
+    const emp = (R.empresas || {})[sel.empresa || miEmp() || "principal"]?.razon_social;
+    const cambios = (sel.cambios || []).slice(-3).map((c) => c.campo === "cierre" ? `cierre ${String(c.antes).slice(5, 16).replace("T", " ")} → <b>${String(c.despues).slice(5, 16).replace("T", " ")}</b>` : c.campo === "presupuesto" ? `presupuesto ${clp(c.antes)} → <b>${clp(c.despues)}</b>` : "pasó a <b>2° llamado</b>");
+    return `<div class="rb-bor" data-c="${esc(x.codigo)}">
+      ${sel.revisar ? `<div class="rb-bor-al">⚠ <b>Cambió mientras cotizabas:</b> ${cambios.join(" · ")}. Tu borrador se conservó; revisa antes de aprobar. <button class="btn small" type="button" data-rb="sel-revisado" data-c="${esc(x.codigo)}">✓ Revisado</button></div>` : ""}
+      <div class="rb-bor-g">
+        <label>Empresa<b>${esc(corta(emp || "PJANIC"))}</b></label>
+        <label>Responsable<select class="rb-bor-resp"><option value="">— sin asignar —</option>${gente.map((g) => `<option ${sel.responsable === g ? "selected" : ""}>${esc(g)}</option>`).join("")}</select></label>
+        <label>Flete (neto)<input class="rb-bor-flete rb-in" inputmode="numeric" value="${sel.flete ? Number(sel.flete).toLocaleString("es-CL") : ""}" placeholder="0"></label>
+        <label>Plazo ofrecido<input class="rb-bor-plazo rb-in" value="${esc(sel.plazo || "")}" placeholder="ej. 3 días hábiles"></label>
+      </div>
+      <div class="muted" style="font-size:.7rem;margin-top:6px">Verificado en Mercado Público a las <b>${hhmm}</b>${sel.verificado?.cierre ? ` · cierre visto ${String(sel.verificado.cierre).slice(5, 16).replace("T", " ")}` : ""} · el borrador se guarda solo en la nube.</div>
+    </div>`;
+  };
+  const tiraBorradorPublica = (x, sel) => tiraBorrador({ ...x, _sel: sel });
   function pantallaLista() {
     const r = R.data?.robot;
     const lista = R.data?.trabajos || [];
@@ -3813,7 +3953,7 @@ ${empNom}`;
         <button type="button" class="rb-pcs" data-rb="ver-roles" title="¿Qué quieres hacer? · ${conectado ? "Robot conectado" : "Robot apagado"}"><i class="${conectado ? "on" : ""}"></i>${/nube/i.test(r?.equipo || "") ? "☁️" : "Robot"}</button><button type="button" class="rb-pcs" data-rb="conectar-mp" title="${mp?.conectado ? "Mercado Público conectado" : "Entrar a Mercado Público desde la app"}"><i class="${mp?.conectado ? "on" : ""}"></i>MP${mp?.conectado ? "" : " ▸"}</button>
         <button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button><button class="rb-ico" type="button" data-rb="analizador" aria-label="Analizador de proyectos" title="Analizador de proyectos — Excel en vivo">📊</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico" type="button" data-rb="oc" aria-label="Órdenes de compra" title="Solo las órdenes de compra: operadas, en operación, nuevas">📦</button><button class="rb-ico rb-claude" type="button" data-rb="claude" aria-label="Chatear con Claude" title="Chatea con Claude, el cerebro de la app">💬</button><button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
         <button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
-        ${barraPortales()}${esDueno() ? (setTimeout(() => { if (!R.nubeT || Date.now() - R.nubeT > 60000) cargarNube(); inicioLoginMP(); }, 0), barraMando(r, mp, conectado)) : ""}`;
+        ${execOn() ? "" : barraPortales()}${esDueno() ? (setTimeout(() => { if (!R.nubeT || Date.now() - R.nubeT > 60000) cargarNube(); inicioLoginMP(); }, 0), execOn() ? "" : barraMando(r, mp, conectado)) : ""}`;
       // 🏆 portada: cada vez que abres la app (y siempre que no haya empresa). Sin formularios: RUT → jugar.
       if (R.verRoles) return selectorRol();
       if (!miEmp() || !portadaVista()) { if (!R.oport) cargarOport(); return pantallaPortada(); }
@@ -3829,6 +3969,8 @@ ${empNom}`;
       else if (R.pantalla === "oc") cuerpo = pantallaOC();
       else if (R.pantalla === "planes") cuerpo = pantallaPlanes();
       else if (R.pantalla === "mplogin") cuerpo = pantallaLoginMP();
+      else if (execOn() && !R.exFicha) { if (!esDueno() && (!R.planT || Date.now() - R.planT > 300000)) setTimeout(cargarPlan, 0); cuerpo = pantallaExec(); }
+      else if (execOn() && R.exFicha) cuerpo = fichaExec(R.exFicha);
       else { if (!esDueno() && (!R.planT || Date.now() - R.planT > 300000)) setTimeout(cargarPlan, 0);
         const pa = portalActivo(); cuerpo = (pa === "ejecuta" ? (tienePlan("medio") ? portalEjecuta() : candado("medio", "🛠 Ejecuta")) : pa === "licita" ? (tienePlan("medio") ? portalLicita() : candado("medio", "📑 Licitaciones")) : pa === "inversion" ? portalInversion() : vistaOport()); }
       const mas = `<details class="rb-ajustes rb-mas"><summary>⚙ Más opciones</summary>
@@ -3838,6 +3980,7 @@ ${empNom}`;
         ${!R.push && pushPosible && !(esIOS && !instalada()) ? `<button class="btn small" type="button" data-rb="avisos">🔔 Activar avisos</button>` : ""}
         ${esIOS && !instalada() ? `<button class="btn small" type="button" data-rb="copiar-enlace-app">📲 Copiar enlace para la app del inicio</button>` : `<button class="btn small" type="button" data-rb="copiar-enlace-app">📲 Copiar enlace para otro celular</button>`}
         <button class="btn small" type="button" data-rb="bienvenida">🧭 Instalación para otra persona</button>
+        <button class="btn small" type="button" data-rb="exec-toggle">${execOn() ? "◧ Volver al modo clásico" : "◧ Modo ejecutivo (Inicio · Buscar · Biblioteca · Actividad)"}</button>
         <button class="btn small" type="button" data-rb="legado" data-v="${legado() ? "0" : "1"}">🎮 ${legado() ? "Ocultar" : "Ver"} las ofertas de antes (de todos)</button>
         <div class="rb-row" style="margin-top:8px">${VISTAS.filter(([k]) => k !== "oport").map(([k, n]) => `<button type="button" class="btn small" data-rb="vista" data-v="${k}">${n}</button>`).join("")}</div>
         <div class="label" style="margin-top:12px">Firma rápida ${firmaRapida() ? "✓ instalada" : "(recomendado)"}</div>
@@ -3845,7 +3988,7 @@ ${empNom}`;
         <div class="rb-row" style="margin-top:8px"><button class="btn small" type="button" data-rb="copiar-marcador">Copiar marcador «Rellenar» (sin extensión)</button>
           ${R.push ? `<button class="btn small" type="button" data-rb="push-probar">Probar aviso</button>` : ""}<button class="btn small" type="button" data-rb="desenlazar">Desenlazar</button></div>
       </details>`;
-      return cab + cuerpo + (R.pantalla === "llamada" || R.pantalla === "claude" || R.pantalla === "oc" || R.pantalla === "analizador" || R.empresaEditar || R.rubroEditar || R.personaEditar ? "" : mas);
+      return cab + cuerpo + (R.pantalla === "llamada" || R.pantalla === "claude" || R.pantalla === "oc" || R.pantalla === "analizador" || R.empresaEditar || R.rubroEditar || R.personaEditar ? "" : mas) + (execOn() ? navExec() : "");
     }
     return `
       <div class="rb-sheet-head"><h2 style="margin:0">Robot de ofertas</h2><button class="rb-x" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
@@ -4520,7 +4663,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       const x = (R.oport?.lista || []).find((y) => y.codigo === cod);
       return pedirOferta({ codigo: cod, nombre: x?.nombre, organismo: x?.organismo, monto: x?.monto });
     }
-    if (a === "det") { R.detalle = cod; sheet.scrollTop = 0; return pintarHoja(); }
+    if (a === "det") { R.detalle = cod; R.exFicha = null; sheet.scrollTop = 0; return pintarHoja(); }
     if (a === "cerrar-det") { R.detalle = null; return pintarHoja(); }
     if (a === "remoto") {
       const v = ($("#rbRemoto")?.value || "").trim();
@@ -4590,6 +4733,12 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       if (w) { try { w.opener = null; } catch {} ABIERTAS[String(cod).toUpperCase()].w = w; } else location.href = portalDe(cod);
       return;
     }
+    if (a === "ex-tab") { R.exTab = b.dataset.t; R.exFicha = null; R.detalle = null; R.pantalla = null; sheet.scrollTop = 0; return pintarHoja(true); }
+    if (a === "ex-ficha") { R.exFicha = cod; sheet.scrollTop = 0; return pintarHoja(true); }
+    if (a === "ex-volver") { R.exFicha = null; return pintarHoja(true); }
+    if (a === "ex-f") { R.exF = R.exF || {}; const k = b.dataset.k; if (k === "seg" || k === "hoy") R.exF[k] = !R.exF[k]; else R.exF[k] = R.exF[k] === b.dataset.v ? "" : b.dataset.v; return pintarHoja(true); }
+    if (a === "ex-lib") { R.exLib = b.dataset.k; return pintarHoja(true); }
+    if (a === "exec-toggle") { try { localStorage.setItem(EXK, execOn() ? "0" : "1"); } catch {} R.exFicha = null; sheet.classList.toggle("rb-exec", execOn()); toast(execOn() ? "◧ Modo ejecutivo" : "Modo clásico"); return pintarHoja(true); }
     if (a === "sel-revisado") { const s = { ...leerSel() }; if (s[cod]) { s[cod] = { ...s[cod], revisar: false }; guardarSel(s); } api("seleccionar", { method: "POST", body: JSON.stringify({ codigo: cod, revisado: true }) }).catch(() => {}); toast("✓ Revisado · " + cod); return pintarHoja(true); }
     if (a === "reabrir") {
       try { const r = await api("reabrir", { method: "POST", body: JSON.stringify({ codigo: cod }) }); if (r.error) { toast(r.error); return; }
@@ -4673,6 +4822,9 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     const d = (+el.value || 0) / 100, pres = +box.dataset.pres || 0, cant = +box.dataset.cant || 1;
     const neto_max = box.dataset.coniva === "1" ? pres / 1.19 : pres, unit = Math.floor(neto_max * (1 - d) / cant / 10) * 10, neto = unit * cant;
     box.querySelector('[data-v="desc"]').textContent = (+el.value).toLocaleString("es-CL"); box.querySelector('[data-v="unit"]').textContent = clp(unit); box.querySelector('[data-v="total"]').textContent = clp(Math.round(neto * 1.19));
+  });
+  sheet.addEventListener("input", (ev) => {            // 🔎 Buscar (modo ejecutivo) en vivo
+    if (ev.target.id !== "rbExQ") return; R.exQ = ev.target.value; const pos = sheet.scrollTop; R.toque = 0; pintarHoja(true); sheet.scrollTop = pos; const q = $("#rbExQ"); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
   });
   sheet.addEventListener("change", (ev) => {           // 📋 borrador: responsable · flete · plazo
     const b = ev.target.closest?.(".rb-bor"); if (!b) return; const cod = b.dataset.c;
