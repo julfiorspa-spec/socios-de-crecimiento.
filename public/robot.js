@@ -1986,7 +1986,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     return `<div class="rb-sec">🤝 Reparto: todos ganan</div>
       ${fila("💼", "Inversionista", X.invRecibe, `invierte ${clp(Math.round(X.capital))} → gana ${clp(Math.round(X.invGan))} (+${pc(X.invPct)})`)}
       ${fila("🚚", "Ejecutador", X.ejec, `${pc(X.p.ejecutador)} de la utilidad final`)}
-      ${fila("🎮", "Jugador", X.jugador, `comisión ${pc(X.p.comision)} por traer el negocio`)}
+      ${fila("🎮", "Cotizador", X.jugador, `comisión ${pc(X.p.comision)} por traer el negocio`)}
       ${fila("🏢", "Empresa", X.empresa, "el resto de la utilidad final")}
       ${corto ? "" : `${fila("🏛", "SII", X.iva_pagar + X.impuesto, "IVA a pagar + impuesto")}${fila("💰", "Factoring", X.factoring, pc(X.p.factoring) + " de la OC")}`}`;
   }
@@ -1998,7 +1998,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     return [
       { k: "rp_inversionista", ico: "💼", quien: op.inversionista_nombre || "Inversionista", monto: X.invRecibe, banco: op.inversionista_banco, campo: "inversionista_banco", det: `capital ${clp(Math.round(X.capital))} + ganancia ${clp(Math.round(X.invGan))}` },
       { k: "rp_ejecutador", ico: "🚚", quien: op.ejecutor_nombre || "Ejecutador", monto: X.ejec, banco: op.ejecutor_banco, campo: "ejecutor_banco", det: `${Math.round(X.p.ejecutador * 100)}% de la utilidad final` },
-      { k: "rp_jugador", ico: "🎮", quien: t.persona || "Jugador", monto: X.jugador, banco: op.jugador_banco, campo: "jugador_banco", det: `comisión ${Math.round(X.p.comision * 100)}%` },
+      { k: "rp_jugador", ico: "🎮", quien: t.persona || "Cotizador", monto: X.jugador, banco: op.jugador_banco, campo: "jugador_banco", det: `comisión ${Math.round(X.p.comision * 100)}%` },
       { k: "rp_sii", ico: "🏛", quien: "Reserva impuestos (F29)", monto: X.iva_pagar + X.impuesto, banco: "Cuenta de impuestos de " + (emp.razon_social || "la empresa"), det: `IVA ${clp(Math.round(X.iva_pagar))} + impuesto ${clp(Math.round(X.impuesto))}` },
       { k: null, ico: "🏢", quien: emp.razon_social || "Empresa", monto: X.empresa + (X.compras - X.capital) + dif, banco: "queda en la cuenta operativa",
         det: `utilidad ${clp(Math.round(X.empresa))} + recupera su aporte a la compra ${clp(Math.round(X.compras - X.capital))}${dif ? ` · diferencia factoring ${dif > 0 ? "+" : ""}${clp(Math.round(dif))}` : ""}` },
@@ -3082,14 +3082,14 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   const ROL = "sdc:rol";
   const rolActual = () => { try { return localStorage.getItem(ROL); } catch { return null; } };
   const ROLES = {
-    juego:     { ico: "🎮", corto: "Jugador", portal: "juego",     h: "El Estado compra todos los días.<br><span>Cotiza y gana tu parte.</span>", sub: "Cotizas, el robot arma la oferta, la ficha y el PDF. Tú firmas con tu ClaveÚnica y cobras.", cta: "▶ ENTRAR A COTIZAR" },
+    juego:     { ico: "🎮", corto: "Cotizador", portal: "juego",     h: "El Estado compra todos los días.<br><span>Cotiza y gana tu parte.</span>", sub: "Cotizas, el robot arma la oferta, la ficha y el PDF. Tú firmas con tu ClaveÚnica y cobras.", cta: "▶ ENTRAR A COTIZAR" },
     licita:    { ico: "📑", corto: "Licitador", portal: "licita",   h: "Las licitaciones grandes.<br><span>Postula y adjudícate proyectos.</span>", sub: "Compites por las licitaciones del Estado, montos mayores y proyectos de varios días.", cta: "▶ ENTRAR A LICITAR" },
     ejecuta:   { ico: "🛠", corto: "Ejecutor", portal: "ejecuta",   h: "Tú ejecutas los negocios.<br><span>Haces la pega y cobras.</span>", sub: "Ejecutas órdenes de compra ya ganadas: compras, entregas, instalas, y muestras el avance en vivo.", cta: "▶ ENTRAR A EJECUTAR" },
-    inversion: { ico: "💰", corto: "Inversor", portal: "inversion", h: "Pones la plata.<br><span>El negocio ya está ganado.</span>", sub: "Inviertes en negocios ya adjudicados y ves tu inversión crecer en tiempo real. Sin ClaveÚnica.", cta: "▶ ENTRAR A INVERTIR" },
+    inversion: { ico: "💰", corto: "Inversionista", portal: "inversion", h: "Pones la plata.<br><span>El negocio ya está ganado.</span>", sub: "Inviertes en negocios ya adjudicados y ves tu inversión crecer en tiempo real. Sin ClaveÚnica.", cta: "▶ ENTRAR A INVERTIR" },
   };
   // 👤 UX por roles: cada perfil ve SOLO sus portales (el inversor no ve licitaciones, etc.). El dueño ve todo.
   const PORTALES_ROL = { juego: ["juego"], licita: ["licita"], ejecuta: ["ejecuta", "inversion"], inversion: ["inversion"] };
-  const TABS_PORTAL = [["juego", "🎮 Juego"], ["licita", "📑 Licita"], ["ejecuta", "🛠 Ejecuta"], ["inversion", "💼 Inversión"]];
+  const TABS_PORTAL = [["juego", "🎮 Cotiza"], ["licita", "📑 Licita"], ["ejecuta", "🛠 Ejecuta"], ["inversion", "💼 Inversión"]];
   function portalesVisibles() {
     if (esDueno()) return ["juego", "licita", "ejecuta", "inversion"];       // el dueño/admin ve todos
     const r = rolActual();
@@ -3113,7 +3113,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       <h1 class="rb-p-h">¿Qué quieres hacer?</h1>
       <div class="rb-p-sub">Toca tu perfil. Puedes ser más de uno.</div>
       <div class="rb-puertas">
-        ${puerta("juego", "🎮", "Jugador · Cotizador", "Cotizas Compras Ágiles del Estado. El robot arma la oferta; tú firmas con tu ClaveÚnica y cobras.")}
+        ${puerta("juego", "🎮", "Cotizador", "Cotizas Compras Ágiles del Estado. El robot arma la oferta; tú firmas con tu ClaveÚnica y cobras.")}
         ${puerta("licita", "📑", "Licitador", "Vas por las licitaciones grandes: postulas, compites y te adjudicas proyectos. (Portal en construcción.)")}
         ${puerta("ejecuta", "🛠", "Ejecutor", "Ejecutas las órdenes de compra ya ganadas: compras, entregas, instalas, y muestras el avance en vivo.")}
         ${puerta("inversion", "💰", "Inversor", "Pones capital en negocios ya adjudicados y ves tu inversión crecer en tiempo real. Sin ClaveÚnica.")}
