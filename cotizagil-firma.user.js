@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      3.3.0
+// @version      3.3.1
 // @description  Te lleva a tu Compra Ágil (una navegación, por tu toque) y rellena precios/despacho/detalle al pulsar Rellenar, con confirmación. No envía, no declara, no firma, no navega solo, no oculta la automatización: el envío y la firma los haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -13,8 +13,8 @@
 // @grant        GM_xmlhttpRequest
 // @connect      cotizagil.netlify.app
 // @run-at       document-idle
-// @downloadURL  https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.3.0
-// @updateURL    https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.3.0
+// @downloadURL  https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.3.1
+// @updateURL    https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.3.1
 // ==/UserScript==
 (function () {
   'use strict';
@@ -477,7 +477,11 @@
     say(base + 'Revisa los montos; el envío y la firma los haces tú.');
     debug('rellenado_por_usuario', `${code} ${solo || 'todo'}=${completed}/${run.length} ${ivaMsg} ${totalMsg}`);
     // tras un momento, revisa por qué «Enviar» sigue gris (si sigue gris)
-    setTimeout(() => { const g = porQueGris(); if (g) { say(base + g); debug('enviar_gris', g); } else say(base + '✅ «Enviar cotización» habilitado. El envío y la firma los haces tú.'); }, 1100);
+    setTimeout(() => {
+      const g = porQueGris(); const btn = botonEnviar();
+      if (btn) { try { btn.scrollIntoView({ behavior: 'smooth', block: 'center' }); btn.style.transition = 'box-shadow .3s'; btn.style.boxShadow = '0 0 0 6px rgba(245,207,107,.85)'; setTimeout(() => { btn.style.boxShadow = ''; }, 2600); } catch (_) {} }
+      if (g) { say(base + g); debug('enviar_gris', g); } else say(base + '✅ «Enviar cotización» habilitado: te llevé al botón. Tú lo tocas, declaras y firmas.');
+    }, 1100);
   };
 
   // ---- Botón ADJUNTAR ARCHIVO: baja el PDF de la app y lo pone en «Adjuntar archivos». No envía. ----
@@ -539,15 +543,21 @@
     if (confirmed) {
       debug('pagina_publicada', confirmed);
       actions.replaceChildren();
-      say(`Mercado Público muestra la página de publicación para ${confirmed}. Confirma visualmente que la oferta fue recibida.`);
-      actions.append(button('Confirmé recepción en el portal', async () => {
+      // MP muestra su propia página «cotización publicada» para este código: la oferta ya fue enviada por ti.
+      // Se registra, se avisa a la nube y se vuelve a CotizÁgil (cerrando esta pestaña si Safari lo permite). Puedes cancelar.
+      let yaConf = false;
+      try { yaConf = JSON.parse((await gmGet('firmada')) || 'null')?.cod === confirmed; } catch (_) {}
+      if (!yaConf) {
         await gmSet('firmada', JSON.stringify({ cod: confirmed, t: Date.now() }));
         await gmSet('pendiente', 'null');
-        debug('confirmacion_manual', confirmed);
-        if (token) { const ua = navigator.userAgent; const disp = (await gmGet('dispositivo')) || (/iphone/i.test(ua) ? 'iPhone' : /android/i.test(ua) ? 'Android' : 'Celular'); getJson('pedir', token, { codigo: confirmed, accion: 'verificar', vista: true, dispositivo: disp }).catch(() => {}); }
-        say(`Confirmación guardada para ${confirmed}. Puedes regresar a CotizÁgil.`);
-        actions.replaceChildren(button('Volver a CotizÁgil', () => location.assign(APP + '/#firmada=' + encodeURIComponent(confirmed))));
-      }));
+        debug('confirmacion_auto', confirmed);
+        if (token) { try { const ua = navigator.userAgent; const disp = (await gmGet('dispositivo')) || (/iphone/i.test(ua) ? 'iPhone' : /android/i.test(ua) ? 'Android' : 'Celular'); await getJson('pedir', token, { codigo: confirmed, accion: 'verificar', vista: true, dispositivo: disp, enviado_por: disp }); } catch (_) {} }
+      }
+      let seg = 4, cancelado = false;
+      const volver = () => { if (cancelado) return; debug('volver_a_app', confirmed); try { window.close(); } catch (_) {} setTimeout(() => { if (!cancelado) location.replace(APP + '/#firmada=' + encodeURIComponent(confirmed)); }, 350); };
+      const tick = () => { if (cancelado) return; say(`✅ ${confirmed} enviada. Registrada en CotizÁgil. Cerrando esta pestaña y volviendo a la app en ${seg}…`); if (seg-- <= 0) volver(); else setTimeout(tick, 1000); };
+      actions.append(button('Quedarme en Mercado Público', () => { cancelado = true; say(`${confirmed} enviada y registrada. Te quedas en el portal.`); actions.replaceChildren(button('Volver a CotizÁgil', () => location.assign(APP + '/#firmada=' + encodeURIComponent(confirmed)))); }, 'ghost'));
+      tick();
       return;
     }
     const code = getPathCode();
