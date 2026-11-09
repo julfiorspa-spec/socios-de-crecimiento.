@@ -3477,10 +3477,10 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   }
   function pantallaOC() {
     const todas = esDueno() && R.ocTodas !== false;
-    const base = todas ? (R.todos || []) : (R.data?.trabajos || []);
+    const base = (R.todos || R.data?.trabajos || []).filter((t) => todas || deMiEmpresa(t));   // las OC son de la empresa, no de un juego
     const L = base.filter((t) => t.op && (t.op.oc_codigo || t.op.oc));
     const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-    const dias = (t) => t.op?.plazo_fecha ? Math.round((new Date(t.op.plazo_fecha + "T12:00") - hoy) / 86400000) : null;
+    const dias = (t) => t.op?.plazo_fecha ? Math.floor((new Date(t.op.plazo_fecha + "T12:00") - hoy) / 86400000) : null;
     const grupos = { A: [], B: [], C: [], D: [] };
     for (const t of L) grupos[clasificarOC(t)].push(t);
     const ordenar = (xs) => xs.sort((a, b) => { const da = dias(a), db = dias(b); if (da != null && db != null) return da - db; if (da != null) return -1; if (db != null) return 1; return (b.actualizado || "").localeCompare(a.actualizado || ""); });
@@ -3489,7 +3489,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       return `<div class="rb-card rb-oc-f" data-rb="det" data-c="${esc(t.codigo)}" style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;margin:6px 0;cursor:pointer">
         <div class="rb-oc-d ${tarde ? "tarde" : d != null && d <= 2 ? "pronto" : ""}">${d == null ? "<b>—</b><small>s/f</small>" : `<b>${Math.abs(d)}</b><small>${tarde ? "atrás" : d === 0 ? "hoy" : "días"}</small>`}</div>
         <div style="flex:1;min-width:0">
-          <div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(corta(t.nombre || t.codigo, 46))}</b><b style="font-size:.9rem;white-space:nowrap">${clp(t.total)}</b></div>
+          <div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.nombre || t.codigo)}</b><b style="font-size:.9rem;white-space:nowrap">${clp(t.total)}</b></div>
           <div class="muted" style="font-size:.74rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.organismo || "")}${todas && emp ? " · " + esc(corta(emp.razon_social, 18)) : ""}</div>
           <div style="font-size:.74rem;margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="rb-oc-tag">OC ${esc(String(o.oc_codigo || o.oc))}</span>${o.oc_estado ? `<span class="rb-oc-tag ${/aceptada/i.test(o.oc_estado) ? "ok" : /cancelad/i.test(o.oc_estado) ? "mal" : ""}">${esc(o.oc_estado)}</span>` : ""}${o.proveedor ? `<span class="rb-oc-tag">${esc(corta(typeof o.proveedor === "object" ? o.proveedor.nombre || "" : o.proveedor, 16))}${o.proveedor_pagado ? " ✓ pagado" : ""}</span>` : ""}</div>
           <div style="font-size:.78rem;margin-top:4px;color:${b === "D" ? "#ff9a9a" : "var(--oro, #f5cf6b)"}">→ ${esc(pasoOC(t, b))}</div>
