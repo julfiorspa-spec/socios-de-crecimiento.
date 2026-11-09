@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      3.3.3
+// @version      3.3.4
 // @description  Te lleva a tu Compra Ágil (una navegación, por tu toque) y rellena precios/despacho/detalle al pulsar Rellenar, con confirmación. No envía, no declara, no firma, no navega solo, no oculta la automatización: el envío y la firma los haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -13,12 +13,12 @@
 // @grant        GM_xmlhttpRequest
 // @connect      cotizagil.netlify.app
 // @run-at       document-idle
-// @downloadURL  https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.3.3
-// @updateURL    https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.3.3
+// @downloadURL  https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.3.4
+// @updateURL    https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.3.4
 // ==/UserScript==
 (function () {
   'use strict';
-  const VERSION = '3.3.3';
+  const VERSION = '3.3.4';
   const APP = 'https://cotizagil.netlify.app';
   const MP = 'https://compra-agil.mercadopublico.cl';
   const CODE = /^[A-Z0-9-]+-COT\d+$/;
@@ -312,6 +312,16 @@
   // 👉 deja MARCADO el botón «Enviar cotización» (anillo dorado + etiqueta) hasta que lo toques. No lo toca por ti.
   // ⬇ baja la pantalla sola hasta «Enviar cotización». No lo toca ni lo decora.
   const marcarEnviar = () => { const btn = botonEnviar(); if (!btn) return false; try { btn.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {} return true; };
+  // ⬇ cuando abres la declaración jurada, baja sola hasta «Aceptar y enviar cotización». Solo baja: leer, aceptar y enviar lo haces tú.
+  let ultAceptar = null;
+  const bajarADeclaracion = () => {
+    const btn = [...document.querySelectorAll('button')].find(b => /aceptar\s+y\s+enviar/i.test(b.textContent || '') && b.getClientRects().length);
+    if (!btn || btn === ultAceptar) return;
+    ultAceptar = btn;
+    setTimeout(() => { try { btn.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {} }, 350);
+    debug('declaracion_abierta', location.pathname);
+  };
+  setInterval(() => { try { bajarADeclaracion(); } catch (_) {} }, 600);
   const marcarIva = () => {
     const el = [...document.querySelectorAll('select,mat-select,[role=combobox]')].find(e => visible(e) && /iva|impuesto/i.test(fieldText(e)));
     if (!el) return false; try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {}
