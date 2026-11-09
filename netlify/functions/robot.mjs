@@ -1631,7 +1631,7 @@ async function atender(req) {
 
   // ---------- 📞 «Me llamaron»: el celular pregunta (texto o audio) y el robot del PC responde con IA ----------
   // ---------- 💬 chat con Claude dentro de la app: el cerebro responde directo desde la nube (sin pasar por el PC) ----------
-  if (ruta === "chat" && req.method === "POST") {
+  if (ruta === "cerebro" && req.method === "POST") {
     const key = process.env.ANTHROPIC_API_KEY || "";
     if (!key) return json({ error: "Falta ANTHROPIC_API_KEY en Netlify (Site configuration → Environment variables). Con eso Claude responde aquí mismo." }, 503);
     const b = await cuerpo(req);

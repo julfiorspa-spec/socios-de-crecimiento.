@@ -546,7 +546,7 @@
 
   async function api(ruta, opt = {}) {
     if (!R.token) throw new Error("Robot sin enlazar");
-    if (opt.body && /^(pedir|seleccionar|preguntar|chat|oport-descartar|plan-links|nube-aprobar|robot-mando|mp-login|mp-login-resp)$/.test(ruta)) {      // cada pedido viaja con TU empresa, tu celular y tu juego
+    if (opt.body && /^(pedir|seleccionar|preguntar|cerebro|oport-descartar|plan-links|nube-aprobar|robot-mando|mp-login|mp-login-resp)$/.test(ruta)) {      // cada pedido viaja con TU empresa, tu celular y tu juego
       try { const o = JSON.parse(opt.body); if (!o.empresa && leer().empresa) o.empresa = leer().empresa; if (!o.dispositivo) o.dispositivo = dispositivo(false);
         o.jugador = miJug(); if (legado()) o.legado = true; if (!o.persona && typeof persona === "function" && persona()?.nombre) o.persona = persona().nombre; opt = { ...opt, body: JSON.stringify(o) }; } catch {}
     }
@@ -3212,7 +3212,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   async function enviarClaude(txt) {
     R.chat = R.chat || cargarChat(); R.chat.mensajes.push({ rol: "yo", texto: txt, t: Date.now() }); R.chat.cargando = true; R.chat.error = null; guardarChat(); pintarHoja(true);
     try {
-      const r = await api("chat", { method: "POST", body: JSON.stringify({ mensajes: R.chat.mensajes.slice(-16).map((m) => ({ rol: m.rol, texto: m.texto })), codigo: R.chat.codigo || null }) });
+      const r = await api("cerebro", { method: "POST", body: JSON.stringify({ mensajes: R.chat.mensajes.slice(-16).map((m) => ({ rol: m.rol, texto: m.texto })), codigo: R.chat.codigo || null }) });
       R.chat.mensajes.push({ rol: "claude", texto: r.respuesta || "…", t: Date.now() }); try { navigator.vibrate?.(12); } catch {}
     } catch (e) { R.chat.error = /ANTHROPIC_API_KEY/.test(e.message) ? "Falta conectar mi cerebro: en Netlify → Site configuration → Environment variables, agrega ANTHROPIC_API_KEY (clave de console.anthropic.com). Con eso respondo aquí mismo." : e.message; }
     R.chat.cargando = false; guardarChat(); pintarHoja(true);
