@@ -3116,7 +3116,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         ${puerta("juego", "🎮", "Cotizador", "Cotizas Compras Ágiles del Estado. El robot arma la oferta; tú firmas con tu ClaveÚnica y cobras.")}
         ${puerta("licita", "📑", "Licitador", "Vas por las licitaciones grandes: postulas, compites y te adjudicas proyectos. (Portal en construcción.)")}
         ${puerta("ejecuta", "🛠", "Ejecutor", "Ejecutas las órdenes de compra ya ganadas: compras, entregas, instalas, y muestras el avance en vivo.")}
-        ${puerta("inversion", "💰", "Inversor", "Pones capital en negocios ya adjudicados y ves tu inversión crecer en tiempo real. Sin ClaveÚnica.")}
+        ${puerta("inversion", "💰", "Inversionista", "Pones capital en negocios ya adjudicados y ves tu inversión crecer en tiempo real. Sin ClaveÚnica.")}
       </div>
       <div class="rb-p-nota" style="margin-top:14px">Puedes cambiar o sumar perfiles cuando quieras. <b>Pronto:</b> cada perfil con su plan (básico · medio · premium).</div>
     </div>`;
