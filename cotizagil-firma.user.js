@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      3.3.1
+// @version      3.3.2
 // @description  Te lleva a tu Compra Ágil (una navegación, por tu toque) y rellena precios/despacho/detalle al pulsar Rellenar, con confirmación. No envía, no declara, no firma, no navega solo, no oculta la automatización: el envío y la firma los haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -13,11 +13,12 @@
 // @grant        GM_xmlhttpRequest
 // @connect      cotizagil.netlify.app
 // @run-at       document-idle
-// @downloadURL  https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.3.1
-// @updateURL    https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.3.1
+// @downloadURL  https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.3.2
+// @updateURL    https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.3.2
 // ==/UserScript==
 (function () {
   'use strict';
+  const VERSION = '3.3.2';
   const APP = 'https://cotizagil.netlify.app';
   const MP = 'https://compra-agil.mercadopublico.cl';
   const CODE = /^[A-Z0-9-]+-COT\d+$/;
@@ -58,7 +59,7 @@
     return el;
   };
   const downloadLog = () => {
-    const blob = new Blob([JSON.stringify({ version: '3.2.5', records: sessionLog }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ version: VERSION, records: sessionLog }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'cotizagil-diagnostico.json'; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1500);
@@ -132,7 +133,24 @@
   // ===================== En CotizÁgil: sincroniza token y confirma firmadas =====================
   if (location.hostname === 'cotizagil.netlify.app') {
     const robot = parse(localStorage.getItem('sdc:robot') || '{}', {});
-    if (robot && typeof robot.token === 'string' && robot.token) gmSet('token', robot.token);
+    if (robot && typeof robot.token === 'string' && robot.token) {
+      gmSet('token', robot.token);
+      // respaldo de tu sesión en la app (enlace, empresa, rol, celular): si Safari la pierde (navegación privada,
+      // vuelta desde Mercado Público en otra pestaña), se restaura sola y no tienes que volver a ingresar
+      try { gmSet('respaldo', JSON.stringify({ t: Date.now(), robot: localStorage.getItem('sdc:robot'), disp: localStorage.getItem('sdc:dispositivo'), rol: localStorage.getItem('sdc:rol'), jug: localStorage.getItem('sdc:jugador'), pers: localStorage.getItem('sdc:persona'), sel: localStorage.getItem('sdc:sel-juego') })); } catch (_) {}
+    } else {
+      (async () => {
+        const r = parse(await gmGet('respaldo'));
+        if (!r || !r.robot || sessionStorage.getItem('cz-restaurado')) return;
+        try {
+          localStorage.setItem('sdc:robot', r.robot);
+          for (const [k, v] of [['sdc:dispositivo', r.disp], ['sdc:rol', r.rol], ['sdc:jugador', r.jug], ['sdc:persona', r.pers], ['sdc:sel-juego', r.sel]]) if (v) localStorage.setItem(k, v);
+          sessionStorage.setItem('cz-restaurado', '1'); sessionStorage.setItem('sdc:portada', '1');
+          debug('sesion_restaurada', location.hash);
+          location.reload();
+        } catch (_) {}
+      })();
+    }
     const device = localStorage.getItem('sdc:dispositivo');
     if (device) gmSet('dispositivo', device);
     document.documentElement.dataset.firmaRapida = '1';
@@ -184,7 +202,7 @@
   panel.style.cssText = 'position:fixed;top:max(8px,env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:2147483000;width:min(94vw,392px);max-height:74vh;overflow:auto;background:linear-gradient(180deg,#17294c,#0f1d36);color:#eef2fb;border:1px solid #3b4d78;border-radius:18px;padding:15px 15px 13px;font:13px/1.45 -apple-system,system-ui,sans-serif;box-shadow:0 12px 36px rgba(0,0,0,.45)';
   const head = document.createElement('div');
   head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px';
-  const marca = text('div'); marca.innerHTML = "<b style='font-size:15.5px;letter-spacing:.2px'>CotizÁgil</b> <span style='opacity:.45;font-size:11px'>v3.2.5</span>";
+  const marca = text('div'); marca.innerHTML = "<b style='font-size:15.5px;letter-spacing:.2px'>CotizÁgil</b> <span style='opacity:.45;font-size:11px'>v" + VERSION + "</span>";
   const chev = text('span', '–'); chev.style.cssText = 'cursor:pointer;font-size:22px;line-height:1;opacity:.6;padding:0 6px';
   head.append(marca, chev); panel.append(head);
   const message = text('div', 'Preparando oferta…'); message.style.cssText = 'margin-top:9px;opacity:.95'; panel.append(message);
@@ -291,6 +309,25 @@
     return coincide(el, v);
   };
   const espera = (ms) => new Promise(r => setTimeout(r, ms));
+  // 👉 deja MARCADO el botón «Enviar cotización» (anillo dorado + etiqueta) hasta que lo toques. No lo toca por ti.
+  const marcarEnviar = () => {
+    const btn = botonEnviar(); if (!btn) return false;
+    try { btn.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {}
+    btn.style.boxShadow = '0 0 0 5px #f5cf6b, 0 0 22px 6px rgba(245,207,107,.75)';
+    btn.style.transition = 'box-shadow .3s';
+    let tag = document.getElementById('cz-tag-enviar');
+    if (!tag) { tag = document.createElement('div'); tag.id = 'cz-tag-enviar'; tag.textContent = '👉 Tócalo tú para enviar'; tag.style.cssText = 'position:fixed;z-index:2147483646;background:#f5cf6b;color:#0b1c3c;font:700 13px -apple-system,system-ui,sans-serif;padding:7px 12px;border-radius:999px;box-shadow:0 6px 18px rgba(0,0,0,.35);pointer-events:none;white-space:nowrap'; document.body.appendChild(tag); }
+    const ubicar = () => { if (!btn.isConnected) { tag.remove(); return; } const r = btn.getBoundingClientRect(); tag.style.left = Math.max(8, r.left + r.width / 2 - tag.offsetWidth / 2) + 'px'; tag.style.top = (r.top - 40) + 'px'; tag.style.display = r.bottom < 0 || r.top > innerHeight ? 'none' : 'block'; };
+    ubicar(); const iv = setInterval(ubicar, 250);
+    const limpiar = () => { clearInterval(iv); tag.remove(); btn.style.boxShadow = ''; };
+    btn.addEventListener('click', limpiar, { once: true }); setTimeout(limpiar, 180000);
+    return true;
+  };
+  const marcarIva = () => {
+    const el = [...document.querySelectorAll('select,mat-select,[role=combobox]')].find(e => visible(e) && /iva|impuesto/i.test(fieldText(e)));
+    if (!el) return false; try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {}
+    el.style.boxShadow = '0 0 0 4px #ff9a9a'; setTimeout(() => { el.style.boxShadow = ''; }, 6000); return true;
+  };
   // total que muestra MP («Monto total» / «Valor neto») para compararlo con la oferta
   const montoEnPantalla = (etiqueta) => {
     const re = new RegExp(etiqueta, 'i');
@@ -466,11 +503,19 @@
     let totalMsg = '';
     if (!solo && Number(offer.total) > 0) {
       await espera(500);
-      const enPantalla = montoEnPantalla('monto\\s*total');
+      let enPantalla = montoEnPantalla('monto\\s*total');
+      const esperado = Number(offer.total);
+      if (enPantalla != null && Math.abs(enPantalla - esperado) > 3 && Math.abs(Math.round(enPantalla * 1.19) - esperado) <= 3) {
+        // los precios están bien: lo que falta es el IVA. Reintenta elegirlo y vuelve a leer.
+        try { ivaMsg = (await fijarIva(amounts, offer)) || ivaMsg; } catch (_) {}
+        await espera(700); enPantalla = montoEnPantalla('monto\\s*total');
+      }
       if (enPantalla != null) {
-        const dif = Math.abs(enPantalla - Number(offer.total));
-        totalMsg = dif <= 3 ? `✔ Total en pantalla ${fmt(enPantalla)} = oferta` : `⚠ TOTAL NO CALZA: pantalla ${fmt(enPantalla)} vs oferta ${fmt(offer.total)}. Revisa los precios por ítem antes de enviar`;
-        if (dif > 3) debug('total_no_calza', `${code} pantalla=${enPantalla} oferta=${offer.total}`);
+        const dif = Math.abs(enPantalla - esperado);
+        if (dif <= 3) totalMsg = `✔ Total en pantalla ${fmt(enPantalla)} = oferta`;
+        else if (Math.abs(Math.round(enPantalla * 1.19) - esperado) <= 3) { totalMsg = `⚠ Precios OK pero FALTA EL IVA: elige «Afecto» en el selector IVA (te lo marqué en rojo)`; marcarIva(); }
+        else totalMsg = `⚠ TOTAL NO CALZA: pantalla ${fmt(enPantalla)} vs oferta ${fmt(esperado)}. Revisa los precios por ítem antes de enviar`;
+        if (dif > 3) debug('total_no_calza', `${code} pantalla=${enPantalla} oferta=${esperado}`);
       }
     }
     const base = `${completed}/${run.length} campos para ${code}. ` + (totalMsg ? totalMsg + '. ' : '') + (ivaMsg ? ivaMsg + '. ' : '') + (avisos.length ? 'Avisos: ' + avisos.join(' ') + ' ' : '');
@@ -478,9 +523,8 @@
     debug('rellenado_por_usuario', `${code} ${solo || 'todo'}=${completed}/${run.length} ${ivaMsg} ${totalMsg}`);
     // tras un momento, revisa por qué «Enviar» sigue gris (si sigue gris)
     setTimeout(() => {
-      const g = porQueGris(); const btn = botonEnviar();
-      if (btn) { try { btn.scrollIntoView({ behavior: 'smooth', block: 'center' }); btn.style.transition = 'box-shadow .3s'; btn.style.boxShadow = '0 0 0 6px rgba(245,207,107,.85)'; setTimeout(() => { btn.style.boxShadow = ''; }, 2600); } catch (_) {} }
-      if (g) { say(base + g); debug('enviar_gris', g); } else say(base + '✅ «Enviar cotización» habilitado: te llevé al botón. Tú lo tocas, declaras y firmas.');
+      const g = porQueGris();
+      if (g) { say(base + g); debug('enviar_gris', g); } else { marcarEnviar(); say(base + (/⚠/.test(totalMsg) ? '«Enviar» está habilitado pero revisa el aviso antes de tocarlo.' : '✅ «Enviar cotización» habilitado y marcado. Tú lo tocas, declaras y firmas.')); }
     }, 1100);
   };
 
