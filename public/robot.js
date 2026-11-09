@@ -306,6 +306,10 @@
   #rbSheet.rb-exec h2.rb-h,#rbSheet.rb-exec .rb-h{font-family:Inter,system-ui,sans-serif;letter-spacing:-.02em;font-weight:800}
   #rbSheet.rb-exec .btn{border-radius:12px;font-weight:700}
   #rbSheet.rb-exec .rb-oro,#rbSheet.rb-exec .btn.rb-oro{background:#f3f4f6;color:#121417;border-color:#f3f4f6}
+  .rb-top-ex{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;overflow:hidden}
+  .rb-top-ex .rb-emp span{max-width:22vw}
+  .rb-ex-menu{display:flex;gap:6px;flex-wrap:wrap;background:#1d2127;border:1px solid #2a2f38;border-radius:12px;padding:8px;margin:6px 0 2px}
+  #rbSheet.rb-exec .rb-ajustes.rb-mas{margin-top:18px}
   .rb-ex-nav{position:fixed;left:0;right:0;bottom:0;height:calc(70px + env(safe-area-inset-bottom,0px));padding:10px 0 env(safe-area-inset-bottom,0px);background:linear-gradient(180deg,rgba(18,20,23,0),#121417 30%);display:grid;grid-template-columns:repeat(4,1fr);z-index:30}
   .rb-ex-nav button{background:none;border:0;color:#9aa3b2;font:600 .64rem Inter,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;gap:3px;position:relative;padding:0}
   .rb-ex-nav button.on{color:#f3f4f6}
@@ -3947,13 +3951,20 @@ ${empNom}`;
     if (R.vista === "oport") {
       const mp = R.data?.mp, emp = empresaActual();
       if (!R.empresas) cargarEmpresas();
-      const cab = `<div class="rb-top2">
+      const iconos = `<button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button><button class="rb-ico" type="button" data-rb="analizador" aria-label="Analizador de proyectos" title="Analizador de proyectos — Excel en vivo">📊</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico" type="button" data-rb="oc" aria-label="Órdenes de compra" title="Solo las órdenes de compra: operadas, en operación, nuevas">📦</button><button class="rb-ico rb-claude" type="button" data-rb="claude" aria-label="Chatear con Claude" title="Chatea con Claude, el cerebro de la app">💬</button><button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>`;
+      // ◧ modo ejecutivo: una sola línea limpia (empresa · quién · robot/MP · ⋯ · ✕); los íconos viven en el menú ⋯
+      const cab = execOn() ? `<div class="rb-top2 rb-top-ex">
+        <button class="rb-emp" type="button" data-rb="empresa-editar">🏢 <span>${esc(corta(emp?.razon_social) || "Mi empresa")}</span> ▾</button>
+        <button class="rb-yo" type="button" data-rb="persona-editar" title="Quién usa este celular">👤 ${persona()?.nombre ? esc(persona().nombre.split(" ")[0].slice(0, 12)) : "¿quién?"}</button>
+        <button type="button" class="rb-pcs" data-rb="ver-roles" title="${conectado ? "Robot conectado" : "Robot apagado"} · ${mp?.conectado ? "MP conectado" : "MP sin sesión"}"><i class="${conectado ? "on" : ""}"></i>${/nube/i.test(r?.equipo || "") ? "☁️" : "Robot"}<i class="${mp?.conectado ? "on" : ""}" style="margin-left:6px"></i>MP</button>
+        <span style="flex:1"></span><button class="rb-ico" type="button" data-rb="ex-menu" aria-label="Más" title="Herramientas">⋯</button><button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
+        ${R.exMenu ? `<div class="rb-ex-menu">${iconos}<button class="rb-ico" type="button" data-rb="conectar-mp" title="Entrar a Mercado Público desde la app">🔑</button></div>` : ""}` : `<div class="rb-top2">
         <button class="rb-emp" type="button" data-rb="empresa-editar">🏢 <span>${esc(corta(emp?.razon_social) || "Mi empresa")}</span> ▾</button>
         <button class="rb-yo" type="button" data-rb="persona-editar" title="Quién usa este celular">👤 ${persona()?.nombre ? "usuario " + esc(persona().nombre.split(" ")[0].slice(0, 12)) : "¿quién?"}</button>
         <button type="button" class="rb-pcs" data-rb="ver-roles" title="¿Qué quieres hacer? · ${conectado ? "Robot conectado" : "Robot apagado"}"><i class="${conectado ? "on" : ""}"></i>${/nube/i.test(r?.equipo || "") ? "☁️" : "Robot"}</button><button type="button" class="rb-pcs" data-rb="conectar-mp" title="${mp?.conectado ? "Mercado Público conectado" : "Entrar a Mercado Público desde la app"}"><i class="${mp?.conectado ? "on" : ""}"></i>MP${mp?.conectado ? "" : " ▸"}</button>
-        <button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button><button class="rb-ico" type="button" data-rb="analizador" aria-label="Analizador de proyectos" title="Analizador de proyectos — Excel en vivo">📊</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico" type="button" data-rb="oc" aria-label="Órdenes de compra" title="Solo las órdenes de compra: operadas, en operación, nuevas">📦</button><button class="rb-ico rb-claude" type="button" data-rb="claude" aria-label="Chatear con Claude" title="Chatea con Claude, el cerebro de la app">💬</button><button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
-        <button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
-        ${execOn() ? "" : barraPortales()}${esDueno() ? (setTimeout(() => { if (!R.nubeT || Date.now() - R.nubeT > 60000) cargarNube(); inicioLoginMP(); }, 0), execOn() ? "" : barraMando(r, mp, conectado)) : ""}`;
+        ${iconos}
+        <button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>`;
+      const cab2 = cab + `${execOn() ? "" : barraPortales()}${esDueno() ? (setTimeout(() => { if (!R.nubeT || Date.now() - R.nubeT > 60000) cargarNube(); inicioLoginMP(); }, 0), execOn() ? "" : barraMando(r, mp, conectado)) : ""}`;
       // 🏆 portada: cada vez que abres la app (y siempre que no haya empresa). Sin formularios: RUT → jugar.
       if (R.verRoles) return selectorRol();
       if (!miEmp() || !portadaVista()) { if (!R.oport) cargarOport(); return pantallaPortada(); }
@@ -3988,7 +3999,7 @@ ${empNom}`;
         <div class="rb-row" style="margin-top:8px"><button class="btn small" type="button" data-rb="copiar-marcador">Copiar marcador «Rellenar» (sin extensión)</button>
           ${R.push ? `<button class="btn small" type="button" data-rb="push-probar">Probar aviso</button>` : ""}<button class="btn small" type="button" data-rb="desenlazar">Desenlazar</button></div>
       </details>`;
-      return cab + cuerpo + (R.pantalla === "llamada" || R.pantalla === "claude" || R.pantalla === "oc" || R.pantalla === "analizador" || R.empresaEditar || R.rubroEditar || R.personaEditar ? "" : mas) + (execOn() ? navExec() : "");
+      return cab2 + cuerpo + (R.pantalla === "llamada" || R.pantalla === "claude" || R.pantalla === "oc" || R.pantalla === "analizador" || R.empresaEditar || R.rubroEditar || R.personaEditar ? "" : mas) + (execOn() ? navExec() : "");
     }
     return `
       <div class="rb-sheet-head"><h2 style="margin:0">Robot de ofertas</h2><button class="rb-x" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
@@ -4733,7 +4744,8 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       if (w) { try { w.opener = null; } catch {} ABIERTAS[String(cod).toUpperCase()].w = w; } else location.href = portalDe(cod);
       return;
     }
-    if (a === "ex-tab") { R.exTab = b.dataset.t; R.exFicha = null; R.detalle = null; R.pantalla = null; sheet.scrollTop = 0; return pintarHoja(true); }
+    if (a === "ex-menu") { R.exMenu = !R.exMenu; return pintarHoja(true); }
+    if (a === "ex-tab") { R.exMenu = false; R.exTab = b.dataset.t; R.exFicha = null; R.detalle = null; R.pantalla = null; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "ex-ficha") { R.exFicha = cod; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "ex-volver") { R.exFicha = null; return pintarHoja(true); }
     if (a === "ex-f") { R.exF = R.exF || {}; const k = b.dataset.k; if (k === "seg" || k === "hoy") R.exF[k] = !R.exF[k]; else R.exF[k] = R.exF[k] === b.dataset.v ? "" : b.dataset.v; return pintarHoja(true); }
