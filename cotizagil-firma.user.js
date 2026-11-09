@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      3.3.2
+// @version      3.3.3
 // @description  Te lleva a tu Compra Ágil (una navegación, por tu toque) y rellena precios/despacho/detalle al pulsar Rellenar, con confirmación. No envía, no declara, no firma, no navega solo, no oculta la automatización: el envío y la firma los haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -13,12 +13,12 @@
 // @grant        GM_xmlhttpRequest
 // @connect      cotizagil.netlify.app
 // @run-at       document-idle
-// @downloadURL  https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.3.2
-// @updateURL    https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.3.2
+// @downloadURL  https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.3.3
+// @updateURL    https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.3.3
 // ==/UserScript==
 (function () {
   'use strict';
-  const VERSION = '3.3.2';
+  const VERSION = '3.3.3';
   const APP = 'https://cotizagil.netlify.app';
   const MP = 'https://compra-agil.mercadopublico.cl';
   const CODE = /^[A-Z0-9-]+-COT\d+$/;
@@ -310,19 +310,8 @@
   };
   const espera = (ms) => new Promise(r => setTimeout(r, ms));
   // 👉 deja MARCADO el botón «Enviar cotización» (anillo dorado + etiqueta) hasta que lo toques. No lo toca por ti.
-  const marcarEnviar = () => {
-    const btn = botonEnviar(); if (!btn) return false;
-    try { btn.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {}
-    btn.style.boxShadow = '0 0 0 5px #f5cf6b, 0 0 22px 6px rgba(245,207,107,.75)';
-    btn.style.transition = 'box-shadow .3s';
-    let tag = document.getElementById('cz-tag-enviar');
-    if (!tag) { tag = document.createElement('div'); tag.id = 'cz-tag-enviar'; tag.textContent = '👉 Tócalo tú para enviar'; tag.style.cssText = 'position:fixed;z-index:2147483646;background:#f5cf6b;color:#0b1c3c;font:700 13px -apple-system,system-ui,sans-serif;padding:7px 12px;border-radius:999px;box-shadow:0 6px 18px rgba(0,0,0,.35);pointer-events:none;white-space:nowrap'; document.body.appendChild(tag); }
-    const ubicar = () => { if (!btn.isConnected) { tag.remove(); return; } const r = btn.getBoundingClientRect(); tag.style.left = Math.max(8, r.left + r.width / 2 - tag.offsetWidth / 2) + 'px'; tag.style.top = (r.top - 40) + 'px'; tag.style.display = r.bottom < 0 || r.top > innerHeight ? 'none' : 'block'; };
-    ubicar(); const iv = setInterval(ubicar, 250);
-    const limpiar = () => { clearInterval(iv); tag.remove(); btn.style.boxShadow = ''; };
-    btn.addEventListener('click', limpiar, { once: true }); setTimeout(limpiar, 180000);
-    return true;
-  };
+  // ⬇ baja la pantalla sola hasta «Enviar cotización». No lo toca ni lo decora.
+  const marcarEnviar = () => { const btn = botonEnviar(); if (!btn) return false; try { btn.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {} return true; };
   const marcarIva = () => {
     const el = [...document.querySelectorAll('select,mat-select,[role=combobox]')].find(e => visible(e) && /iva|impuesto/i.test(fieldText(e)));
     if (!el) return false; try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {}
@@ -524,7 +513,7 @@
     // tras un momento, revisa por qué «Enviar» sigue gris (si sigue gris)
     setTimeout(() => {
       const g = porQueGris();
-      if (g) { say(base + g); debug('enviar_gris', g); } else { marcarEnviar(); say(base + (/⚠/.test(totalMsg) ? '«Enviar» está habilitado pero revisa el aviso antes de tocarlo.' : '✅ «Enviar cotización» habilitado y marcado. Tú lo tocas, declaras y firmas.')); }
+      if (g) { say(base + g); debug('enviar_gris', g); } else { marcarEnviar(); say(base + (/⚠/.test(totalMsg) ? '«Enviar» está habilitado pero revisa el aviso antes de tocarlo.' : '✅ «Enviar cotización» habilitado. Tú lo tocas, declaras y firmas.')); }
     }, 1100);
   };
 
@@ -597,11 +586,8 @@
         debug('confirmacion_auto', confirmed);
         if (token) { try { const ua = navigator.userAgent; const disp = (await gmGet('dispositivo')) || (/iphone/i.test(ua) ? 'iPhone' : /android/i.test(ua) ? 'Android' : 'Celular'); await getJson('pedir', token, { codigo: confirmed, accion: 'verificar', vista: true, dispositivo: disp, enviado_por: disp }); } catch (_) {} }
       }
-      let seg = 4, cancelado = false;
-      const volver = () => { if (cancelado) return; debug('volver_a_app', confirmed); try { window.close(); } catch (_) {} setTimeout(() => { if (!cancelado) location.replace(APP + '/#firmada=' + encodeURIComponent(confirmed)); }, 350); };
-      const tick = () => { if (cancelado) return; say(`✅ ${confirmed} enviada. Registrada en CotizÁgil. Cerrando esta pestaña y volviendo a la app en ${seg}…`); if (seg-- <= 0) volver(); else setTimeout(tick, 1000); };
-      actions.append(button('Quedarme en Mercado Público', () => { cancelado = true; say(`${confirmed} enviada y registrada. Te quedas en el portal.`); actions.replaceChildren(button('Volver a CotizÁgil', () => location.assign(APP + '/#firmada=' + encodeURIComponent(confirmed)))); }, 'ghost'));
-      tick();
+      say(`✅ ${confirmed} enviada y registrada en CotizÁgil. Cuando quieras, vuelve a la app.`);
+      actions.append(button('Volver a CotizÁgil', () => location.assign(APP + '/#firmada=' + encodeURIComponent(confirmed)), 'ghost'));
       return;
     }
     const code = getPathCode();
