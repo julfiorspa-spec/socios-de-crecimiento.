@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      3.2.5
+// @version      3.3.0
 // @description  Te lleva a tu Compra Ágil (una navegación, por tu toque) y rellena precios/despacho/detalle al pulsar Rellenar, con confirmación. No envía, no declara, no firma, no navega solo, no oculta la automatización: el envío y la firma los haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -13,8 +13,8 @@
 // @grant        GM_xmlhttpRequest
 // @connect      cotizagil.netlify.app
 // @run-at       document-idle
-// @downloadURL  https://cotizagil.netlify.app/cotizagil-firma.user.js
-// @updateURL    https://cotizagil.netlify.app/cotizagil-firma.user.js
+// @downloadURL  https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.3.0
+// @updateURL    https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.3.0
 // ==/UserScript==
 (function () {
   'use strict';
@@ -258,6 +258,7 @@
   // Dispara la secuencia de eventos estándar para que el formulario (Angular/React) reconozca
   // el valor y HABILITE «Enviar cotización» (si no, el botón queda gris).
   const soloDig = (s) => String(s).replace(/\D/g, '');
+  const fmt = (n) => '$' + Math.round(Number(n) || 0).toLocaleString('es-CL');
   const writeField = (el, value) => {
     const prototype = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
@@ -274,8 +275,33 @@
     el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
     el.dispatchEvent(new Event('blur', { bubbles: true }));
     el.blur();
-    const num = /^\d+(?:[.,]\d+)?$/.test(v);               // el portal a veces agrega puntos de miles
-    return num ? soloDig(el.value) === soloDig(v) : (el.value || '').trim() === v;
+    return coincide(el, v);
+  };
+  const coincide = (el, v) => { const num = /^\d+(?:[.,]\d+)?$/.test(v); return num ? soloDig(el.value) === soloDig(v) : (el.value || '').trim() === v; };   // el portal agrega puntos de miles
+  // 2º método: tecleo real (beforeinput/input por carácter), que las máscaras de Angular siempre aceptan
+  const writeTyped = (el, value) => {
+    const v = textValue(value);
+    el.focus(); el.click?.();
+    try { el.select(); } catch (_) {}
+    try { document.execCommand('selectAll', false, null); document.execCommand('delete', false, null); } catch (_) {}
+    try { if (!document.execCommand('insertText', false, v)) throw new Error('x'); }
+    catch (_) { const setter = Object.getOwnPropertyDescriptor(el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value')?.set; setter?.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); }
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    el.dispatchEvent(new Event('blur', { bubbles: true })); el.blur();
+    return coincide(el, v);
+  };
+  const espera = (ms) => new Promise(r => setTimeout(r, ms));
+  // total que muestra MP («Monto total» / «Valor neto») para compararlo con la oferta
+  const montoEnPantalla = (etiqueta) => {
+    const re = new RegExp(etiqueta, 'i');
+    const nodos = [...document.querySelectorAll('div,span,p,td,label,strong,b,h1,h2,h3,h4')].filter(n => n.children.length === 0 && re.test(n.textContent || ''));
+    for (const n of nodos) {
+      for (let x = n, k = 0; k < 4 && x; k++, x = x.parentElement) {
+        const m = (x.innerText || '').replace(re, '').match(/\$\s*([\d.]{4,})/);
+        if (m) return Number(soloDig(m[1]));
+      }
+    }
+    return null;
   };
 
   // ---- ¿Por qué «Enviar cotización» sigue gris? Revisa qué campo obligatorio falta. ----
@@ -403,16 +429,53 @@
     const confirmed = window.confirm(`CotizÁgil rellenará ${run.length} campo(s) de ${code}:\n` + run.map(t => t.label).join(', ') + '.\n\n' + (avisos.length ? 'Avisos:\n' + avisos.join('\n') + '\n\n' : '') + 'Revisa TODOS los valores y haz tú el envío, la declaración y la firma. ¿Continuar?');
     if (!confirmed) { debug('rellenado_cancelado', (solo || 'todo') + '-' + code); return; }
 
-    let completed = 0;
+    // 1ª pasada: campo por campo, dejando respirar al formulario (Angular reformatea y a veces descarta el valor)
+    say(`Rellenando ${run.length} campo(s) de ${code}…`);
     for (const task of run) {
-      try { if (visible(task.el) && writeField(task.el, task.value)) completed++; else avisos.push(`${task.label}: no se confirmó la escritura.`); }
-      catch (_) { avisos.push(`${task.label}: error al completar el campo.`); }
+      try { task.ok = visible(task.el) && writeField(task.el, task.value); } catch (_) { task.ok = false; }
+      await espera(160);
     }
+    // 2ª y 3ª pasada: VERIFICA lo que quedó de verdad en el formulario y reescribe lo que no pegó, tecleando
+    for (let pasada = 0; pasada < 3; pasada++) {
+      await espera(500);
+      const frescos = allFields().filter(el => el.tagName === 'INPUT');           // el DOM puede haberse re-renderizado
+      const precioFrescos = frescos.filter(el => clase(el) === 'i');
+      const despFrescos = frescos.filter(el => clase(el) === 'd');
+      let faltan = 0;
+      run.forEach((task, i) => {
+        let el = task.el;
+        if (!el || !el.isConnected) {                                               // referencia vieja: busca el campo por posición
+          if (task.tipo === 'precio') el = precioFrescos[run.filter(t => t.tipo === 'precio').indexOf(task)];
+          else if (task.tipo === 'despacho') el = despFrescos[0];
+          if (el) task.el = el;
+        }
+        if (!el || !visible(el)) { task.ok = false; faltan++; return; }
+        if (coincide(el, textValue(task.value))) { task.ok = true; return; }
+        faltan++;
+        try { task.ok = pasada % 2 === 0 ? writeTyped(el, task.value) : writeField(el, task.value); } catch (_) { task.ok = false; }
+      });
+      debug('rellenado_verificacion', `${code} pasada ${pasada + 1}: ${faltan} por corregir`);
+      if (!faltan) break;
+    }
+    await espera(400);
+    const completed = run.filter(t => t.ok && t.el && coincide(t.el, textValue(t.value))).length;
+    run.filter(t => !(t.ok && t.el && coincide(t.el, textValue(t.value)))).forEach(t => avisos.push(`${t.label}: el formulario no tomó el valor ${t.value}. Escríbelo a mano.`));
     let ivaMsg = '';
     if (!solo) { try { ivaMsg = await fijarIva(amounts, offer); } catch (_) {} }   // 🔛 enciende el IVA
-    const base = `${completed}/${run.length} campos para ${code}. ` + (ivaMsg ? ivaMsg + '. ' : '') + (avisos.length ? 'Avisos: ' + avisos.join(' ') + ' ' : '');
+    // ✔ compara el total que muestra MP con el de la oferta: si no calza, lo dice fuerte
+    let totalMsg = '';
+    if (!solo && Number(offer.total) > 0) {
+      await espera(500);
+      const enPantalla = montoEnPantalla('monto\\s*total');
+      if (enPantalla != null) {
+        const dif = Math.abs(enPantalla - Number(offer.total));
+        totalMsg = dif <= 3 ? `✔ Total en pantalla ${fmt(enPantalla)} = oferta` : `⚠ TOTAL NO CALZA: pantalla ${fmt(enPantalla)} vs oferta ${fmt(offer.total)}. Revisa los precios por ítem antes de enviar`;
+        if (dif > 3) debug('total_no_calza', `${code} pantalla=${enPantalla} oferta=${offer.total}`);
+      }
+    }
+    const base = `${completed}/${run.length} campos para ${code}. ` + (totalMsg ? totalMsg + '. ' : '') + (ivaMsg ? ivaMsg + '. ' : '') + (avisos.length ? 'Avisos: ' + avisos.join(' ') + ' ' : '');
     say(base + 'Revisa los montos; el envío y la firma los haces tú.');
-    debug('rellenado_por_usuario', `${code} ${solo || 'todo'}=${completed}/${run.length} ${ivaMsg}`);
+    debug('rellenado_por_usuario', `${code} ${solo || 'todo'}=${completed}/${run.length} ${ivaMsg} ${totalMsg}`);
     // tras un momento, revisa por qué «Enviar» sigue gris (si sigue gris)
     setTimeout(() => { const g = porQueGris(); if (g) { say(base + g); debug('enviar_gris', g); } else say(base + '✅ «Enviar cotización» habilitado. El envío y la firma los haces tú.'); }, 1100);
   };
