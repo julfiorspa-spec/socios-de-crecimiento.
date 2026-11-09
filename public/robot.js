@@ -3214,9 +3214,23 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     try {
       const r = await api("chat", { method: "POST", body: JSON.stringify({ mensajes: R.chat.mensajes.slice(-16).map((m) => ({ rol: m.rol, texto: m.texto })), codigo: R.chat.codigo || null }) });
       R.chat.mensajes.push({ rol: "claude", texto: r.respuesta || "…", t: Date.now() }); try { navigator.vibrate?.(12); } catch {}
-    } catch (e) { R.chat.error = e.message; }
+    } catch (e) { R.chat.error = /ANTHROPIC_API_KEY/.test(e.message) ? "Falta conectar mi cerebro: en Netlify → Site configuration → Environment variables, agrega ANTHROPIC_API_KEY (clave de console.anthropic.com). Con eso respondo aquí mismo." : e.message; }
     R.chat.cargando = false; guardarChat(); pintarHoja(true);
     setTimeout(() => { const f = $("#rbChatFin"); if (f) f.scrollIntoView({ block: "end" }); }, 30);
+  }
+  // 🎙 hablarle a Claude: dictado del celular (reconocimiento de voz del navegador) → texto → se envía al soltar
+  let __rec = null;
+  function dictarClaude() {
+    R.chat = R.chat || cargarChat();
+    if (__rec) { try { __rec.stop(); } catch {} return; }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SR) return toast("Este navegador no tiene dictado");
+    const rec = new SR(); rec.lang = "es-CL"; rec.interimResults = true; rec.continuous = false; __rec = rec;
+    R.chat.oyendo = true; pintarHoja(true);
+    let final = "";
+    rec.onresult = (e) => { let parcial = ""; for (const r of e.results) { if (r.isFinal) final += r[0].transcript; else parcial += r[0].transcript; } const el = $("#rbChatIn"); if (el) el.value = (final + " " + parcial).trim(); };
+    rec.onerror = () => { R.chat.oyendo = false; __rec = null; pintarHoja(true); };
+    rec.onend = () => { R.chat.oyendo = false; __rec = null; const txt = final.trim(); if (txt) { const el = $("#rbChatIn"); if (el) el.value = ""; enviarClaude(txt); } else pintarHoja(true); };
+    try { rec.start(); } catch { R.chat.oyendo = false; __rec = null; pintarHoja(true); }
   }
   function pantallaClaude() {
     const c = R.chat || (R.chat = cargarChat());
@@ -3228,7 +3242,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       <div class="muted rb-sub">Soy el cerebro de la app. Sé de ${emp ? "<b>" + esc(corta(emp.razon_social)) + "</b>" : "tu empresa"}${t ? " y de la compra <b>" + esc(t.codigo) + "</b>" : " y de tus compras"}. Pregúntame lo que le preguntarías a tu socio.</div>
       <div class="rb-chat">${(c.mensajes || []).map((m) => `<div class="rb-msg ${m.rol === "yo" ? "yo" : "cl"}">${md(m.texto)}</div>`).join("") || `<div class="rb-chat-sug">${sug.map((q) => `<button type="button" class="rb-rchip" data-rb="claude-sug" data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>`}
         ${c.cargando ? `<div class="rb-msg cl"><span class="spinner"></span> pensando…</div>` : ""}${c.error ? `<div class="rb-msg err">⚠ ${esc(c.error)}</div>` : ""}<div id="rbChatFin"></div></div>
-      <div class="rb-chat-in"><textarea id="rbChatIn" rows="2" placeholder="Escríbeme…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.closest('.rb-chat-in').querySelector('[data-rb=claude-enviar]').click()}"></textarea><button class="btn rb-oro" type="button" data-rb="claude-enviar">Enviar</button></div>`;
+      <div class="rb-chat-in"><textarea id="rbChatIn" rows="2" placeholder="Escríbeme o dícta me…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.closest('.rb-chat-in').querySelector('[data-rb=claude-enviar]').click()}"></textarea>${("webkitSpeechRecognition" in window || "SpeechRecognition" in window) ? `<button class="btn ${R.chat?.oyendo ? "rb-oro" : ""}" type="button" data-rb="claude-mic" aria-label="Dictar" title="Hablar en vez de escribir">${R.chat?.oyendo ? "⏺" : "🎙"}</button>` : ""}<button class="btn rb-oro" type="button" data-rb="claude-enviar">Enviar</button></div>`;
   }
   // ---------- 📞 «Me llamaron»: escribe o graba qué te dijeron y el robot te dice si da o no ----------
   const HIST = "sdc:llamadas";
@@ -4170,6 +4184,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "claude-limpiar") { R.chat = { mensajes: [], codigo: null }; guardarChat(); return pintarHoja(true); }
     if (a === "claude-enviar") { const el = $("#rbChatIn"); const txt = (el?.value || "").trim(); if (!txt) return; el.value = ""; return enviarClaude(txt); }
     if (a === "claude-sug") { return enviarClaude(b.dataset.q || ""); }
+    if (a === "claude-mic") { return dictarClaude(); }
     if (a === "llamada-cod") { R.pantalla = "llamada"; R.llamada = { texto: "Me están llamando por la compra " + b.dataset.c }; sheet.scrollTop = 0; confirmarLlamada(b.dataset.c); return pintarHoja(true); }
     if (a === "llamada-cerrar") { R.pantalla = null; return pintarHoja(true); }
     if (a === "analizador") { R.pantalla = "analizador"; R.anl = R.anl || { prod: "", cant: 0, compra: 0, venta: 0 }; sheet.scrollTop = 0; return pintarHoja(true); }
