@@ -612,8 +612,7 @@
     for (const [cod, x] of Object.entries(ABIERTAS)) {
       if (Date.now() - x.t > 45 * 60_000) { delete ABIERTAS[cod]; continue; }
       if (x.pedido && Date.now() - x.pedido < 90_000) continue;
-      x.pedido = Date.now();
-      try { await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "verificar", dispositivo: dispositivo(false) }) }); } catch {}
+      x.pedido = Date.now();      // ya no se pide «verificar» por tiempo: solo cuenta la pantalla «enviada correctamente» de MP o tu «Ya la firmé»
     }
   }
   function cerrarEnviadas(lista) {
@@ -1098,6 +1097,7 @@
       acts.push(`<button class="btn small" data-rb="ofertar" data-c="${esc(t.codigo)}" type="button">↻ Rehacer oferta</button>`);
     }
     if (t.estado === "confirmada") acts.push(`<button class="btn small" data-rb="editar" data-c="${esc(t.codigo)}" type="button" style="border-color:#c8900f;color:#ffd88a">Editar oferta</button>`);
+    if (enviada && !t.op?.oc_codigo) acts.push(`<button class="btn small" data-rb="reabrir" data-c="${esc(t.codigo)}" type="button" title="Si en realidad no se envió, vuelve a Firmar con la misma oferta">↩ No se envió · volver a Firmar</button>`);
     if (t.estado === "probada") acts.push(`<button class="btn small rb-go" data-rb="ofertar" data-c="${esc(t.codigo)}" type="button">Preparar para firmar</button>`);
     if (["requiere", "error", "cancelada"].includes(t.estado)) acts.push(`<button class="btn small" data-rb="ofertar" data-c="${esc(t.codigo)}" type="button">Reintentar</button>`);
     if (t.estado === "lista") acts.unshift(`<a class="btn small rb-remoto" href="${esc(leer().remoto || REMOTO_DEF)}" target="_blank" rel="noopener noreferrer">Dar el clic desde aquí ↗</a>`);
@@ -4550,8 +4550,14 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       if (w) { try { w.opener = null; } catch {} ABIERTAS[String(cod).toUpperCase()].w = w; } else location.href = portalDe(cod);
       return;
     }
+    if (a === "reabrir") {
+      try { const r = await api("reabrir", { method: "POST", body: JSON.stringify({ codigo: cod }) }); if (r.error) { toast(r.error); return; }
+        const o = leerFirmadas(); delete o[cod]; try { localStorage.setItem(FIRMADAS, JSON.stringify(o)); } catch {}
+        toast("↩ " + cod + " volvió a Firmar"); R.oportTab = "firmar"; await refrescar(); pintarHoja(true); } catch (e) { toast(e.message); }
+      return;
+    }
     if (a === "verificar") {
-      try { await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "verificar", dispositivo: dispositivo(true) }) }); toast("El robot revisará el portal"); await refrescar(); }
+      try { await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "verificar", vista: true, dispositivo: dispositivo(true) }) }); marcarFirmada(cod, false); toast("✅ Marcada como enviada por ti"); await refrescar(); }
       catch (e) { toast(e.message); }
       return;
     }

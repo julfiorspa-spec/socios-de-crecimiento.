@@ -1240,8 +1240,9 @@ async function atender(req) {
         : "El robot ingresará la oferta en Mercado Público (tú declaras y envías).");
       return json({ trabajo: await escribir(store, previo) });
     }
-    if (accion === "verificar") {          // revisar en el portal si ya quedó enviada: conserva la oferta preparada
+    if (accion === "verificar") {          // marcar enviada: SOLO con confirmación humana/visual (vista), nunca por tiempo
       if (!previo) return json({ error: "No hay oferta preparada para verificar." }, 404);
+      if (!b.vista) return json({ trabajo: previo, aviso: "Sin confirmación de Mercado Público: sigue en Firmar." });   // el robot ya no entra al portal a mirar; sin «enviada correctamente» no se marca
       previo.accion = "verificar";
       if (b.vista) previo.enviada_vista = ahora();     // Mercado Público mostró «Cotización enviada correctamente»: sale de Firmar en todos los celulares
       previo.dispositivo = texto(b.dispositivo, 60) || previo.dispositivo || null;   // qué celular la envió (registro «Enviados» del PC)
@@ -1516,6 +1517,16 @@ async function atender(req) {
     const lista = (await todos(store)).filter((t) => t.op && t.op.etapa !== "rechazada" && !/cancelad|anulad/i.test(t.op.oc_estado || "") && (todas ? (t.op.oc_codigo || t.op.oc || t.op.etapa === "previa" || (id && t.op.ejecutor === id)) : id && t.op.ejecutor === id))
       .map(({ firma, historial, envios, ...t }) => t);
     return json({ negocios: lista });
+  }
+  // ↩ reabrir: una compra marcada «enviada» por error vuelve a Firmar con su oferta intacta (la firma se conserva en el registro)
+  if (ruta === "reabrir" && req.method === "POST") {
+    const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo));
+    if (!t) return json({ error: "No existe." }, 404);
+    if (!t.firma || !Array.isArray(t.firma.precios)) return json({ error: "Esta compra no tiene una oferta preparada que reabrir: pide prepararla de nuevo." }, 409);
+    if (!["enviada", "confirmada", "en_cola", "error"].includes(t.estado)) return json({ trabajo: t, aviso: "Ya está en Firmar." });
+    t.accion = "firmar"; delete t.enviada_vista; delete t.fecha_envio;
+    anotar(t, "firmar", "Reabierta desde el celular: no se había enviado. Lista para rellenar y firmar.");
+    return json({ trabajo: await escribir(store, t) });
   }
   // ---------- 🤝 comisiones: OC concretadas por la app para una empresa socia × su % (GENSA 28%) ----------
   if (ruta === "comisiones" && req.method === "GET") {
