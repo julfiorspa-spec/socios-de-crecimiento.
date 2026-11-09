@@ -407,6 +407,11 @@
   .rb-chat-in{display:flex;gap:8px;align-items:flex-end;position:sticky;bottom:0;padding:8px 0;background:inherit}
   .rb-chat-in textarea{flex:1;min-width:0;border-radius:12px;padding:9px;font:inherit}
   .rb-claude{background:linear-gradient(160deg,rgba(245,207,107,.35),rgba(245,207,107,.1))!important}
+  .rb-oc-d{flex:0 0 46px;height:46px;border-radius:8px;background:rgba(255,255,255,.07);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+  .rb-oc-d b{font-size:1.05rem}.rb-oc-d small{font-size:.58rem;opacity:.7;margin-top:2px}
+  .rb-oc-d.tarde{background:rgba(201,75,75,.25);color:#ff9a9a}.rb-oc-d.pronto{background:rgba(245,207,107,.22)}
+  .rb-oc-tag{display:inline-block;padding:1px 7px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);font-size:.68rem}
+  .rb-oc-tag.ok{border-color:rgba(79,209,139,.5);color:#8ff0b8}.rb-oc-tag.mal{border-color:rgba(255,120,120,.5);color:#ff9a9a}
   .rb-llamar{border-radius:16px;padding:10px;background:linear-gradient(160deg,rgba(255,226,140,.12),rgba(255,255,255,.03));border:1px solid rgba(245,207,107,.35)}
   .btn.rb-mic.on{background:#e8313f!important;border-color:#e8313f!important;animation:pulse 1.2s ease-in-out infinite}
   .rb-resp{margin-top:12px;border-radius:18px;padding:14px;border:1px solid rgba(255,255,255,.16);background:linear-gradient(160deg,rgba(255,255,255,.10),rgba(255,255,255,.03))}
@@ -3454,6 +3459,51 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     R._cargGlobal = (async () => { try { const r = await api("global"); R.global = { trabajos: r.trabajos || [], jugadores: r.jugadores || {} }; R.globalT = Date.now(); pintarHojaSiAbierta(); } catch {} finally { R._cargGlobal = null; } })();
     return R._cargGlobal;
   }
+  // ---------- 📦 Órdenes de compra: una caja con SOLO las OC, en el orden en que se operan ----------
+  function clasificarOC(t) {
+    const o = t.op || {}, est = String(o.oc_estado || "");
+    if (/cancelad|anulad|rechazad/i.test(est)) return "D";
+    if (o.cerrado || o.cobrado || ["cerrado", "entrega", "entregado"].includes(o.etapa)) return "A";
+    if (o.proveedor || o.precio_acordado || o.proveedor_pagado || ["pago", "transporte", "despacho"].includes(o.etapa)) return "B";
+    return "C";
+  }
+  const OC_BLOQUES = { A: ["✅ Ya operadas", "entregadas o cerradas: cobrar y archivar"], B: ["🔧 En operación", "con proveedor acordado: pagar, despachar, pedir recepción"], C: ["🆕 OC nuevas", "ganadas esta semana: aceptar la OC en MP y cerrar proveedor"], D: ["⚠️ Canceladas · revisar", "la OC se canceló: no pagar ni comprar; verificar en MP"] };
+  function pasoOC(t, b) {
+    const o = t.op || {}, est = String(o.oc_estado || "");
+    if (b === "D") return o.proveedor_pagado ? "Proveedor pagado con OC cancelada: recuperar o reasignar" : "Avisar al proveedor y cerrar";
+    if (b === "A") return o.cobrado ? "Cobrado · archivar" : "Emitir factura y cobrar";
+    if (b === "B") { if (!o.proveedor_pagado && o.precio_acordado) return "Pagar al proveedor " + clp(o.precio_acordado); if (/enviada a proveedor/i.test(est)) return "Aceptar la OC en MP y despachar"; if (o.etapa === "transporte" || o.etapa === "despacho") return "Confirmar entrega y pedir recepción conforme"; return "Pedir recepción conforme y facturar"; }
+    return /enviada a proveedor/i.test(est) ? "Aceptar la OC en MP · buscar proveedor" : "Cerrar proveedor y agendar entrega";
+  }
+  function pantallaOC() {
+    const todas = esDueno() && R.ocTodas !== false;
+    const base = todas ? (R.todos || []) : (R.data?.trabajos || []);
+    const L = base.filter((t) => t.op && (t.op.oc_codigo || t.op.oc));
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const dias = (t) => t.op?.plazo_fecha ? Math.round((new Date(t.op.plazo_fecha + "T12:00") - hoy) / 86400000) : null;
+    const grupos = { A: [], B: [], C: [], D: [] };
+    for (const t of L) grupos[clasificarOC(t)].push(t);
+    const ordenar = (xs) => xs.sort((a, b) => { const da = dias(a), db = dias(b); if (da != null && db != null) return da - db; if (da != null) return -1; if (db != null) return 1; return (b.actualizado || "").localeCompare(a.actualizado || ""); });
+    const suma = (xs) => xs.reduce((s, t) => s + (Number(t.total) || 0), 0);
+    const fila = (t, b) => { const o = t.op || {}, d = dias(t), emp = (R.empresas || {})[t.empresa || "principal"]; const tarde = d != null && d < 0;
+      return `<div class="rb-card rb-oc-f" data-rb="det" data-c="${esc(t.codigo)}" style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;margin:6px 0;cursor:pointer">
+        <div class="rb-oc-d ${tarde ? "tarde" : d != null && d <= 2 ? "pronto" : ""}">${d == null ? "<b>—</b><small>s/f</small>" : `<b>${Math.abs(d)}</b><small>${tarde ? "atrás" : d === 0 ? "hoy" : "días"}</small>`}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(corta(t.nombre || t.codigo, 46))}</b><b style="font-size:.9rem;white-space:nowrap">${clp(t.total)}</b></div>
+          <div class="muted" style="font-size:.74rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.organismo || "")}${todas && emp ? " · " + esc(corta(emp.razon_social, 18)) : ""}</div>
+          <div style="font-size:.74rem;margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="rb-oc-tag">OC ${esc(String(o.oc_codigo || o.oc))}</span>${o.oc_estado ? `<span class="rb-oc-tag ${/aceptada/i.test(o.oc_estado) ? "ok" : /cancelad/i.test(o.oc_estado) ? "mal" : ""}">${esc(o.oc_estado)}</span>` : ""}${o.proveedor ? `<span class="rb-oc-tag">${esc(corta(typeof o.proveedor === "object" ? o.proveedor.nombre || "" : o.proveedor, 16))}${o.proveedor_pagado ? " ✓ pagado" : ""}</span>` : ""}</div>
+          <div style="font-size:.78rem;margin-top:4px;color:${b === "D" ? "#ff9a9a" : "var(--oro, #f5cf6b)"}">→ ${esc(pasoOC(t, b))}</div>
+        </div></div>`; };
+    const sel = R.ocB || "";
+    const chips = Object.keys(OC_BLOQUES).map((k) => `<button type="button" class="rb-rchip ${sel === k ? "on" : ""}" data-rb="oc-bloque" data-b="${k}">${OC_BLOQUES[k][0].replace(/^\S+\s/, "")}<i>${grupos[k].length}</i></button>`).join("");
+    const bloques = Object.keys(OC_BLOQUES).filter((k) => !sel || sel === k).map((k) => grupos[k].length ? `<div style="margin-top:14px"><div style="display:flex;justify-content:space-between;align-items:baseline"><b>${OC_BLOQUES[k][0]} · ${grupos[k].length}</b><span class="muted" style="font-size:.78rem">${clp(suma(grupos[k]))}</span></div><div class="muted" style="font-size:.72rem;margin-bottom:4px">${OC_BLOQUES[k][1]}</div>${ordenar(grupos[k]).map((t) => fila(t, k)).join("")}</div>` : "").join("");
+    const vivas = [...grupos.A, ...grupos.B, ...grupos.C];
+    return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">📦 Órdenes de compra</h2><button class="btn small" type="button" data-rb="oc-cerrar">← Volver</button></div>
+      <div class="muted rb-sub">Solo las compras que ya tienen orden de compra, en el orden en que se operan: por plazo de entrega. ${esDueno() ? `<button class="btn small rb-link" type="button" data-rb="oc-todas">${todas ? "Todas las empresas" : "Solo mi empresa"} ▾</button>` : ""}</div>
+      <div class="rb-marcador" style="margin:8px 0"><div class="rb-m oro"><span>📦 OC vivas</span><b>${vivas.length}</b><small>${clp(suma(vivas))} vendido</small></div><div class="rb-m verde"><span>🔧 En operación</span><b>${grupos.B.length}</b><small>${clp(suma(grupos.B))}</small></div><div class="rb-m"><span>🆕 Nuevas</span><b>${grupos.C.length}</b><small>${clp(suma(grupos.C))}</small></div></div>
+      <div class="rb-rchips">${chips}</div>
+      ${L.length ? bloques : `<div class="empty">Todavía no hay órdenes de compra${todas ? "" : " de tu empresa"}. Cuando te adjudiquen, aparecen aquí solas.</div>`}</div>`;
+  }
   function pantallaGlobal() {
     if (!R.global || Date.now() - (R.globalT || 0) > 60000) setTimeout(cargarGlobal, 0);
     const G = R.global; if (!G) return `<div class="empty"><span class="spinner"></span> Juntando todo lo de la app…</div>`;
@@ -3722,7 +3772,7 @@ ${empNom}`;
         <button class="rb-emp" type="button" data-rb="empresa-editar">🏢 <span>${esc(corta(emp?.razon_social) || "Mi empresa")}</span> ▾</button>
         <button class="rb-yo" type="button" data-rb="persona-editar" title="Quién usa este celular">👤 ${persona()?.nombre ? "usuario " + esc(persona().nombre.split(" ")[0].slice(0, 12)) : "¿quién?"}</button>
         <button type="button" class="rb-pcs" data-rb="ver-roles" title="¿Qué quieres hacer? · ${conectado ? "Robot conectado" : "Robot apagado"}"><i class="${conectado ? "on" : ""}"></i>${/nube/i.test(r?.equipo || "") ? "☁️" : "Robot"}</button><button type="button" class="rb-pcs" data-rb="conectar-mp" title="${mp?.conectado ? "Mercado Público conectado" : "Entrar a Mercado Público desde la app"}"><i class="${mp?.conectado ? "on" : ""}"></i>MP${mp?.conectado ? "" : " ▸"}</button>
-        <button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button><button class="rb-ico" type="button" data-rb="analizador" aria-label="Analizador de proyectos" title="Analizador de proyectos — Excel en vivo">📊</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico rb-claude" type="button" data-rb="claude" aria-label="Chatear con Claude" title="Chatea con Claude, el cerebro de la app">💬</button><button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
+        <button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button><button class="rb-ico" type="button" data-rb="analizador" aria-label="Analizador de proyectos" title="Analizador de proyectos — Excel en vivo">📊</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico" type="button" data-rb="oc" aria-label="Órdenes de compra" title="Solo las órdenes de compra: operadas, en operación, nuevas">📦</button><button class="rb-ico rb-claude" type="button" data-rb="claude" aria-label="Chatear con Claude" title="Chatea con Claude, el cerebro de la app">💬</button><button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>
         <button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
         ${barraPortales()}${esDueno() ? (setTimeout(() => { if (!R.nubeT || Date.now() - R.nubeT > 60000) cargarNube(); inicioLoginMP(); }, 0), barraMando(r, mp, conectado)) : ""}`;
       // 🏆 portada: cada vez que abres la app (y siempre que no haya empresa). Sin formularios: RUT → jugar.
@@ -3737,6 +3787,7 @@ ${empNom}`;
       else if (R.pantalla === "analizador") cuerpo = pantallaAnalizador();
       else if (R.pantalla === "correos") cuerpo = pantallaCorreos();
       else if (R.pantalla === "global") cuerpo = pantallaGlobal();
+      else if (R.pantalla === "oc") cuerpo = pantallaOC();
       else if (R.pantalla === "planes") cuerpo = pantallaPlanes();
       else if (R.pantalla === "mplogin") cuerpo = pantallaLoginMP();
       else { if (!esDueno() && (!R.planT || Date.now() - R.planT > 300000)) setTimeout(cargarPlan, 0);
@@ -3755,7 +3806,7 @@ ${empNom}`;
         <div class="rb-row" style="margin-top:8px"><button class="btn small" type="button" data-rb="copiar-marcador">Copiar marcador «Rellenar» (sin extensión)</button>
           ${R.push ? `<button class="btn small" type="button" data-rb="push-probar">Probar aviso</button>` : ""}<button class="btn small" type="button" data-rb="desenlazar">Desenlazar</button></div>
       </details>`;
-      return cab + cuerpo + (R.pantalla === "llamada" || R.pantalla === "claude" || R.pantalla === "analizador" || R.empresaEditar || R.rubroEditar || R.personaEditar ? "" : mas);
+      return cab + cuerpo + (R.pantalla === "llamada" || R.pantalla === "claude" || R.pantalla === "oc" || R.pantalla === "analizador" || R.empresaEditar || R.rubroEditar || R.personaEditar ? "" : mas);
     }
     return `
       <div class="rb-sheet-head"><h2 style="margin:0">Robot de ofertas</h2><button class="rb-x" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
@@ -4189,6 +4240,10 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "plan-activar") { try { await api("plan", { method: "POST", body: JSON.stringify({ jugador: b.dataset.j, plan: b.dataset.v, activar: true }) }); toast("👑 Plan activado"); R.planT = 0; await cargarPlan(); } catch (e) { toast(e.message); } return; }
     if (a === "global") { R.pantalla = "global"; sheet.scrollTop = 0; cargarGlobal(); if (!R.ejecutores) cargarEjecuta(); return pintarHoja(true); }
     if (a === "global-cerrar") { R.pantalla = null; return pintarHoja(true); }
+    if (a === "oc") { R.pantalla = "oc"; sheet.scrollTop = 0; return pintarHoja(true); }
+    if (a === "oc-cerrar") { R.pantalla = null; return pintarHoja(true); }
+    if (a === "oc-bloque") { R.ocB = R.ocB === b.dataset.b ? "" : b.dataset.b; return pintarHoja(true); }
+    if (a === "oc-todas") { R.ocTodas = !R.ocTodas; return pintarHoja(true); }
     if (a === "global-j") { R.globalJ = b.dataset.v || ""; return pintarHoja(true); }
     if (a === "llam-si") { if (R.pantalla !== "llamada") { R.pantalla = "llamada"; R.llamada = { texto: "" }; sheet.scrollTop = 0; } return confirmarLlamada(cod); }
     if (a === "llam-no") { R.llamada.idx = (R.llamada.idx || 0) + 1; if (R.llamada.idx >= (R.llamada.cands || []).length) R.llamada.cands = []; return pintarHoja(true); }
