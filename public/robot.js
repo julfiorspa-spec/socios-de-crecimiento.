@@ -407,6 +407,12 @@
   .rb-chat-in{display:flex;gap:8px;align-items:flex-end;position:sticky;bottom:0;padding:8px 0;background:inherit}
   .rb-chat-in textarea{flex:1;min-width:0;border-radius:12px;padding:9px;font:inherit}
   .rb-claude{background:linear-gradient(160deg,rgba(245,207,107,.35),rgba(245,207,107,.1))!important}
+  .rb-bor{margin-top:10px;padding-top:10px;border-top:1px dashed rgba(255,255,255,.14)}
+  .rb-bor-g{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .rb-bor-g label{display:flex;flex-direction:column;gap:3px;font-size:.66rem;letter-spacing:.05em;text-transform:uppercase;opacity:.8}
+  .rb-bor-g label b{font-size:.85rem;text-transform:none;letter-spacing:0;opacity:1}
+  .rb-bor-g select,.rb-bor-g input{font-size:.85rem;padding:7px 8px;border-radius:8px;background:rgba(0,0,0,.25);color:inherit;border:1px solid rgba(255,255,255,.14);text-transform:none;letter-spacing:0}
+  .rb-bor-al{background:rgba(255,179,71,.14);border:1px solid rgba(255,179,71,.5);border-radius:10px;padding:8px 10px;font-size:.8rem;margin-bottom:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
   .rb-oc-d{flex:0 0 46px;height:46px;border-radius:8px;background:rgba(255,255,255,.07);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
   .rb-oc-d b{font-size:1.05rem}.rb-oc-d small{font-size:.58rem;opacity:.7;margin-top:2px}
   .rb-oc-d.tarde{background:rgba(201,75,75,.25);color:#ff9a9a}.rb-oc-d.pronto{background:rgba(245,207,107,.22)}
@@ -2482,6 +2488,24 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const enviadosT = enviadosAll.filter((t) => !segDe(t.codigo)?.ganada);
     const tabs = [["nuevas", "👆 Por preparar", nuevas.length], ["sel", "⭐ Seleccionadas", sel.length], ["firmar", "✍ Por firmar", enFirma.length],
       ["hechas", "📨 Enviadas", enviadosT.length], ["ganadas", "🏆 Ganadas", ganadasT.length], ["papelera", "🗑 No deseadas", papelera.length]];
+    // 📋 Borrador de trabajo: empresa · responsable · flete · plazo · última verificación · cambios por revisar
+    const tiraBorrador = (x) => {
+      const sel = x._sel || {}; const gente = [...new Set([persona()?.nombre, ...Object.values(R.ejecutores || {}).map((e) => e?.nombre)].filter(Boolean))];
+      if (sel.responsable && !gente.includes(sel.responsable)) gente.push(sel.responsable);
+      const ver = sel.ultima_verificacion || sel.verificado?.t || R.oport?.fecha; const hhmm = ver ? new Date(ver).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }) : "—";
+      const emp = (R.empresas || {})[sel.empresa || miEmp() || "principal"]?.razon_social;
+      const cambios = (sel.cambios || []).slice(-3).map((c) => c.campo === "cierre" ? `cierre ${String(c.antes).slice(5, 16).replace("T", " ")} → <b>${String(c.despues).slice(5, 16).replace("T", " ")}</b>` : c.campo === "presupuesto" ? `presupuesto ${clp(c.antes)} → <b>${clp(c.despues)}</b>` : "pasó a <b>2° llamado</b>");
+      return `<div class="rb-bor" data-c="${esc(x.codigo)}">
+        ${sel.revisar ? `<div class="rb-bor-al">⚠ <b>Cambió mientras cotizabas:</b> ${cambios.join(" · ")}. Tu borrador se conservó; revisa antes de aprobar. <button class="btn small" type="button" data-rb="sel-revisado" data-c="${esc(x.codigo)}">✓ Revisado</button></div>` : ""}
+        <div class="rb-bor-g">
+          <label>Empresa<b>${esc(corta(emp || "PJANIC"))}</b></label>
+          <label>Responsable<select class="rb-bor-resp"><option value="">— sin asignar —</option>${gente.map((g) => `<option ${sel.responsable === g ? "selected" : ""}>${esc(g)}</option>`).join("")}</select></label>
+          <label>Flete (neto)<input class="rb-bor-flete rb-in" inputmode="numeric" value="${sel.flete ? Number(sel.flete).toLocaleString("es-CL") : ""}" placeholder="0"></label>
+          <label>Plazo ofrecido<input class="rb-bor-plazo rb-in" value="${esc(sel.plazo || "")}" placeholder="ej. 3 días hábiles"></label>
+        </div>
+        <div class="muted" style="font-size:.7rem;margin-top:6px">Verificado en Mercado Público a las <b>${hhmm}</b>${sel.verificado?.cierre ? ` · cierre visto ${String(sel.verificado.cierre).slice(5, 16).replace("T", " ")}` : ""} · el borrador se guarda solo en la nube.</div>
+      </div>`;
+    };
     const tarjetaSel = (x) => {
       const pres = Number(x.monto) || 0;
       const margenRubro = Number(x._sel.margen ?? x.margen) || 0.2;
@@ -2528,6 +2552,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         <details class="rb-det"><summary>✎ Mi costo: <b class="rb-cvis">${clp(costo || costoEst)}</b> <span class="rb-cest">${Number(x._sel.costo) ? "(tuyo)" : costoMk ? "(mercado, IA)" : `(estimado ${Math.round(margenRubro * 100)}% margen)`}</span></summary>
           <input class="rb-costo rb-in" inputmode="numeric" value="${(costo || costoEst).toLocaleString("es-CL")}" style="margin-top:6px"></details>
         <div class="rb-bajo" style="display:none;color:#ff9a9a;font-size:.78rem;margin-top:6px">🔴 Bajo el piso (${clp(piso)}): ganarías la compra pero <b>perderías plata</b>. Sube la apuesta o consigue mejor costo.</div>
+        ${tiraBorrador(x)}
         <div class="rb-sobre muted" style="display:none;color:#ffd88a;font-size:.78rem;margin-top:6px">⚠ Sobre el presupuesto (${clp(pres)}): se oferta igual, hasta el tope de 100 UTM (${clp(tope)}). El organismo puede preferir una más barata.</div>
         <button class="btn rb-firmar" type="button" style="width:100%;margin-top:10px;padding:14px;font-size:1rem" data-rb="sel-preparar" data-c="${esc(x.codigo)}">✍ Apostar y firmar <span class="rb-p2">${clp(precio0)}</span></button>
         <div class="muted" style="font-size:.68rem;margin-top:5px;text-align:center">el robot arma cotización y PDF y la deja en ✍ Firmar</div>`
@@ -4565,6 +4590,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       if (w) { try { w.opener = null; } catch {} ABIERTAS[String(cod).toUpperCase()].w = w; } else location.href = portalDe(cod);
       return;
     }
+    if (a === "sel-revisado") { const s = { ...leerSel() }; if (s[cod]) { s[cod] = { ...s[cod], revisar: false }; guardarSel(s); } api("seleccionar", { method: "POST", body: JSON.stringify({ codigo: cod, revisado: true }) }).catch(() => {}); toast("✓ Revisado · " + cod); return pintarHoja(true); }
     if (a === "reabrir") {
       try { const r = await api("reabrir", { method: "POST", body: JSON.stringify({ codigo: cod }) }); if (r.error) { toast(r.error); return; }
         const o = leerFirmadas(); delete o[cod]; try { localStorage.setItem(FIRMADAS, JSON.stringify(o)); } catch {}
@@ -4647,6 +4673,12 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     const d = (+el.value || 0) / 100, pres = +box.dataset.pres || 0, cant = +box.dataset.cant || 1;
     const neto_max = box.dataset.coniva === "1" ? pres / 1.19 : pres, unit = Math.floor(neto_max * (1 - d) / cant / 10) * 10, neto = unit * cant;
     box.querySelector('[data-v="desc"]').textContent = (+el.value).toLocaleString("es-CL"); box.querySelector('[data-v="unit"]').textContent = clp(unit); box.querySelector('[data-v="total"]').textContent = clp(Math.round(neto * 1.19));
+  });
+  sheet.addEventListener("change", (ev) => {           // 📋 borrador: responsable · flete · plazo
+    const b = ev.target.closest?.(".rb-bor"); if (!b) return; const cod = b.dataset.c;
+    if (ev.target.classList.contains("rb-bor-resp")) { guardarSelLuego(cod, { responsable: ev.target.value || "" }); toast(ev.target.value ? "Responsable: " + ev.target.value : "Sin responsable"); }
+    if (ev.target.classList.contains("rb-bor-flete")) { const n = ev.target.value.replace(/\D/g, ""); ev.target.value = n ? (+n).toLocaleString("es-CL") : ""; guardarSelLuego(cod, { flete: n ? +n : null }); }
+    if (ev.target.classList.contains("rb-bor-plazo")) guardarSelLuego(cod, { plazo: ev.target.value.trim() });
   });
   sheet.addEventListener("change", async (ev) => {
     const el = ev.target, cod = el.dataset?.c; if (!cod) return;

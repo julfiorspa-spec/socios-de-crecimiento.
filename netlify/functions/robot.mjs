@@ -783,6 +783,33 @@ async function atender(req) {
     const b = await cuerpo(req);
     const lista = Array.isArray(b.lista) ? b.lista.slice(0, 1200) : [];
     await store.setJSON("oportunidades/lista", { fecha: texto(b.fecha, 40) || ahora(), excel: texto(b.excel, 80), resumen: b.resumen || null, lista });
+    // 🔔 ¿cambió algo en una compra guardada mientras se cotiza? (cierre, presupuesto): se marca para revisar y se avisa
+    try {
+      const porCod = new Map(lista.map((x) => [limpiaCodigo(x.codigo), x]));
+      const { blobs } = await store.list({ prefix: "oportunidades/seleccionadas" });
+      const t0 = ahora(); let avisos = 0;
+      for (const bl of blobs) {
+        const sel = (await store.get(bl.key, { type: "json" })) || {}; let tocado = false;
+        for (const [cod, x] of Object.entries(sel)) {
+          const nuevo = porCod.get(cod); if (!nuevo) continue;
+          const vistoC = x.verificado?.cierre ?? x.cierre ?? null, vistoM = x.verificado?.monto ?? x.monto ?? null;
+          const nC = texto(nuevo.cierre, 40) || null, nM = nuevo.monto != null ? Math.round(Number(nuevo.monto) || 0) : null;
+          const cambios = [];
+          if (nC && vistoC && nC !== vistoC) cambios.push({ campo: "cierre", antes: vistoC, despues: nC, t: t0 });
+          if (nM != null && vistoM != null && nM !== vistoM) cambios.push({ campo: "presupuesto", antes: vistoM, despues: nM, t: t0 });
+          if (nuevo.llamado && /segundo|2/.test(String(nuevo.llamado).toLowerCase()) && !x.seg) { x.seg = true; cambios.push({ campo: "llamado", antes: "1°", despues: "2° llamado", t: t0 }); }
+          if (!cambios.length) { x.ultima_verificacion = t0; tocado = true; continue; }
+          x.cambios = [...(x.cambios || []), ...cambios].slice(-12); x.revisar = true; x.ultima_verificacion = t0;
+          x.cierre = nC || x.cierre; if (nM != null) x.monto = nM;
+          x.verificado = { cierre: nC || vistoC, monto: nM ?? vistoM, t: t0 }; tocado = true;
+          if (avisos < 6) { avisos++;
+            const det = cambios.map((c) => c.campo === "cierre" ? `cierre ${String(c.antes).slice(5, 16).replace("T", " ")} → ${String(c.despues).slice(5, 16).replace("T", " ")}` : c.campo === "presupuesto" ? `presupuesto $${Number(c.antes).toLocaleString("es-CL")} → $${Number(c.despues).toLocaleString("es-CL")}` : "pasó a 2° llamado").join(" · ");
+            await avisarTexto(store, `⚠ Cambió ${cod}${x.responsable ? " · " + x.responsable : ""}`, `${(x.nombre || "").slice(0, 60)}: ${det}. Revisa antes de aprobar; tu borrador se conserva.`, "cambio-" + cod, "/#robot=" + cod, true).catch(() => {});
+          }
+        }
+        if (tocado) await store.setJSON(bl.key, sel);
+      }
+    } catch (e) { console.log("cambios guardadas:", String(e).slice(0, 120)); }
     return json({ ok: true, n: lista.length });
   }
   if (ruta === "oportunidades" && req.method === "GET") {
@@ -837,7 +864,15 @@ async function atender(req) {
       const num = (v) => (v == null || v === "" ? undefined : Math.max(0, Math.round(Number(v) || 0)));
       s[codigo] = { ...prev, nombre: texto(b.nombre, 200) ?? prev.nombre, organismo: texto(b.organismo, 120) ?? prev.organismo,
         monto: num(b.monto) ?? prev.monto, cierre: texto(b.cierre, 40) ?? prev.cierre, margen: b.margen != null ? Number(b.margen) || 0 : prev.margen,
-        precio: num(b.precio) ?? prev.precio, costo: b.costo === null ? undefined : num(b.costo) ?? prev.costo, empresa: texto(b.empresa, 40) ?? prev.empresa, actualizado: ahora() };
+        precio: num(b.precio) ?? prev.precio, costo: b.costo === null ? undefined : num(b.costo) ?? prev.costo, empresa: texto(b.empresa, 40) ?? prev.empresa, actualizado: ahora(),
+        // 📋 borrador de trabajo: quién lo lleva, flete y plazo ofrecido; y qué vimos en MP al guardarlo (para detectar cambios)
+        responsable: b.responsable !== undefined ? (texto(b.responsable, 60) || undefined) : prev.responsable,
+        flete: b.flete === null ? undefined : num(b.flete) ?? prev.flete,
+        plazo: b.plazo !== undefined ? (texto(b.plazo, 80) || undefined) : prev.plazo,
+        nota: b.nota !== undefined ? (texto(b.nota, 300) || undefined) : prev.nota,
+        verificado: prev.verificado || { cierre: texto(b.cierre, 40) || null, monto: num(b.monto) ?? null, t: ahora() },
+        cambios: prev.cambios || [], revisar: b.revisado ? false : (prev.revisar || false), jugador: prev.jugador || jug(b.jugador) || null };
+      if (b.revisado) { s[codigo].verificado = { cierre: s[codigo].cierre || null, monto: s[codigo].monto ?? null, t: ahora() }; }
     }
     await store.setJSON(claveS, s);
     if (b.quitar && b.legado && jug(b.jugador)) {            // las antiguas (antes de separar los juegos) también se sueltan
