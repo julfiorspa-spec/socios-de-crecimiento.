@@ -1,4 +1,5 @@
 // Puente entre CotizÁgil (celular) y el robot del PC.
+import caRubros from "./ca_rubros.json";
 // El celular pide "Hacer oferta"; el robot del PC toma el pedido, prepara la oferta en
 // Mercado Público y va informando el estado. El envío final y la declaración jurada
 // los hace siempre la persona en mercadopublico.cl.
@@ -812,8 +813,24 @@ async function atender(req) {
     } catch (e) { console.log("cambios guardadas:", String(e).slice(0, 120)); }
     return json({ ok: true, n: lista.length });
   }
+  // ☁️ Compras Ágiles directo desde la API oficial de Mercado Público (ticket en Netlify: CA_TICKET o MP_TICKET).
+  // Así la app muestra oportunidades aunque el robot del PC esté apagado o su intermediario (RadarPúblico) caído.
   if (ruta === "oportunidades" && req.method === "GET") {
-    const o = (await store.get("oportunidades/lista", { type: "json" })) || { lista: [] };
+    let o = (await store.get("oportunidades/lista", { type: "json" })) || { lista: [] };
+    try {
+      const ca = (o.lista || []).filter((x) => x.fuente !== "licitacion");
+      const vivasRobot = ca.filter((x) => x.cierre && Date.parse(x.cierre) > Date.now()).length;
+      const edadMin = o.fecha ? (Date.now() - Date.parse(o.fecha)) / 60000 : 1e9;
+      if ((vivasRobot < 20 || edadMin > 150) && (process.env.CA_TICKET || process.env.MP_TICKET)) {
+        const of = await caOficial(store);
+        if (of && of.lista.length) {
+          const vistos = new Set(of.lista.map((x) => x.codigo));
+          const lic = (o.lista || []).filter((x) => x.fuente === "licitacion");
+          const resto = ca.filter((x) => !vistos.has(x.codigo) && x.cierre && Date.parse(x.cierre) > Date.now());
+          o = { ...o, fecha: of.fecha, origen: "api_oficial", lista: [...of.lista, ...resto, ...lic] };
+        }
+      }
+    } catch (e) { console.log("CA oficial:", String(e).slice(0, 160)); }
     o.descartes = await leerCajon(store, "oportunidades/descartes", jug(url.searchParams.get("jugador")), url.searchParams.get("legado") === "1");
     return json(o);
   }
@@ -2025,4 +2042,78 @@ async function atender(req) {
   }
 
   return json({ error: "Ruta no encontrada." }, 404);
+}
+
+
+// ===================== Compra Ágil · API oficial (api2.mercadopublico.cl) =====================
+const CA_API = "https://api2.mercadopublico.cl/v2/compra-agil";
+const caNorm = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ");
+const CA_RX = caRubros.rubros.map((r) => ({ ...r, re: new RegExp(r.kw, "i") }));
+const CA_GE = { ...caRubros.ge, re: new RegExp(caRubros.ge.kw, "i"), no: new RegExp(caRubros.ge.no, "i") };
+function caClasificar(nombre) {
+  const t = caNorm(nombre);
+  if (CA_GE.re.test(t) && !CA_GE.no.test(t)) return { rubro: CA_GE.rubro, tipo: CA_GE.tipo, margen: CA_GE.margen, viab: CA_GE.viab };
+  const hits = CA_RX.filter((r) => r.re.test(t));
+  if (!hits.length) return { rubro: "Otro producto", tipo: "rev", margen: 0.18, viab: 0.6 };
+  const orden = { exp: 0, rev: 1, srv: 2, esp: 3 };
+  const esp = hits.filter((h) => h.tipo === "esp"), exp = hits.filter((h) => h.tipo === "exp");
+  const h = (esp[0] || exp[0] || hits.sort((a, b) => orden[a.tipo] - orden[b.tipo])[0]);
+  return { rubro: h.rubro, tipo: h.tipo, margen: h.margen, viab: h.viab };
+}
+const caFecha = (v) => { if (!v) return null; const d = new Date(v); return isNaN(d) ? null : d.toISOString().slice(0, 16); };
+function caItem(x) {
+  const f = x.fechas || {}, m = x.montos || {}, i = x.institucion || {};
+  const conv = (x.convocatoria || {}).estado_convocatoria;
+  return { codigo: String(x.codigo || "").trim(), nombre: String(x.nombre || "").replace(/\s+/g, " ").trim(),
+    publicada: caFecha(f.fecha_publicacion), cierre: caFecha(f.fecha_cierre),
+    organismo: String(i.organismo_comprador || "").trim(), unidad: String(i.unidad_compra || "").trim(), region: String(i.nombre_region || "").trim(),
+    monto: Number(m.monto_disponible_clp || m.monto_disponible || 0), llamado: conv === 2 ? "Segundo llamado" : "Primer llamado",
+    ofertas: Number((x.resumen || {}).total_ofertas_recibidas || 0), enviadas: 0, oc: null };
+}
+async function caPagina(ticket, n, tam) {
+  const u = `${CA_API}?estado=publicada&tamano_pagina=${tam}&ordenar_por=FechaCierre&numero_pagina=${n}`;
+  const r = await fetch(u, { headers: { ticket, accept: "application/json", "user-agent": "CotizAgil/1.0" }, signal: AbortSignal.timeout(20000) });
+  if (!r.ok) throw new Error("HTTP " + r.status + " en página " + n);
+  const d = await r.json(); const p = d.payload || d;
+  return { items: p.items || [], total: Number((p.paginacion || {}).total_paginas || 1) };
+}
+async function caOficial(store) {
+  // Lectura incremental: la función de Netlify dura ~10 s, así que cada llamada avanza algunas páginas y guarda el cursor.
+  // Mientras un ciclo no termina, se sigue mostrando la lista completa del ciclo anterior.
+  const ticket = process.env.CA_TICKET || process.env.MP_TICKET;
+  const K = "oportunidades/ca_oficial";
+  const est = (await store.get(K, { type: "json" }).catch(() => null)) || { lista: [], fecha: null, ciclo: null };
+  const ahora = Date.now();
+  const cicloViejo = !est.ciclo || (est.ciclo.completo && ahora - Date.parse(est.ciclo.inicio) > 15 * 60000);
+  if (est.ciclo && est.ciclo.completo && !cicloViejo) return est;
+  if (cicloViejo) est.ciclo = { inicio: new Date().toISOString(), siguiente: 1, total: null, tam: 20, items: {}, completo: false, errores: 0 };
+  const c = est.ciclo; const t0 = Date.now();
+  while (!c.completo && Date.now() - t0 < 6500) {
+    const n = c.siguiente; const cuantas = c.total ? Math.min(5, c.total - n + 1) : 1;
+    if (cuantas <= 0) { c.completo = true; break; }
+    const lote = await Promise.allSettled([...Array(cuantas)].map((_, k) => caPagina(ticket, n + k, c.tam)));
+    let ok = 0;
+    for (const r of lote) if (r.status === "fulfilled") { ok++; if (!c.total) c.total = Math.min(r.value.total, Math.ceil(3000 / c.tam)); for (const x of r.value.items) { const o = caItem(x); if (o.codigo) c.items[o.codigo] = o; } }
+    if (!ok) { c.errores++; if (c.tam === 20 && c.errores >= 2) { c.tam = 10; c.total = null; c.siguiente = 1; c.items = {}; c.errores = 0; continue; } if (c.errores >= 6) break; continue; }
+    c.siguiente = n + cuantas;
+    if (c.total && c.siguiente > c.total) c.completo = true;
+  }
+  if (c.completo) {
+    const [lo, hi] = caRubros.rango; const res = [];
+    for (const o of Object.values(c.items)) {
+      if (o.monto < lo || o.monto > hi || !o.cierre || Date.parse(o.cierre) < ahora + 3600000) continue;
+      const cl = caClasificar(o.nombre); const neto = o.monto / 1.19; const horas = (Date.parse(o.cierre) - ahora) / 3600000;
+      let bonus = 1; if (/^segundo/i.test(o.llamado)) bonus *= 1.6; if (o.ofertas === 0) bonus *= 1.1; else if (o.ofertas >= 5) bonus *= 0.85; if (horas < 6) bonus *= 0.8; if (o.monto < 300000) bonus *= 0.7;
+      const ganancia = neto * cl.margen * cl.viab * bonus;
+      res.push({ fuente: "compra_agil", ...o, ...cl, neto: Math.round(neto), horas: Math.round(horas * 10) / 10, ganancia: Math.round(ganancia), ya_ofertada: false, etiqueta: caRubros.etiqueta[cl.tipo], trabajada: false, nuestra: false });
+    }
+    const tope = Math.max(1, ...res.map((r) => r.ganancia));
+    for (const r of res) r.puntaje = Math.round(100 * Math.pow(r.ganancia / tope, 0.6));
+    res.sort((a, b) => b.ganancia - a.ganancia);
+    est.lista = res; est.fecha = new Date().toISOString(); est.paginas = c.total; est.tam = c.tam; est.crudas = Object.keys(c.items).length;
+    c.items = {};                                                    // el detalle crudo ya no hace falta en el blob
+    console.log(`CA oficial: ${res.length} compras en rango de ${est.crudas} (${c.total} páginas de ${c.tam})`);
+  }
+  await store.setJSON(K, est);
+  return est.lista.length ? est : null;
 }

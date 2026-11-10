@@ -1,0 +1,197 @@
+{
+ "etiqueta": {
+  "exp": "★ Ya lo vendemos",
+  "rev": "Reventa",
+  "srv": "Servicio intermediable",
+  "esp": "Especializado"
+ },
+ "ge": {
+  "rubro": "Grupos electrógenos y energía de respaldo",
+  "tipo": "srv",
+  "margen": 0.25,
+  "viab": 0.9,
+  "kw": "grupos? electrogenos?|generador(es)?( electric\\w*| diesel| a gas| de emergencia| de respaldo| insonor\\w*)?\\b|motogenerador|genset|tablero de transferencia|transferencia automatica|\\btta\\b|\\bats\\b|banco de carga|planta electrica|energia de respaldo|respaldo electrico|\\bkva\\b",
+  "no": "generador de (ozono|vapor|hielo|nitrogeno|oxigeno|hidrogeno|humo|ultrasonido|codigos?|contenido|pulsos|senal)"
+ },
+ "rubros": [
+  {
+   "rubro": "Alimento animal y forraje",
+   "tipo": "exp",
+   "margen": 0.28,
+   "viab": 1.0,
+   "kw": "alfalfa|avena|fardo|forraje|alimento (para )?(animal|caballo|equino|bovino|perro|gato|mascota)|concentrado animal|pellet (de )?alfalfa|heno|viruta|aserrin|cama(s)? (para|de) (animal|caballo)|pellet (para|de) (cama|caballo)"
+  },
+  {
+   "rubro": "Áridos y materiales de calle",
+   "tipo": "exp",
+   "margen": 0.3,
+   "viab": 1.0,
+   "kw": "arido|\\barena\\b(?! (puerto|montt|vina))|\\barenas?\\b(?=.*(saco|m3|metro|tonelad|lavada|fina|gruesa|cubic))|gravilla|grava|ripio|maicillo|chancado|base estabilizada|estabilizado|bolon|piedra (chancada|bolon|laja)|material de relleno|asfalt|bacheo|despeje de caminos|emulsion|carpeta asfaltica|cemento|hormigon|mortero|adocreto|solerilla|soleras?|camion(es)? tolva|movimiento de tierra|reparacion de (calles|caminos)|mantencion de (calles|caminos)|perfilado"
+  },
+  {
+   "rubro": "Polietileno y bolsas",
+   "tipo": "exp",
+   "margen": 0.3,
+   "viab": 1.0,
+   "kw": "polietileno|bolsas?\\b|nylon|film\\b|stretch|manga plastica|plastico (negro|transparente)|lamina plastica|polipropileno|geomembrana|malla raschel"
+  },
+  {
+   "rubro": "Cajas de cartón",
+   "tipo": "exp",
+   "margen": 0.32,
+   "viab": 1.0,
+   "kw": "cajas? (de )?carton|carton corrugado|cajas? archivo|embalaje|cajas? a medida"
+  },
+  {
+   "rubro": "Sacos",
+   "tipo": "exp",
+   "margen": 0.3,
+   "viab": 1.0,
+   "kw": "\\bsacos?\\b|maxisaco|big ?bag"
+  },
+  {
+   "rubro": "Limpia fosas y sanitarios",
+   "tipo": "exp",
+   "margen": 0.25,
+   "viab": 0.95,
+   "kw": "limpia ?fosas?|fosa septica|camara desgrasadora|desratizacion|sanitizacion|bano(s)? quimico|banos? portatil|limpieza de (camaras|fosas|alcantarillado)"
+  },
+  {
+   "rubro": "Catering y alimentación",
+   "tipo": "exp",
+   "margen": 0.25,
+   "viab": 0.95,
+   "kw": "catering|coffee|cafe break|colacion|almuerzo|cena\\b|cocktail|coctel|banqueteria|servicio de alimentacion|alimentacion (para|de)|servicio de alimentos|once\\b|desayuno|tortas?\\b|alimentos? (perecibles|no perecibles)|empanada"
+  },
+  {
+   "rubro": "Pasto en rollo y semillas",
+   "tipo": "exp",
+   "margen": 0.3,
+   "viab": 1.0,
+   "kw": "pasto (en rollo|alfombra)|cesped|semillas?|plantas? (ornamentales|nativas|de interior|para)|plantas\\b(?! (elevadora|de tratamiento|electrica))|arboles? (nativos|ornamentales|de especies|distintas)|suministro de arboles|abonos? (organic|natural|para|foliar)|fertilizante|compost|tierra de hoja|insumos de jardineria|jardineria"
+  },
+  {
+   "rubro": "Andamios",
+   "tipo": "exp",
+   "margen": 0.28,
+   "viab": 0.95,
+   "kw": "andamio|alzaprima|escalera (de|tijera|telescopica)"
+  },
+  {
+   "rubro": "Aseo y limpieza",
+   "tipo": "rev",
+   "margen": 0.25,
+   "viab": 0.95,
+   "kw": "aseo|limpieza|panales|detergente|cloro|desinfectante|papel higienico|toalla|jabon|escoba|trapero|basurero|contenedor|bolsa de basura|dispensador|alcohol gel"
+  },
+  {
+   "rubro": "Ferretería y construcción",
+   "tipo": "rev",
+   "margen": 0.24,
+   "viab": 0.9,
+   "kw": "ferreteria|herramienta|pintura|esmalte|tornillo|clavo|madera|tablero|osb|terciado|perfil|fierro|zinc|plancha|tubo|pvc|caneria|gasfiter|electric|cable|ampolleta|foco|luminaria|candado|chapa|cerradura|malla|alambre|poste|cerco"
+  },
+  {
+   "rubro": "Alimentos y abarrotes",
+   "tipo": "rev",
+   "margen": 0.22,
+   "viab": 0.95,
+   "kw": "alimento|abarrote|cafe|azucar|te (en bolsa|negro|verde)|bolsitas? de te|galleta|bebida|agua (mineral|purificada|embotellada)|bidones? de agua|jugo|leche|fruta|verdura|carne|pan\\b|dulce|chocolate|confite|golosina|canasta|navidad|cajas? navidenas?"
+  },
+  {
+   "rubro": "EPP y ropa de trabajo",
+   "tipo": "rev",
+   "margen": 0.25,
+   "viab": 0.9,
+   "kw": "epp|elementos? de proteccion|guante|casco|zapato de seguridad|calzado|bota|chaleco|parka|uniforme|ropa de trabajo|vestuario|polera|poleron|jockey|mascarilla|lentes de seguridad|overol|buzo"
+  },
+  {
+   "rubro": "Oficina y librería",
+   "tipo": "rev",
+   "margen": 0.22,
+   "viab": 0.95,
+   "kw": "oficina|libreria|papel|resma|lapiz|toner|tinta|cuaderno|archivador|carpeta|utiles escolares|material didactico|incentivos|premios|regalos|trofeo|medalla|galvano"
+  },
+  {
+   "rubro": "Mobiliario y equipamiento",
+   "tipo": "rev",
+   "margen": 0.22,
+   "viab": 0.85,
+   "kw": "mobiliario|mueble|silla|mesa|escritorio|estante|repisa|locker|casillero|sillon|sofa|colchon|cama|toldo|carpa|lona|camarin"
+  },
+  {
+   "rubro": "Electro y tecnología",
+   "tipo": "rev",
+   "margen": 0.15,
+   "viab": 0.85,
+   "kw": "computador|notebook|impresora|monitor|tablet|celular|proyector|parlante|televisor|tv\\b|camara|disco duro|pendrive|teclado|mouse|router|estufa|calefactor|pellet|ventilador|refrigerador|microondas|hervidor|electrodomestico|generador"
+  },
+  {
+   "rubro": "Deporte y recreación",
+   "tipo": "rev",
+   "margen": 0.25,
+   "viab": 0.9,
+   "kw": "deport|balon|pelota|camiseta|implementos deportivos|juegos? infantil|juguete|inflable|piscina"
+  },
+  {
+   "rubro": "Insumos agrícolas y veterinarios",
+   "tipo": "rev",
+   "margen": 0.24,
+   "viab": 0.9,
+   "kw": "agricola|veterinari|insumo agricola|riego|manguera|motobomba|desmalezadora|motosierra|combustible|lena\\b|carbon"
+  },
+  {
+   "rubro": "Arriendos y logística",
+   "tipo": "srv",
+   "margen": 0.2,
+   "viab": 0.85,
+   "kw": "arriendo|traslado|transporte|flete|bus|minibus|camioneta|grua|bodegaje|mudanza"
+  },
+  {
+   "rubro": "Eventos y amplificación",
+   "tipo": "srv",
+   "margen": 0.22,
+   "viab": 0.85,
+   "kw": "evento|amplificacion|escenario|iluminacion|show|animacion|fiesta|celebracion|aniversario|decoracion|globos"
+  },
+  {
+   "rubro": "Imprenta y publicidad",
+   "tipo": "srv",
+   "margen": 0.25,
+   "viab": 0.85,
+   "kw": "impresion|imprenta|pendon|letrero|senaletica|grafica|afiche|diptico|triptico|adhesivo|gigantografia|lienzo|merchandising|tazones?|bolsos?"
+  },
+  {
+   "rubro": "Especializado (salud/técnico)",
+   "tipo": "esp",
+   "margen": 0.12,
+   "viab": 0.35,
+   "kw": "medic|clinic|farmac|reactivo|laboratorio|dental|odontolog|quirurg|insumos? medicos?|neumotacografo|oxigeno|examen|hospital|sonda|cateter|jeringa|vacuna|parenteral|drenaje|sutura|angioplastia|semaglutida|hormona|cenabast|antibiotico|\\bfa \\d|\\b\\d+ ?(mg|ml|ui|mcg)\\b|ampolla|comprimido|tableta|inyectable|suero|guia de |\\bfco\\b|grad 0|protesis|ortesis|hemodialisis|kinesiolog|ensayos? de agua|analisis de agua|muestras de|atencion integral|trastorno|vitrectomia|extraccion de sangre|comodato|dialisis|monofil|cutic|cassette|instrumental|esteril|clinico|paciente|cesfam (insumos|farmacia)"
+  },
+  {
+   "rubro": "Mantención y reparación técnica",
+   "tipo": "esp",
+   "margen": 0.15,
+   "viab": 0.35,
+   "kw": "mantencion|mantenimiento (de|preventivo|correctivo)(?! de jardines)|reparacion|repuesto|neumatico|taller mecanico|vehiculo|patente|calibracion|revision tecnica|ascensor|caldera|climatizacion|aire acondicionado|redes de gas|instalacion de|gasfiteria domiciliaria|electrica domiciliaria|transporte de (pasajeros|escolares)|furgon escolar|traslado (de )?(pacientes|escolares|furgon)|alojamiento|sarcofago|pantallas? interactivas?"
+  },
+  {
+   "rubro": "Obras y servicios mayores",
+   "tipo": "esp",
+   "margen": 0.1,
+   "viab": 0.25,
+   "kw": "construccion|ampliacion|remodelacion|capa (asfaltica|proteccion|de rodadura)|reposicion de capa|asfalto calzada|demarc|limpieza de muros|pavimento|conservacion|polideportivo|cecosf|cesfam (nuevo|reposicion)|servicios? (de )?aseo|aseo y servicios generales|limpieza y desinfeccion|servicios bancarios|intereses|imagenologia|restauracion|reposicion (de )?(sede|medialuna|escuela)|habilitacion (de|sala)|mejoramiento (integral|de|del|areas|plazas|espacio|caminos|iluminacion)|obras? complementarias|anteproyecto|precalificacion|guardias? de seguridad|seguridad y vigilancia|seguros|concesion|recoleccion (y transporte )?de residuos|relleno sanitario|alumbrado publico|paneles solares|climatizacion|personal para|prestaciones de"
+  },
+  {
+   "rubro": "Servicios profesionales",
+   "tipo": "esp",
+   "margen": 0.1,
+   "viab": 0.2,
+   "kw": "capacitacion|cursos? de|taller de|asesoria|consultoria|estudio de|diseno de|software|licencia|desarrollo de|auditoria|honorario|psicolog|abogado|topograf|plataforma|suscripcion|hacking|ciberseguridad|inteligencia artificial|georreferenc|nube|hosting|dominio|difusion cientifica|multiplataforma|almacenamiento nas|servidor"
+  }
+ ],
+ "rango": [
+  1000000,
+  8000000
+ ]
+}
