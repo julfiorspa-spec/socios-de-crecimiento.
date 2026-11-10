@@ -831,7 +831,12 @@ async function atender(req) {
           o = { ...o, fecha: of.fecha, origen: "api_oficial", lista: [...of.lista, ...resto, ...lic] };
         }
       }
-    } catch (e) { console.log("CA oficial:", String(e).slice(0, 160)); }
+    } catch (e) { console.log("CA oficial:", String(e).slice(0, 160)); o.oficial_error = String(e).slice(0, 160); }
+    try {
+      const tk2 = process.env.CA_TICKET || process.env.MP_TICKET || ((await store.get("config/ticket_api", { type: "json" })) || {}).ticket;
+      const est = (await store.get("oportunidades/ca_oficial", { type: "json" }).catch(() => null)) || {};
+      o.oficial = { ticket: !!tk2, fecha: est.fecha || null, n: (est.lista || []).length, ciclo: est.ciclo ? { siguiente: est.ciclo.siguiente, total: est.ciclo.total, completo: est.ciclo.completo, errores: est.ciclo.errores, ultimo_error: est.ciclo.ultimo_error || null, tam: est.ciclo.tam } : null, error: o.oficial_error || null };
+    } catch (_) {}
     o.descartes = await leerCajon(store, "oportunidades/descartes", jug(url.searchParams.get("jugador")), url.searchParams.get("legado") === "1");
     return json(o);
   }
@@ -2099,6 +2104,7 @@ async function caOficial(store, ticketDado) {
     if (cuantas <= 0) { c.completo = true; break; }
     const lote = await Promise.allSettled([...Array(cuantas)].map((_, k) => caPagina(ticket, n + k, c.tam)));
     let ok = 0;
+    for (const r of lote) if (r.status === "rejected") c.ultimo_error = String(r.reason && r.reason.message || r.reason).slice(0, 120);
     for (const r of lote) if (r.status === "fulfilled") { ok++; if (!c.total) c.total = Math.min(r.value.total, Math.ceil(3000 / c.tam)); for (const x of r.value.items) { const o = caItem(x); if (o.codigo) c.items[o.codigo] = o; } }
     if (!ok) { c.errores++; if (c.tam === 20 && c.errores >= 2) { c.tam = 10; c.total = null; c.siguiente = 1; c.items = {}; c.errores = 0; continue; } if (c.errores >= 6) break; continue; }
     c.siguiente = n + cuantas;
