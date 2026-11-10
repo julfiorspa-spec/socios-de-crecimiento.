@@ -2097,7 +2097,7 @@ async function caOficial(store, ticketDado) {
   const K = "oportunidades/ca_oficial";
   const est = (await store.get(K, { type: "json" }).catch(() => null)) || { lista: [], fecha: null, ciclo: null };
   const ahora = Date.now();
-  const cicloViejo = !est.ciclo || (est.ciclo.completo && ahora - Date.parse(est.ciclo.inicio) > 15 * 60000);
+  const cicloViejo = !est.ciclo || !est.ciclo.dias || (est.ciclo.completo && ahora - Date.parse(est.ciclo.inicio) > 15 * 60000) || (!est.ciclo.completo && ahora - Date.parse(est.ciclo.inicio) > 30 * 60000);
   if (est.ciclo && est.ciclo.completo && !cicloViejo) return est;
   if (cicloViejo) est.ciclo = { inicio: new Date().toISOString(), siguiente: 1, total: null, tam: 10, items: {}, completo: false, errores: 0, dias: 6 };
   const c = est.ciclo; const t0 = Date.now();
