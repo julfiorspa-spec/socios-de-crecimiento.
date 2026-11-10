@@ -307,7 +307,7 @@
   #rbSheet.rb-exec .btn{border-radius:12px;font-weight:700}
   #rbSheet.rb-exec .rb-oro,#rbSheet.rb-exec .btn.rb-oro{background:#f3f4f6;color:#121417;border-color:#f3f4f6}
   .rb-top-ex{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;overflow:hidden}
-  .rb-top-ex .rb-emp span{max-width:22vw}
+  .rb-top-ex .rb-emp span{max-width:34vw;display:inline-block;vertical-align:bottom;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .rb-ex-menu{display:flex;gap:6px;flex-wrap:wrap;background:#1d2127;border:1px solid #2a2f38;border-radius:12px;padding:8px;margin:6px 0 2px}
   #rbSheet.rb-exec .rb-ajustes.rb-mas{margin-top:18px}
   .rb-ex-nav{position:fixed;left:0;right:0;bottom:0;height:calc(70px + env(safe-area-inset-bottom,0px));padding:10px 0 env(safe-area-inset-bottom,0px);background:linear-gradient(180deg,rgba(18,20,23,0),#121417 30%);display:grid;grid-template-columns:repeat(4,1fr);z-index:30}
