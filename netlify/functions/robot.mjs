@@ -899,7 +899,7 @@ async function atender(req) {
   if (ruta === "seleccionar" && req.method === "POST") {
     const b = await cuerpo(req);
     const codigo = limpiaCodigo(b.codigo);
-    if (!/^\d{1,8}-\d{1,8}-COT\d{2}$/.test(codigo)) return json({ error: "Código inválido" }, 400);
+    if (!/^\d{1,8}-\d{1,8}-(COT|LE|LP|LQ|LR|LS|L1|R1|CO)\d{2}$/i.test(codigo)) return json({ error: "Código inválido" }, 400);
     const claveS = cajon("oportunidades/seleccionadas", jug(b.jugador));
     const s = (await store.get(claveS, { type: "json" })) || {};
     if (b.quitar) delete s[codigo];
@@ -914,6 +914,7 @@ async function atender(req) {
         flete: b.flete === null ? undefined : num(b.flete) ?? prev.flete,
         plazo: b.plazo !== undefined ? (texto(b.plazo, 80) || undefined) : prev.plazo,
         nota: b.nota !== undefined ? (texto(b.nota, 300) || undefined) : prev.nota,
+        decision: b.decision !== undefined ? (["si", "no", "despues"].includes(b.decision) ? b.decision : undefined) : prev.decision,   // 📑 licitador: vamos / no / después
         verificado: prev.verificado || { cierre: texto(b.cierre, 40) || null, monto: num(b.monto) ?? null, t: ahora() },
         cambios: prev.cambios || [], revisar: b.revisado ? false : (prev.revisar || false), jugador: prev.jugador || jug(b.jugador) || null };
       if (b.revisado) { s[codigo].verificado = { cierre: s[codigo].cierre || null, monto: s[codigo].monto ?? null, t: ahora() }; }

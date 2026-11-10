@@ -3931,12 +3931,104 @@ ${empNom}`;
     const tab = exTab(); if (!R.oport) cargarOport();
     return `<div class="rb-paso">${({ inicio: exInicio, buscar: exBuscar, biblio: exBiblio, activ: exActiv })[tab]()}</div>`;
   }
+  /* ---- 👤 Perfiles del modo ejecutivo: cada uno entra y sabe qué hacer ---- */
+  const PERFK = "sdc:perfil";
+  const PERFILES = [["cotizador", "✍ Cotizador"], ["licitador", "📑 Licitador"], ["ejecutor", "🛠 Ejecutor"], ["inversionista", "💼 Inversionista"]];
+  const perfil = () => { try { return localStorage.getItem(PERFK) || "cotizador"; } catch { return "cotizador"; } };
+  const perfilBarra = () => `<div class="rb-ex-chips" style="margin:8px 0 2px">${PERFILES.map(([k, l]) => `<button type="button" class="${perfil() === k ? "on" : ""}" data-rb="ex-perfil" data-k="${k}">${l}</button>`).join("")}</div>`;
+  const habilDesde = (d, n) => { const x = new Date(d); let k = 0; while (k < n) { x.setDate(x.getDate() + 1); if (x.getDay() % 6) k++; } return x; };
+  const fcorta = (d) => d ? new Date(d).toLocaleDateString("es-CL", { weekday: "short", day: "numeric", month: "short" }) : "—";
+  const hoyMs = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); };
+  const esLic = (c) => /-(LE|LP|LQ|LR|LS|L1|R1|CO)\d{2}$/i.test(String(c || ""));
+  // 🛠 Plan de ejecución de una OC: lo simulado (fechas hábiles desde que se ganó) contra lo real (historial de etapas)
+  function planOC(t) {
+    const op = t.op || {}, h = op.historial || []; const real = (e) => h.find((x) => x.etapa === e)?.t || null;
+    const inicio = real("ganada") || op.oc_fecha || t.actualizado || t.creado || new Date().toISOString();
+    const pasos = [
+      ["ganada", "OC aceptada en Mercado Público", 0, real("ganada") || (op.oc_codigo ? inicio : null)],
+      ["inversionista", "Capital confirmado", 1, real("inversionista") || (op.nos_da ? real("inversionista") : null)],
+      ["operacion", "Proveedor cerrado y precio acordado", 2, real("operacion") || (op.precio_acordado ? real("transporte") || null : null)],
+      ["pago", "Pago al proveedor", 3, real("pago") || (op.proveedor_pagado ? real("pago") : null)],
+      ["despacho", "Despachado (guía)", op.plazo_fecha ? null : 6, real("despacho")],
+      ["entrega", "Entregado y recepción conforme", op.plazo_fecha ? null : 7, real("entrega")],
+      ["cerrado", "Factura emitida · negocio cerrado", op.plazo_fecha ? null : 9, real("cerrado") || (op.cerrado || null)],
+      ["cobro", "Cobrado", op.plazo_fecha ? null : 39, op.cobrado ? (op.fecha_cobro || op.cerrado || null) : null],
+    ];
+    const plazo = op.plazo_fecha ? new Date(op.plazo_fecha + "T12:00") : null;
+    return pasos.map((pp, i) => { let plan = pp[2] != null ? habilDesde(inicio, pp[2]) : plazo ? (i === 4 ? new Date(plazo.getTime() - 864e5) : i === 5 ? plazo : i === 6 ? habilDesde(plazo, 2) : new Date(plazo.getTime() + 32 * 864e5)) : null;
+      const hecho = !!pp[3] || (pp[0] === "cobro" ? !!op.cobrado : ETAPAS_IDX(op.etapa) > ETAPAS_IDX(pp[0]));
+      const dif = pp[3] && plan ? Math.round((Date.parse(pp[3]) - plan.getTime()) / 864e5) : (!hecho && plan && plan.getTime() < hoyMs() ? Math.round((hoyMs() - plan.getTime()) / 864e5) : null);
+      return { k: pp[0], txt: pp[1], plan, real: pp[3], hecho, dif }; });
+  }
+  const ETAPAS_IDX = (e) => ["previa", "ganada", "inversionista", "operacion", "transporte", "pago", "documentos", "despacho", "entrega", "cerrado"].indexOf(e || "previa");
+  function exInicioCotizador(op, n) {
+    const firmar = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t)).sort((a, b) => (Date.parse(a.cierre || 0) || 9e15) - (Date.parse(b.cierre || 0) || 9e15));
+    const hoy = hoyMs(); const envHoy = (R.data?.trabajos || []).filter((t) => HECHA.includes(t.estado) && Date.parse(t.fecha_envio || t.actualizado || 0) >= hoy).length;
+    const meta = Number(localStorage.getItem("sdc:meta_dia") || 8); const pct = Math.min(100, Math.round(envHoy / meta * 100));
+    const prep = op.slice(0, 6);
+    return `<div class="rb-ex-h2">Hoy <small>meter y meter cotizaciones</small></div>
+      <div class="rb-card" style="margin:0;padding:12px 14px"><div class="rb-env"><div><b style="font-size:1.6rem">${envHoy}</b> <span class="muted">de ${meta} enviadas hoy</span></div><div><b style="font-size:1.6rem;color:#f4c95d">${firmar.length}</b> <span class="muted">listas para firmar</span></div></div><div class="bar" style="height:6px;background:#2a2f38;border-radius:3px;margin-top:8px"><i style="display:block;height:100%;width:${pct}%;background:#1ed760;border-radius:3px"></i></div>
+        ${firmar.length ? `<button class="btn rb-oro" type="button" data-rb="det" data-c="${esc(firmar[0].codigo)}" style="width:100%;margin-top:10px">▶ Siguiente: firmar ${esc(corta(firmar[0].nombre || firmar[0].codigo))} · ${clp(firmar[0].total)}</button>` : `<div class="muted" style="font-size:.82rem;margin-top:8px">Nada por firmar. Elige una oportunidad abajo y el robot te la deja lista.</div>`}</div>
+      ${firmar.length > 1 ? `<div class="rb-ex-h2">Cola para firmar <small>${firmar.length}</small></div><div class="rb-card" style="padding:4px 14px;margin:0">${firmar.slice(0, 12).map((t) => exFila(t)).join("")}</div>` : ""}
+      <div class="rb-ex-h2">Para preparar ahora <small>cierran primero en tus rubros</small></div><div class="rb-card" style="padding:4px 14px;margin:0">${prep.length ? prep.map((x) => exFila(x, `<button class="btn small rb-oro" type="button" data-rb="oport-si" data-c="${esc(x.codigo)}" style="margin-left:auto">✍ Preparar</button>`)).join("") : `<div class="muted" style="padding:10px 0;font-size:.85rem">${R.oport ? "Nada por cerrar en tus rubros. Toca Buscar." : "Cargando…"}</div>`}</div>`;
+  }
+  function exInicioLicitador() {
+    const lista = (R.oport?.lista || []).filter((x) => x.fuente === "licitacion" || esLic(x.codigo)); const sel = leerSel();
+    const L = lista.filter((x) => exHoras(x) > 0).sort((a, b) => exHoras(a) - exHoras(b));
+    const dec = (c) => sel[c]?.decision || "";
+    const fila = (x) => { const d = dec(x.codigo); const h = exHoras(x); const dias = h != null ? Math.floor(h / 24) : null;
+      return `<div class="rb-card" style="margin:0 0 8px;padding:12px 14px;border-left:3px solid ${d === "si" ? "#1ed760" : d === "no" ? "#ff6b6b" : "#2a2f38"}"><div style="display:flex;justify-content:space-between;gap:8px"><div style="min-width:0"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.nombre || x.codigo)}</b><span class="muted" style="font-size:.78rem">${esc(x.organismo || "")} · ${esc(x.codigo)}${x.monto ? " · " + clp(x.monto) : ""}</span></div><div style="text-align:right;white-space:nowrap"><b style="color:${h < 48 ? "#ff8a65" : "#f4c95d"}">${dias != null ? (dias < 1 ? "cierra hoy" : dias + " día" + (dias > 1 ? "s" : "")) : "—"}</b><br><span class="muted" style="font-size:.72rem">${x.cierre ? new Date(x.cierre).toLocaleDateString("es-CL", { day: "numeric", month: "short" }) : ""}</span></div></div>
+        <div class="rb-row" style="margin-top:8px;gap:6px"><button class="btn small ${d === "si" ? "rb-oro" : ""}" type="button" data-rb="lic-dec" data-c="${esc(x.codigo)}" data-d="si">✅ Vamos</button><button class="btn small" type="button" data-rb="lic-dec" data-c="${esc(x.codigo)}" data-d="no" style="${d === "no" ? "border-color:#ff6b6b;color:#ff6b6b" : ""}">✖ No</button><button class="btn small" type="button" data-rb="lic-dec" data-c="${esc(x.codigo)}" data-d="despues">⏳ Después</button><button class="btn small" type="button" data-rb="claude" data-c="${esc(x.codigo)}">💬 ¿Entramos?</button><button class="btn small" type="button" data-rb="ex-ficha" data-c="${esc(x.codigo)}">Ficha ›</button></div>
+        ${d === "si" ? `<div class="muted" style="font-size:.74rem;margin-top:6px">Checklist: bases leídas · anexos · garantía de seriedad · visita a terreno · consultas en el foro. El robot deja la ficha lista; tú ingresas y firmas en MP.</div>` : ""}</div>`; };
+    const si = L.filter((x) => dec(x.codigo) === "si"), pend = L.filter((x) => !dec(x.codigo)), desp = L.filter((x) => dec(x.codigo) === "despues");
+    return `<div class="rb-ex-h2">Licitaciones <small>tú y Claude deciden juntos</small></div>
+      <div class="rb-card" style="margin:0 0 10px;padding:10px 14px"><div class="rb-env"><div><b style="font-size:1.4rem;color:#1ed760">${si.length}</b> <span class="muted">vamos</span></div><div><b style="font-size:1.4rem;color:#f4c95d">${pend.length}</b> <span class="muted">por decidir</span></div><div><b style="font-size:1.4rem">${desp.length}</b> <span class="muted">después</span></div></div></div>
+      ${si.length ? `<div class="rb-ex-h2">En las que vamos <small>${si.length}</small></div>${si.map(fila).join("")}` : ""}
+      <div class="rb-ex-h2">Por decidir <small>cierran primero</small></div>${pend.length ? pend.slice(0, 20).map(fila).join("") : `<div class="muted" style="font-size:.85rem">${R.oport ? "No hay licitaciones abiertas en tus rubros. Toca Buscar o pídele al robot licitaciones." : "Cargando…"}</div>`}
+      ${desp.length ? `<div class="rb-ex-h2">Para después <small>${desp.length}</small></div>${desp.map(fila).join("")}` : ""}`;
+  }
+  function exInicioEjecutor() {
+    const T = (R.data?.trabajos || []).filter((t) => t.op && (t.op.oc_codigo || t.op.oc) && clasificarOC(t) !== "D" && !t.op.cobrado).sort((a, b) => Date.parse(b.actualizado || 0) - Date.parse(a.actualizado || 0));
+    const yo = persona()?.nombre; const mias = yo ? T.filter((t) => !t.op.responsable || t.op.responsable === yo || t.op.ejecutor_nombre === yo) : T;
+    const card = (t) => { const P = planOC(t); const act = P.find((p) => !p.hecho) || P[P.length - 1]; const atraso = P.filter((p) => p.dif > 0).reduce((a, p) => Math.max(a, p.dif), 0); const hechos = P.filter((p) => p.hecho).length;
+      return `<div class="rb-card" style="margin:0 0 10px;padding:12px 14px"><div style="display:flex;justify-content:space-between;gap:8px"><div style="min-width:0"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.nombre || t.codigo)}</b><span class="muted" style="font-size:.78rem">${esc(t.organismo || "")} · OC ${esc(t.op.oc_codigo || t.op.oc || "")} · ${clp(t.total)}</span></div><div style="text-align:right;white-space:nowrap"><b style="color:${atraso ? "#ff6b6b" : "#1ed760"}">${atraso ? atraso + " día" + (atraso > 1 ? "s" : "") + " atrás" : "al día"}</b><br><span class="muted" style="font-size:.72rem">${hechos}/${P.length} pasos</span></div></div>
+        <div class="bar" style="height:6px;background:#2a2f38;border-radius:3px;margin:8px 0"><i style="display:block;height:100%;width:${Math.round(hechos / P.length * 100)}%;background:${atraso ? "#ff8a65" : "#1ed760"};border-radius:3px"></i></div>
+        <div style="font-size:.84rem"><b>En qué estoy:</b> ${esc(act.txt)}${act.plan ? ` · simulado ${fcorta(act.plan)}` : ""}${act.dif > 0 ? ` · <span style="color:#ff6b6b">${act.dif} día${act.dif > 1 ? "s" : ""} de atraso</span>` : ""}</div>
+        <details style="margin-top:6px"><summary class="muted" style="font-size:.76rem;cursor:pointer">Simulado vs real · ${P.length} pasos</summary><div style="font-size:.78rem;margin-top:6px">${P.map((p) => `<div style="display:flex;gap:8px;padding:3px 0;border-bottom:1px solid #2a2f38"><span>${p.hecho ? "✅" : p === act ? "▶" : "○"}</span><span style="flex:1">${esc(p.txt)}</span><span class="muted">${p.plan ? fcorta(p.plan) : "—"}</span><span style="min-width:70px;text-align:right;color:${p.dif > 0 ? "#ff6b6b" : p.dif < 0 ? "#1ed760" : "#9aa3b2"}">${p.real ? fcorta(p.real) + (p.dif ? ` (${p.dif > 0 ? "+" : ""}${p.dif}d)` : "") : p.dif > 0 ? `+${p.dif}d` : ""}</span></div>`).join("")}</div></details>
+        <div class="rb-row" style="margin-top:8px"><button class="btn small rb-oro" type="button" data-rb="det" data-c="${esc(t.codigo)}">▶ Hacer este paso</button><button class="btn small" type="button" data-rb="inv-pdf" data-c="${esc(t.codigo)}">📄 Caja</button><button class="btn small" type="button" data-rb="claude" data-c="${esc(t.codigo)}">💬 Claude</button></div></div>`; };
+    const otras = T.filter((t) => !mias.includes(t));
+    return `<div class="rb-ex-h2">Mis órdenes en ejecución <small>${mias.length}</small></div>${mias.length ? mias.map(card).join("") : `<div class="muted" style="font-size:.85rem">No tienes órdenes de compra en ejecución. Cuando una cotización gane, aparece aquí con sus pasos.</div>`}
+      ${otras.length ? `<div class="rb-ex-h2">De otros ejecutores <small>${otras.length}</small></div><div class="rb-card" style="padding:4px 14px;margin:0">${otras.map((t) => exFila(t, `<span class="rb-ex-st">${esc(t.op.responsable || t.op.ejecutor_nombre || "sin responsable")}</span>`)).join("")}</div>` : ""}`;
+  }
+  function exInicioInversionista() {
+    const T = (R.data?.trabajos || []).filter((t) => t.op && (t.op.oc_codigo || t.op.oc) && clasificarOC(t) !== "D").map((t) => ({ t, X: calcNeg(t), P: planOC(t) })).filter((z) => z.X.capital > 0 || z.t.op.inversionista_nombre);
+    const act = T.filter((z) => !z.t.op.cobrado), done = T.filter((z) => z.t.op.cobrado);
+    const capital = act.reduce((a, z) => a + z.X.capital, 0), gan = act.reduce((a, z) => a + z.X.invGan, 0), meta = act.reduce((a, z) => a + z.X.invRecibe, 0);
+    const card = (z) => { const { t, X, P } = z; const op = t.op; const puesto = (op.historial || []).find((h) => h.etapa === "inversionista")?.t || op.transferido || t.actualizado; const cobro = P[P.length - 1]; const fin = cobro.real || cobro.plan;
+      const total = fin && puesto ? Math.max(1, Date.parse(fin) - Date.parse(puesto)) : 1; const pct = op.cobrado ? 100 : Math.min(99, Math.max(2, Math.round((Date.now() - Date.parse(puesto)) / total * 100)));
+      const hechos = P.filter((p) => p.hecho).length; const paso = P.find((p) => !p.hecho);
+      return `<div class="rb-card" style="margin:0 0 10px;padding:12px 14px"><div style="display:flex;justify-content:space-between;gap:8px"><div style="min-width:0"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.nombre || t.codigo)}</b><span class="muted" style="font-size:.78rem">${esc(t.organismo || "")} · ${esc(t.codigo)}</span></div><div style="text-align:right;white-space:nowrap"><b style="color:#1ed760">${clp(X.invRecibe)}</b><br><span class="muted" style="font-size:.72rem">meta · capital ${clp(X.capital)}</span></div></div>
+        <div class="bar" style="height:8px;background:#2a2f38;border-radius:4px;margin:8px 0 4px;position:relative"><i style="display:block;height:100%;width:${pct}%;background:linear-gradient(90deg,#f4c95d,#1ed760);border-radius:4px"></i></div>
+        <div style="display:flex;justify-content:space-between;font-size:.74rem" class="muted"><span>puesto ${fcorta(puesto)}</span><span>${hechos}/${P.length} pasos</span><span>${op.cobrado ? "cobrado ✅" : "llega " + fcorta(fin)}</span></div>
+        <div style="font-size:.84rem;margin-top:6px"><b>Dónde está tu plata:</b> ${op.cobrado ? "cobrada, lista para repartir" : paso ? esc(paso.txt).toLowerCase() : "cerrando"} · ganancia proyectada <b style="color:#1ed760">${clp(X.invGan)}</b> (${(X.invPct * 100).toFixed(1)} %)${op.cobrado ? "" : ` · <span class="rb-reloj" data-t="${esc(puesto)}"></span> en juego`}</div>
+        <div class="rb-row" style="margin-top:8px"><button class="btn small" type="button" data-rb="inv-pdf" data-c="${esc(t.codigo)}">📄 Caja y cronología</button><button class="btn small" type="button" data-rb="det" data-c="${esc(t.codigo)}">Ver OC ›</button><button class="btn small" type="button" data-rb="claude" data-c="${esc(t.codigo)}">💬 ¿Cómo va?</button></div></div>`; };
+    return `<div class="rb-ex-h2">Tu plata, en vivo <small>${act.length} negocio${act.length === 1 ? "" : "s"} abiertos</small></div>
+      <div class="rb-card" style="margin:0 0 10px;padding:12px 14px"><div class="rb-env"><div><span class="muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em">Capital en juego</span><br><b style="font-size:1.3rem">${clp(capital)}</b></div><div><span class="muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em">Ganancia proyectada</span><br><b style="font-size:1.3rem;color:#1ed760">${clp(gan)}</b></div><div><span class="muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em">Meta</span><br><b style="font-size:1.3rem;color:#f4c95d">${clp(meta)}</b></div></div></div>
+      ${act.length ? act.map(card).join("") : `<div class="muted" style="font-size:.85rem">No hay capital puesto en negocios abiertos. Cuando una OC pida inversión, aparece aquí con su avance segundo a segundo.</div>`}
+      ${done.length ? `<div class="rb-ex-h2">Cobrados <small>${done.length}</small></div>${done.slice(0, 8).map(card).join("")}` : ""}`;
+  }
+  function exReloj() {           // ⏱ segundo a segundo: tiempo con el capital puesto
+    document.querySelectorAll(".rb-reloj").forEach((el) => { const ms = Date.now() - Date.parse(el.dataset.t); if (!(ms > 0)) return; const d = Math.floor(ms / 864e5), h = Math.floor(ms % 864e5 / 36e5), m = Math.floor(ms % 36e5 / 6e4), sg = Math.floor(ms % 6e4 / 1e3); el.textContent = `${d} d ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sg).padStart(2, "0")}`; });
+  }
+  setInterval(exReloj, 1000);
   function exInicio() {
     const nom = (persona()?.nombre || "").split(" ")[0]; const h = new Date().getHours(); const sal = h < 12 ? "Buenos días" : h < 20 ? "Buenas tardes" : "Buenas noches";
     const op = exMisOport().sort((a, b) => exHoras(a) - exHoras(b)); const prox = op.slice(0, 3); const seg = op.filter(exSeg); const savedC = Object.keys(leerSel()).map((c) => (R.oport?.lista || []).find((x) => x.codigo === c) || { codigo: c, ...leerSel()[c] });
     const n = exPendientes().length; const r = R.data?.robot;
+    const pf = perfil(); const cuerpoPerfil = pf === "cotizador" ? exInicioCotizador(op, n) : pf === "licitador" ? exInicioLicitador() : pf === "ejecutor" ? exInicioEjecutor() : exInicioInversionista();
     return `<div class="rb-env"><div><div class="rb-ex-h1">${sal}${nom ? ", " + esc(nom) : ""}</div><div class="muted" style="font-size:.8rem">${new Date().toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long" })} · ${n ? `<b style="color:#ff8a65">${n} pendiente${n > 1 ? "s" : ""}</b>` : "sin pendientes"} · robot ${r?.conectado ? "🟢" : "⚫"}</div></div></div>
-      <div class="rb-ex-h2">Próximos cierres <small>en tus rubros</small></div><div class="rb-card" style="padding:4px 14px;margin:0">${prox.length ? prox.map((x) => exFila(x)).join("") : `<div class="muted" style="padding:10px 0;font-size:.85rem">${R.oport ? "Nada por cerrar en tus rubros. Toca Buscar para explorar." : "Cargando oportunidades…"}</div>`}</div>
+      ${perfilBarra()}${cuerpoPerfil}
+      ${pf === "cotizador" ? "" : `<div class="rb-ex-h2">Próximos cierres <small>en tus rubros</small></div>`}${pf === "cotizador" ? "" : `<div class="rb-card" style="padding:4px 14px;margin:0">${prox.length ? prox.map((x) => exFila(x)).join("") : `<div class="muted" style="padding:10px 0;font-size:.85rem">${R.oport ? "Nada por cerrar en tus rubros. Toca Buscar para explorar." : "Cargando oportunidades…"}</div>`}</div>`}
       <div class="rb-ex-h2">Segundos llamados <small>menos competencia</small></div>${seg.length ? `<div class="rb-ex-carr">${seg.slice(0, 12).map(exCover).join("")}</div>` : `<div class="muted" style="font-size:.85rem">Hoy no hay segundos llamados en tus rubros.</div>`}
       <div class="rb-ex-h2">Oportunidades en tus rubros <small>${op.length}</small></div><div class="rb-ex-carr">${op.filter((x) => !exSeg(x)).slice(0, 14).map(exCover).join("") || `<div class="muted" style="font-size:.85rem">—</div>`}</div>
       <div class="rb-ex-h2">Guardadas recientemente <small>${savedC.length}</small></div>${savedC.length ? `<div class="rb-ex-carr">${savedC.slice(0, 12).map(exCover).join("")}</div>` : `<div class="muted" style="font-size:.85rem">Guarda una compra con ★ desde su ficha y aparece aquí.</div>`}
@@ -4834,6 +4926,12 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       const w = window.open(portalDe(cod), "_blank");
       if (w) { try { w.opener = null; } catch {} ABIERTAS[String(cod).toUpperCase()].w = w; } else location.href = portalDe(cod);
       return;
+    }
+    if (a === "ex-perfil") { try { localStorage.setItem(PERFK, b.dataset.k); } catch (e) {} R.exTab = "inicio"; return pintarHoja(true); }
+    if (a === "lic-dec") {
+      const x = (R.oport?.lista || []).find((y) => y.codigo === cod) || {}; const d = b.dataset.d; const prev = leerSel()[cod]?.decision;
+      try { const r = await api("seleccionar", { method: "POST", body: JSON.stringify({ codigo: cod, nombre: x.nombre, organismo: x.organismo, monto: x.monto, cierre: x.cierre, decision: prev === d ? "" : d }) }); if (r.sel) guardarSel(r.sel); } catch (e) { toast(e.message); }
+      toast(d === "si" ? "✅ Vamos: el robot prepara la ficha" : d === "no" ? "Descartada" : "⏳ Para después"); return pintarHoja(true);
     }
     if (a === "ex-menu") { R.exMenu = !R.exMenu; return pintarHoja(true); }
     if (a === "ex-tab") { R.exMenu = false; R.exTab = b.dataset.t; R.exFicha = null; R.detalle = null; R.pantalla = null; sheet.scrollTop = 0; return pintarHoja(true); }
