@@ -4025,7 +4025,7 @@ ${empNom}`;
         <button class="rb-yo" type="button" data-rb="persona-editar" title="Quién usa este celular">👤 ${persona()?.nombre ? esc(persona().nombre.split(" ")[0].slice(0, 12)) : "¿quién?"}</button>
         <button type="button" class="rb-pcs" data-rb="ver-roles" title="${conectado ? "Robot conectado" : "Robot apagado"} · ${mp?.conectado ? "MP conectado" : "MP sin sesión"}"><i class="${conectado ? "on" : ""}"></i>${/nube/i.test(r?.equipo || "") ? "☁️" : "Robot"}<i class="${mp?.conectado ? "on" : ""}" style="margin-left:6px"></i>MP</button>
         <span style="flex:1"></span><button class="rb-ico" type="button" data-rb="ex-menu" aria-label="Más" title="Herramientas">⋯</button><button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
-        ${R.exMenu ? `<div class="rb-ex-menu">${iconos}<button class="rb-ico" type="button" data-rb="conectar-mp" title="Entrar a Mercado Público desde la app">🔑</button></div>` : ""}` : `<div class="rb-top2">
+        ${R.exMenu ? `<div class="rb-ex-menu">${iconos}<button class="rb-ico" type="button" data-rb="conectar-mp" title="Entrar a Mercado Público desde la app">🔑</button><button class="rb-ico" type="button" data-rb="informe-link" data-id="gensa" title="Link del informe para GENSA (Sí/No)">📋</button></div>` : ""}` : `<div class="rb-top2">
         <button class="rb-emp" type="button" data-rb="empresa-editar">🏢 <span>${esc(corta(emp?.razon_social) || "Mi empresa")}</span> ▾</button>
         <button class="rb-yo" type="button" data-rb="persona-editar" title="Quién usa este celular">👤 ${persona()?.nombre ? "usuario " + esc(persona().nombre.split(" ")[0].slice(0, 12)) : "¿quién?"}</button>
         <button type="button" class="rb-pcs" data-rb="ver-roles" title="¿Qué quieres hacer? · ${conectado ? "Robot conectado" : "Robot apagado"}"><i class="${conectado ? "on" : ""}"></i>${/nube/i.test(r?.equipo || "") ? "☁️" : "Robot"}</button><button type="button" class="rb-pcs" data-rb="conectar-mp" title="${mp?.conectado ? "Mercado Público conectado" : "Entrar a Mercado Público desde la app"}"><i class="${mp?.conectado ? "on" : ""}"></i>MP${mp?.conectado ? "" : " ▸"}</button>
@@ -4269,6 +4269,15 @@ ${empNom}`;
       const mail = t.oc_compra?.mail || t.op?.informe?.comprador?.email || "";
       location.href = `mailto:${encodeURIComponent(mail)}?subject=${encodeURIComponent("Desglose cotización " + cod)}&body=${encodeURIComponent(txt)}`;
       toast("✉ Correo listo con el desglose (también copiado)"); return;
+    }
+    if (a === "informe-link") {
+      const id = b.dataset.id || "gensa"; toast("Pidiendo el link…");
+      try { const r = await api("informe-link?id=" + encodeURIComponent(id)); if (!r || !r.url) { toast("No pude obtener el link"); return; }
+        const n = Object.values(r.resp || {}), si = n.filter((x) => x.decision === "si").length, no = n.filter((x) => x.decision === "no").length;
+        try { await navigator.clipboard.writeText(r.url); } catch (e) {}
+        if (navigator.share) { try { await navigator.share({ title: "Socios de Crecimiento · Informe " + id.toUpperCase(), url: r.url }); } catch (e) {} }
+        toast(`📋 Link copiado · respuestas: ${si} sí · ${no} no`);
+      } catch (e) { toast("No pude obtener el link"); } return;
     }
     if (a === "inv-pdf") {
       const t = trabajoG(cod) || R.anl && { codigo: cod }; if (!t) { toast("No encuentro esa compra"); return; }

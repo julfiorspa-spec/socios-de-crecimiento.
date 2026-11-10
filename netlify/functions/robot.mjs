@@ -668,7 +668,28 @@ async function webpayRetorno(req) {                                             
   } catch { return volver("error"); }
 }
 
+// 📋 Informes públicos para socias (GENSA): la página /informes/<id>.html lee y guarda respuestas Sí/No con una clave
+// derivada del código de enlace (nadie puede adivinarla; el dueño la obtiene desde la app con informe-link).
+const informeClave = (id) => createHmac("sha256", process.env.ROBOT_TOKEN || "sin-token").update("informe:" + id).digest("base64url").slice(0, 22);
+async function informePublico(req) {
+  const u = new URL(req.url), id = (u.searchParams.get("id") || "").replace(/[^\w-]/g, "").slice(0, 40), k = u.searchParams.get("k") || "";
+  if (!id || !process.env.ROBOT_TOKEN || k.length !== 22 || !timingSafeEqual(Buffer.from(k), Buffer.from(informeClave(id)))) return json({ error: "Informe no disponible." }, 404);
+  const store = getStore({ name: STORE, consistency: "strong" });
+  const inf = (await store.get(`informes/${id}`, { type: "json" })) || { resp: {} };
+  if (req.method === "POST") {
+    const b = await req.json().catch(() => ({})), c = texto(b.codigo, 40)?.replace(/[^\w-]/g, "");
+    if (!c) return json({ error: "Falta el código." }, 400);
+    if (Object.keys(inf.resp || {}).length > 500) return json({ error: "Informe lleno." }, 429);
+    inf.resp = inf.resp || {}; inf.resp[c] = { decision: ["si", "no", ""].includes(b.decision) ? b.decision : "", nota: texto(b.nota, 300) || "", por: texto(b.por, 60) || "", fecha: ahora() };
+    inf.ultimo = ahora(); await store.setJSON(`informes/${id}`, inf);
+    if (b.decision) avisarTexto(store, `📋 ${id.toUpperCase()} respondió ${b.decision === "si" ? "SÍ ✅" : "NO ✖"}`, `${c}${b.nota ? " · " + texto(b.nota, 120) : ""}${b.por ? " · " + texto(b.por, 40) : ""}`, "informe-" + id, "/#robot").catch(() => {});
+    return json({ ok: true, resp: inf.resp });
+  }
+  return json({ resp: inf.resp || {}, ultimo: inf.ultimo || null });
+}
+
 async function atender(req) {
+  if (/^\/bot\/informe\/?$/.test(new URL(req.url).pathname)) return informePublico(req);
   if (/^\/bot\/wa\/?$/.test(new URL(req.url).pathname)) return waWebhook(req);
   if (/^\/bot\/nube-pedir\/?$/.test(new URL(req.url).pathname)) return nubePedir(req);
   if (/^\/bot\/webpay-retorno\/?$/.test(new URL(req.url).pathname)) return webpayRetorno(req);
@@ -1689,6 +1710,11 @@ async function atender(req) {
 
   // ---------- 📞 «Me llamaron»: el celular pregunta (texto o audio) y el robot del PC responde con IA ----------
   // ---------- 💬 chat con Claude dentro de la app: el cerebro responde directo desde la nube (sin pasar por el PC) ----------
+  if (ruta === "informe-link") {                                     // el dueño pide el link público de un informe (con su clave)
+    const id = (url.searchParams.get("id") || "gensa").replace(/[^\w-]/g, "").slice(0, 40);
+    const inf = (await store.get(`informes/${id}`, { type: "json" })) || { resp: {} };
+    return json({ id, url: `${process.env.URL || "https://cotizagil.netlify.app"}/informes/${id}.html?k=${informeClave(id)}`, resp: inf.resp || {}, ultimo: inf.ultimo || null });
+  }
   if (ruta === "cerebro" && req.method === "POST") {
     const key = process.env.ANTHROPIC_API_KEY || "";
     if (!key) return json({ error: "Falta ANTHROPIC_API_KEY en Netlify (Site configuration → Environment variables). Con eso Claude responde aquí mismo." }, 503);
