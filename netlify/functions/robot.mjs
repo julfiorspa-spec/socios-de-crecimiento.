@@ -2081,9 +2081,11 @@ function caItem(x) {
     monto: Number(m.monto_disponible_clp || m.monto_disponible || 0), llamado: conv === 2 ? "Segundo llamado" : "Primer llamado",
     ofertas: Number((x.resumen || {}).total_ofertas_recibidas || 0), enviadas: 0, oc: null };
 }
-async function caPagina(ticket, n, tam) {
-  const u = `${CA_API}?estado=publicada&tamano_pagina=${tam}&ordenar_por=FechaCierre&numero_pagina=${n}`;
-  const r = await fetch(u, { headers: { ticket, accept: "application/json", "user-agent": "CotizAgil/1.0" }, signal: AbortSignal.timeout(20000) });
+const caDesde = (dias) => new Date(Date.now() - dias * 86400000).toISOString().slice(0, 10);
+async function caPagina(ticket, n, tam, dias = 6) {
+  // tramo chico: solo lo publicado en los últimos días (una Compra Ágil vive ~3-5 días) y sin ordenar: es lo que el servidor contesta rápido
+  const u = `${CA_API}?estado=publicada&publicado_desde=${caDesde(dias)}&tamano_pagina=${tam}&numero_pagina=${n}`;
+  const r = await fetch(u, { headers: { ticket, accept: "application/json", "user-agent": "CotizAgil/1.0" }, signal: AbortSignal.timeout(8000) });
   if (!r.ok) throw new Error("HTTP " + r.status + " en página " + n);
   const d = await r.json(); const p = d.payload || d;
   return { items: p.items || [], total: Number((p.paginacion || {}).total_paginas || 1) };
@@ -2097,16 +2099,16 @@ async function caOficial(store, ticketDado) {
   const ahora = Date.now();
   const cicloViejo = !est.ciclo || (est.ciclo.completo && ahora - Date.parse(est.ciclo.inicio) > 15 * 60000);
   if (est.ciclo && est.ciclo.completo && !cicloViejo) return est;
-  if (cicloViejo) est.ciclo = { inicio: new Date().toISOString(), siguiente: 1, total: null, tam: 20, items: {}, completo: false, errores: 0 };
+  if (cicloViejo) est.ciclo = { inicio: new Date().toISOString(), siguiente: 1, total: null, tam: 10, items: {}, completo: false, errores: 0, dias: 6 };
   const c = est.ciclo; const t0 = Date.now();
   while (!c.completo && Date.now() - t0 < 6500) {
-    const n = c.siguiente; const cuantas = c.total ? Math.min(5, c.total - n + 1) : 1;
+    const n = c.siguiente; const cuantas = c.total ? Math.min(4, c.total - n + 1) : 1;
     if (cuantas <= 0) { c.completo = true; break; }
-    const lote = await Promise.allSettled([...Array(cuantas)].map((_, k) => caPagina(ticket, n + k, c.tam)));
+    const lote = await Promise.allSettled([...Array(cuantas)].map((_, k) => caPagina(ticket, n + k, c.tam, c.dias || 6)));
     let ok = 0;
     for (const r of lote) if (r.status === "rejected") c.ultimo_error = String(r.reason && r.reason.message || r.reason).slice(0, 120);
     for (const r of lote) if (r.status === "fulfilled") { ok++; if (!c.total) c.total = Math.min(r.value.total, Math.ceil(3000 / c.tam)); for (const x of r.value.items) { const o = caItem(x); if (o.codigo) c.items[o.codigo] = o; } }
-    if (!ok) { c.errores++; if (c.tam === 20 && c.errores >= 2) { c.tam = 10; c.total = null; c.siguiente = 1; c.items = {}; c.errores = 0; continue; } if (c.errores >= 6) break; continue; }
+    if (!ok) { c.errores++; if (c.errores === 2 && (c.dias || 6) > 3) { c.dias = 3; c.total = null; c.siguiente = 1; c.items = {}; } if (c.errores >= 6) break; continue; }   // si ni así contesta, acorta a 3 días
     c.siguiente = n + cuantas;
     if (c.total && c.siguiente > c.total) c.completo = true;
   }
