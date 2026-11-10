@@ -821,8 +821,9 @@ async function atender(req) {
       const ca = (o.lista || []).filter((x) => x.fuente !== "licitacion");
       const vivasRobot = ca.filter((x) => x.cierre && Date.parse(x.cierre) > Date.now()).length;
       const edadMin = o.fecha ? (Date.now() - Date.parse(o.fecha)) / 60000 : 1e9;
-      if ((vivasRobot < 20 || edadMin > 150) && (process.env.CA_TICKET || process.env.MP_TICKET)) {
-        const of = await caOficial(store);
+      const tk = process.env.CA_TICKET || process.env.MP_TICKET || ((await store.get("config/ticket_api", { type: "json" })) || {}).ticket;
+      if ((vivasRobot < 20 || edadMin > 150) && tk) {
+        const of = await caOficial(store, tk);
         if (of && of.lista.length) {
           const vistos = new Set(of.lista.map((x) => x.codigo));
           const lic = (o.lista || []).filter((x) => x.fuente === "licitacion");
@@ -1750,6 +1751,11 @@ async function atender(req) {
   // ---------- robot del PC ----------
   if (ruta === "latido" && req.method === "POST") {
     const b = await cuerpo(req);
+    // 🎫 el robot comparte el ticket de la API oficial (nube.json → ticket_api) para que la nube lea Compra Ágil por su cuenta
+    if (typeof b.ticket_api === "string" && /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/.test(b.ticket_api)) {
+      const T = (await store.get("config/ticket_api", { type: "json" })) || {};
+      if (T.ticket !== b.ticket_api) await store.setJSON("config/ticket_api", { ticket: b.ticket_api, equipo: texto(b.equipo, 60), t: ahora() });
+    }
     // 🔐 conectar Mercado Público desde el celular: SOLO el robot del PC (ClaveÚnica bloquea los servidores en la nube)
     let loginMP = null;
     {
@@ -2077,10 +2083,10 @@ async function caPagina(ticket, n, tam) {
   const d = await r.json(); const p = d.payload || d;
   return { items: p.items || [], total: Number((p.paginacion || {}).total_paginas || 1) };
 }
-async function caOficial(store) {
+async function caOficial(store, ticketDado) {
   // Lectura incremental: la función de Netlify dura ~10 s, así que cada llamada avanza algunas páginas y guarda el cursor.
   // Mientras un ciclo no termina, se sigue mostrando la lista completa del ciclo anterior.
-  const ticket = process.env.CA_TICKET || process.env.MP_TICKET;
+  const ticket = ticketDado || process.env.CA_TICKET || process.env.MP_TICKET;
   const K = "oportunidades/ca_oficial";
   const est = (await store.get(K, { type: "json" }).catch(() => null)) || { lista: [], fecha: null, ciclo: null };
   const ahora = Date.now();
