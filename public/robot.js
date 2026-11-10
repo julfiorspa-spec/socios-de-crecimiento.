@@ -3669,6 +3669,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const tel = String(oc.fono || op.informe?.comprador?.telefono || "").replace(/[^\d+]/g, ""), mail = oc.mail || op.informe?.comprador?.email;
     return `<div class="rb-acciones">
       ${enEj ? `<button class="btn small rb-oro" type="button" data-rb="mail-abrir" data-c="${esc(cod)}">🛠 Abrir en Ejecuta</button>` : `<button class="btn small rb-oro" type="button" data-rb="env-ejecutar" data-c="${esc(cod)}" data-e="${ocN ? "ganada" : "previa"}">🛠 Pasar a Ejecuta</button>`}
+      ${t.pdf ? `<button class="btn small rb-firmar" type="button" data-rb="pdf" data-c="${esc(cod)}">📑 Ficha técnica ingresada</button>` : ""}
       <button class="btn small" type="button" data-rb="inv-pdf" data-c="${esc(cod)}">📄 PDF inversionistas</button>
       ${docOC ? `<button class="btn small" type="button" data-rb="neg-doc" data-c="${esc(cod)}" data-id="${esc(docOC.id)}">📄 OC en PDF</button>` : ocN ? `<a class="btn small" href="https://www.mercadopublico.cl/PurchaseOrder/Modules/PO/DetailsPurchaseOrder.aspx?codigoOC=${encodeURIComponent(ocN)}" target="_blank" rel="noopener">📄 OC ${esc(ocN)}</a>` : `<a class="btn small" href="${portalDe(cod)}" target="_blank" rel="noopener">📄 Ver compra</a>`}
       ${tel ? `<a class="btn small" href="tel:${esc(tel)}">📞 Comprador</a>` : ""}${mail ? `<a class="btn small" href="mailto:${esc(mail)}?subject=${encodeURIComponent("OC " + (ocN || cod))}">✉ Comprador</a>` : ""}
