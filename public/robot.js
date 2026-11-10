@@ -1991,7 +1991,62 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         ${f("− PPM", -X.impuesto, "", pc(X.p.impuesto) + " de la venta")}${f("= Utilidad a repartir", X.repartir, "t")}${f("− Comisión jugador", -X.comision, "", pc(X.p.comision))}${f("= Utilidad final", X.final, "oro")}</table>
       <div class="rb-row" style="margin:6px 0"><span class="muted" style="font-size:.72rem;align-self:center">Pago al proveedor:</span><button class="btn small ${X.conFactura ? "rb-oro" : ""}" type="button" data-rb="ej-factura" data-c="${esc(t.codigo)}" data-f="1">🧾 Con factura</button><button class="btn small ${X.conFactura ? "" : "rb-oro"}" type="button" data-rb="ej-factura" data-c="${esc(t.codigo)}" data-f="0">🚫 Sin factura</button></div>
       ${repartoHTML(t, X, true)}
-      <div class="rb-row"><button class="btn small rb-firmar" type="button" data-rb="neg-archivo" data-t="excel" data-c="${esc(t.codigo)}">📊 Descargar la planilla</button></div></div>`;
+      <div class="rb-row"><button class="btn small rb-firmar" type="button" data-rb="neg-archivo" data-t="excel" data-c="${esc(t.codigo)}">📊 Descargar la planilla</button><button class="btn small rb-oro" type="button" data-rb="inv-pdf" data-c="${esc(t.codigo)}">📄 PDF para inversionistas</button></div></div>`;
+  }
+  // 📄 Presentación ejecutiva para inversionistas (PDF descargable): cinta de la planilla, cronología del negocio día a día, pagos con/sin factura, IVA y reparto
+  function presentacionInv(t, X) {
+    const op = t.op || {}, inf = op.informe || {}, emp = empresaActual() || {}, oc = t.oc_compra || {};
+    const f = (n) => (n < 0 ? "−" : "") + "$" + Math.round(Math.abs(n)).toLocaleString("es-CL"), pc = (x) => Math.round(x * 1000) / 10 + " %";
+    const DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"], MES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+    const fd = (d) => `${DIAS[d.getDay()]} ${d.getDate()} ${MES[d.getMonth()]}`;
+    const habil = (d, n) => { const x = new Date(d); let k = 0; while (k < n) { x.setDate(x.getDate() + 1); if (x.getDay() % 6) k++; } return x; };
+    const hoy = new Date(); hoy.setHours(12, 0, 0, 0);
+    const plazo = op.plazo_fecha ? new Date(op.plazo_fecha + "T12:00") : null;
+    const habilAtras = (d, n) => { const x = new Date(d); let k = 0; while (k < n) { x.setDate(x.getDate() - 1); if (x.getDay() % 6) k++; } return x; };
+    const prod = plazo && plazo > hoy ? habilAtras(plazo, 2) : habil(hoy, 3);
+    const carga = habil(prod, 1), desc = habil(carga, 1), fact = habil(desc, 1), pago = habil(fact, 1), f29 = new Date(fact.getFullYear(), fact.getMonth() + 1, 20, 12), fin = habil(f29, 7);
+    const ant = X.compras * (X.p.anticipo ?? 1) * 0.5, saldo = X.compras - ant, prov = typeof op.proveedor === "object" ? op.proveedor?.nombre : op.proveedor;
+    const sinF = (op.pagos_sin_factura || []).filter((x) => x && x.monto), sinT = sinF.reduce((a, x) => a + Number(x.monto || 0), 0);
+    const pasos = [
+      [hoy, op.transferido ? "Pagado el anticipo al proveedor" : "Hoy · se paga el anticipo al proveedor", -ant, `${prov ? "Proveedor " + prov + ". " : ""}50 % de la compra (${f(ant)}). ${X.capital ? "Capital del inversionista: " + f(X.capital) + "." : ""}`],
+      [prod, "Producto listo en el proveedor", -saldo, `Se paga el saldo (${f(saldo)}) contra la guía de despacho${op.plazo_fecha ? " · entrega comprometida " + fd(plazo) : ""}.`],
+      [carga, "Carga y despacho", 0, `Guía de despacho con el número de OC ${op.oc_codigo || ""}. ${lugarDe(t) || inf.direccion ? "Destino: " + (lugarDe(t) || inf.direccion) + "." : ""}`],
+      [desc, "Descarga y recepción conforme", -X.transporte, `Firma de la contraparte técnica de ${oc.organismo || t.organismo || "la institución"}.${X.transporte ? " Transporte: " + f(X.transporte) + "." : ""}`],
+      [fact, "Se factura y se cede al factoring", 0, `Factura por ${f(X.total)} con la recepción conforme adjunta.`],
+      [pago, "Pagado: el factoring deposita", X.ingreso, `Ingreso final ${f(X.ingreso)} (total − ${pc(X.p.factoring)}).${sinT ? " Se pagan " + f(sinT) + " sin factura (deudas), que bajan la utilidad de " + f(X.final) + " a " + f(X.final - sinT) + "." : ""}`],
+      [f29, "F29: IVA e impuesto", -(X.iva_pagar + X.impuesto), `IVA a pagar ${f(X.iva_pagar)} + impuesto ${f(X.impuesto)}.`],
+      [fin, "Cierre y reparto", X.final - sinT, `Inversionista recibe ${f(X.invRecibe)} (capital ${f(X.capital)} + ganancia ${f(X.invGan)}, ${pc(X.invPct)}). Ejecutor ${f(X.ejec)}. Empresa ${f(X.empresa)}.`],
+    ];
+    const K = [["Neto", X.neto], ["IVA", X.iva], ["Total", X.total], ["Factoring " + pc(X.p.factoring), -X.factoring], ["Ingreso final", X.ingreso], ["Compras", -X.compras - X.transporte - sinT], ["Utilidad", X.utilidad - sinT], ["Impuesto", -X.impuesto], ["Utilidad a repartir", X.repartir - sinT], ["Comisión", -X.comision], ["Ut. final", X.final - sinT]];
+    const tr = (a, v, b) => `<tr><td>${esc(a)}</td><td class="n${b ? " b" : ""}">${f(v)}</td></tr>`;
+    const css = `body{font:13px/1.45 Inter,Arial,sans-serif;color:#121417;background:#fff;margin:0}.pg{max-width:820px;margin:0 auto;padding:22px 24px}h1{font-size:1.4rem;margin:0}.sub{color:#5b6a84;margin:2px 0 14px}.est{display:inline-block;background:#eef1f6;border-radius:999px;padding:3px 10px;font-size:.72rem;font-weight:700}
+      .cinta{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:12px 0}.k{border:1px solid #d9dfe9;border-radius:10px;padding:8px 10px}.k small{display:block;color:#5b6a84;font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em}.k b{display:block;font-size:.98rem;margin-top:2px}.k.g b{color:#15803d}.k.r b{color:#c62828}.k.o b{color:#b07d10}
+      .bar{height:9px;border-radius:5px;background:#eef1f6;overflow:hidden;display:flex;margin:6px 0 3px}.bar i{display:block;height:100%}.leg{font-size:.68rem;color:#5b6a84}.leg i{display:inline-block;width:8px;height:8px;border-radius:2px;margin:0 3px 0 8px}
+      h2{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#5b6a84;margin:16px 0 6px}table{width:100%;border-collapse:collapse;font-size:.84rem}td,th{padding:5px 4px;border-bottom:1px solid #e6eaf1;text-align:left;vertical-align:top}th{color:#5b6a84;font-size:.64rem;text-transform:uppercase;letter-spacing:.06em}td.n{text-align:right;white-space:nowrap}td.b{font-weight:700}
+      .tl{list-style:none;margin:0;padding:0;position:relative}.tl:before{content:"";position:absolute;left:9px;top:6px;bottom:6px;width:2px;background:#e6eaf1}.tl li{position:relative;padding:0 0 9px 28px;break-inside:avoid}.tl li:before{content:"";position:absolute;left:3px;top:4px;width:11px;height:11px;border-radius:50%;background:#fff;border:2px solid #9aa3b2}.tl li:first-child:before{background:#1ed760;border-color:#1ed760}
+      .d{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#5b6a84}.t{font-weight:600}.m{font-weight:700}.m.in{color:#15803d}.m.out{color:#c62828}.o{color:#5b6a84;font-size:.78rem}.obs{background:#fff8e6;border-left:3px solid #b07d10;border-radius:6px;padding:7px 10px;font-size:.8rem;margin-top:6px}
+      .dos{display:grid;grid-template-columns:1fr 1fr;gap:14px}.foot{color:#5b6a84;font-size:.66rem;margin-top:14px}.bt{position:fixed;right:14px;bottom:14px;display:flex;gap:8px}.bt button{background:#121417;color:#fff;border:0;border-radius:999px;padding:10px 16px;font:700 .85rem Inter,Arial,sans-serif;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+      @media print{.bt{display:none}.pg{padding:0}}@page{size:A4;margin:12mm}@media(max-width:560px){.cinta{grid-template-columns:repeat(2,1fr)}.dos{grid-template-columns:1fr}}`;
+    const base = Math.max(X.total, 1), seg = [[X.compras + X.transporte + sinT, "#3b6fd9"], [X.factoring, "#8a63d2"], [X.iva_pagar + X.impuesto, "#5b7a9f"], [X.comision, "#c08a3a"], [Math.max(X.final - sinT, 0), "#1ed760"]];
+    const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Presentación inversionistas · ${esc(t.codigo)}</title><style>${css}</style></head><body><div class="pg" id="pg">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-end"><div><h1>Caja de la orden de compra</h1><div class="sub"><b>${esc(t.nombre || t.codigo)}</b> · ${esc(oc.organismo || t.organismo || "")}${op.oc_codigo ? " · OC " + esc(op.oc_codigo) : " · " + esc(t.codigo)} · ${esc(emp.razon_social || "")}</div></div><span class="est">● ${op.cerrado ? "Cerrado" : op.etapa ? "En ejecución · " + esc(op.etapa) : "Proyección"} · ${fd(hoy)}</span></div>
+      <div class="cinta">${K.map((k) => `<div class="k ${/Ut\. final|Utilidad$/.test(k[0]) ? (k[1] >= 0 ? "g" : "r") : /Ingreso/.test(k[0]) ? "o" : k[1] < 0 ? "r" : ""}"><small>${esc(k[0])}</small><b>${f(k[1])}</b></div>`).join("")}</div>
+      <div class="bar">${seg.map((x) => `<i style="width:${(x[0] / base * 100).toFixed(2)}%;background:${x[1]}"></i>`).join("")}</div>
+      <div class="leg"><i style="background:#3b6fd9"></i>Compras<i style="background:#8a63d2"></i>Factoring<i style="background:#5b7a9f"></i>Impuestos<i style="background:#c08a3a"></i>Comisión<i style="background:#1ed760"></i>Utilidad final</div>
+      <h2>Cronología del negocio</h2><ul class="tl">${pasos.map((p) => `<li><div class="d">${fd(p[0])}</div><div class="t">${esc(p[1])} ${p[2] ? `<span class="m ${p[2] > 0 ? "in" : "out"}">${f(p[2])}</span>` : ""}</div><div class="o">${esc(p[3])}</div></li>`).join("")}
+        <li><div class="obs">Observación: de un total facturado de ${f(X.total)} quedan ${f(X.final - sinT)} de utilidad final (${(X.total ? (X.final - sinT) / X.total * 100 : 0).toFixed(1)} %). ${X.final - sinT > 0 ? "El negocio cierra positivo." : "El negocio queda negativo: revisar precio de compra."}</div></li></ul>
+      <div class="dos"><div><h2>Pago con factura (totales con IVA)</h2><table><tr><th>Proveedor</th><th class="n">Total</th><th>Medio</th></tr>
+        <tr><td>${esc(prov || "Proveedor por definir")}</td><td class="n">${f(X.compras)}</td><td>${esc(op.banco_proveedor ? "Transferencia" : "—")}</td></tr>${X.transporte ? `<tr><td>Transporte</td><td class="n">${f(X.transporte)}</td><td>Transferencia</td></tr>` : ""}
+        <tr><td><b>Total</b></td><td class="n b">${f(X.compras + X.transporte)}</td><td style="color:#5b6a84">IVA incl. ${f(X.iva_compra)}</td></tr></table>
+        <h2>Pago sin factura</h2><table><tr><th>Concepto</th><th class="n">Total</th><th>Medio</th></tr>${sinF.length ? sinF.map((x) => `<tr><td>${esc(x.que || x.concepto || "")}</td><td class="n">${f(x.monto)}</td><td>${esc(x.medio || "")}</td></tr>`).join("") : `<tr><td colspan="3" style="color:#5b6a84">Sin pagos sin factura</td></tr>`}<tr><td><b>Total</b></td><td class="n b">${f(sinT)}</td><td></td></tr></table></div>
+      <div><h2>IVA</h2><table>${tr("IVA venta", X.iva)}${tr("IVA compra", X.iva_compra)}${tr("IVA a pagar", X.iva_pagar, true)}</table>
+        <h2>Resultado ejecutivo</h2><table>${tr("Ingreso final del factoring", X.ingreso)}${tr("Pagos con factura", -(X.compras + X.transporte))}${tr("Pagos sin factura", -sinT)}${tr("Utilidad", X.utilidad - sinT, true)}${tr("Impuestos (IVA + PPM)", -(X.iva_pagar + X.impuesto))}${tr("Comisión", -X.comision)}${tr("Utilidad final", X.final - sinT, true)}</table>
+        <h2>Reparto</h2><table>${tr("Inversionista: capital " + f(X.capital) + " + ganancia " + f(X.invGan) + " (" + pc(X.invPct) + ")", X.invRecibe, true)}${tr("Ejecutor (" + pc(X.p.ejecutador) + ")", X.ejec)}${tr("Cotizador (comisión)", X.jugador)}${tr(emp.razon_social || "Empresa", X.empresa, true)}</table></div></div>
+      <p class="foot">Presentación generada por CotizÁgil · Socios de Crecimiento · ${fd(hoy)} ${hoy.toTimeString().slice(0, 5)} · Compras: ${esc(X.fuente)}. Cifras en pesos chilenos; proyección sujeta a los precios finales del proveedor y a la fecha real de pago del factoring.</p></div>
+      <div class="bt"><button type="button" id="bPdf">⬇ Descargar PDF</button><button type="button" onclick="window.print()">🖨 Imprimir</button></div>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+      <script>document.getElementById("bPdf").onclick=async function(){const b=this;b.textContent="Generando…";try{const el=document.getElementById("pg");const c=await html2canvas(el,{scale:2,backgroundColor:"#fff",useCORS:true});const {jsPDF}=window.jspdf;const pdf=new jsPDF({unit:"mm",format:"a4"});const W=210-20,H=297-20;const ph=c.width*H/W;let y=0,first=true;while(y<c.height){const h=Math.min(ph,c.height-y);const s=document.createElement("canvas");s.width=c.width;s.height=h;s.getContext("2d").drawImage(c,0,y,c.width,h,0,0,c.width,h);if(!first)pdf.addPage();pdf.addImage(s.toDataURL("image/jpeg",.92),"JPEG",10,10,W,h*W/c.width);y+=h;first=false;}pdf.save(${JSON.stringify("Presentacion_inversionistas_" + String(t.codigo).replace(/[^\w-]/g, "_") + ".pdf")});b.textContent="⬇ Descargar PDF";}catch(e){b.textContent="Usa Imprimir → Guardar como PDF";window.print();}};<\/script></body></html>`;
+    return html;
   }
   // 📊 Ficha de una oferta ENVIADA: qué puede pasar, cuánto vale, excel previo + repartija, qué hacer
   function fichaEnviada(t) {
@@ -3605,6 +3660,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const tel = String(oc.fono || op.informe?.comprador?.telefono || "").replace(/[^\d+]/g, ""), mail = oc.mail || op.informe?.comprador?.email;
     return `<div class="rb-acciones">
       ${enEj ? `<button class="btn small rb-oro" type="button" data-rb="mail-abrir" data-c="${esc(cod)}">🛠 Abrir en Ejecuta</button>` : `<button class="btn small rb-oro" type="button" data-rb="env-ejecutar" data-c="${esc(cod)}" data-e="${ocN ? "ganada" : "previa"}">🛠 Pasar a Ejecuta</button>`}
+      <button class="btn small" type="button" data-rb="inv-pdf" data-c="${esc(cod)}">📄 PDF inversionistas</button>
       ${docOC ? `<button class="btn small" type="button" data-rb="neg-doc" data-c="${esc(cod)}" data-id="${esc(docOC.id)}">📄 OC en PDF</button>` : ocN ? `<a class="btn small" href="https://www.mercadopublico.cl/PurchaseOrder/Modules/PO/DetailsPurchaseOrder.aspx?codigoOC=${encodeURIComponent(ocN)}" target="_blank" rel="noopener">📄 OC ${esc(ocN)}</a>` : `<a class="btn small" href="${portalDe(cod)}" target="_blank" rel="noopener">📄 Ver compra</a>`}
       ${tel ? `<a class="btn small" href="tel:${esc(tel)}">📞 Comprador</a>` : ""}${mail ? `<a class="btn small" href="mailto:${esc(mail)}?subject=${encodeURIComponent("OC " + (ocN || cod))}">✉ Comprador</a>` : ""}
       </div>${q ? `<div class="muted" style="font-size:.68rem;margin-top:4px">👤 La ingresó ${yo ? "tu juego" : "<b>" + esc(q.nombre || "otro juego") + "</b>"}${!yo && q.telefono ? ` · <a href="https://wa.me/${waNum(q.telefono)}?text=${encodeURIComponent("Hola " + (q.nombre || "") + ", te escribo por la compra " + cod + " (" + (t.nombre || "") + ")")}" target="_blank" rel="noopener">💬 escríbele</a>` : ""}</div>` : ""}`;
@@ -4195,6 +4251,13 @@ ${empNom}`;
         else toast("El PC recalcula el informe (1–2 min)");
         await refrescar(); pintarHoja(); } catch (e) { toast(e.message); }
       return;
+    }
+    if (a === "inv-pdf") {
+      const t = trabajoG(cod) || R.anl && { codigo: cod }; if (!t) { toast("No encuentro esa compra"); return; }
+      let tt = t; if (!calcNeg(t).compras && R.anl && (R.anl.prod === cod || cod === "Proyecto")) { const cant = +R.anl.cant || 0; tt = { codigo: R.anl.prod || "Proyecto", nombre: R.anl.prod, total: Math.round(cant * (+R.anl.venta || 0) * 1.19), op: { precio_acordado: Math.round(cant * (+R.anl.compra || 0) * 1.19), informe: {} } }; }
+      const X = calcNeg(tt); if (!X.compras) { toast("Falta el precio de compra para armar la presentación"); return; }
+      const w = window.open("", "_blank"); if (!w) { toast("Permite ventanas emergentes para abrir el PDF"); return; }
+      w.document.open(); w.document.write(presentacionInv(tt, X)); w.document.close(); return;
     }
     if (a === "neg-archivo" || a === "neg-doc") {
       const w = window.open("", "_blank");
