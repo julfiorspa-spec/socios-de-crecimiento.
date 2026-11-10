@@ -615,6 +615,15 @@
   const trabajo = (cod) => R.data?.trabajos?.find((t) => t.codigo === String(cod).toUpperCase());
   // 🌍 el asistente y el informe global ven TODOS los juegos (cada juego sigue siendo independiente para jugar)
   const trabajoG = (cod) => { const c = String(cod).toUpperCase(); return trabajo(c) || (R.todos || []).find((t) => t.codigo === c) || (R.ejec || []).find((t) => t.codigo === c) || (R.global?.trabajos || []).find((t) => t.codigo === c); };
+  // ✉ desglose de la oferta por producto y monto (lo piden los compradores antes de adjudicar)
+  function desgloseTexto(t) {
+    const emp = empresaActual() || {}, its = (t.items || []).filter((i) => i.d), n = (v) => Math.round(Number(v) || 0);
+    const li = its.map((i, k) => { const q = Number(i.q) || 1, p = n(i.p); return { k: k + 1, d: i.d, q, p, s: q * p }; });
+    const neto = li.reduce((a, x) => a + x.s, 0), total = n(t.total), conIva = total && Math.abs(neto * 1.19 - total) < Math.abs(neto - total);
+    const base = conIva ? neto : total && Math.abs(neto - total) > 2 ? Math.round(total / 1.19) : neto, iva = Math.round(base * 0.19);
+    const fila = (x) => `${x.k}. ${x.d} — ${x.q.toLocaleString("es-CL")} x ${clp(x.p)} = ${clp(x.s)}`;
+    return `Estimada/o:\n\nJunto con saludar, adjunto el desglose de la cotización ${t.codigo}${t.nombre ? " (" + t.nombre + ")" : ""}:\n\n${li.map(fila).join("\n")}\n\nNeto: ${clp(base)}\nIVA 19 %: ${clp(iva)}\nTotal: ${clp(total || base + iva)}\n\nLos valores son unitarios netos; el total incluye IVA, despacho a ${t.oc_compra?.direccion || t.organismo || "destino"} y la validez indicada en la oferta.\n\nQuedo atento a cualquier consulta.\n\nAtentamente,\n${emp.razon_social || ""}${emp.rut ? "\nRUT " + emp.rut : ""}${emp.telefono ? "\n" + emp.telefono : ""}`;
+  }
   // 🤝 2 (o más) jugadores conectados: lo que OTRO juego ya tomó/envió NO se le repite a este. Devuelve el nombre del que la tiene, o null.
   const LIBRE_OTRO = new Set(["cancelada", "rechazada", "descartada"]);
   const tomadaOtro = (cod) => { const c = String(cod).toUpperCase(), mio = miJug();
@@ -1194,7 +1203,7 @@
       ${alertasHtml}
       ${billetera}${pasos}${declJurada}
       ${t.detalle || (t.items && t.items.length) ? `<details class="rb-det"><summary>Detalle de la oferta</summary><pre>${esc(
-        (t.items || []).map((i, k) => `${k + 1}. ${i.d} — ${i.q} x ${clp(i.p)}`).join("\n") + (t.detalle ? "\n\n" + t.detalle : ""))}</pre></details>` : ""}
+        (t.items || []).map((i, k) => `${k + 1}. ${i.d} — ${i.q} x ${clp(i.p)}`).join("\n") + (t.detalle ? "\n\n" + t.detalle : ""))}</pre>${(t.items || []).some((i) => i.p) ? `<div class="rb-row"><button class="btn small rb-oro" type="button" data-rb="desglose-mail" data-c="${esc(t.codigo)}">✉ Responder desglose al comprador</button><button class="btn small" type="button" data-rb="desglose-copiar" data-c="${esc(t.codigo)}">📋 Copiar desglose</button></div>` : ""}</details>` : ""}
       <div class="rb-acts">${acts.join("")}</div>
       <div class="rb-line" style="margin-top:8px">${esc(hace(t.actualizado))}</div>
     </div>`;
@@ -4251,6 +4260,14 @@ ${empNom}`;
         else toast("El PC recalcula el informe (1–2 min)");
         await refrescar(); pintarHoja(); } catch (e) { toast(e.message); }
       return;
+    }
+    if (a === "desglose-mail" || a === "desglose-copiar") {
+      const t = trabajoG(cod); if (!t) return;
+      const txt = desgloseTexto(t); try { await navigator.clipboard.writeText(txt); } catch (e) {}
+      if (a === "desglose-copiar") { toast("📋 Desglose copiado"); return; }
+      const mail = t.oc_compra?.mail || t.op?.informe?.comprador?.email || "";
+      location.href = `mailto:${encodeURIComponent(mail)}?subject=${encodeURIComponent("Desglose cotización " + cod)}&body=${encodeURIComponent(txt)}`;
+      toast("✉ Correo listo con el desglose (también copiado)"); return;
     }
     if (a === "inv-pdf") {
       const t = trabajoG(cod) || R.anl && { codigo: cod }; if (!t) { toast("No encuentro esa compra"); return; }
