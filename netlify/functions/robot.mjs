@@ -835,7 +835,7 @@ async function atender(req) {
     try {
       const tk2 = process.env.CA_TICKET || process.env.MP_TICKET || ((await store.get("config/ticket_api", { type: "json" })) || {}).ticket;
       const est = (await store.get("oportunidades/ca_oficial", { type: "json" }).catch(() => null)) || {};
-      o.oficial = { ticket: !!tk2, fecha: est.fecha || null, n: (est.lista || []).length, ciclo: est.ciclo ? { siguiente: est.ciclo.siguiente, total: est.ciclo.total, completo: est.ciclo.completo, errores: est.ciclo.errores, ultimo_error: est.ciclo.ultimo_error || null, tam: est.ciclo.tam } : null, error: o.oficial_error || null };
+      o.oficial = { ticket: !!tk2, fecha: est.fecha || null, n: (est.lista || []).length, ciclo: est.ciclo ? { region: est.ciclo.region, siguiente: est.ciclo.siguiente, total: est.ciclo.total, completo: est.ciclo.completo, errores: est.ciclo.errores, ultimo_error: est.ciclo.ultimo_error || null, tam: est.ciclo.tam } : null, error: o.oficial_error || null };
     } catch (_) {}
     o.descartes = await leerCajon(store, "oportunidades/descartes", jug(url.searchParams.get("jugador")), url.searchParams.get("legado") === "1");
     return json(o);
@@ -2082,35 +2082,35 @@ function caItem(x) {
     ofertas: Number((x.resumen || {}).total_ofertas_recibidas || 0), enviadas: 0, oc: null };
 }
 const caDesde = (dias) => new Date(Date.now() - dias * 86400000).toISOString().slice(0, 10);
-async function caPagina(ticket, n, tam, dias = 6) {
-  // tramo chico: solo lo publicado en los últimos días (una Compra Ágil vive ~3-5 días) y sin ordenar: es lo que el servidor contesta rápido
-  const u = `${CA_API}?estado=publicada&publicado_desde=${caDesde(dias)}&tamano_pagina=${tam}&numero_pagina=${n}`;
+async function caPagina(ticket, n, tam, dias = 6, region = null) {
+  // La API exige filtros y responde 504 a consultas amplias: se pide POR REGIÓN (1..16) y solo lo publicado en los últimos días.
+  const u = `${CA_API}?estado=publicada${region ? "&region=" + region : ""}&publicado_desde=${caDesde(dias)}&tamano_pagina=${tam}&numero_pagina=${n}`;
   const r = await fetch(u, { headers: { ticket, accept: "application/json", "user-agent": "CotizAgil/1.0" }, signal: AbortSignal.timeout(8000) });
-  if (!r.ok) throw new Error("HTTP " + r.status + " en página " + n);
+  if (!r.ok) throw new Error("HTTP " + r.status + " región " + region + " página " + n);
   const d = await r.json(); const p = d.payload || d;
   return { items: p.items || [], total: Number((p.paginacion || {}).total_paginas || 1) };
 }
 async function caOficial(store, ticketDado) {
-  // Lectura incremental: la función de Netlify dura ~10 s, así que cada llamada avanza algunas páginas y guarda el cursor.
-  // Mientras un ciclo no termina, se sigue mostrando la lista completa del ciclo anterior.
+  // Lectura incremental por región: cada llamada avanza lo que alcanza (~6 s) y guarda el cursor; hasta terminar el ciclo
+  // se sigue mostrando la lista completa del ciclo anterior.
   const ticket = ticketDado || process.env.CA_TICKET || process.env.MP_TICKET;
   const K = "oportunidades/ca_oficial";
   const est = (await store.get(K, { type: "json" }).catch(() => null)) || { lista: [], fecha: null, ciclo: null };
   const ahora = Date.now();
-  const cicloViejo = !est.ciclo || !est.ciclo.dias || (est.ciclo.completo && ahora - Date.parse(est.ciclo.inicio) > 15 * 60000) || (!est.ciclo.completo && ahora - Date.parse(est.ciclo.inicio) > 30 * 60000);
+  const cicloViejo = !est.ciclo || !est.ciclo.region || (est.ciclo.completo && ahora - Date.parse(est.ciclo.inicio) > 15 * 60000) || (!est.ciclo.completo && ahora - Date.parse(est.ciclo.inicio) > 30 * 60000);
   if (est.ciclo && est.ciclo.completo && !cicloViejo) return est;
-  if (cicloViejo) est.ciclo = { inicio: new Date().toISOString(), siguiente: 1, total: null, tam: 10, items: {}, completo: false, errores: 0, dias: 6 };
+  if (cicloViejo) est.ciclo = { inicio: new Date().toISOString(), region: 1, siguiente: 1, total: null, tam: 10, dias: 6, items: {}, completo: false, errores: 0 };
   const c = est.ciclo; const t0 = Date.now();
-  while (!c.completo && Date.now() - t0 < 6500) {
+  while (!c.completo && Date.now() - t0 < 6000) {
     const n = c.siguiente; const cuantas = c.total ? Math.min(4, c.total - n + 1) : 1;
-    if (cuantas <= 0) { c.completo = true; break; }
-    const lote = await Promise.allSettled([...Array(cuantas)].map((_, k) => caPagina(ticket, n + k, c.tam, c.dias || 6)));
+    if (cuantas <= 0) { c.region++; c.siguiente = 1; c.total = null; if (c.region > 16) c.completo = true; continue; }
+    const lote = await Promise.allSettled([...Array(cuantas)].map((_, k) => caPagina(ticket, n + k, c.tam, c.dias, c.region)));
     let ok = 0;
     for (const r of lote) if (r.status === "rejected") c.ultimo_error = String(r.reason && r.reason.message || r.reason).slice(0, 120);
-    for (const r of lote) if (r.status === "fulfilled") { ok++; if (!c.total) c.total = Math.min(r.value.total, Math.ceil(3000 / c.tam)); for (const x of r.value.items) { const o = caItem(x); if (o.codigo) c.items[o.codigo] = o; } }
-    if (!ok) { c.errores++; if (c.errores === 2 && (c.dias || 6) > 3) { c.dias = 3; c.total = null; c.siguiente = 1; c.items = {}; } if (c.errores >= 6) break; continue; }   // si ni así contesta, acorta a 3 días
+    for (const r of lote) if (r.status === "fulfilled") { ok++; if (!c.total) c.total = Math.min(r.value.total, 60); for (const x of r.value.items) { const o = caItem(x); if (o.codigo) c.items[o.codigo] = o; } }
+    if (!ok) { c.errores++; if (c.errores >= 3) { c.errores = 0; c.region++; c.siguiente = 1; c.total = null; if (c.region > 16) c.completo = true; } continue; }   // región que no contesta: se salta
     c.siguiente = n + cuantas;
-    if (c.total && c.siguiente > c.total) c.completo = true;
+    if (c.total && c.siguiente > c.total) { c.region++; c.siguiente = 1; c.total = null; if (c.region > 16) c.completo = true; }
   }
   if (c.completo) {
     const [lo, hi] = caRubros.rango; const res = [];
@@ -2124,9 +2124,9 @@ async function caOficial(store, ticketDado) {
     const tope = Math.max(1, ...res.map((r) => r.ganancia));
     for (const r of res) r.puntaje = Math.round(100 * Math.pow(r.ganancia / tope, 0.6));
     res.sort((a, b) => b.ganancia - a.ganancia);
-    est.lista = res; est.fecha = new Date().toISOString(); est.paginas = c.total; est.tam = c.tam; est.crudas = Object.keys(c.items).length;
-    c.items = {};                                                    // el detalle crudo ya no hace falta en el blob
-    console.log(`CA oficial: ${res.length} compras en rango de ${est.crudas} (${c.total} páginas de ${c.tam})`);
+    if (res.length || !est.lista.length) { est.lista = res; est.fecha = new Date().toISOString(); est.crudas = Object.keys(c.items).length; }
+    c.items = {};
+    console.log(`CA oficial: ${res.length} compras en rango de ${est.crudas} (16 regiones, páginas de ${c.tam})`);
   }
   await store.setJSON(K, est);
   return est.lista.length ? est : null;
