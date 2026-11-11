@@ -3705,26 +3705,24 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       </div>${q ? `<div class="muted" style="font-size:.68rem;margin-top:4px">👤 La ingresó ${yo ? "tu juego" : "<b>" + esc(q.nombre || "otro juego") + "</b>"}${!yo && q.telefono ? ` · <a href="https://wa.me/${waNum(q.telefono)}?text=${encodeURIComponent("Hola " + (q.nombre || "") + ", te escribo por la compra " + cod + " (" + (t.nombre || "") + ")")}" target="_blank" rel="noopener">💬 escríbele</a>` : ""}</div>` : ""}`;
   }
   // 📊 Analizador de proyectos: Excel en vivo manual (producto, cantidad, compra/venta → utilidad y repartija)
+  // 📊 Analizador de proyectos: varios productos (cantidad, compra y venta netos c/u) → Excel en vivo del proyecto completo
+  const anlLineas = () => { const a = R.anl || (R.anl = { prod: "", lineas: [] }); if (!Array.isArray(a.lineas)) a.lineas = a.cant || a.compra || a.venta ? [{ prod: a.prod || "", cant: +a.cant || 0, compra: +a.compra || 0, venta: +a.venta || 0 }] : []; if (!a.lineas.length) a.lineas.push({ prod: "", cant: 0, compra: 0, venta: 0 }); return a; };
+  const anlTot = (a) => { let v = 0, c = 0; for (const l of a.lineas) { const q = Math.max(0, +l.cant || 0); v += q * Math.max(0, +l.venta || 0); c += q * Math.max(0, +l.compra || 0); } return { ventaIVA: Math.round(v * 1.19), compraIVA: Math.round(c * 1.19), ventaN: Math.round(v), compraN: Math.round(c) }; };
+  const anlT = (a) => { const T = anlTot(a); return { codigo: a.prod || a.lineas[0]?.prod || "Proyecto", nombre: a.prod || a.lineas.map((l) => l.prod).filter(Boolean).join(" + "), total: T.ventaIVA, items: a.lineas.filter((l) => l.prod || l.cant).map((l) => ({ d: l.prod, q: +l.cant || 0, p: +l.venta || 0 })), op: { precio_acordado: T.compraIVA, pagos: a.lineas.filter((l) => +l.compra && +l.cant).map((l) => ({ nombre: l.prov || l.prod || "Proveedor", monto: Math.round((+l.cant || 0) * (+l.compra || 0)), factura: true })), informe: {} } }; };
+  function anlResultadoHTML(a) { const T = anlTot(a); const t = anlT(a); const listo = T.ventaIVA > 0 && T.compraIVA > 0; const m = T.ventaN ? Math.round((T.ventaN - T.compraN) / T.ventaN * 100) : 0;
+    return `<div class="rb-kv" style="margin:8px 0"><span>Venta total c/IVA <b>${clp(T.ventaIVA)}</b></span><span>Compra total c/IVA <b>${clp(T.compraIVA)}</b></span>${listo ? `<span>Margen bruto <b>${m} %</b></span>` : ""}</div>${listo ? excelVivo(t, calcNeg(t)) : `<div class="muted" style="font-size:.78rem">Llena cantidad, compra y venta de al menos un producto para ver el Excel en vivo. 📈</div>`}`; }
   function pantallaAnalizador() {
-    const a = R.anl || (R.anl = { prod: "", cant: 0, compra: 0, venta: 0 });
-    const cant = Math.max(0, +a.cant || 0), cu = Math.max(0, +a.compra || 0), vu = Math.max(0, +a.venta || 0);
-    const ventaIVA = Math.round(cant * vu * 1.19), compraIVA = Math.round(cant * cu * 1.19);
-    const t = { codigo: a.prod || "Proyecto", total: ventaIVA, op: { precio_acordado: compraIVA, informe: {} } };
-    const listo = ventaIVA > 0 && compraIVA > 0;
-    const num = (v) => (v ? Number(v).toLocaleString("es-CL") : "");
+    const a = anlLineas(); const num = (v) => (v ? Number(v).toLocaleString("es-CL") : "");
+    const fila = (l, i) => `<div class="rb-llamar anl-linea" data-i="${i}" style="margin-bottom:8px"><div class="rb-env"><label class="rb-lab" style="flex:1">Producto ${i + 1}<input class="rb-in anl-in" data-i="${i}" data-anl="prod" value="${esc(l.prod || "")}" placeholder="Ej: Sillas plegables"></label>${a.lineas.length > 1 ? `<button class="btn small" type="button" data-rb="anl-quitar" data-i="${i}" title="Quitar" style="margin:18px 0 0 6px">🗑</button>` : ""}</div>
+        <div class="rb-row"><label class="rb-lab" style="flex:1">Cantidad<input class="rb-in anl-in" data-i="${i}" data-anl="cant" inputmode="numeric" value="${+l.cant || ""}" placeholder="100"></label><label class="rb-lab" style="flex:1">💸 Compra neto c/u<input class="rb-in anl-in" data-i="${i}" data-anl="compra" inputmode="numeric" value="${num(+l.compra || 0)}" placeholder="2.000"></label><label class="rb-lab" style="flex:1">🏷️ Venta neto c/u<input class="rb-in anl-in" data-i="${i}" data-anl="venta" inputmode="numeric" value="${num(+l.venta || 0)}" placeholder="3.000"></label></div>
+        <div class="muted" style="font-size:.72rem;margin-top:2px">${+l.cant && +l.venta ? `vende ${clp(Math.round(+l.cant * +l.venta * 1.19))} · compra ${clp(Math.round(+l.cant * (+l.compra || 0) * 1.19))} (c/IVA)` : ""}</div></div>`;
     return `<div class="rb-paso">
       <div class="rb-env"><h2 class="rb-h" style="margin:0">📊 Analizador de proyectos</h2><button class="btn small" type="button" data-rb="llamada-cerrar">← Volver</button></div>
-      <div class="muted rb-sub">Pon el producto, la cantidad y los precios <b>netos por unidad</b> (lo que te cuesta y a cuánto lo vendes). Te armo el <b>Excel en vivo</b>: utilidad, IVA, factoring, impuestos y repartija — igual que un negocio real, por proyecto.</div>
-      <div class="rb-llamar">
-        <label class="rb-lab">Producto / proyecto<input class="rb-in anl-in" data-anl="prod" value="${esc(a.prod || "")}" placeholder="Ej: Sillas plegables"></label>
-        <label class="rb-lab">Cantidad<input class="rb-in anl-in" data-anl="cant" inputmode="numeric" value="${cant || ""}" placeholder="100"></label>
-        <div class="rb-row">
-          <label class="rb-lab" style="flex:1">💸 Compra neto c/u<input class="rb-in anl-in" data-anl="compra" inputmode="numeric" value="${num(cu)}" placeholder="2.000"></label>
-          <label class="rb-lab" style="flex:1">🏷️ Venta neto c/u<input class="rb-in anl-in" data-anl="venta" inputmode="numeric" value="${num(vu)}" placeholder="3.000"></label>
-        </div>
-      </div>
-      <div class="rb-kv" style="margin:8px 0"><span>Venta total c/IVA <b>${clp(ventaIVA)}</b></span><span>Compra total c/IVA <b>${clp(compraIVA)}</b></span></div>
-      <div id="anlResult">${listo ? excelVivo(t, calcNeg(t)) : `<div class="muted" style="font-size:.78rem">Llena cantidad, compra y venta para ver el Excel en vivo. 📈</div>`}</div>
+      <div class="muted rb-sub">Pon los productos del proyecto con cantidad y precios <b>netos por unidad</b> (lo que te cuesta y a cuánto lo vendes). Te armo el <b>Excel en vivo</b> del proyecto completo: utilidad, IVA, factoring, impuestos y repartija.</div>
+      <label class="rb-lab">Nombre del proyecto<input class="rb-in anl-in" data-anl="proy" value="${esc(a.prod || "")}" placeholder="Ej: Equipamiento sala de clases"></label>
+      <div id="anlLineas">${a.lineas.map(fila).join("")}</div>
+      <div class="rb-row" style="margin:4px 0 10px"><button class="btn small rb-oro" type="button" data-rb="anl-agregar">＋ Agregar producto</button><button class="btn small" type="button" data-rb="anl-limpiar">Limpiar</button><button class="btn small" type="button" data-rb="inv-pdf" data-c="Proyecto">📄 PDF inversionistas</button></div>
+      <div id="anlResult">${anlResultadoHTML(a)}</div>
     </div>`;
   }
   function pantallaLlamada() {
@@ -4543,8 +4541,8 @@ ${empNom}`;
       } catch (e) { toast("No pude obtener el link"); } return;
     }
     if (a === "inv-pdf") {
-      const t = trabajoG(cod) || R.anl && { codigo: cod }; if (!t) { toast("No encuentro esa compra"); return; }
-      let tt = t; if (!calcNeg(t).compras && R.anl && (R.anl.prod === cod || cod === "Proyecto")) { const cant = +R.anl.cant || 0; tt = { codigo: R.anl.prod || "Proyecto", nombre: R.anl.prod, total: Math.round(cant * (+R.anl.venta || 0) * 1.19), op: { precio_acordado: Math.round(cant * (+R.anl.compra || 0) * 1.19), informe: {} } }; }
+      const t = trabajoG(cod) || (R.anl && { codigo: cod }); if (!t) { toast("No encuentro esa compra"); return; }
+      let tt = t; if ((!t || !calcNeg(t).compras) && R.anl && (cod === "Proyecto" || R.anl.prod === cod)) tt = anlT(anlLineas());
       const X = calcNeg(tt); if (!X.compras) { toast("Falta el precio de compra para armar la presentación"); return; }
       const w = window.open("", "_blank"); if (!w) { toast("Permite ventanas emergentes para abrir el PDF"); return; }
       w.document.open(); w.document.write(presentacionInv(tt, X)); w.document.close(); return;
@@ -4720,6 +4718,9 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "claude-mic") { return dictarClaude(); }
     if (a === "llamada-cod") { R.pantalla = "llamada"; R.llamada = { texto: "Me están llamando por la compra " + b.dataset.c }; sheet.scrollTop = 0; confirmarLlamada(b.dataset.c); return pintarHoja(true); }
     if (a === "llamada-cerrar") { R.pantalla = null; return pintarHoja(true); }
+    if (a === "anl-agregar") { anlLineas().lineas.push({ prod: "", cant: 0, compra: 0, venta: 0 }); pintarHoja(true); setTimeout(() => { const ins = sheet.querySelectorAll(".anl-linea .anl-in[data-anl=prod]"); ins[ins.length - 1]?.focus(); }, 50); return; }
+    if (a === "anl-quitar") { const L = anlLineas().lineas; L.splice(+b.dataset.i, 1); if (!L.length) L.push({ prod: "", cant: 0, compra: 0, venta: 0 }); return pintarHoja(true); }
+    if (a === "anl-limpiar") { R.anl = { prod: "", lineas: [{ prod: "", cant: 0, compra: 0, venta: 0 }] }; return pintarHoja(true); }
     if (a === "analizador") { R.pantalla = "analizador"; R.anl = R.anl || { prod: "", cant: 0, compra: 0, venta: 0 }; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "prop-wa") { const msg = ($("#rbProp")?.value || "").trim(); if (!msg) { toast("Escribe la propuesta"); return; }
       const tel = waNum(($("#rbPropTel")?.value || "").trim());
@@ -5334,14 +5335,12 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
   // 📊 Analizador de proyectos: recalcula el Excel en vivo al teclear (sin re-render, para no perder el foco)
   sheet.addEventListener("input", (ev) => {
     const el = ev.target; if (!el.classList?.contains("anl-in")) return;
-    const a = R.anl || (R.anl = { prod: "", cant: 0, compra: 0, venta: 0 });
-    const k = el.dataset.anl;
-    if (k === "prod") a.prod = el.value;
-    else a[k] = +(el.value || "").replace(/\D/g, "") || 0;
-    const cant = Math.max(0, +a.cant || 0), cu = Math.max(0, +a.compra || 0), vu = Math.max(0, +a.venta || 0);
-    const t = { codigo: a.prod || "Proyecto", total: Math.round(cant * vu * 1.19), op: { precio_acordado: Math.round(cant * cu * 1.19), informe: {} } };
-    const res = sheet.querySelector("#anlResult");
-    if (res) res.innerHTML = (t.total > 0 && t.op.precio_acordado > 0) ? excelVivo(t, calcNeg(t)) : `<div class="muted" style="font-size:.78rem">Llena cantidad, compra y venta para ver el Excel en vivo. 📈</div>`;
+    const a = anlLineas(); const k = el.dataset.anl; const i2 = +el.dataset.i;
+    if (k === "proy") a.prod = el.value;
+    else if (k === "prod") { if (a.lineas[i2]) a.lineas[i2].prod = el.value; }
+    else if (a.lineas[i2]) a.lineas[i2][k] = +(el.value || "").replace(/\D/g, "") || 0;
+    const res = sheet.querySelector("#anlResult"); if (res) res.innerHTML = anlResultadoHTML(a);
+    const lin = el.closest(".anl-linea"); if (lin && a.lineas[i2]) { const l = a.lineas[i2]; const m = lin.querySelector(".muted"); if (m) m.textContent = +l.cant && +l.venta ? `vende ${clp(Math.round(+l.cant * +l.venta * 1.19))} · compra ${clp(Math.round(+l.cant * (+l.compra || 0) * 1.19))} (c/IVA)` : ""; }
     clearTimeout(R.tUI); R.tUI = setTimeout(guardarUI, 500);
   });
   sheet.addEventListener("click", (ev) => {
