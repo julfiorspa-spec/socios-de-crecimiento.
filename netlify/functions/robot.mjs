@@ -1323,7 +1323,8 @@ async function atender(req) {
     // 🏢 Una compra = una empresa. Si otra empresa del grupo ya la cotizó (o la tiene lista para firmar), no se vuelve a preparar:
     //    sobrescribiría sus precios en el portal y además dos empresas relacionadas no pueden ofertar la misma compra.
     { const empN = texto(b.empresa, 40) || null; const prevE = previo?.empresa || null;
-      if (previo && empN && prevE && prevE !== empN && !["rechazada", "error", "descartada", "cancelada"].includes(previo.estado) && accion !== "verificar") {
+      const distinta = previo && empN && prevE && prevE !== "principal" && empN !== "principal" && prevE !== empN;
+      if (distinta && ["firmar", "enviada", "confirmada"].includes(previo.estado) && accion !== "verificar") {
         const L = (await store.get("empresas/lista", { type: "json" })) || {}; const nom = L[prevE]?.razon_social || prevE;
         return json({ trabajo: previo, error: `Esta compra ya la cotizó ${nom} (${previo.estado}). Una misma compra no se oferta con dos empresas del grupo: elige otra.` }, 409); } }
     if (accion === "lic_firmar" || accion === "lic_ingresar") {   // pasos siguientes: conservan el análisis y los papeles
