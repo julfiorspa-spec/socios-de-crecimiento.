@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      3.4.1
+// @version      3.4.2
 // @description  Te lleva a tu Compra Ágil (una navegación, por tu toque) y rellena precios/despacho/detalle al pulsar Rellenar, con confirmación. No envía, no declara, no firma, no navega solo, no oculta la automatización: el envío y la firma los haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -13,12 +13,12 @@
 // @grant        GM_xmlhttpRequest
 // @connect      cotizagil.netlify.app
 // @run-at       document-idle
-// @downloadURL  https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.4.1
-// @updateURL    https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.4.1
+// @downloadURL  https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.4.2
+// @updateURL    https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.4.2
 // ==/UserScript==
 (function () {
   'use strict';
-  const VERSION = '3.4.1';
+  const VERSION = '3.4.2';
   const APP = 'https://cotizagil.netlify.app';
   const MP = 'https://compra-agil.mercadopublico.cl';
   const CODE = /^[A-Z0-9-]+-COT\d+$/;
@@ -224,8 +224,12 @@
 
   const getPathCode = () => { const m = location.pathname.match(/^\/resumen-cotizacion\/([^/]+)/i); return m ? cleanCode(decodeURIComponent(m[1])) : null; };
   // Página «ya enviada»: MP muestra «Descargar comprobante» / «Anular cotización» / «Enviar nueva cotización» en el resumen de una oferta que ya se envió.
-  const yaEnviadaEnPantalla = () => { const t = (document.body && document.body.innerText) || ''; return /descargar comprobante/i.test(t) && /(anular cotizaci|enviar nueva cotizaci)/i.test(t); };
+  // Solo cuenta como «ya enviada» el RESUMEN de ESA cotización (su código en pantalla + comprobante + adjuntos), nunca una lista de cotizaciones.
+  const yaEnviadaEnPantalla = () => { const t = (document.body && document.body.innerText) || ''; const c = getPathCode(); if (!c || !t.includes(c)) return false;
+    return /descargar comprobante/i.test(t) && /adjuntos de la cotizaci/i.test(t) && /(anular cotizaci|enviar nueva cotizaci)/i.test(t) && !/mis cotizaciones|listado|resultados/i.test(t.slice(0, 400)); };
   const confirmedCode = () => { if (/cotizacion-publicada/i.test(location.pathname)) return cleanCode(new URLSearchParams(location.search).get('quote')); if (yaEnviadaEnPantalla()) return getPathCode(); return null; };
+  // ⛔ compra cerrada / fuera de plazo: se avisa a la nube para que salga de Firmar en todos los celulares
+  const cerradaEnPantalla = () => { const t = (document.body && document.body.innerText) || ''; return /(compra|cotizaci[oó]n|convocatoria)[^.]{0,40}(cerrad|finaliz)|fuera de plazo|ya no (recibe|acepta) (cotizaciones|ofertas)|no es posible (ingresar|enviar) (la )?cotizaci/i.test(t); };
 
   let lastPath = '', currentCode = '', loading = false, token = null;
 
@@ -585,6 +589,12 @@
     ultBloqueo = false;
 
     const confirmed = confirmedCode();
+    if (!confirmed && getPathCode() && cerradaEnPantalla()) {
+      const cod = getPathCode(); const token = await gmGet('token');
+      if (token && !(await gmGet('cerrada:' + cod))) { try { await getJson('olvidar', token, { codigo: cod }); await gmSet('cerrada:' + cod, Date.now()); } catch (_) {} }
+      say(`⛔ ${cod}: Mercado Público dice que esta compra está cerrada o fuera de plazo. La saqué de Firmar en CotizÁgil.`);
+      actions.append(button('Volver a CotizÁgil', () => location.assign(APP + '/#robot'), 'ghost')); return;
+    }
     if (confirmed) {
       debug('pagina_publicada', confirmed);
       actions.replaceChildren();

@@ -895,7 +895,7 @@
       setTimeout(() => { abrir(); toast("✅ " + cod + " firmada · ya no está en Firmar. ¡Va la próxima!"); }, 30);
       // ▶ y te lleva directo a la siguiente lista para firmar (de tu empresa primero); si no hay, al Inicio del cotizador
       R.siguienteDe = cod;
-      const irSiguiente = () => { const yo = miEmp(); const cola = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t) && t.codigo !== cod && esMia(t) && !leerOcultas()[t.codigo]).sort((a, b) => (a.empresa === yo ? 0 : 1) - (b.empresa === yo ? 0 : 1) || (Date.parse(a.cierre || 0) || 9e15) - (Date.parse(b.cierre || 0) || 9e15));
+      const irSiguiente = () => { const yo = miEmp(); const cola = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t) && !noFirmable(t) && t.codigo !== cod && esMia(t) && !leerOcultas()[t.codigo]).sort((a, b) => (a.empresa === yo ? 0 : 1) - (b.empresa === yo ? 0 : 1) || (Date.parse(a.cierre || 0) || 9e15) - (Date.parse(b.cierre || 0) || 9e15));
         R.siguienteDe = null; R.exFicha = null; if (cola.length) { R.detalle = cola[0].codigo; toast("▶ Siguiente: " + corta(cola[0].nombre || cola[0].codigo)); } else { R.detalle = null; R.exTab = "inicio"; toast("No queda nada por firmar 👌"); } pintarHoja(true); };
       setTimeout(irSiguiente, 1500); setTimeout(() => { if (R.siguienteDe) irSiguiente(); }, 4000);
       return;
@@ -1348,6 +1348,8 @@
   //    aunque el robot del PC todavía la esté confirmando; pasa directo a Enviadas.
   const FIRMADAS = "sdc:firmadas";
   const leerFirmadas = () => { try { const o = JSON.parse(localStorage.getItem(FIRMADAS)) || {}; for (const k in o) if (Date.now() - o[k] > 12 * 3600e3) delete o[k]; return o; } catch { return {}; } };
+  // ⛔ no se puede firmar: la compra cerró (fecha de cierre pasada) o MP dijo cerrada / fuera de plazo: sale sola de Firmar
+  const noFirmable = (t) => !!t && ((t.cierre && Date.parse(t.cierre) && Date.parse(t.cierre) < Date.now()) || /\bCERRADA\b/.test(t.mensaje || "") || /(compra|cotizaci[oó]n|convocatoria)[^.]{0,30}cerrad|ya no (recibe|acepta) (cotizaciones|ofertas)|fuera de plazo|no es posible (ingresar|enviar)/i.test(t.mensaje || ""));
   const yaFirmada = (t) => { if (!t || HECHA.includes(t.estado)) return false;
     const c = Date.parse(t.creado || 0) || 0, act = Date.parse(t.actualizado || 0) || c, l = leerFirmadas()[t.codigo], v = Date.parse(t.enviada_vista || 0) || 0;
     if (t.accion === "verificar" && ["en_cola", "tomado", "preparando"].includes(t.estado)) return true;   // el robot está confirmando el envío
@@ -2522,7 +2524,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const nuevas = lista.filter((x) => vigente(x) && !descartada(x.codigo) && !trabajo(x.codigo) && !x.ya_ofertada && !x.trabajada && !esSel(x.codigo) && !tomadaOtro(x.codigo));
     const ocultas = leerOcultas();
     const cierreDe = (t) => t.cierre || (lista.find((x) => x.codigo === t.codigo) || {}).cierre || (leerSel()[t.codigo] || {}).cierre;
-    const cerrada = (t) => /\bCERRADA\b/.test(t.mensaje || "") || /(compra|cotizaci[oó]n|convocatoria)[^.]{0,30}cerrad|ya no (recibe|acepta) (cotizaciones|ofertas)|fuera de plazo/i.test(t.mensaje || "")
+    const cerrada = (t) => noFirmable(t)
       || (cierreDe(t) && Date.parse(cierreDe(t)) < ahora);
     const ultAct = (t) => Date.parse(t.actualizado || t.creado || 0) || 0;
     const oculto = (t) => { const o = ocultas[t.codigo]; return !!(o && (Date.parse(o) || 0) >= ultAct(t)); };   // si la ocultaste pero el robot la volvió a dejar lista DESPUÉS, reaparece
@@ -3978,7 +3980,7 @@ ${empNom}`;
   }
   function exPendientes() {      // tareas que requieren acción (para Actividad y el contador)
     const out = []; const ocu = leerOcultas(); const trabajos = (R.data?.trabajos || []).filter((t) => esMia(t) && !ocu[t.codigo]); const sel = leerSel();
-    for (const t of trabajos) { if (t.estado === "firmar" && !yaFirmada(t)) out.push({ tipo: "doc", c: t.codigo, texto: `Falta tu firma · ${t.nombre || t.codigo}`, det: true }); }
+    for (const t of trabajos) { if (t.estado === "firmar" && !yaFirmada(t) && !noFirmable(t)) out.push({ tipo: "doc", c: t.codigo, texto: `Falta tu firma · ${t.nombre || t.codigo}`, det: true }); }
     for (const [c, x] of Object.entries(sel)) if (x.revisar) out.push({ tipo: "cierre", c, texto: `Cambió mientras cotizabas · ${x.nombre || c}` });
     for (const t of trabajos) { if (!t.op || !(t.op.oc_codigo || t.op.oc)) continue; const b = clasificarOC(t); if (b === "A" && !t.op.cobrado) out.push({ tipo: "env", c: t.codigo, texto: `Cobrar · ${t.nombre || t.codigo}`, det: true }); if (b === "B" && t.op.precio_acordado && !t.op.proveedor_pagado) out.push({ tipo: "doc", c: t.codigo, texto: `Pagar al proveedor ${clp(t.op.precio_acordado)} · ${t.nombre || t.codigo}`, det: true }); if (b === "C") out.push({ tipo: "info", c: t.codigo, texto: `Aceptar la OC en MP · ${t.nombre || t.codigo}`, det: true }); if (b === "D" && t.op.proveedor_pagado) out.push({ tipo: "cierre", c: t.codigo, texto: `OC cancelada con proveedor pagado · ${t.nombre || t.codigo}`, det: true }); }
     for (const m of (R.mailAl || []).filter((x) => !x.visto).slice(0, 5)) out.push({ tipo: "info", c: m.codigo || "", texto: `Correo · ${m.asunto || m.resumen || ""}`.slice(0, 90), det: !!m.codigo });
@@ -3989,7 +3991,7 @@ ${empNom}`;
     return `<nav class="rb-ex-nav">${[["inicio", "Inicio", EXI.inicio], ["buscar", "Buscar", EXI.buscar], ["biblio", "Tu biblioteca", EXI.biblio], ["activ", "Actividad", EXI.activ]].map(([k, l, ic]) => `<button type="button" class="${t === k ? "on" : ""}" data-rb="ex-tab" data-t="${k}">${ic}${l}${k === "activ" && n ? `<span class="n">${n}</span>` : ""}</button>`).join("")}</nav>` + exContinuar();
   }
   function exContinuar() {
-    const oc = leerOcultas(); const firmar = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t) && esMia(t) && !oc[t.codigo]); if (!firmar.length || R.detalle || R.exFicha) return "";
+    const oc = leerOcultas(); const firmar = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t) && !noFirmable(t) && esMia(t) && !oc[t.codigo]); if (!firmar.length || R.detalle || R.exFicha) return "";
     const t = firmar[0]; const otras = firmar.length - 1;
     return `<div class="rb-ex-cont"><button type="button" data-rb="det" data-c="${esc(t.codigo)}"><div style="width:38px;height:38px;border-radius:6px;background:${exColor(t)}"></div><div style="flex:1;min-width:0"><div style="font-size:.8rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Continuar cotización · ${esc(t.nombre || t.codigo)}</div><div class="bar"><i style="width:70%"></i></div><div style="font-size:.68rem;color:#9aa3b2">${clp(t.total)} · lista para rellenar y firmar${otras ? ` · ${otras} más en Biblioteca` : ""}</div></div>›</button></div>`;
   }
@@ -4043,7 +4045,7 @@ ${empNom}`;
         <div class="rb-row" style="margin-top:6px"><button class="btn small" type="button" data-rb="ex-ficha" data-c="${esc(x.codigo)}">Ficha ›</button><button class="btn small" type="button" data-rb="claude" data-c="${esc(x.codigo)}">💬 ¿Da?</button></div></div></div>`;
   }
   function exInicioCotizador(op, n) {
-    const oc = leerOcultas(); const firmar = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t) && esMia(t) && !oc[t.codigo]).sort((a, b) => (Date.parse(a.cierre || 0) || 9e15) - (Date.parse(b.cierre || 0) || 9e15));
+    const oc = leerOcultas(); const firmar = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t) && !noFirmable(t) && esMia(t) && !oc[t.codigo]).sort((a, b) => (Date.parse(a.cierre || 0) || 9e15) - (Date.parse(b.cierre || 0) || 9e15));
     const hoy = hoyMs(); const envHoy = (R.data?.trabajos || []).filter((t) => HECHA.includes(t.estado) && Date.parse(t.fecha_envio || t.actualizado || 0) >= hoy).length;
     const meta = Number(localStorage.getItem("sdc:meta_dia") || 8); const pct = Math.min(100, Math.round(envHoy / meta * 100));
     const prep = op.slice(0, 6);
@@ -5162,7 +5164,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       try { await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "verificar", vista: true, dispositivo: dispositivo(true) }) }); marcarFirmada(cod, false); await refrescar(); }
       catch (e) { toast(e.message); }
       // ✅ desaparece de Firmar y te lleva a la siguiente (de tu empresa primero); si no queda, al Inicio
-      { const yo = miEmp(); const cola = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t) && t.codigo !== cod && esMia(t) && !leerOcultas()[t.codigo]).sort((a2, b2) => (a2.empresa === yo ? 0 : 1) - (b2.empresa === yo ? 0 : 1) || (Date.parse(a2.cierre || 0) || 9e15) - (Date.parse(b2.cierre || 0) || 9e15));
+      { const yo = miEmp(); const cola = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t) && !noFirmable(t) && t.codigo !== cod && esMia(t) && !leerOcultas()[t.codigo]).sort((a2, b2) => (a2.empresa === yo ? 0 : 1) - (b2.empresa === yo ? 0 : 1) || (Date.parse(a2.cierre || 0) || 9e15) - (Date.parse(b2.cierre || 0) || 9e15));
         R.detalle = cola[0]?.codigo || null; R.exFicha = null; if (!cola.length) R.exTab = "inicio"; R.firIdx = 0; toast(cola.length ? "✅ Enviada · siguiente: " + corta(cola[0].nombre || cola[0].codigo) : "✅ Enviada · no queda nada por firmar 👌"); sheet.scrollTop = 0; }
       return pintarHoja(true);
     }
