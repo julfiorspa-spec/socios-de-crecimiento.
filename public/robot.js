@@ -885,7 +885,7 @@
       setTimeout(() => { abrir(); toast("✅ " + cod + " firmada · ya no está en Firmar. ¡Va la próxima!"); }, 30);
       // ▶ y te lleva directo a la siguiente lista para firmar (de tu empresa primero); si no hay, al Inicio del cotizador
       R.siguienteDe = cod;
-      const irSiguiente = () => { const yo = miEmp(); const cola = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t) && t.codigo !== cod && esMia(t)).sort((a, b) => (a.empresa === yo ? 0 : 1) - (b.empresa === yo ? 0 : 1) || (Date.parse(a.cierre || 0) || 9e15) - (Date.parse(b.cierre || 0) || 9e15));
+      const irSiguiente = () => { const yo = miEmp(); const cola = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t) && t.codigo !== cod && esMia(t) && !leerOcultas()[t.codigo]).sort((a, b) => (a.empresa === yo ? 0 : 1) - (b.empresa === yo ? 0 : 1) || (Date.parse(a.cierre || 0) || 9e15) - (Date.parse(b.cierre || 0) || 9e15));
         R.siguienteDe = null; R.exFicha = null; if (cola.length) { R.detalle = cola[0].codigo; toast("▶ Siguiente: " + corta(cola[0].nombre || cola[0].codigo)); } else { R.detalle = null; R.exTab = "inicio"; toast("No queda nada por firmar 👌"); } pintarHoja(true); };
       setTimeout(irSiguiente, 1500); setTimeout(() => { if (R.siguienteDe) irSiguiente(); }, 4000);
       return;
@@ -3968,7 +3968,7 @@ ${empNom}`;
       <div class="rb-row" style="gap:4px;align-items:center">💼 Invierte: ${bot("inversionista_nombre", z.invierte)}<button class="btn small ${z.invierte && !gente.includes(z.invierte) ? "rb-oro" : ""}" type="button" data-rb="traza-otro" data-campo="inversionista_nombre" data-c="${esc(t.codigo)}">${z.invierte && !gente.includes(z.invierte) ? esc(z.invierte) : "otro…"}</button></div></div>`;
   }
   function exPendientes() {      // tareas que requieren acción (para Actividad y el contador)
-    const out = []; const trabajos = (R.data?.trabajos || []).filter(esMia); const sel = leerSel();
+    const out = []; const ocu = leerOcultas(); const trabajos = (R.data?.trabajos || []).filter((t) => esMia(t) && !ocu[t.codigo]); const sel = leerSel();
     for (const t of trabajos) { if (t.estado === "firmar" && !yaFirmada(t)) out.push({ tipo: "doc", c: t.codigo, texto: `Falta tu firma · ${t.nombre || t.codigo}`, det: true }); }
     for (const [c, x] of Object.entries(sel)) if (x.revisar) out.push({ tipo: "cierre", c, texto: `Cambió mientras cotizabas · ${x.nombre || c}` });
     for (const t of trabajos) { if (!t.op || !(t.op.oc_codigo || t.op.oc)) continue; const b = clasificarOC(t); if (b === "A" && !t.op.cobrado) out.push({ tipo: "env", c: t.codigo, texto: `Cobrar · ${t.nombre || t.codigo}`, det: true }); if (b === "B" && t.op.precio_acordado && !t.op.proveedor_pagado) out.push({ tipo: "doc", c: t.codigo, texto: `Pagar al proveedor ${clp(t.op.precio_acordado)} · ${t.nombre || t.codigo}`, det: true }); if (b === "C") out.push({ tipo: "info", c: t.codigo, texto: `Aceptar la OC en MP · ${t.nombre || t.codigo}`, det: true }); if (b === "D" && t.op.proveedor_pagado) out.push({ tipo: "cierre", c: t.codigo, texto: `OC cancelada con proveedor pagado · ${t.nombre || t.codigo}`, det: true }); }
@@ -3980,7 +3980,7 @@ ${empNom}`;
     return `<nav class="rb-ex-nav">${[["inicio", "Inicio", EXI.inicio], ["buscar", "Buscar", EXI.buscar], ["biblio", "Tu biblioteca", EXI.biblio], ["activ", "Actividad", EXI.activ]].map(([k, l, ic]) => `<button type="button" class="${t === k ? "on" : ""}" data-rb="ex-tab" data-t="${k}">${ic}${l}${k === "activ" && n ? `<span class="n">${n}</span>` : ""}</button>`).join("")}</nav>` + exContinuar();
   }
   function exContinuar() {
-    const firmar = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t) && esMia(t)); if (!firmar.length || R.detalle || R.exFicha) return "";
+    const oc = leerOcultas(); const firmar = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t) && esMia(t) && !oc[t.codigo]); if (!firmar.length || R.detalle || R.exFicha) return "";
     const t = firmar[0]; const otras = firmar.length - 1;
     return `<div class="rb-ex-cont"><button type="button" data-rb="det" data-c="${esc(t.codigo)}"><div style="width:38px;height:38px;border-radius:6px;background:${exColor(t)}"></div><div style="flex:1;min-width:0"><div style="font-size:.8rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Continuar cotización · ${esc(t.nombre || t.codigo)}</div><div class="bar"><i style="width:70%"></i></div><div style="font-size:.68rem;color:#9aa3b2">${clp(t.total)} · lista para rellenar y firmar${otras ? ` · ${otras} más en Biblioteca` : ""}</div></div>›</button></div>`;
   }
@@ -4033,14 +4033,14 @@ ${empNom}`;
         <div class="rb-row" style="margin-top:6px"><button class="btn small" type="button" data-rb="ex-ficha" data-c="${esc(x.codigo)}">Ficha ›</button><button class="btn small" type="button" data-rb="claude" data-c="${esc(x.codigo)}">💬 ¿Da?</button></div></div></div>`;
   }
   function exInicioCotizador(op, n) {
-    const firmar = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t) && esMia(t)).sort((a, b) => (Date.parse(a.cierre || 0) || 9e15) - (Date.parse(b.cierre || 0) || 9e15));
+    const oc = leerOcultas(); const firmar = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t) && esMia(t) && !oc[t.codigo]).sort((a, b) => (Date.parse(a.cierre || 0) || 9e15) - (Date.parse(b.cierre || 0) || 9e15));
     const hoy = hoyMs(); const envHoy = (R.data?.trabajos || []).filter((t) => HECHA.includes(t.estado) && Date.parse(t.fecha_envio || t.actualizado || 0) >= hoy).length;
     const meta = Number(localStorage.getItem("sdc:meta_dia") || 8); const pct = Math.min(100, Math.round(envHoy / meta * 100));
     const prep = op.slice(0, 6);
     return `<div class="rb-ex-h2">Hoy <small>meter y meter cotizaciones</small></div>
       <div class="rb-card" style="margin:0;padding:12px 14px"><div class="rb-env"><div><b style="font-size:1.6rem">${envHoy}</b> <span class="muted">de ${meta} enviadas hoy</span></div><div><b style="font-size:1.6rem;color:#f4c95d">${firmar.length}</b> <span class="muted">listas para firmar</span></div></div><div class="bar" style="height:6px;background:#2a2f38;border-radius:3px;margin-top:8px"><i style="display:block;height:100%;width:${pct}%;background:#1ed760;border-radius:3px"></i></div>
         ${firmar.length ? `<button class="btn rb-oro" type="button" data-rb="det" data-c="${esc(firmar[0].codigo)}" style="width:100%;margin-top:10px">▶ Siguiente: firmar ${esc(corta(firmar[0].nombre || firmar[0].codigo))} · ${clp(firmar[0].total)}</button>` : `<div class="muted" style="font-size:.82rem;margin-top:8px">Nada por firmar. Elige una oportunidad abajo y el robot te la deja lista.</div>`}</div>
-      ${firmar.length > 1 ? `<div class="rb-ex-h2">Cola para firmar <small>${firmar.length}</small></div><div class="rb-card" style="padding:4px 14px;margin:0">${firmar.slice(0, 12).map((t) => exFila(t)).join("")}</div>` : ""}
+      ${firmar.length ? `<div class="rb-ex-h2">Cola para firmar <small>${firmar.length} · 🗑 la saca del ambiente</small></div><div class="rb-card" style="padding:4px 14px;margin:0">${firmar.slice(0, 12).map((t) => exFila(t, `<button class="btn small" type="button" data-rb="ex-quitar" data-c="${esc(t.codigo)}" style="margin-left:auto;opacity:.8" title="Quitar">🗑</button>`)).join("")}</div>` : ""}
       ${exJugar(op)}
       <div class="rb-ex-h2">Para preparar ahora <small>cierran primero · cuánto da</small></div><div class="rb-card" style="padding:4px 14px;margin:0">${prep.length ? prep.map((x) => exFila(x, daChip(x) + `<button class="btn small rb-oro" type="button" data-rb="oport-si" data-c="${esc(x.codigo)}" style="margin-left:auto">✍ Preparar</button>`)).join("") : `<div class="muted" style="padding:10px 0;font-size:.85rem">${R.oport ? "Nada por cerrar en tus rubros. Toca Buscar." : "Cargando…"}</div>`}</div>`;
   }
@@ -4151,7 +4151,7 @@ ${empNom}`;
       <div class="rb-ex-h2">Resultados <small>${L.length}</small></div><div class="rb-card" style="padding:4px 14px;margin:0">${L.length ? L.slice(0, 80).map((x) => exFila(x)).join("") : `<div class="muted" style="padding:10px 0;font-size:.85rem">${R.oport ? "Nada con ese filtro." : "Cargando…"}</div>`}</div>`;
   }
   function exBiblio() {
-    const k = R.exLib || "todas"; const trabajos = (R.data?.trabajos || []).filter(esMia); const sel = leerSel(); const lista = R.oport?.lista || [];
+    const k = R.exLib || "todas"; const ocu = leerOcultas(); const trabajos = (R.data?.trabajos || []).filter((t) => esMia(t) && !(ocu[t.codigo] && t.estado === "firmar")); const sel = leerSel(); const lista = R.oport?.lista || [];
     const filas = [];
     for (const [c, x] of Object.entries(sel)) { const t = trabajo(c); if (t) continue; const o = lista.find((y) => y.codigo === c) || { codigo: c, ...x }; filas.push({ k: "guardadas", t: Date.parse(x.actualizado || x.desde || 0), html: exFila(o, `<span class="rb-ex-st">MP: publicada</span><span class="rb-ex-st doc">${x.costo || x.flete || x.responsable ? "borrador" : "guardada"}</span>`) }); }
     for (const t of trabajos) { const oc = t.op && (t.op.oc_codigo || t.op.oc); const b = oc ? clasificarOC(t) : null; const inter = oc ? ({ A: "Entregada", B: "En operación", C: "OC nueva", D: "Revisar" })[b] : t.estado === "firmar" ? "Lista para firmar" : HECHA.includes(t.estado) ? "Enviada" : esc(t.estado);
@@ -5109,7 +5109,8 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       const etapa = t?.op?.etapa && ["ganada", "inversionista", "operacion"].includes(t.op.etapa) ? "transporte" : null;
       try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos, ...(etapa ? { etapa } : {}), dispositivo: dispositivo(false) }) }); toast("💸 Compras guardadas: el negocio se recalculó"); R.ejecT = 0; await refrescar(); } catch (e) { toast(e.message); } return pintarHoja(true);
     }
-    if (a === "ex-jugar-paso") { R.exJugarIdx = (R.exJugarIdx || 0) + 1; return pintarHoja(true); }
+    if (a === "ex-jugar-paso") { const x = exMisOport().filter((y) => !trabajo(y.codigo))[(R.exJugarIdx || 0) % Math.max(1, exMisOport().filter((y) => !trabajo(y.codigo)).length)]; if (x) { api("oport-descartar", { method: "POST", body: JSON.stringify({ codigo: x.codigo, descartar: true }) }).catch(() => {}); R.desc = { ...(R.desc || {}), [x.codigo]: 1 }; toast("🗑 Paso: no vuelve a aparecer"); } return pintarHoja(true); }
+    if (a === "ex-quitar") { await quitarFirma(cod, null, "exec"); toast("🗑 Quitada del ambiente"); return pintarHoja(true); }
     if (a === "ex-todas-emp") { guardar({ todasEmp: !leer().todasEmp }); return pintarHoja(true); }
     if (a === "ex-perfil") { try { localStorage.setItem(PERFK, b.dataset.k); } catch (e) {} R.exTab = "inicio"; return pintarHoja(true); }
     if (a === "lic-dec") {
