@@ -346,6 +346,8 @@
   .rb-ex-chips button.on{background:#f3f4f6;color:#121417;border-color:#f3f4f6}
   .rb-ex-search{display:flex;align-items:center;gap:10px;background:#f3f4f6;color:#121417;border-radius:10px;padding:0 12px;height:46px;margin-top:8px}
   .rb-ex-search input{flex:1;min-width:0;background:none;border:0;outline:0;color:#121417;font:500 .9rem Inter,sans-serif}
+  .rb-ex-search svg{width:20px;height:20px;flex:0 0 20px;fill:none;stroke:#121417;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round}
+  #rbSheet svg:not([width]):not(.rb-svg-libre){max-width:28px;max-height:28px}
   .rb-ex-cont{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(74px + env(safe-area-inset-bottom,0px));width:min(560px,calc(100vw - 16px));z-index:29}
   .rb-ex-cont button{width:100%;display:flex;align-items:center;gap:10px;background:#262b33;border:1px solid #363c47;border-radius:10px;padding:9px 10px;color:#f3f4f6;text-align:left;font:inherit;box-shadow:0 10px 30px rgba(0,0,0,.5)}
   .rb-ex-cont .bar{height:3px;background:#363c47;border-radius:2px;overflow:hidden;margin-top:5px}.rb-ex-cont .bar i{display:block;height:100%;background:#f4c95d}
