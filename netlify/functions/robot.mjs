@@ -859,6 +859,10 @@ async function atender(req) {
       o.oficial = { ticket: !!tk2, fecha: est.fecha || null, n: (est.lista || []).length, ciclo: est.ciclo ? { region: est.ciclo.region, siguiente: est.ciclo.siguiente, total: est.ciclo.total, completo: est.ciclo.completo, errores: est.ciclo.errores, ultimo_error: est.ciclo.ultimo_error || null, tam: est.ciclo.tam } : null, error: o.oficial_error || null };
     } catch (_) {}
     o.descartes = await leerCajon(store, "oportunidades/descartes", jug(url.searchParams.get("jugador")), url.searchParams.get("legado") === "1");
+    // 🏢 Ya ingresada por alguien del grupo (cualquier usuario o empresa): se marca para que no vuelva a aparecer en ningún celular
+    try { const T = await todos(store); const L = (await store.get("empresas/lista", { type: "json" })) || {}; const hechas = new Map();
+      for (const t of T) if (["firmar", "enviada", "confirmada", "en_cola", "tomado", "preparando", "lista"].includes(t.estado) || t.op?.oc_codigo) hechas.set(t.codigo, { estado: t.estado, empresa: L[t.empresa || "principal"]?.razon_social || t.empresa || "", persona: t.persona || t.dispositivo || "" });
+      o = { ...o, lista: (o.lista || []).map((x) => { const h = hechas.get(x.codigo); return h ? { ...x, ya_ofertada: true, trabajada: true, quien: `${h.persona ? h.persona + " · " : ""}${h.empresa}`.trim(), estado_trabajo: h.estado } : x; }) }; } catch (e) {}
     return json(o);
   }
   // «No deseadas» (deslizar a la izquierda): se guardan para todos tus dispositivos y el robot no las prepara
