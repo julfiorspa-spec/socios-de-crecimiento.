@@ -1985,7 +1985,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const transporte = Number(op.costo_transporte) || p.transporte || 0;
     const neto = Math.round(total / 1.19), iva = total - neto, factoring = total * p.factoring, ingreso = total - factoring;
     const conFactura = !op.sin_factura;                               // 🧾 sin factura = NO hay IVA crédito (no baja el IVA a pagar)
-    const iva_compra = conFactura ? compras - compras / 1.19 : 0, iva_pagar = Math.max(0, iva - iva_compra), recargo = 0;
+    const iva_compra = Array.isArray(op.pagos) && op.pagos.length ? op.pagos.reduce((s, x) => s + (x.factura ? (Number(x.monto) || 0) * 0.19 : 0), 0) : conFactura ? compras - compras / 1.19 : 0, iva_pagar = Math.max(0, iva - iva_compra), recargo = 0;
     const impuesto = Math.max(0, neto) * p.impuesto;                  // 🏛 PPM: % sobre la venta neta (no sobre la utilidad)
     const utilidad = ingreso - compras - iva_pagar - recargo - transporte, repartir = utilidad - impuesto;
     const comision = p.aplica_comision ? Math.max(0, repartir) * p.comision : 0, final = repartir - comision;
@@ -3366,9 +3366,10 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const emp = empresaActual();
     const t = c.codigo ? (R.data?.trabajos || []).find((x) => x.codigo === c.codigo) : null;
     const md = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\n/g, "<br>");
-    const sug = [t ? `¿Cómo oferto ${t.codigo} para ganar sin perder plata?` : "¿Qué oportunidad me conviene jugar hoy?", "Calcúlame costos, HH y utilidad de esta compra", "¿Qué me falta para la licitación y cómo la ejecuto?", emp?.comision ? "¿Cuánto llevo en comisiones y qué OC faltan?" : "¿Qué servicio nuevo puedo vender con lo que ya hago?"];
+    const licDocs = (t?.lic_docs || []).filter((d) => /pdf/i.test(d.mime || "")).length;
+    const sug = t && esLic(t.codigo) ? ["Resume las bases: qué piden, plazos, garantías y criterios de evaluación", "Checklist de anexos y documentos que debo presentar", "¿Vale la pena? Dame los números y el precio para ganar", "Riesgos, multas y qué preguntar en el foro"] : [t ? `¿Cómo oferto ${t.codigo} para ganar sin perder plata?` : "¿Qué oportunidad me conviene jugar hoy?", "Calcúlame costos, HH y utilidad de esta compra", "¿Qué me falta para la licitación y cómo la ejecuto?", emp?.comision ? "¿Cuánto llevo en comisiones y qué OC faltan?" : "¿Qué servicio nuevo puedo vender con lo que ya hago?"];
     return `<div class="rb-env"><h2 class="rb-h" style="margin:0">💬 Claude</h2><div class="rb-row"><button class="btn small" type="button" data-rb="claude-limpiar" title="Borrar conversación">🗑</button><button class="btn small" type="button" data-rb="claude-cerrar">← Volver</button></div></div>
-      <div class="muted rb-sub">Soy el cerebro de la app. Sé de ${emp ? "<b>" + esc(corta(emp.razon_social)) + "</b>" : "tu empresa"}${t ? " y de la compra <b>" + esc(t.codigo) + "</b>" : " y de tus compras"}. Pregúntame lo que le preguntarías a tu socio.</div>
+      <div class="muted rb-sub">Soy el cerebro de la app. Sé de ${emp ? "<b>" + esc(corta(emp.razon_social)) + "</b>" : "tu empresa"}${t ? " y de la compra <b>" + esc(t.codigo) + "</b>" : " y de tus compras"}. Pregúntame lo que le preguntarías a tu socio.${licDocs ? ` <b>Leo los ${licDocs} PDF de la licitación</b> (bases y anexos).` : ""}</div>
       <div class="rb-chat">${(c.mensajes || []).map((m) => `<div class="rb-msg ${m.rol === "yo" ? "yo" : "cl"}">${md(m.texto)}</div>`).join("") || `<div class="rb-chat-sug">${sug.map((q) => `<button type="button" class="rb-rchip" data-rb="claude-sug" data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>`}
         ${c.cargando ? `<div class="rb-msg cl"><span class="spinner"></span> pensando…</div>` : ""}${c.error ? `<div class="rb-msg err">⚠ ${esc(c.error)}</div>` : ""}<div id="rbChatFin"></div></div>
       <div class="rb-chat-in"><textarea id="rbChatIn" rows="2" placeholder="Escríbeme o dícta me…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.closest('.rb-chat-in').querySelector('[data-rb=claude-enviar]').click()}"></textarea>${("webkitSpeechRecognition" in window || "SpeechRecognition" in window) ? `<button class="btn ${R.chat?.oyendo ? "rb-oro" : ""}" type="button" data-rb="claude-mic" aria-label="Dictar" title="Hablar en vez de escribir">${R.chat?.oyendo ? "⏺" : "🎙"}</button>` : ""}<button class="btn rb-oro" type="button" data-rb="claude-enviar">Enviar</button></div>`;
@@ -3973,6 +3974,20 @@ ${empNom}`;
       return { k: pp[0], txt: pp[1], plan, real: pp[3], hecho, dif }; });
   }
   const ETAPAS_IDX = (e) => ["previa", "ganada", "inversionista", "operacion", "transporte", "pago", "documentos", "despacho", "entrega", "cerrado"].indexOf(e || "previa");
+  // 💰 cuánto da (rápido): presupuesto neto × margen del rubro − costos fijos de despacho; ofertas = competencia
+  const daRapido = (x) => { const pres = Number(x.monto) || 0; if (!pres) return null; const m = x.margen ?? 0.25; const util = pres / 1.19 * (1 - (exSeg(x) ? 0.02 : 0.06)) * m - (typeof fijosDe === "function" ? fijosDe(pres) : 0); return { util: Math.round(util), m }; };
+  const daChip = (x) => { const d = daRapido(x); if (!d) return ""; return `<span class="rb-ex-st ${d.util > 150000 ? "env" : d.util > 0 ? "" : "cierre"}">${d.util > 0 ? "da ~" + clp(d.util) : "no da"}</span>`; };
+  function exJugar(op) {
+    const idx = R.exJugarIdx || 0; const lista = op.filter((x) => !trabajo(x.codigo)); const x = lista[idx % Math.max(1, lista.length)]; if (!x) return "";
+    const d = daRapido(x); const h = exHoras(x); const of = x.ofertas ?? null;
+    const vale = d && d.util > 150000 && (of == null || of < 6) && h > 6; const razon = !d ? "sin presupuesto publicado" : d.util <= 0 ? "con el margen del rubro no deja plata" : of >= 6 ? `ya hay ${of} ofertas` : h <= 6 ? "cierra en menos de 6 h" : d.util <= 150000 ? "deja poco para el despacho" : "";
+    return `<div class="rb-ex-h2">🎮 Jugar <small>${idx % lista.length + 1} de ${lista.length} · ¿vale la pena?</small></div>
+      <div class="rb-card" style="margin:0;padding:0;overflow:hidden"><div style="height:110px;background:${exColor(x)};padding:12px;display:flex;flex-direction:column;justify-content:flex-end"><div>${exSeg(x) ? '<span class="rb-ex-st info">2° llamado</span>' : ""}<span class="rb-ex-st ${h < 30 ? "cierre" : ""}">${exCierreTxt(x)}</span>${of != null ? `<span class="rb-ex-st">${of === 0 ? "sin rivales aún" : of + " oferta" + (of === 1 ? "" : "s")}</span>` : ""}</div><b style="font-size:1.05rem;line-height:1.2">${esc(x.nombre || x.codigo)}</b><span class="muted" style="font-size:.78rem">${esc(x.organismo || "")} · ${esc(x.codigo)}</span></div>
+        <div style="padding:12px 14px"><div class="rb-env"><div><span class="muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em">Presupuesto</span><br><b style="font-size:1.2rem">${x.monto ? clp(x.monto) : "—"}</b></div><div style="text-align:right"><span class="muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em">Cuánto da</span><br><b style="font-size:1.2rem;color:${d && d.util > 0 ? "#1ed760" : "#ff6b6b"}">${d ? (d.util > 0 ? "~" + clp(d.util) : "no da") : "—"}</b></div></div>
+        <div style="font-size:.84rem;margin-top:6px"><b style="color:${vale ? "#1ed760" : "#f4c95d"}">${vale ? "✅ Vale la pena" : "🤔 " + razon}</b>${d ? ` · margen del rubro ${Math.round(d.m * 100)} % (${esc(x.rubro || "")})` : ""}</div>
+        <div class="rb-row" style="margin-top:10px;gap:8px"><button class="btn small" type="button" data-rb="ex-jugar-paso" style="flex:1">✕ Paso</button><button class="btn rb-oro" type="button" data-rb="oport-si" data-c="${esc(x.codigo)}" style="flex:2">⭐ Apuesto: prepárala</button></div>
+        <div class="rb-row" style="margin-top:6px"><button class="btn small" type="button" data-rb="ex-ficha" data-c="${esc(x.codigo)}">Ficha ›</button><button class="btn small" type="button" data-rb="claude" data-c="${esc(x.codigo)}">💬 ¿Da?</button></div></div></div>`;
+  }
   function exInicioCotizador(op, n) {
     const firmar = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t) && esMia(t)).sort((a, b) => (Date.parse(a.cierre || 0) || 9e15) - (Date.parse(b.cierre || 0) || 9e15));
     const hoy = hoyMs(); const envHoy = (R.data?.trabajos || []).filter((t) => HECHA.includes(t.estado) && Date.parse(t.fecha_envio || t.actualizado || 0) >= hoy).length;
@@ -3982,7 +3997,8 @@ ${empNom}`;
       <div class="rb-card" style="margin:0;padding:12px 14px"><div class="rb-env"><div><b style="font-size:1.6rem">${envHoy}</b> <span class="muted">de ${meta} enviadas hoy</span></div><div><b style="font-size:1.6rem;color:#f4c95d">${firmar.length}</b> <span class="muted">listas para firmar</span></div></div><div class="bar" style="height:6px;background:#2a2f38;border-radius:3px;margin-top:8px"><i style="display:block;height:100%;width:${pct}%;background:#1ed760;border-radius:3px"></i></div>
         ${firmar.length ? `<button class="btn rb-oro" type="button" data-rb="det" data-c="${esc(firmar[0].codigo)}" style="width:100%;margin-top:10px">▶ Siguiente: firmar ${esc(corta(firmar[0].nombre || firmar[0].codigo))} · ${clp(firmar[0].total)}</button>` : `<div class="muted" style="font-size:.82rem;margin-top:8px">Nada por firmar. Elige una oportunidad abajo y el robot te la deja lista.</div>`}</div>
       ${firmar.length > 1 ? `<div class="rb-ex-h2">Cola para firmar <small>${firmar.length}</small></div><div class="rb-card" style="padding:4px 14px;margin:0">${firmar.slice(0, 12).map((t) => exFila(t)).join("")}</div>` : ""}
-      <div class="rb-ex-h2">Para preparar ahora <small>cierran primero en tus rubros</small></div><div class="rb-card" style="padding:4px 14px;margin:0">${prep.length ? prep.map((x) => exFila(x, `<button class="btn small rb-oro" type="button" data-rb="oport-si" data-c="${esc(x.codigo)}" style="margin-left:auto">✍ Preparar</button>`)).join("") : `<div class="muted" style="padding:10px 0;font-size:.85rem">${R.oport ? "Nada por cerrar en tus rubros. Toca Buscar." : "Cargando…"}</div>`}</div>`;
+      ${exJugar(op)}
+      <div class="rb-ex-h2">Para preparar ahora <small>cierran primero · cuánto da</small></div><div class="rb-card" style="padding:4px 14px;margin:0">${prep.length ? prep.map((x) => exFila(x, daChip(x) + `<button class="btn small rb-oro" type="button" data-rb="oport-si" data-c="${esc(x.codigo)}" style="margin-left:auto">✍ Preparar</button>`)).join("") : `<div class="muted" style="padding:10px 0;font-size:.85rem">${R.oport ? "Nada por cerrar en tus rubros. Toca Buscar." : "Cargando…"}</div>`}</div>`;
   }
   function exInicioLicitador() {
     const lista = (R.oport?.lista || []).filter((x) => x.fuente === "licitacion" || esLic(x.codigo)); const sel = leerSel();
@@ -3999,6 +4015,16 @@ ${empNom}`;
       <div class="rb-ex-h2">Por decidir <small>cierran primero</small></div>${pend.length ? pend.slice(0, 20).map(fila).join("") : `<div class="muted" style="font-size:.85rem">${R.oport ? "No hay licitaciones abiertas en tus rubros. Toca Buscar o pídele al robot licitaciones." : "Cargando…"}</div>`}
       ${desp.length ? `<div class="rb-ex-h2">Para después <small>${desp.length}</small></div>${desp.map(fila).join("")}` : ""}`;
   }
+  // 💸 A quién le compré: nombre y monto neto (varias personas), con o sin factura; de aquí sale el costo real del negocio
+  function pagosHTML(t) {
+    const op = t.op || {}; const P = Array.isArray(op.pagos) && op.pagos.length ? op.pagos : (op.precio_acordado ? [{ nombre: (typeof op.proveedor === "object" ? op.proveedor?.nombre : op.proveedor) || "Proveedor", monto: Math.round(op.sin_factura ? op.precio_acordado : op.precio_acordado / 1.19), factura: !op.sin_factura }] : []);
+    const tot = P.reduce((a, x) => a + (Number(x.monto) || 0), 0), bruto = P.reduce((a, x) => a + (Number(x.monto) || 0) * (x.factura ? 1.19 : 1), 0);
+    const X = calcNeg(t);
+    return `<details class="rb-pagos" data-c="${esc(t.codigo)}" ${!P.length ? "open" : ""}><summary style="cursor:pointer;font-size:.84rem;margin-top:8px"><b>💸 A quién le compré</b> <span class="muted">· ${P.length ? `${P.length} pago${P.length > 1 ? "s" : ""} · neto ${clp(tot)} · con IVA ${clp(Math.round(bruto))}` : "anota nombre y monto neto"}</span></summary>
+      <div style="margin-top:6px">${(P.length ? P : [{ nombre: "", monto: "", factura: true }]).map((x, i) => `<div class="rb-row" style="gap:6px;margin:4px 0"><input class="rb-in pg-n" placeholder="Nombre (ej. tía Cemento)" value="${esc(x.nombre || "")}" style="flex:2;min-width:110px"><input class="rb-in pg-m" inputmode="numeric" placeholder="monto neto" value="${x.monto ? Number(x.monto).toLocaleString("es-CL") : ""}" style="flex:1;min-width:90px;text-align:right"><label style="font-size:.72rem;white-space:nowrap"><input type="checkbox" class="pg-f" ${x.factura !== false ? "checked" : ""}> factura</label></div>`).join("")}
+      <div class="rb-row" style="margin-top:6px"><button class="btn small" type="button" data-rb="pg-mas" data-c="${esc(t.codigo)}">+ persona</button><button class="btn small rb-oro" type="button" data-rb="pg-guardar" data-c="${esc(t.codigo)}">Guardar</button><span class="muted" style="font-size:.74rem">venta ${clp(t.total)} → utilidad final <b style="color:${X.final >= 0 ? "#1ed760" : "#ff6b6b"}">${clp(Math.round(X.final))}</b></span></div></div></details>`;
+  }
+  function leerPagos(cod) { const box = document.querySelector(`.rb-pagos[data-c="${CSS.escape(cod)}"]`); if (!box) return []; return [...box.querySelectorAll(".rb-row")].map((r) => ({ nombre: (r.querySelector(".pg-n")?.value || "").trim().slice(0, 60), monto: Math.round(Number(String(r.querySelector(".pg-m")?.value || "").replace(/[^\d]/g, "")) || 0), factura: !!r.querySelector(".pg-f")?.checked })).filter((x) => x.nombre || x.monto); }
   function exInicioEjecutor() {
     const T = (R.data?.trabajos || []).filter((t) => t.op && (t.op.oc_codigo || t.op.oc) && clasificarOC(t) !== "D" && !t.op.cobrado).sort((a, b) => Date.parse(b.actualizado || 0) - Date.parse(a.actualizado || 0));
     const yo = persona()?.nombre; const mias = yo ? T.filter((t) => !t.op.responsable || t.op.responsable === yo || t.op.ejecutor_nombre === yo) : T;
@@ -4007,6 +4033,7 @@ ${empNom}`;
         <div class="bar" style="height:6px;background:#2a2f38;border-radius:3px;margin:8px 0"><i style="display:block;height:100%;width:${Math.round(hechos / P.length * 100)}%;background:${atraso ? "#ff8a65" : "#1ed760"};border-radius:3px"></i></div>
         <div style="font-size:.84rem"><b>En qué estoy:</b> ${esc(act.txt)}${act.plan ? ` · simulado ${fcorta(act.plan)}` : ""}${act.dif > 0 ? ` · <span style="color:#ff6b6b">${act.dif} día${act.dif > 1 ? "s" : ""} de atraso</span>` : ""}</div>
         <details style="margin-top:6px"><summary class="muted" style="font-size:.76rem;cursor:pointer">Simulado vs real · ${P.length} pasos</summary><div style="font-size:.78rem;margin-top:6px">${P.map((p) => `<div style="display:flex;gap:8px;padding:3px 0;border-bottom:1px solid #2a2f38"><span>${p.hecho ? "✅" : p === act ? "▶" : "○"}</span><span style="flex:1">${esc(p.txt)}</span><span class="muted">${p.plan ? fcorta(p.plan) : "—"}</span><span style="min-width:70px;text-align:right;color:${p.dif > 0 ? "#ff6b6b" : p.dif < 0 ? "#1ed760" : "#9aa3b2"}">${p.real ? fcorta(p.real) + (p.dif ? ` (${p.dif > 0 ? "+" : ""}${p.dif}d)` : "") : p.dif > 0 ? `+${p.dif}d` : ""}</span></div>`).join("")}</div></details>
+        ${pagosHTML(t)}
         <div class="rb-row" style="margin-top:8px"><button class="btn small rb-oro" type="button" data-rb="det" data-c="${esc(t.codigo)}">▶ Hacer este paso</button><button class="btn small" type="button" data-rb="inv-pdf" data-c="${esc(t.codigo)}">📄 Caja</button><button class="btn small" type="button" data-rb="claude" data-c="${esc(t.codigo)}">💬 Claude</button></div></div>`; };
     const otras = T.filter((t) => !mias.includes(t));
     return `<div class="rb-ex-h2">Mis órdenes en ejecución <small>${mias.length}</small></div>${mias.length ? mias.map(card).join("") : `<div class="muted" style="font-size:.85rem">No tienes órdenes de compra en ejecución. Cuando una cotización gane, aparece aquí con sus pasos.</div>`}
@@ -4940,6 +4967,14 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       if (w) { try { w.opener = null; } catch {} ABIERTAS[String(cod).toUpperCase()].w = w; } else location.href = portalDe(cod);
       return;
     }
+    if (a === "pg-mas") { const box = document.querySelector(`.rb-pagos[data-c="${CSS.escape(cod)}"] > div`); if (box) box.insertAdjacentHTML("afterbegin", `<div class="rb-row" style="gap:6px;margin:4px 0"><input class="rb-in pg-n" placeholder="Nombre" style="flex:2;min-width:110px"><input class="rb-in pg-m" inputmode="numeric" placeholder="monto neto" style="flex:1;min-width:90px;text-align:right"><label style="font-size:.72rem;white-space:nowrap"><input type="checkbox" class="pg-f" checked> factura</label></div>`); return; }
+    if (a === "pg-guardar") {
+      const pagos = leerPagos(cod); if (!pagos.length) { toast("Anota al menos un nombre y monto"); return; }
+      const t = trabajoG(cod); const datos = { pagos, precio_acordado: Math.round(pagos.reduce((s, x) => s + x.monto * (x.factura ? 1.19 : 1), 0)), proveedor: pagos.map((x) => x.nombre).filter(Boolean).join(" + ").slice(0, 120) };
+      const etapa = t?.op?.etapa && ["ganada", "inversionista", "operacion"].includes(t.op.etapa) ? "transporte" : null;
+      try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos, ...(etapa ? { etapa } : {}), dispositivo: dispositivo(false) }) }); toast("💸 Compras guardadas: el negocio se recalculó"); R.ejecT = 0; await refrescar(); } catch (e) { toast(e.message); } return pintarHoja(true);
+    }
+    if (a === "ex-jugar-paso") { R.exJugarIdx = (R.exJugarIdx || 0) + 1; return pintarHoja(true); }
     if (a === "ex-todas-emp") { guardar({ todasEmp: !leer().todasEmp }); return pintarHoja(true); }
     if (a === "ex-perfil") { try { localStorage.setItem(PERFK, b.dataset.k); } catch (e) {} R.exTab = "inicio"; return pintarHoja(true); }
     if (a === "lic-dec") {

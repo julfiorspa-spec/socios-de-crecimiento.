@@ -1089,6 +1089,10 @@ async function atender(req) {
       "ejecutor", "ejecutor_nombre", "plazo_proveedor", "fecha_entrega", "banco_proveedor", "negociacion", "plazo_fecha", "plazo_nota", "incidencia",
       "transportista", "transportista_tel", "origen_flete", "patente", "recibio_nombre", "recibio_rut", "fecha_cobro", "inversionista_nombre", "inversionista_tel", "despacho_modo", "proveedor_k", "proveedor_email", "proveedor_tel", "entrega_contacto", "entrega_tel", "vehiculo", "factoring", "nota_cierre", "twitch_canal", "video_prueba", "inversionista_banco", "ejecutor_banco", "jugador_banco"]) if (d[k] !== undefined) op[k] = texto(d[k], 400);
     for (const k of ["precio_acordado", "costo_transporte", "opcion", "km", "cobrado"]) if (d[k] !== undefined) op[k] = d[k] === null ? null : Math.max(0, Math.round(Number(d[k]) || 0));
+    if (Array.isArray(d.pagos)) {                                    // 💸 a quién le compré: nombre + monto neto + factura (varias personas)
+      op.pagos = d.pagos.slice(0, 12).map((x) => ({ nombre: texto(x?.nombre, 60) || "", monto: Math.max(0, Math.round(Number(x?.monto) || 0)), factura: x?.factura !== false })).filter((x) => x.nombre || x.monto);
+      op.precio_acordado = Math.round(op.pagos.reduce((s, x) => s + x.monto * (x.factura ? 1.19 : 1), 0)); op.sin_factura = op.pagos.length > 0 && op.pagos.every((x) => !x.factura);
+    }
     const yaPedido = !!op.pedido_transferencia, yaTransf = !!op.transferido;
     for (const k of ["inversion_ok", "compra_ok", "despacho_ok", "guia_firmada", "factura_firmada", "aplica_comision", "nos_da", "proveedor_pagado", "guia_hecha", "factura_hecha", "oc_aceptada", "pedido_transferencia", "transferido", "rp_inversionista", "rp_ejecutador", "rp_jugador", "rp_sii", "sin_factura"]) if (d[k] !== undefined) op[k] = !!d[k];
     if (d.comision !== undefined) op.comision = Math.min(0.10, Math.max(0.01, Number(d.comision) || 0.04));
@@ -1738,9 +1742,17 @@ async function atender(req) {
       t ? `Compra en pantalla: ${t.codigo} · ${t.nombre || ""} · ${t.organismo || ""} · estado ${t.estado} · total ofertado ${t.total || "?"}. Ítems: ${(t.items || []).slice(0, 12).map((i) => `${i.nombre || i.descripcion} x${i.cantidad}${i.precio_unit ? " a $" + i.precio_unit : ""}`).join("; ")}` : "",
       mios ? "Compras recientes de esta empresa en la app:\n" + mios : "",
     ].filter(Boolean).join("\n\n");
+    // 📑 Licitaciones: Claude lee las bases y anexos (PDF) subidos a la compra y trabaja como licitador: resume, arma checklist, calcula y pregunta
+    const esLic = cod && /-(LE|LP|LQ|LR|LS|L1|R1|CO)\d{2}$/i.test(cod);
+    const docsPdf = t ? (t.lic_docs || []).filter((d) => /pdf/i.test(d.mime || "")).slice(-4) : [];
+    const bloques = []; let kb = 0;
+    for (const d of docsPdf) { if (kb + (d.kb || 0) > 7000) break; const buf = await store.get(`doc/${t.codigo}/${d.id}`, { type: "arrayBuffer" }).catch(() => null); if (!buf) continue; kb += d.kb || 0;
+      bloques.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: Buffer.from(buf).toString("base64") }, title: d.nombre || "documento", cache_control: { type: "ephemeral" } }); }
+    const sistemaFinal = sistema + (esLic ? "\n\nEsta compra es una LICITACIÓN. Actúa como el licitador socio del usuario: lee las bases y anexos adjuntos; resume qué piden, plazos (cierre, consultas, visita, entrega), garantías (seriedad y fiel cumplimiento), criterios de evaluación con sus ponderaciones, multas y documentos/anexos que hay que presentar; da el checklist en orden; calcula el precio para ganar con margen; señala riesgos; y TERMINA SIEMPRE con la siguiente decisión concreta que el usuario debe tomar (una pregunta). No digas que estás «revisando documentos»: responde con el contenido." : "");
+    if (bloques.length) { const last = msgs[msgs.length - 1]; last.content = [...bloques, { type: "text", text: last.content }]; }
     const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST",
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5", max_tokens: 900, system: sistema, messages: msgs }) });
+      body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5", max_tokens: esLic ? 1400 : 900, system: sistemaFinal, messages: msgs }) });
     if (!r.ok) { const err = await r.text().catch(() => ""); return json({ error: "Claude no respondió (" + r.status + "): " + err.slice(0, 200) }, 502); }
     const d = await r.json();
     const out = (d.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n").trim();
