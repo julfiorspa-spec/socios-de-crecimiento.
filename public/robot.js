@@ -310,6 +310,14 @@
   .rb-top-ex .rb-emp span{max-width:34vw;display:inline-block;vertical-align:bottom;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .rb-ex-menu{display:flex;gap:6px;flex-wrap:wrap;background:#1d2127;border:1px solid #2a2f38;border-radius:12px;padding:8px;margin:6px 0 2px}
   #rbSheet.rb-exec .rb-ajustes.rb-mas{margin-top:18px}
+  /* 🎨 el color ejecutivo (grafito · Inter · verde) también en la app clásica con Jugar */
+  #rbSheet.rb-color{background:#121417;font-family:Inter,system-ui,sans-serif;--panel:#1d2127;--panel-2:#262b33;--bg-2:#181b20;--line:#363c47;--line-soft:#2a2f38;--oro:#f0c060;--oro-d:#c7961f;--vivo:#4fd18b;--ink-faint:#9aa3b2;color:#f3f4f6;}
+  #rbSheet.rb-color::before{background:#121417}
+  #rbSheet.rb-color .rb-card,#rbSheet.rb-color .rb-sel,#rbSheet.rb-color .rb-neg{background:#1d2127;border-color:#2a2f38;border-radius:12px}
+  #rbSheet.rb-color h2.rb-h,#rbSheet.rb-color .rb-h{font-family:Inter,system-ui,sans-serif;letter-spacing:-.02em;font-weight:800}
+  #rbSheet.rb-color .btn{border-radius:12px;font-weight:700}
+  #rbSheet.rb-color .rb-oro,#rbSheet.rb-color .btn.rb-oro{background:#f3f4f6;color:#121417;border-color:#f3f4f6}
+  #rbSheet.rb-color .rb-ajustes.rb-mas{margin-top:18px}
   .rb-ex-nav{position:fixed;left:0;right:0;bottom:0;height:calc(70px + env(safe-area-inset-bottom,0px));padding:10px 0 env(safe-area-inset-bottom,0px);background:linear-gradient(180deg,rgba(18,20,23,0),#121417 30%);display:grid;grid-template-columns:repeat(4,1fr);z-index:30}
   .rb-ex-nav button{background:none;border:0;color:#9aa3b2;font:600 .64rem Inter,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;gap:3px;position:relative;padding:0}
   .rb-ex-nav button.on{color:#f3f4f6}
@@ -920,7 +928,7 @@
   back.addEventListener("click", cerrar);
 
   function abrir(foco, detalle) {
-    sheet.classList.toggle("rb-exec", execOn());
+    sheet.classList.toggle("rb-exec", execOn()); sheet.classList.add("rb-color");
     R.foco = foco || null; R.conf = null; R.detalle = detalle || (foco && R.vista !== "lista" ? foco : null);
     sheet.classList.add("on"); back.classList.add("on");
     pintarHoja(); refrescar(); estadoPush().then(pintarHojaSiAbierta);
@@ -3938,7 +3946,7 @@ ${empNom}`;
 
   /* ============ ◧ MODO EJECUTIVO: Inicio · Buscar · Biblioteca · Actividad (sobre los mismos datos del motor) ============ */
   const EXK = "sdc:exec";
-  const execOn = () => { try { return localStorage.getItem(EXK) !== "0"; } catch { return true; } };
+  const execOn = () => { try { return localStorage.getItem(EXK) === "1"; } catch { return false; } };   // 🎮 por defecto la app clásica (Jugar); el modo ejecutivo se activa desde ⋯
   const exTab = () => R.exTab || "inicio";
   const EXI = {
     inicio: '<svg viewBox="0 0 24 24"><path d="m3 11 9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>',
