@@ -1544,6 +1544,7 @@
     : "mailto:" + encodeURIComponent(to || "") + "?subject=" + encodeURIComponent(su) + "&body=" + encodeURIComponent(body);
   const waNum = (n) => { let d = String(n || "").replace(/\D/g, ""); if (d.length === 9 && d[0] === "9") d = "56" + d; if (d.length === 8) d = "569" + d; return d.length >= 10 ? d : ""; };
   const telNum = (n) => String(n || "").replace(/[^\d+]/g, "");
+  const itemsTodo = (t) => { const a2 = Array.isArray(t.items) && t.items.length ? t.items : itemsDe(t); if (!a2.length && !(R._pidiendo || {})[t.codigo] && !(R.fichas || {})[t.codigo]) setTimeout(() => cargarDocs(t.codigo), 0); return a2; };
   const itemsDe = (t) => { const oc = t.oc_compra?.items || [], W = (R.full || {})[t.codigo], F = (R.fichas || {})[t.codigo], inf = t.op?.informe || {};
     if (oc.length) return oc.map((i) => ({ d: i.especificacion || i.nombre, q: i.cantidad, u: i.unidad, p: i.precio }));
     if ((W?.items || []).length) return W.items.map((i) => ({ d: i.d, q: i.q, p: i.p }));
@@ -4013,7 +4014,7 @@ ${empNom}`;
     const inicio = real("ganada") || op.oc_fecha || t.actualizado || t.creado || new Date().toISOString();
     const pasos = [
       ["ganada", "OC aceptada en Mercado Público", 0, real("ganada") || (op.oc_codigo ? inicio : null)],
-      ["inversionista", "Capital confirmado", 1, real("inversionista") || (op.nos_da ? real("inversionista") : null)],
+      ["inversionista", "Capital confirmado", 1, real("inversionista") || (op.nos_da || op.pedido_transferencia || op.inversionista_nombre ? null : "omitido")],
       ["operacion", "Proveedor cerrado y precio acordado", 2, real("operacion") || (op.precio_acordado ? real("transporte") || null : null)],
       ["pago", "Pago al proveedor", 3, real("pago") || (op.proveedor_pagado ? real("pago") : null)],
       ["despacho", "Despachado (guía)", op.plazo_fecha ? null : 6, real("despacho")],
@@ -4024,6 +4025,7 @@ ${empNom}`;
     const plazo = op.plazo_fecha ? new Date(op.plazo_fecha + "T12:00") : null;
     return pasos.map((pp, i) => { let plan = pp[2] != null ? habilDesde(inicio, pp[2]) : plazo ? (i === 4 ? new Date(plazo.getTime() - 864e5) : i === 5 ? plazo : i === 6 ? habilDesde(plazo, 2) : new Date(plazo.getTime() + 32 * 864e5)) : null;
       const hecho = !!pp[3] || (pp[0] === "cobro" ? !!op.cobrado : ETAPAS_IDX(op.etapa) > ETAPAS_IDX(pp[0]));
+      if (pp[3] === "omitido") return { k: pp[0], txt: pp[1] + " (sin inversionista: con capital propio)", plan, real: null, hecho: true, dif: null };
       const dif = pp[3] && plan ? Math.round((Date.parse(pp[3]) - plan.getTime()) / 864e5) : (!hecho && plan && plan.getTime() < hoyMs() ? Math.round((hoyMs() - plan.getTime()) / 864e5) : null);
       return { k: pp[0], txt: pp[1], plan, real: pp[3], hecho, dif }; });
   }
@@ -4072,7 +4074,7 @@ ${empNom}`;
   // 🔗 Dónde comprarlo al menor precio: por ítem, links ordenados de menor a mayor precio (y el reemplazo si no está el exacto),
   //    los proveedores que el robot ya cotizó, y «precio real»: proveedor + unitario → se guarda y el Excel baja solo
   function cajaLinks(t) {
-    const its = (Array.isArray(t.items) && t.items.length ? t.items : []).slice(0, 4); const inf = t.op?.informe || {};
+    const its = itemsTodo(t).slice(0, 4); const inf = t.op?.informe || {};
     const limpia = (it) => String(it.d || it.descripcion || it.nombre || "").replace(/\(.*?\)/g, "").replace(/seg[uú]n (eett|especificaci[oó]n).*/i, "").split(/[,;·]/)[0].trim().slice(0, 60);
     const qd = (it) => encodeURIComponent(limpia(it));
     const links = (it) => [["MercadoLibre · menor precio", `https://listado.mercadolibre.cl/${qd(it)}_OrderId_PRICE_ASC`], ["Google Shopping · menor precio", `https://www.google.com/search?tbm=shop&q=${qd(it)}&tbs=p_ord:p`], ["Sodimac", `https://www.sodimac.cl/sodimac-cl/search?Ntt=${qd(it)}`], ["Easy", `https://www.easy.cl/search?q=${qd(it)}`], ["Reemplazo (equivalente)", `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(limpia(it).split(" ").slice(0, 3).join(" ") + " similar")}&tbs=p_ord:p`]];
@@ -4101,7 +4103,7 @@ ${empNom}`;
     const T = (R.data?.trabajos || []).filter((t) => t.op && (t.op.oc_codigo || t.op.oc) && clasificarOC(t) !== "D" && !t.op.cobrado).sort((a, b) => Date.parse(b.actualizado || 0) - Date.parse(a.actualizado || 0));
     const yo = persona()?.nombre; const mias = yo ? T.filter((t) => !t.op.responsable || t.op.responsable === yo || t.op.ejecutor_nombre === yo) : T;
     const card = (t) => { const P = planOC(t); const act = P.find((p) => !p.hecho) || P[P.length - 1]; const atraso = P.filter((p) => p.dif > 0).reduce((a, p) => Math.max(a, p.dif), 0); const hechos = P.filter((p) => p.hecho).length;
-      return `<div class="rb-card" style="margin:0 0 10px;padding:12px 14px"><div style="display:flex;justify-content:space-between;gap:8px"><div style="min-width:0;cursor:pointer" data-rb="ex-oc" data-c="${esc(t.codigo)}"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.nombre || t.codigo)} <span class="muted" style="font-weight:500">›</span></b><span class="muted" style="font-size:.78rem">📄 OC ${esc(t.op.oc_codigo || t.op.oc || "")} · ${esc(t.organismo || "")} · ${clp(t.total)}</span></div><div style="text-align:right;white-space:nowrap"><b style="color:${atraso ? "#ff6b6b" : "#1ed760"}">${atraso ? atraso + " día" + (atraso > 1 ? "s" : "") + " atrás" : "al día"}</b><br><span class="muted" style="font-size:.72rem">${hechos}/${P.length} pasos</span></div></div>
+      return `<div class="rb-card" style="margin:0 0 10px;padding:12px 14px"><div style="display:flex;justify-content:space-between;gap:8px"><div style="min-width:0;cursor:pointer" data-rb="ex-oc" data-c="${esc(t.codigo)}"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.nombre || t.codigo)} <span class="muted" style="font-weight:500">›</span></b><span class="muted" style="font-size:.78rem">📄 OC ${esc(t.op.oc_codigo || t.op.oc || "")} · ${esc(t.organismo || t.oc_compra?.organismo || "")} · ${clp(t.oc_compra?.total || t.total)}</span></div><div style="text-align:right;white-space:nowrap"><b style="color:${atraso ? "#ff6b6b" : "#1ed760"}">${atraso ? atraso + " día" + (atraso > 1 ? "s" : "") + " atrás" : "al día"}</b><br><span class="muted" style="font-size:.72rem">${hechos}/${P.length} pasos</span></div></div>
         <div class="bar" style="height:6px;background:#2a2f38;border-radius:3px;margin:8px 0"><i style="display:block;height:100%;width:${Math.round(hechos / P.length * 100)}%;background:${atraso ? "#ff8a65" : "#1ed760"};border-radius:3px"></i></div>
         <div style="font-size:.84rem"><b>En qué estoy:</b> ${esc(act.txt)}${act.plan ? ` · simulado ${fcorta(act.plan)}` : ""}${act.dif > 0 ? ` · <span style="color:#ff6b6b">${act.dif} día${act.dif > 1 ? "s" : ""} de atraso</span>` : ""}</div>
         <details style="margin-top:6px"><summary class="muted" style="font-size:.76rem;cursor:pointer">Simulado vs real · ${P.length} pasos</summary><div style="font-size:.78rem;margin-top:6px">${P.map((p) => `<div style="display:flex;gap:8px;padding:3px 0;border-bottom:1px solid #2a2f38"><span>${p.hecho ? "✅" : p === act ? "▶" : "○"}</span><span style="flex:1">${esc(p.txt)}</span><span class="muted">${p.plan ? fcorta(p.plan) : "—"}</span><span style="min-width:70px;text-align:right;color:${p.dif > 0 ? "#ff6b6b" : p.dif < 0 ? "#1ed760" : "#9aa3b2"}">${p.real ? fcorta(p.real) + (p.dif ? ` (${p.dif > 0 ? "+" : ""}${p.dif}d)` : "") : p.dif > 0 ? `+${p.dif}d` : ""}</span></div>`).join("")}</div></details>
@@ -4185,7 +4187,7 @@ ${empNom}`;
   function ocExec(cod) {
     const t = trabajoG(cod); if (!t) { R.exOC = null; return ""; } const op = t.op || {}, oc = t.oc_compra || {}; const docOC = (op.docs || []).filter((d) => d.tipo === "oc").pop();
     const docs = [...(t.lic_docs || []), ...(op.docs || []).filter((d) => d.tipo !== "oc")]; const z = trazaDe(t); const X = calcNeg(t);
-    const its = (Array.isArray(t.items) ? t.items : []).slice(0, 40);
+    const its = itemsTodo(t).slice(0, 40);
     const btn = (ok, html) => ok ? html : html.replace('class="btn', 'class="btn" disabled style="opacity:.45" data-x="').replace("data-rb=", "data-off=");
     return `<div class="rb-env"><button class="btn small" type="button" data-rb="ex-oc-volver">‹ Volver</button><span class="muted" style="font-size:.78rem">${esc(cod)}</span></div>
       <div style="border-radius:12px;background:${exColor(t)};padding:14px;margin:10px 0 12px"><div><span class="rb-ex-st env">OC ${esc(op.oc_codigo || op.oc || "")}</span>${op.oc_estado ? `<span class="rb-ex-st">${esc(op.oc_estado)}</span>` : ""}${op.plazo_fecha ? `<span class="rb-ex-st doc">entrega ${esc(new Date(op.plazo_fecha + "T12:00").toLocaleDateString("es-CL", { day: "numeric", month: "short" }))}</span>` : ""}</div>
@@ -4205,7 +4207,7 @@ ${empNom}`;
   }
   // 🧾 Ítems de la OC, uno por uno: precio real por ítem (y proveedor si cambia) → ¿da o no da? en vivo, antes de guardar
   function itemsExec(cod) {
-    const t = trabajoG(cod); if (!t) { R.exItems = null; return ""; } const op = t.op || {}; const its = Array.isArray(t.items) ? t.items : [];
+    const t = trabajoG(cod); if (!t) { R.exItems = null; return ""; } const op = t.op || {}; const its = itemsTodo(t);
     const P = op.pagos || []; const unitPrev = {}; P.forEach((pg) => (pg.unit || []).forEach((u, i) => { if (u) unitPrev[i] = { u, n: pg.nombre, tipo: pg.tipo || "bruto" }; }));
     const q = (it) => Number(it.q || it.cantidad || 1) || 1, d = (it) => String(it.d || it.descripcion || it.nombre || ""), of = (it) => Number(it.p || it.precio || 0) || 0;
     const ventaN = Math.round((Number(t.total) || 0) / 1.19);
@@ -4220,7 +4222,7 @@ ${empNom}`;
   }
   function itemsCalc(cod) {       // ¿da? en vivo mientras escribes
     const t = trabajoG(cod); const box = document.querySelector(`.rb-items[data-c="${CSS.escape(cod)}"]`); if (!t || !box) return null;
-    const its = Array.isArray(t.items) ? t.items : []; const tipo = document.querySelector(".it-tipo.rb-oro")?.dataset.v || "bruto"; const aNeto = (v) => tipo === "bruto" ? v / 1.19 : v;
+    const its = itemsTodo(t); const tipo = document.querySelector(".it-tipo.rb-oro")?.dataset.v || "bruto"; const aNeto = (v) => tipo === "bruto" ? v / 1.19 : v;
     let compraN = 0, con = 0; const unit = [], provs = {};
     box.querySelectorAll(".it-row").forEach((r) => { const i = +r.dataset.i, u = Math.round(Number(String(r.querySelector(".it-u").value).replace(/[^\d]/g, "")) || 0); const qn = Number(its[i]?.q || its[i]?.cantidad || 1) || 1; unit[i] = u; const sub = Math.round(aNeto(u) * qn); r.querySelector(".it-sub").textContent = u ? clp(sub) + " neto" : ""; if (u) { con++; compraN += sub; const pn = (r.querySelector(".it-p").value || "").trim() || (document.querySelector(".it-prov")?.value || "").trim() || "Proveedor"; provs[pn] = (provs[pn] || 0) + sub; } });
     const X = compraN ? calcNeg({ ...t, op: { ...(t.op || {}), precio_acordado: Math.round(compraN * 1.19), pagos: Object.entries(provs).map(([n, m]) => ({ nombre: n, monto: m, factura: true })) } }) : null;
@@ -5101,7 +5103,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos: { pagos, precio_acordado: Math.round(pagos[0].monto * 1.19), proveedor: b.dataset.n }, dispositivo: dispositivo(false) }) }); toast("💾 Precio del robot guardado"); R.ejecT = 0; await refrescar(); } catch (e) { toast(e.message); } return pintarHoja(true); }
     if (a === "lk-guardar") {
       const t = trabajoG(cod); const box = document.querySelector(`.rb-links[data-c="${CSS.escape(cod)}"]`); if (!t || !box) return;
-      const its = (Array.isArray(t.items) ? t.items : []).slice(0, 4); const unit = []; let total = 0;
+      const its = itemsTodo(t).slice(0, 4); const unit = []; let total = 0;
       const tipo = box.querySelector(".lk-tipo.rb-oro")?.dataset.v || "bruto"; const aNeto = (v) => tipo === "bruto" ? Math.round(v / 1.19) : v;
       box.querySelectorAll(".lk-u").forEach((inp) => { const i = +inp.dataset.i, u = Math.round(Number(String(inp.value).replace(/[^\d]/g, "")) || 0); unit[i] = u; const q = Number(its[i]?.q || its[i]?.cantidad || 1) || 1; total += aNeto(u) * q; });
       const nombre = (box.querySelector(".lk-prov")?.value || "Proveedor").trim().slice(0, 60); if (!total) { toast("Pon el precio real por unidad"); return; }
