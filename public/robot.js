@@ -3757,6 +3757,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         <div class="rb-kv"><span>Ofertamos <b>${clp(t.total)}</b></span>${g.ganada ? `<span>🏆 ganada${g.oc ? " · OC " + esc(g.oc) : ""}</span>` : g.glosa ? `<span>${esc(g.glosa)}</span>` : ""}${g.mi_lugar ? `<span>${g.mi_lugar}° de ${g.competidores}</span>` : ""}</div>
         ${t.comprobante ? `<div class="rb-row"><button class="btn small" type="button" data-rb="comprobante" data-c="${esc(cod)}">🧾 Comprobante</button></div>` : ""}
         ${barraAcciones(t)}</div>
+      ${briefHTML(cod, t)}
       ${(() => { const its = (Array.isArray(t.items) && t.items.length ? t.items : (F?.items || [])); if (!its.length) return "";
         const desc = (it) => it.d || it.descripcion || it.nombre || "", can = (it) => it.q || it.cantidad || "", uni = (it) => it.unidad || "", pre = (it) => it.p || it.precio || 0;
         return `<details class="rb-det" open><summary>📋 Requerimientos — ${its.length} ítem${its.length > 1 ? "s" : ""} (enumerados y detallados)</summary>
@@ -3879,9 +3880,35 @@ ${empNom}`;
       if (R.llamada?.texto === texto && !R.llamada.confirmado) { R.llamada.cands = candidatasLlamada(texto); R.llamada.idx = 0; pintarHoja(true); }
     }).catch(() => {});
   }
+  // 🧭 Brief instantáneo de «Me llamaron»: qué hay que hacer, dónde comprar (links), cómo lo haría (georreferenciado). Lo arma Claude en la nube, sin robot.
+  async function briefLlamada(cod) {
+    const t = trabajoG(cod); if (!t) return; R.brief = R.brief || {}; if (R.brief[cod]?.ok || R.brief[cod]?.cargando) return;
+    R.brief[cod] = { cargando: true }; pintarHojaSiAbierta?.() ?? pintarHoja(true);
+    try { const r = await api("cerebro", { method: "POST", body: JSON.stringify({ codigo: cod, empresa: miEmp(), modo: "llamada", mensajes: [{ rol: "yo", texto: "Brief de la llamada" }] }) });
+      let j = null; try { j = JSON.parse(String(r.texto || r.respuesta || "").replace(/^[^{]*/, "").replace(/[^}]*$/, "")); } catch (e) {}
+      R.brief[cod] = j ? { ok: true, ...j } : { error: "Claude no devolvió el brief" };
+    } catch (e) { R.brief[cod] = { error: e.message }; }
+    pintarHoja(true);
+  }
+  function briefHTML(cod, t) {
+    const b = (R.brief || {})[cod]; const its = (Array.isArray(t.items) && t.items.length ? t.items : []).slice(0, 3);
+    const q = (it) => encodeURIComponent(String(it.d || it.descripcion || it.nombre || "").replace(/\(.*?\)/g, "").split(/[,;·]/)[0].trim().slice(0, 50));
+    const comuna = encodeURIComponent((t.oc_compra?.comuna || t.oc_compra?.direccion || t.organismo || "").split(/[,·]/)[0].trim());
+    const tiendas = (it) => [["MercadoLibre", `https://listado.mercadolibre.cl/${q(it)}`], ["Sodimac", `https://www.sodimac.cl/sodimac-cl/search?Ntt=${q(it)}`], ["Google Shopping", `https://www.google.com/search?tbm=shop&q=${q(it)}`], ["Cerca de " + decodeURIComponent(comuna).slice(0, 18), `https://www.google.com/maps/search/${q(it)}+cerca+de+${comuna}`]];
+    const oc = t.op?.oc_codigo || t.oc_compra?.oc_codigo; const docs = (t.lic_docs || []).slice(-6);
+    return `<div class="rb-card" style="border-color:rgba(30,215,96,.45);margin-top:8px">
+      <div class="rb-env"><b>🧭 Qué hay que hacer</b><span class="muted" style="font-size:.7rem">${b?.ok ? "Claude · al instante" : b?.cargando ? "pensando…" : ""}</span></div>
+      ${b?.ok ? `<p style="margin:6px 0;font-size:.92rem"><b>${esc(b.que_hacer || "")}</b></p>${b.entrega ? `<div class="muted" style="font-size:.8rem">📍 ${esc(b.entrega)}</div>` : ""}` : b?.cargando ? `<p class="muted"><span class="spinner"></span> Leyendo la compra…</p>` : b?.error ? `<p class="muted" style="font-size:.78rem">⚠ ${esc(b.error)} <button class="btn small" type="button" data-rb="brief-reintentar" data-c="${esc(cod)}">Reintentar</button></p>` : ""}
+      <div class="rb-row" style="margin-top:6px">${(() => { const d = (t.op?.docs || []).filter((x) => x.tipo === "oc").pop(); return oc ? (d ? `<button class="btn small rb-oro" type="button" data-rb="neg-doc" data-c="${esc(cod)}" data-id="${esc(d.id)}">📄 Ver OC ${esc(oc)}</button>` : `<span class="rb-pill">🏆 OC ${esc(oc)}</span>`) : ""; })()}<button class="btn small" type="button" data-rb="det" data-c="${esc(cod)}">Abrir en Ejecuta ›</button>${t.pdf ? `<button class="btn small" type="button" data-rb="pdf" data-c="${esc(cod)}">📑 Lo que ofertamos</button>` : ""}</div>
+      ${docs.length ? `<div class="rb-sec" style="margin-top:8px">📎 Anexos de la compra</div><div class="rb-row">${docs.map((d) => `<button class="btn small" type="button" data-rb="neg-doc" data-c="${esc(cod)}" data-id="${esc(d.id)}">${esc((d.nombre || d.tipo).slice(0, 28))}</button>`).join("")}</div>` : `<div class="muted" style="font-size:.74rem;margin-top:6px">📎 Los anexos que subió el comprador se ven en la ficha de Mercado Público; si los descargas, súbelos en Ejecuta y Claude los lee.</div>`}
+      ${its.length ? `<div class="rb-sec" style="margin-top:8px">🛒 Dónde comprarlo</div>${its.map((it) => `<div style="font-size:.8rem;margin:4px 0"><b>${esc(String(it.d || it.descripcion || it.nombre || "").slice(0, 60))}</b><div class="rb-row" style="margin-top:3px">${tiendas(it).map(([n, u]) => `<a class="btn small" href="${u}" target="_blank" rel="noopener">${n} ↗</a>`).join("")}</div></div>`).join("")}` : ""}
+      ${(b?.donde_comprar || []).length ? `<div class="rb-row" style="margin-top:4px">${b.donde_comprar.slice(0, 4).map((d) => `<a class="btn small" href="${esc(d.url || "#")}" target="_blank" rel="noopener">${esc(d.nombre || d.url)} ↗</a>`).join("")}</div>` : ""}
+      ${b?.ok && b.como_lo_haria ? `<div class="rb-sec" style="margin-top:8px">🚚 Cómo lo haría</div><p style="font-size:.84rem;margin:4px 0">${esc(b.como_lo_haria)}</p>${(b.ojo || []).length ? `<div class="muted" style="font-size:.76rem">⚠ ${b.ojo.slice(0, 3).map(esc).join(" · ")}</div>` : ""}${b.utilidad_estimada ? `<div style="font-size:.84rem;margin-top:4px">💰 Utilidad estimada: <b style="color:#1ed760">${esc(String(b.utilidad_estimada))}</b></div>` : ""}` : ""}
+    </div>`;
+  }
   function confirmarLlamada(cod) {
     const texto = R.llamada?.texto || "";
-    R.llamada = { texto, confirmado: cod };
+    R.llamada = { texto, confirmado: cod }; briefLlamada(cod);
     cargarDocs(cod);
     preguntarRobot(texto || "Me llamaron por esta compra", null, cod);
   }
@@ -4967,6 +4994,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       if (w) { try { w.opener = null; } catch {} ABIERTAS[String(cod).toUpperCase()].w = w; } else location.href = portalDe(cod);
       return;
     }
+    if (a === "brief-reintentar") { R.brief[cod] = null; return briefLlamada(cod); }
     if (a === "pg-mas") { const box = document.querySelector(`.rb-pagos[data-c="${CSS.escape(cod)}"] > div`); if (box) box.insertAdjacentHTML("afterbegin", `<div class="rb-row" style="gap:6px;margin:4px 0"><input class="rb-in pg-n" placeholder="Nombre" style="flex:2;min-width:110px"><input class="rb-in pg-m" inputmode="numeric" placeholder="monto neto" style="flex:1;min-width:90px;text-align:right"><label style="font-size:.72rem;white-space:nowrap"><input type="checkbox" class="pg-f" checked> factura</label></div>`); return; }
     if (a === "pg-guardar") {
       const pagos = leerPagos(cod); if (!pagos.length) { toast("Anota al menos un nombre y monto"); return; }
