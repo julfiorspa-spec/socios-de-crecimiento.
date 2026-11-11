@@ -1649,6 +1649,7 @@ async function atender(req) {
     // 🤝 socio comercial: % de comisión para CotizÁgil sobre el neto de cada OC concretada por la app (ej. GENSA 28)
     if (b.comision !== undefined) { const c = Number(String(b.comision).replace(",", ".")); e.comision = Number.isFinite(c) && c >= 0 && c <= 100 ? c : 0; if (e.comision && !e.socio_desde) e.socio_desde = ahora(); }
     if (b.socio_nota !== undefined) e.socio_nota = texto(b.socio_nota, 300);
+    if (Array.isArray(b.rubros_app)) e.rubros_app = b.rubros_app.slice(0, 12).map((x) => texto(x, 80)).filter(Boolean);   // 🏢 rubros que esta empresa ve en la app (multiusuario)
     if (b.perfil && typeof b.perfil === "object") {        // 🔎 lo que el robot descubrió con el RUT: rubros, subrubros y aperturas
       const L2 = (v, n, m) => (Array.isArray(v) ? v : []).slice(0, n).map((x) => (typeof x === "object" ? { rubro: texto(x.rubro, 80), por_que: texto(x.por_que, 200) } : texto(x, m)));
       e.perfil = { rubros: L2(b.perfil.rubros, 8, 80), subrubros: L2(b.perfil.subrubros, 14, 80), aperturas: L2(b.perfil.aperturas, 5, 80),

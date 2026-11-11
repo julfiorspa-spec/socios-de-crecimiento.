@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      3.3.4
+// @version      3.4.0
 // @description  Te lleva a tu Compra Ágil (una navegación, por tu toque) y rellena precios/despacho/detalle al pulsar Rellenar, con confirmación. No envía, no declara, no firma, no navega solo, no oculta la automatización: el envío y la firma los haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -13,12 +13,12 @@
 // @grant        GM_xmlhttpRequest
 // @connect      cotizagil.netlify.app
 // @run-at       document-idle
-// @downloadURL  https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.3.4
-// @updateURL    https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.3.4
+// @downloadURL  https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.4.0
+// @updateURL    https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.4.0
 // ==/UserScript==
 (function () {
   'use strict';
-  const VERSION = '3.3.4';
+  const VERSION = '3.4.0';
   const APP = 'https://cotizagil.netlify.app';
   const MP = 'https://compra-agil.mercadopublico.cl';
   const CODE = /^[A-Z0-9-]+-COT\d+$/;
@@ -596,8 +596,12 @@
         debug('confirmacion_auto', confirmed);
         if (token) { try { const ua = navigator.userAgent; const disp = (await gmGet('dispositivo')) || (/iphone/i.test(ua) ? 'iPhone' : /android/i.test(ua) ? 'Android' : 'Celular'); await getJson('pedir', token, { codigo: confirmed, accion: 'verificar', vista: true, dispositivo: disp, enviado_por: disp }); } catch (_) {} }
       }
-      say(`✅ ${confirmed} enviada y registrada en CotizÁgil. Cuando quieras, vuelve a la app.`);
-      actions.append(button('Volver a CotizÁgil', () => location.assign(APP + '/#firmada=' + encodeURIComponent(confirmed)), 'ghost'));
+      // ⚡ vuelve solo a CotizÁgil en 2 s (la app te lleva a la siguiente); «Quedarme» lo cancela.
+      let quedarse = false; let seg = 2;
+      say(`✅ ${confirmed} enviada y registrada. Volviendo a CotizÁgil en ${seg} s…`);
+      actions.append(button('Quedarme en Mercado Público', () => { quedarse = true; say(`✅ ${confirmed} enviada y registrada en CotizÁgil.`); }, 'ghost'));
+      actions.append(button('Volver ahora', () => location.assign(APP + '/#firmada=' + encodeURIComponent(confirmed)), 'ghost'));
+      const tic = setInterval(() => { if (quedarse) { clearInterval(tic); return; } seg -= 1; if (seg <= 0) { clearInterval(tic); location.assign(APP + '/#firmada=' + encodeURIComponent(confirmed)); } else say(`✅ ${confirmed} enviada y registrada. Volviendo a CotizÁgil en ${seg} s…`); }, 1000);
       return;
     }
     const code = getPathCode();

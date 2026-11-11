@@ -631,6 +631,12 @@
     return t ? (t.persona || t.dispositivo || "otro jugador") : null; };
   // 🏢 cada celular ve y oferta solo con su empresa ("principal" = la del robot del PC)
   const miEmp = () => leer().empresa || null;
+  // 🏢 Multiusuario: cada empresa ve SOLO sus rubros y sus cotizaciones (Diego · PJANIC / Nicolás · NS Comex)
+  const RUBROS_EMP_DEF = [[/pjanic/i, ["Áridos y materiales de calle", "Electro y tecnología", "Imprenta y publicidad", "Mobiliario y equipamiento", "Polietileno y bolsas"]],
+    [/ns ?comex|comex/i, ["Arriendos y logística", "Catering y alimentación", "Eventos y amplificación", "Limpia fosas y sanitarios", "Mantención y reparación técnica", "Obras y servicios mayores"]]];
+  const rubrosDeEmp = (e) => { if (!e) return null; if (Array.isArray(e.rubros_app) && e.rubros_app.length) return e.rubros_app; const d = RUBROS_EMP_DEF.find(([re]) => re.test(e.razon_social || "")); return d ? d[1] : null; };
+  const esMia = (t) => { const yo = miEmp(); if (!yo || leer().todasEmp) return true; const te = t.empresa || "principal"; return te === yo || (te === "principal" && /pjanic/i.test((R.empresas || {})[yo]?.razon_social || "")); };
+  function aplicarRubrosEmp(e) { const r = rubrosDeEmp(e); if (r) guardar({ rubros: r, rubroListo: 1, rubrosEmp: e.id }); }
   const deMiEmpresa = (x) => !miEmp() || (x?.empresa || "principal") === miEmp();
   // 🎮 cada celular es un juego aparte: ve solo lo que pidió él (lo de antes de separar, solo si este celular lo pidió)
   function miJug() {
@@ -648,6 +654,7 @@
     if (R._cargEmp) return; R._cargEmp = true;
     try { R.empresas = (await api("empresas")).empresas || {}; } catch (e) { R.empresas = R.empresas || {}; }
     // Solo autoselecciona PJANIC cuando hay UNA sola empresa (un único dueño). Con varias empresas, cada celular nuevo ELIGE la suya.
+    try { const ye = miEmp() && (R.empresas || {})[miEmp()]; if (ye && leer().rubrosEmp !== ye.id && rubrosDeEmp(ye)) { aplicarRubrosEmp(ye); R.oport = null; } } catch {}
     try { if (!miEmp() && Object.keys(R.empresas || {}).length <= 1) { const pj = Object.values(R.empresas || {}).find((e) => /pjanic/i.test(e.razon_social || "") || (e.rut || "").replace(/[.\-]/g, "") === "784931145"); if (pj) guardar({ empresa: pj.id }); } } catch {}
     R._cargEmp = false; pintarHoja(true);
   }
@@ -876,6 +883,11 @@
       try { sessionStorage.setItem("sdc:portada", "1"); } catch {}
       marcarFirmada(cod, false);
       setTimeout(() => { abrir(); toast("✅ " + cod + " firmada · ya no está en Firmar. ¡Va la próxima!"); }, 30);
+      // ▶ y te lleva directo a la siguiente lista para firmar (de tu empresa primero); si no hay, al Inicio del cotizador
+      R.siguienteDe = cod;
+      const irSiguiente = () => { const yo = miEmp(); const cola = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t) && t.codigo !== cod && esMia(t)).sort((a, b) => (a.empresa === yo ? 0 : 1) - (b.empresa === yo ? 0 : 1) || (Date.parse(a.cierre || 0) || 9e15) - (Date.parse(b.cierre || 0) || 9e15));
+        R.siguienteDe = null; R.exFicha = null; if (cola.length) { R.detalle = cola[0].codigo; toast("▶ Siguiente: " + corta(cola[0].nombre || cola[0].codigo)); } else { R.detalle = null; R.exTab = "inicio"; toast("No queda nada por firmar 👌"); } pintarHoja(true); };
+      setTimeout(irSiguiente, 1500); setTimeout(() => { if (R.siguienteDe) irSiguiente(); }, 4000);
       return;
     }
     const m = location.hash.match(/enlazar=([A-Za-z0-9_-]{16,})/);
@@ -3911,7 +3923,7 @@ ${empNom}`;
   const exFila = (x, extra) => { const d = x.cierre ? new Date(x.cierre) : null; const sel = leerSel()[x.codigo]; const t = trabajo(x.codigo);
     return `<div class="rb-ex-row" data-rb="${t ? "det" : "ex-ficha"}" data-c="${esc(x.codigo)}"><div class="d">${d ? `<b>${d.getDate()}</b><small>${["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"][d.getMonth()]} ${d.toTimeString().slice(0, 5)}</small>` : "<b>—</b>"}</div><div class="tx"><b>${esc(x.nombre || x.codigo)}</b><span>${esc(x.organismo || "")}${x.region ? " · " + esc(String(x.region).replace("Región ", "").replace(" de Santiago", "")) : ""}</span><span>${esc(x.codigo)}${x.monto ? " · ppto. " + clp(x.monto) : ""}</span><div>${exSeg(x) ? '<span class="rb-ex-st info">2° llamado</span>' : ""}${exHoras(x) != null && exHoras(x) > 0 ? `<span class="rb-ex-st ${exHoras(x) < 30 ? "cierre" : ""}">${exCierreTxt(x)}</span>` : ""}${sel ? `<span class="rb-ex-st ${sel.revisar ? "doc" : ""}">${sel.revisar ? "⚠ revisar" : "guardada"}</span>` : ""}${t ? `<span class="rb-ex-st ${HECHA.includes(t.estado) ? "env" : t.estado === "firmar" ? "doc" : ""}">${HECHA.includes(t.estado) ? "oferta enviada" : t.estado === "firmar" ? "falta tu firma" : esc(t.estado)}</span>` : ""}${extra || ""}</div></div></div>`; };
   function exPendientes() {      // tareas que requieren acción (para Actividad y el contador)
-    const out = []; const trabajos = R.data?.trabajos || []; const sel = leerSel();
+    const out = []; const trabajos = (R.data?.trabajos || []).filter(esMia); const sel = leerSel();
     for (const t of trabajos) { if (t.estado === "firmar" && !yaFirmada(t)) out.push({ tipo: "doc", c: t.codigo, texto: `Falta tu firma · ${t.nombre || t.codigo}`, det: true }); }
     for (const [c, x] of Object.entries(sel)) if (x.revisar) out.push({ tipo: "cierre", c, texto: `Cambió mientras cotizabas · ${x.nombre || c}` });
     for (const t of trabajos) { if (!t.op || !(t.op.oc_codigo || t.op.oc)) continue; const b = clasificarOC(t); if (b === "A" && !t.op.cobrado) out.push({ tipo: "env", c: t.codigo, texto: `Cobrar · ${t.nombre || t.codigo}`, det: true }); if (b === "B" && t.op.precio_acordado && !t.op.proveedor_pagado) out.push({ tipo: "doc", c: t.codigo, texto: `Pagar al proveedor ${clp(t.op.precio_acordado)} · ${t.nombre || t.codigo}`, det: true }); if (b === "C") out.push({ tipo: "info", c: t.codigo, texto: `Aceptar la OC en MP · ${t.nombre || t.codigo}`, det: true }); if (b === "D" && t.op.proveedor_pagado) out.push({ tipo: "cierre", c: t.codigo, texto: `OC cancelada con proveedor pagado · ${t.nombre || t.codigo}`, det: true }); }
@@ -3923,7 +3935,7 @@ ${empNom}`;
     return `<nav class="rb-ex-nav">${[["inicio", "Inicio", EXI.inicio], ["buscar", "Buscar", EXI.buscar], ["biblio", "Tu biblioteca", EXI.biblio], ["activ", "Actividad", EXI.activ]].map(([k, l, ic]) => `<button type="button" class="${t === k ? "on" : ""}" data-rb="ex-tab" data-t="${k}">${ic}${l}${k === "activ" && n ? `<span class="n">${n}</span>` : ""}</button>`).join("")}</nav>` + exContinuar();
   }
   function exContinuar() {
-    const firmar = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t)); if (!firmar.length || R.detalle || R.exFicha) return "";
+    const firmar = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t) && esMia(t)); if (!firmar.length || R.detalle || R.exFicha) return "";
     const t = firmar[0]; const otras = firmar.length - 1;
     return `<div class="rb-ex-cont"><button type="button" data-rb="det" data-c="${esc(t.codigo)}"><div style="width:38px;height:38px;border-radius:6px;background:${exColor(t)}"></div><div style="flex:1;min-width:0"><div style="font-size:.8rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Continuar cotización · ${esc(t.nombre || t.codigo)}</div><div class="bar"><i style="width:70%"></i></div><div style="font-size:.68rem;color:#9aa3b2">${clp(t.total)} · lista para rellenar y firmar${otras ? ` · ${otras} más en Biblioteca` : ""}</div></div>›</button></div>`;
   }
@@ -3962,7 +3974,7 @@ ${empNom}`;
   }
   const ETAPAS_IDX = (e) => ["previa", "ganada", "inversionista", "operacion", "transporte", "pago", "documentos", "despacho", "entrega", "cerrado"].indexOf(e || "previa");
   function exInicioCotizador(op, n) {
-    const firmar = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t)).sort((a, b) => (Date.parse(a.cierre || 0) || 9e15) - (Date.parse(b.cierre || 0) || 9e15));
+    const firmar = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t) && esMia(t)).sort((a, b) => (Date.parse(a.cierre || 0) || 9e15) - (Date.parse(b.cierre || 0) || 9e15));
     const hoy = hoyMs(); const envHoy = (R.data?.trabajos || []).filter((t) => HECHA.includes(t.estado) && Date.parse(t.fecha_envio || t.actualizado || 0) >= hoy).length;
     const meta = Number(localStorage.getItem("sdc:meta_dia") || 8); const pct = Math.min(100, Math.round(envHoy / meta * 100));
     const prep = op.slice(0, 6);
@@ -4046,7 +4058,7 @@ ${empNom}`;
       <div class="rb-ex-h2">Resultados <small>${L.length}</small></div><div class="rb-card" style="padding:4px 14px;margin:0">${L.length ? L.slice(0, 80).map((x) => exFila(x)).join("") : `<div class="muted" style="padding:10px 0;font-size:.85rem">${R.oport ? "Nada con ese filtro." : "Cargando…"}</div>`}</div>`;
   }
   function exBiblio() {
-    const k = R.exLib || "todas"; const trabajos = R.data?.trabajos || []; const sel = leerSel(); const lista = R.oport?.lista || [];
+    const k = R.exLib || "todas"; const trabajos = (R.data?.trabajos || []).filter(esMia); const sel = leerSel(); const lista = R.oport?.lista || [];
     const filas = [];
     for (const [c, x] of Object.entries(sel)) { const t = trabajo(c); if (t) continue; const o = lista.find((y) => y.codigo === c) || { codigo: c, ...x }; filas.push({ k: "guardadas", t: Date.parse(x.actualizado || x.desde || 0), html: exFila(o, `<span class="rb-ex-st">MP: publicada</span><span class="rb-ex-st doc">${x.costo || x.flete || x.responsable ? "borrador" : "guardada"}</span>`) }); }
     for (const t of trabajos) { const oc = t.op && (t.op.oc_codigo || t.op.oc); const b = oc ? clasificarOC(t) : null; const inter = oc ? ({ A: "Entregada", B: "En operación", C: "OC nueva", D: "Revisar" })[b] : t.estado === "firmar" ? "Lista para firmar" : HECHA.includes(t.estado) ? "Enviada" : esc(t.estado);
@@ -4054,7 +4066,8 @@ ${empNom}`;
       filas.push({ k: kk, t: Date.parse(t.actualizado || t.creado || 0), html: `<div class="rb-ex-row" data-rb="det" data-c="${esc(t.codigo)}"><div class="d" style="background:${exColor(t)}"><b style="font-size:.66rem">${esc(corta((R.empresas || {})[t.empresa || "principal"]?.razon_social || "PJANIC").split(" ")[0].slice(0, 8))}</b></div><div class="tx"><b>${esc(t.nombre || t.codigo)}</b><span>${esc(t.organismo || "")} · ${esc(t.codigo)}</span><div><span class="rb-ex-st">MP: ${esc(mp)}</span><span class="rb-ex-st ${kk === "cobrar" ? "doc" : kk === "cobradas" || kk === "enviadas" ? "env" : kk === "operacion" ? "info" : kk === "firmar" ? "doc" : ""}">${inter}</span>${t.total ? `<span class="rb-ex-st">${clp(t.total)}</span>` : ""}${oc && t.op.responsable ? `<span class="rb-ex-st">${esc(t.op.responsable)}</span>` : ""}</div></div></div>` }); }
     const chips = [["todas", "Todas"], ["guardadas", "Guardadas"], ["firmar", "Por firmar"], ["enviadas", "Enviadas"], ["operacion", "En operación"], ["cobrar", "Por cobrar"], ["cobradas", "Cobradas"]];
     const L = filas.filter((f) => k === "todas" || f.k === k).sort((a, b) => b.t - a.t);
-    return `<div class="rb-env"><div class="rb-ex-h1">Tu biblioteca</div><button class="btn small" type="button" data-rb="oc">📦 Caja de OC</button></div><div class="muted" style="font-size:.8rem">Estado oficial de Mercado Público · avance interno</div>
+    const emp = (R.empresas || {})[miEmp() || ""]; 
+    return `<div class="rb-env"><div class="rb-ex-h1">Tu biblioteca</div><button class="btn small" type="button" data-rb="oc">📦 Caja de OC</button></div><div class="muted" style="font-size:.8rem">Estado oficial de Mercado Público · avance interno${emp ? ` · <button class="btn small" type="button" data-rb="ex-todas-emp" style="padding:1px 8px">${leer().todasEmp ? "Todas las empresas" : "Solo " + esc(corta(emp.razon_social))}</button>` : ""}</div>
       <div class="rb-ex-chips">${chips.map(([kk, l]) => `<button type="button" class="${k === kk ? "on" : ""}" data-rb="ex-lib" data-k="${kk}">${l}${kk !== "todas" ? ` <i style="opacity:.6">${filas.filter((f) => f.k === kk).length}</i>` : ""}</button>`).join("")}</div>
       <div class="rb-card" style="padding:4px 14px;margin:0">${L.length ? L.slice(0, 120).map((f) => f.html).join("") : `<div class="muted" style="padding:10px 0;font-size:.85rem">Aún no hay compras aquí.</div>`}</div>`;
   }
@@ -4683,7 +4696,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "empresa-editar") { R.empresaEditar = true; R.empForm = null; R.empresas = null; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "empresa-form") { R.empForm = b.dataset.id ? { ...(R.empresas || {})[b.dataset.id] } : {}; return pintarHoja(true); }
     if (a === "empresa-cancelar") { R.empForm = null; return pintarHoja(true); }
-    if (a === "empresa-usar") { guardar({ empresa: b.dataset.id }); R.empresaEditar = false; R.ver = null; R.data = null; R.ultimoHtml = null; toast("🏢 Ofertas con " + corta((R.empresas || {})[b.dataset.id]?.razon_social)); refrescar(); return pintarHoja(true); }
+    if (a === "empresa-usar") { guardar({ empresa: b.dataset.id }); aplicarRubrosEmp((R.empresas || {})[b.dataset.id]); R.oport = null; R.empresaEditar = false; R.ver = null; R.data = null; R.ultimoHtml = null; toast("🏢 Ofertas con " + corta((R.empresas || {})[b.dataset.id]?.razon_social)); refrescar(); return pintarHoja(true); }
     if (a === "empresa-guardar") {
       const d = {}; $$("[data-emp]", sheet).forEach((i) => { d[i.dataset.emp] = i.value.trim(); }); if (!d.id) delete d.id;
       if (!d.razon_social || !d.rut) { toast("Falta razón social y RUT"); return; }
@@ -4927,6 +4940,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       if (w) { try { w.opener = null; } catch {} ABIERTAS[String(cod).toUpperCase()].w = w; } else location.href = portalDe(cod);
       return;
     }
+    if (a === "ex-todas-emp") { guardar({ todasEmp: !leer().todasEmp }); return pintarHoja(true); }
     if (a === "ex-perfil") { try { localStorage.setItem(PERFK, b.dataset.k); } catch (e) {} R.exTab = "inicio"; return pintarHoja(true); }
     if (a === "lic-dec") {
       const x = (R.oport?.lista || []).find((y) => y.codigo === cod) || {}; const d = b.dataset.d; const prev = leerSel()[cod]?.decision;
