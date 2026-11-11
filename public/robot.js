@@ -899,6 +899,8 @@
     setTimeout(() => abrir(null, cod && cod !== "PRUEBA" ? cod : null), 400);
   }
   window.addEventListener("hashchange", desdeHash);
+  document.addEventListener("input", (e) => { const box = e.target.closest?.(".rb-items"); if (box) itemsCalc(box.dataset.c); else if (e.target.classList?.contains("it-prov")) { const b2 = document.querySelector(".rb-items"); if (b2) itemsCalc(b2.dataset.c); } });
+  document.addEventListener("click", (e) => { const b = e.target.closest?.(".it-tipo"); if (!b) return; document.querySelectorAll(".it-tipo").forEach((x) => x.classList.toggle("rb-oro", x === b)); const b2 = document.querySelector(".rb-items"); if (b2) itemsCalc(b2.dataset.c); });
 
   /* ---------------- UI: botón en la cabecera ---------------- */
   const chip = document.createElement("button");
@@ -4183,9 +4185,37 @@ ${empNom}`;
         <div class="rb-ex-row" data-rb="inv-pdf" data-c="${esc(cod)}"><div class="d">💼</div><div class="tx"><b>PDF del inversor · simulación</b><span>caja, cronología y reparto${X.compras ? " · utilidad " + clp(Math.round(X.final)) : " · con precio estimado"}</span></div>›</div>
         ${docs.length ? docs.slice(-8).map((d) => `<div class="rb-ex-row" data-rb="neg-doc" data-c="${esc(cod)}" data-id="${esc(d.id)}"><div class="d">📎</div><div class="tx"><b>${esc((d.nombre || d.tipo).slice(0, 48))}</b><span>${esc(d.tipo || "anexo")}${d.kb ? " · " + d.kb + " KB" : ""}</span></div>›</div>`).join("") : `<div class="rb-ex-row" style="opacity:.6;cursor:default"><div class="d">📎</div><div class="tx"><b>Anexos técnicos</b><span>no hay anexos guardados · súbelos desde Ejecuta y Claude los lee</span></div></div>`}
       </div>
-      <div class="rb-ex-h2">🔗 Dónde comprarlo al menor precio <small>busca, elige y anota el precio</small></div><div class="rb-card" style="margin:0">${cajaLinks(t)}</div>
+      ${its.length > 4 ? `<div class="rb-card" style="margin:12px 0 0;padding:4px 14px"><div class="rb-ex-row" data-rb="ex-items" data-c="${esc(cod)}"><div class="d">🧾</div><div class="tx"><b>${its.length} ítems · poner precios reales ítem por ítem</b><span>cada uno con su precio y proveedor · ¿da o no da? en vivo</span></div>›</div></div>` : ""}
+      <div class="rb-ex-h2">🔗 Dónde comprarlo al menor precio <small>${its.length > 4 ? "primeros 4 ítems · los demás en la pantalla de ítems" : "busca, elige y anota el precio"}</small></div><div class="rb-card" style="margin:0">${cajaLinks(t)}</div>
       ${its.length ? `<div class="rb-ex-h2">Qué pide la orden <small>${its.length} ítem${its.length > 1 ? "s" : ""}</small></div><div class="rb-card" style="margin:0;font-size:.84rem"><ol style="margin:0;padding-left:18px">${its.map((it) => `<li>${esc(String(it.d || it.descripcion || it.nombre || ""))}${it.q || it.cantidad ? ` · <b>${esc(String(it.q || it.cantidad))}</b> ${esc(it.unidad || "")}` : ""}${it.p ? ` · ${clp(it.p)} c/u` : ""}</li>`).join("")}</ol></div>` : ""}
       <div class="rb-row" style="margin-top:12px"><button class="btn rb-oro" type="button" data-rb="ex-oc-volver" style="flex:1">‹ Volver a ejecutar</button><button class="btn" type="button" data-rb="claude" data-c="${esc(cod)}">💬 Claude</button></div>`;
+  }
+  // 🧾 Ítems de la OC, uno por uno: precio real por ítem (y proveedor si cambia) → ¿da o no da? en vivo, antes de guardar
+  function itemsExec(cod) {
+    const t = trabajoG(cod); if (!t) { R.exItems = null; return ""; } const op = t.op || {}; const its = Array.isArray(t.items) ? t.items : [];
+    const P = op.pagos || []; const unitPrev = {}; P.forEach((pg) => (pg.unit || []).forEach((u, i) => { if (u) unitPrev[i] = { u, n: pg.nombre, tipo: pg.tipo || "bruto" }; }));
+    const q = (it) => Number(it.q || it.cantidad || 1) || 1, d = (it) => String(it.d || it.descripcion || it.nombre || ""), of = (it) => Number(it.p || it.precio || 0) || 0;
+    const ventaN = Math.round((Number(t.total) || 0) / 1.19);
+    return `<div class="rb-env"><button class="btn small" type="button" data-rb="ex-items-volver">‹ Volver</button><span class="muted" style="font-size:.78rem">${esc(cod)} · ${its.length} ítems</span></div>
+      <div class="rb-ex-h1" style="margin:8px 0 2px">Precios reales, ítem por ítem</div><div class="muted" style="font-size:.8rem">Anota lo que te cobra el proveedor por cada ítem. Abajo ves al tiro si da o no da.</div>
+      <div class="rb-row" style="margin:8px 0;gap:6px;align-items:center"><span class="muted" style="font-size:.74rem">Precios</span><button class="btn small it-tipo rb-oro" type="button" data-v="bruto">Bruto (c/IVA)</button><button class="btn small it-tipo" type="button" data-v="neto">Neto</button><span class="muted" style="font-size:.74rem">· proveedor general:</span><input class="rb-in it-prov" placeholder="ej. Jim Pro" style="flex:1;min-width:100px" value="${esc(P[0]?.nombre || "")}"></div>
+      <div class="rb-card rb-items" data-c="${esc(cod)}" style="padding:4px 12px;margin:0">${its.map((it, i) => `<div class="rb-ex-row it-row" data-i="${i}" style="cursor:default;align-items:flex-start"><div class="d" style="min-width:34px"><b>${i + 1}</b></div><div class="tx" style="flex:1"><b style="white-space:normal">${esc(d(it))}</b><span>${q(it)} ${esc(it.unidad || "u")}${of(it) ? " · ofertado " + clp(of(it)) + " c/u" : ""}</span>
+          <div class="rb-row" style="margin-top:4px;gap:6px;align-items:center"><input class="rb-in it-u" inputmode="numeric" placeholder="precio real c/u" style="width:120px;text-align:right" value="${unitPrev[i] ? Number(unitPrev[i].u).toLocaleString("es-CL") : ""}"><input class="rb-in it-p" placeholder="proveedor (si es otro)" style="flex:1;min-width:90px" value="${esc(unitPrev[i]?.n && unitPrev[i].n !== (P[0]?.nombre || "") ? unitPrev[i].n : "")}"><span class="it-sub muted" style="font-size:.74rem;min-width:70px;text-align:right"></span></div></div></div>`).join("")}</div>
+      <div class="rb-card" style="margin-top:10px"><div class="rb-env"><div><span class="muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em">Venta neta</span><br><b>${clp(ventaN)}</b></div><div><span class="muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em">Compra neta</span><br><b class="it-tot">—</b></div><div style="text-align:right"><span class="muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em">¿Da?</span><br><b class="it-da">pon precios</b></div></div>
+        <div class="muted it-nota" style="font-size:.74rem;margin-top:4px">Sin precios todavía · ${its.filter((_, i) => unitPrev[i]).length}/${its.length} ítems con precio</div>
+        <div class="rb-row" style="margin-top:8px"><button class="btn rb-oro" type="button" data-rb="it-guardar" data-c="${esc(cod)}" style="flex:1">💾 Guardar precios reales → Excel en vivo</button></div></div>`;
+  }
+  function itemsCalc(cod) {       // ¿da? en vivo mientras escribes
+    const t = trabajoG(cod); const box = document.querySelector(`.rb-items[data-c="${CSS.escape(cod)}"]`); if (!t || !box) return null;
+    const its = Array.isArray(t.items) ? t.items : []; const tipo = document.querySelector(".it-tipo.rb-oro")?.dataset.v || "bruto"; const aNeto = (v) => tipo === "bruto" ? v / 1.19 : v;
+    let compraN = 0, con = 0; const unit = [], provs = {};
+    box.querySelectorAll(".it-row").forEach((r) => { const i = +r.dataset.i, u = Math.round(Number(String(r.querySelector(".it-u").value).replace(/[^\d]/g, "")) || 0); const qn = Number(its[i]?.q || its[i]?.cantidad || 1) || 1; unit[i] = u; const sub = Math.round(aNeto(u) * qn); r.querySelector(".it-sub").textContent = u ? clp(sub) + " neto" : ""; if (u) { con++; compraN += sub; const pn = (r.querySelector(".it-p").value || "").trim() || (document.querySelector(".it-prov")?.value || "").trim() || "Proveedor"; provs[pn] = (provs[pn] || 0) + sub; } });
+    const X = compraN ? calcNeg({ ...t, op: { ...(t.op || {}), precio_acordado: Math.round(compraN * 1.19), pagos: Object.entries(provs).map(([n, m]) => ({ nombre: n, monto: m, factura: true })) } }) : null;
+    const tot = document.querySelector(".it-tot"), da = document.querySelector(".it-da"), nota = document.querySelector(".it-nota");
+    if (tot) tot.textContent = compraN ? clp(compraN) : "—";
+    if (da) { da.textContent = X ? (X.final > 0 ? "✅ SÍ DA" : "❌ NO DA") : "pon precios"; da.style.color = X ? (X.final > 0 ? "#1ed760" : "#ff6b6b") : ""; }
+    if (nota) nota.textContent = X ? `Utilidad final ${clp(Math.round(X.final))} · margen ${Math.round((compraN ? (Math.round((Number(t.total) || 0) / 1.19) - compraN) / Math.max(1, Math.round((Number(t.total) || 0) / 1.19)) : 0) * 100)} % · ${con}/${its.length} ítems con precio${con < its.length ? " (faltan " + (its.length - con) + ")" : ""}` : `Sin precios todavía · 0/${its.length} ítems con precio`;
+    return { compraN, unit, provs, tipo, con };
   }
   function fichaExec(cod) {
     const x = (R.oport?.lista || []).find((y) => y.codigo === cod) || { codigo: cod, ...(leerSel()[cod] || {}) }; const sel = leerSel()[cod]; const t = trabajo(cod);
@@ -4264,6 +4294,7 @@ ${empNom}`;
       else if (R.pantalla === "planes") cuerpo = pantallaPlanes();
       else if (R.pantalla === "mplogin") cuerpo = pantallaLoginMP();
       else if (execOn() && !R.exFicha) { if (!esDueno() && (!R.planT || Date.now() - R.planT > 300000)) setTimeout(cargarPlan, 0); cuerpo = pantallaExec(); }
+      else if (execOn() && R.exItems) cuerpo = itemsExec(R.exItems);
       else if (execOn() && R.exOC) cuerpo = ocExec(R.exOC);
       else if (execOn() && R.exFicha) cuerpo = fichaExec(R.exFicha);
       else { if (!esDueno() && (!R.planT || Date.now() - R.planT > 300000)) setTimeout(cargarPlan, 0);
@@ -5091,6 +5122,15 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "ex-volver") { R.exFicha = null; return pintarHoja(true); }
     if (a === "ex-oc") { R.exOC = cod; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "ex-oc-volver") { R.exOC = null; return pintarHoja(true); }
+    if (a === "ex-items") { R.exItems = cod; sheet.scrollTop = 0; pintarHoja(true); setTimeout(() => itemsCalc(cod), 50); return; }
+    if (a === "ex-items-volver") { R.exItems = null; return pintarHoja(true); }
+    if (a === "it-guardar") {
+      const t = trabajoG(cod); const c = itemsCalc(cod); if (!t || !c || !c.compraN) { toast("Pon al menos un precio real"); return; }
+      const nombreGral = (document.querySelector(".it-prov")?.value || "").trim(); const pagos = Object.entries(c.provs).map(([n, m]) => ({ nombre: n, monto: m, factura: true, tipo: c.tipo })); if (pagos[0]) pagos[0].unit = c.unit;
+      const datos = { pagos, precio_acordado: Math.round(c.compraN * 1.19), proveedor: (nombreGral || pagos.map((x) => x.nombre).join(" + ")).slice(0, 120) };
+      try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos, dispositivo: dispositivo(false) }) }); const X = calcNeg({ ...t, op: { ...(t.op || {}), precio_acordado: datos.precio_acordado, pagos } }); toast((X.final > 0 ? "✅ SÍ DA · utilidad " : "❌ NO DA · ") + clp(Math.round(X.final))); R.ejecT = 0; await refrescar(); } catch (e) { toast(e.message); }
+      R.exItems = null; return pintarHoja(true);
+    }
     if (a === "ex-f") { R.exF = R.exF || {}; const k = b.dataset.k; if (k === "seg" || k === "hoy") R.exF[k] = !R.exF[k]; else R.exF[k] = R.exF[k] === b.dataset.v ? "" : b.dataset.v; return pintarHoja(true); }
     if (a === "ex-lib") { R.exLib = b.dataset.k; return pintarHoja(true); }
     if (a === "exec-toggle") { try { localStorage.setItem(EXK, execOn() ? "0" : "1"); } catch {} R.exFicha = null; sheet.classList.toggle("rb-exec", execOn()); toast(execOn() ? "◧ Modo ejecutivo" : "Modo clásico"); return pintarHoja(true); }
