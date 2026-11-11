@@ -5146,9 +5146,12 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       return;
     }
     if (a === "verificar") {
-      try { await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "verificar", vista: true, dispositivo: dispositivo(true) }) }); marcarFirmada(cod, false); toast("✅ Marcada como enviada por ti"); await refrescar(); }
+      try { await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "verificar", vista: true, dispositivo: dispositivo(true) }) }); marcarFirmada(cod, false); await refrescar(); }
       catch (e) { toast(e.message); }
-      return;
+      // ✅ desaparece de Firmar y te lleva a la siguiente (de tu empresa primero); si no queda, al Inicio
+      { const yo = miEmp(); const cola = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t) && t.codigo !== cod && esMia(t) && !leerOcultas()[t.codigo]).sort((a2, b2) => (a2.empresa === yo ? 0 : 1) - (b2.empresa === yo ? 0 : 1) || (Date.parse(a2.cierre || 0) || 9e15) - (Date.parse(b2.cierre || 0) || 9e15));
+        R.detalle = cola[0]?.codigo || null; R.exFicha = null; if (!cola.length) R.exTab = "inicio"; R.firIdx = 0; toast(cola.length ? "✅ Enviada · siguiente: " + corta(cola[0].nombre || cola[0].codigo) : "✅ Enviada · no queda nada por firmar 👌"); sheet.scrollTop = 0; }
+      return pintarHoja(true);
     }
     if (a === "ofertar" || a === "editar") {
       const t = trabajo(cod) || {};

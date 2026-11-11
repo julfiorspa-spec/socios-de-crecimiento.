@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      3.4.0
+// @version      3.4.1
 // @description  Te lleva a tu Compra Ágil (una navegación, por tu toque) y rellena precios/despacho/detalle al pulsar Rellenar, con confirmación. No envía, no declara, no firma, no navega solo, no oculta la automatización: el envío y la firma los haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -13,12 +13,12 @@
 // @grant        GM_xmlhttpRequest
 // @connect      cotizagil.netlify.app
 // @run-at       document-idle
-// @downloadURL  https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.4.0
-// @updateURL    https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.4.0
+// @downloadURL  https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.4.1
+// @updateURL    https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.4.1
 // ==/UserScript==
 (function () {
   'use strict';
-  const VERSION = '3.4.0';
+  const VERSION = '3.4.1';
   const APP = 'https://cotizagil.netlify.app';
   const MP = 'https://compra-agil.mercadopublico.cl';
   const CODE = /^[A-Z0-9-]+-COT\d+$/;
@@ -223,7 +223,9 @@
   }
 
   const getPathCode = () => { const m = location.pathname.match(/^\/resumen-cotizacion\/([^/]+)/i); return m ? cleanCode(decodeURIComponent(m[1])) : null; };
-  const confirmedCode = () => { if (!/cotizacion-publicada/i.test(location.pathname)) return null; return cleanCode(new URLSearchParams(location.search).get('quote')); };
+  // Página «ya enviada»: MP muestra «Descargar comprobante» / «Anular cotización» / «Enviar nueva cotización» en el resumen de una oferta que ya se envió.
+  const yaEnviadaEnPantalla = () => { const t = (document.body && document.body.innerText) || ''; return /descargar comprobante/i.test(t) && /(anular cotizaci|enviar nueva cotizaci)/i.test(t); };
+  const confirmedCode = () => { if (/cotizacion-publicada/i.test(location.pathname)) return cleanCode(new URLSearchParams(location.search).get('quote')); if (yaEnviadaEnPantalla()) return getPathCode(); return null; };
 
   let lastPath = '', currentCode = '', loading = false, token = null;
 
