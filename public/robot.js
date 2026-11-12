@@ -3167,6 +3167,9 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       const o = await api("oportunidades"); o.descartes = o.descartes || {};
       const ya = Date.now() + 30 * 60000; o.lista = (o.lista || []).filter((x) => !x.cierre || Date.parse(x.cierre) > ya);
       R.oport = o; R.oportViejo = false; R.oportT = Date.now();
+      // ⚡ la lista vuelve al instante (cache); la API oficial se refresca en segundo plano, como máximo cada 10 min, sin trabar la pantalla
+      const edad = o.fecha ? (Date.now() - Date.parse(o.fecha)) / 60000 : 1e9; const inc = o.oficial?.ciclo && !o.oficial.ciclo.completo;
+      if ((edad > 10 || inc) && Date.now() - (R.oportRef || 0) > 120000) { R.oportRef = Date.now(); setTimeout(async () => { try { const o2 = await api("oportunidades?refrescar=1"); if (o2 && (o2.lista || []).length) { o2.descartes = o2.descartes || {}; R.oport = o2; R.oportT = Date.now(); if (!R.detalle && !R.exFicha) pintarHoja(true); } } catch (_) {} }, 300); }
       setTimeout(() => aCache("oport2", o), 50);
     } catch (e) { if (!R.oport) R.oport = { lista: [], error: e.message }; toast(e.message); }
     R._cargandoOport = false; pintarHoja();
@@ -4161,8 +4164,10 @@ ${empNom}`;
     const q = norm(R.exQ || ""); const f = R.exF || {}; const lista = (R.oport?.lista || []).filter((x) => x.fuente !== "licitacion" && exHoras(x) > 0);
     const rubros = [...new Set(lista.map((x) => x.rubro).filter(Boolean))].sort();
     const regiones = [...new Set(lista.map((x) => String(x.region || "").replace("Región ", "").replace(" de Santiago", "")).filter(Boolean))].sort();
-    const L = lista.filter((x) => !(x.ya_ofertada || x.trabajada) && (!q || norm((x.nombre || "") + " " + (x.organismo || "") + " " + x.codigo + " " + (x.region || "")).includes(q)) && (!f.rubro || x.rubro === f.rubro) && (!f.seg || exSeg(x)) && (!f.reg || String(x.region || "").includes(f.reg)) && (!f.hoy || exHoras(x) < 24)).sort((a, b) => exHoras(a) - exHoras(b));
-    const tomadas = q ? lista.filter((x) => (x.ya_ofertada || x.trabajada) && norm((x.nombre || "") + " " + x.codigo).includes(q)).slice(0, 5) : [];
+    const quienDeC = (c) => { const t = (R.todos || R.data?.trabajos || []).find((y) => y.codigo === c); if (!t) return ""; const e = (R.empresas || {})[t.empresa || "principal"]; return [t.persona || quienDe(t)?.nombre, e?.razon_social].filter(Boolean).join(" · "); };
+    const tomada = (x) => x.ya_ofertada || x.trabajada || !!(R.todos || R.data?.trabajos || []).find((y) => y.codigo === x.codigo && !["rechazada", "error"].includes(y.estado));
+    const tomadas = q ? lista.filter((x) => tomada(x) && norm((x.nombre || "") + " " + x.codigo).includes(q)).slice(0, 5).map((x) => ({ ...x, quien: x.quien || quienDeC(x.codigo) })) : [];
+    const L = lista.filter((x) => !tomada(x) && (!q || norm((x.nombre || "") + " " + (x.organismo || "") + " " + x.codigo + " " + (x.region || "")).includes(q)) && (!f.rubro || x.rubro === f.rubro) && (!f.seg || exSeg(x)) && (!f.reg || String(x.region || "").includes(f.reg)) && (!f.hoy || exHoras(x) < 24)).sort((a, b) => exHoras(a) - exHoras(b));
     return `<div class="rb-ex-h1">Buscar</div><div class="muted" style="font-size:.8rem">Oportunidades abiertas por palabra, organismo o ID</div>
       <div class="rb-ex-search">${EXI.buscar}<input id="rbExQ" placeholder="Áridos, hospital, 2466-512…" value="${esc(R.exQ || "")}" autocomplete="off"></div>
       <div class="rb-ex-chips"><button type="button" class="${f.seg ? "on" : ""}" data-rb="ex-f" data-k="seg">2° llamado</button><button type="button" class="${f.hoy ? "on" : ""}" data-rb="ex-f" data-k="hoy">Cierra hoy</button>${rubros.map((r) => `<button type="button" class="${f.rubro === r ? "on" : ""}" data-rb="ex-f" data-k="rubro" data-v="${esc(r)}">${esc(r)}</button>`).join("")}</div>
