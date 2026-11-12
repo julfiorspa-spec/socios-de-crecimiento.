@@ -32,6 +32,7 @@
     t.firma.total || t.total || 0].join("|");
   const firmaRapida = () => document.documentElement.dataset.firmaRapida === "1";   // extensión Tampermonkey instalada
   const portalDe = (cod) => `https://compra-agil.mercadopublico.cl/resumen-cotizacion/${encodeURIComponent(cod)}`;
+  const LOGIN_MP = "https://www.mercadopublico.cl/Home/Login";   // 🔑 si la compra «por fuera» rebota, primero se entra aquí (otra pestaña) y después Ir a firmar carga bien
   async function copiar(texto) {
     try { await navigator.clipboard.writeText(texto); return true; } catch {}
     try {
@@ -1176,7 +1177,7 @@
     if (t.estado === "en_cola" || t.estado === "tomado") acts.push(`<button class="btn small danger" data-rb="cancelar" data-c="${esc(t.codigo)}" type="button">Cancelar</button>`);
     const firmable = t.estado === "firmar" && t.firma?.precios?.length;
     if (firmable) {
-      acts.push(`<button class="btn small rb-firmar" data-rb="ir-firmar" data-c="${esc(t.codigo)}" type="button">✍ Ir a firmar</button>`);
+      acts.push(`<button class="btn small rb-firmar" data-rb="ir-firmar" data-c="${esc(t.codigo)}" type="button">✍ Ir a firmar</button><a class="btn small" href="${LOGIN_MP}" target="_blank" rel="noopener" title="Si la compra rebota, entra primero a Mercado Público en otra pestaña">🔑 Entrar a MP</a>`);
       acts.push(`<button class="btn small" data-rb="verificar" data-c="${esc(t.codigo)}" type="button">Ya la firmé</button>`);
       acts.push(`<button class="btn small" data-rb="ofertar" data-c="${esc(t.codigo)}" type="button">↻ Rehacer oferta</button>`);
     }
@@ -1306,7 +1307,7 @@
   function tarjetaFirma(t, nueva) {
     const e = est(t.estado), firmable = t.estado === "firmar" && t.firma?.precios?.length;
     const rojas = (firmable && t.firma.alertas || []).filter((a) => a.nivel === "rojo").length;
-    const accion = firmable ? `<button class="btn rb-oro rb-big-btn" data-rb="ir-firmar" data-c="${esc(t.codigo)}" type="button">✍ Ir a firmar ${clp(t.total)}</button>
+    const accion = firmable ? `<button class="btn rb-oro rb-big-btn" data-rb="ir-firmar" data-c="${esc(t.codigo)}" type="button">✍ Ir a firmar ${clp(t.total)}</button><a class="btn small" href="${LOGIN_MP}" target="_blank" rel="noopener" style="margin-top:4px" title="Si la compra rebota, entra primero a Mercado Público en otra pestaña y vuelve a tocar Ir a firmar">🔑 ¿Rebota? Entra primero</a>
         <div class="rb-row" style="justify-content:center"><button class="btn small" data-rb="verificar" data-c="${esc(t.codigo)}" type="button">Ya la firmé</button><button class="btn small" data-rb="det" data-c="${esc(t.codigo)}" type="button">Ver detalle</button></div>`
       : ["requiere", "error"].includes(t.estado) ? `<div class="rb-row"><button class="btn small rb-oro" data-rb="ofertar" data-c="${esc(t.codigo)}" type="button">Reintentar</button><button class="btn small" data-rb="det" data-c="${esc(t.codigo)}" type="button">Ver qué pasó</button></div>`
       : `<div class="rb-prog2"><i style="width:${{ en_cola: 15, tomado: 30, preparando: 60, lista: 90 }[t.estado] || 45}%"></i></div><div class="muted" style="font-size:.72rem">${esc(t.mensaje || e.txt)}</div>`;

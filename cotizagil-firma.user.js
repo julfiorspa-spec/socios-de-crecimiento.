@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      3.4.2
+// @version      3.4.3
 // @description  Te lleva a tu Compra Ágil (una navegación, por tu toque) y rellena precios/despacho/detalle al pulsar Rellenar, con confirmación. No envía, no declara, no firma, no navega solo, no oculta la automatización: el envío y la firma los haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -13,12 +13,12 @@
 // @grant        GM_xmlhttpRequest
 // @connect      cotizagil.netlify.app
 // @run-at       document-idle
-// @downloadURL  https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.4.2
-// @updateURL    https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.4.2
+// @downloadURL  https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.4.3
+// @updateURL    https://cotizagil.netlify.app/cotizagil-firma.user.js?v=3.4.3
 // ==/UserScript==
 (function () {
   'use strict';
-  const VERSION = '3.4.2';
+  const VERSION = '3.4.3';
   const APP = 'https://cotizagil.netlify.app';
   const MP = 'https://compra-agil.mercadopublico.cl';
   const CODE = /^[A-Z0-9-]+-COT\d+$/;
@@ -588,6 +588,14 @@
     if (hayBloqueoMP()) { mostrarBloqueo(); return; }
     ultBloqueo = false;
 
+    // 🔑 La compra «por fuera» rebota (pide sesión o muestra error / página vacía): ofrecer entrar en otra pestaña y reintentar
+    { const txt = ((document.body && document.body.innerText) || '').trim(); const pide = /iniciar sesi|inicie sesi|ingrese (su )?(usuario|clave)|clave ?[uú]nica|sesi[oó]n (ha )?expirad|no autorizado|ha ocurrido un error|error inesperado|p[aá]gina no (disponible|encontrada)/i.test(txt) || (getPathCode() && txt.length < 80);
+      if (pide && !confirmedCode()) {
+        say('🔑 Mercado Público no cargó la compra (pide sesión o rebotó). Entra en otra pestaña y después vuelve aquí y toca Reintentar.');
+        actions.append(button('Iniciar sesión en otra pestaña', () => { window.open('https://www.mercadopublico.cl/Home/Login', '_blank'); }, 'primary'));
+        actions.append(button('↻ Reintentar', () => location.reload(), 'ghost'));
+        actions.append(button('Volver a CotizÁgil', () => location.assign(APP + '/#robot'), 'ghost'));
+        return; } }
     const confirmed = confirmedCode();
     if (!confirmed && getPathCode() && cerradaEnPantalla()) {
       const cod = getPathCode(); const token = await gmGet('token');
