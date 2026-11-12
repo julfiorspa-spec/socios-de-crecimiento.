@@ -3956,6 +3956,7 @@ ${empNom}`;
     buscar: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
     biblio: '<svg viewBox="0 0 24 24"><path d="M4 4v16M9 4v16M14 5l5 15"/></svg>',
     activ: '<svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21a2 2 0 0 0 4 0"/></svg>',
+    jugar: '<svg viewBox="0 0 24 24"><path d="M6 9h4M8 7v4M15 8h.01M18 10h.01M4 14a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2a3 3 0 0 1-5.5 1.7L13 15h-2l-1.5 2.7A3 3 0 0 1 4 16z"/></svg>',
   };
   const exSeg = (x) => /^segundo/i.test(x.llamado || "");
   const exHoras = (x) => x.cierre ? (Date.parse(x.cierre) - Date.now()) / 36e5 : null;
@@ -3988,7 +3989,7 @@ ${empNom}`;
   }
   function navExec() {
     const n = exPendientes().length; const t = R.exFicha || R.detalle ? "" : exTab();
-    return `<nav class="rb-ex-nav">${[["inicio", "Inicio", EXI.inicio], ["buscar", "Buscar", EXI.buscar], ["biblio", "Tu biblioteca", EXI.biblio], ["activ", "Actividad", EXI.activ]].map(([k, l, ic]) => `<button type="button" class="${t === k ? "on" : ""}" data-rb="ex-tab" data-t="${k}">${ic}${l}${k === "activ" && n ? `<span class="n">${n}</span>` : ""}</button>`).join("")}</nav>` + exContinuar();
+    return `<nav class="rb-ex-nav">${[["inicio", "Inicio", EXI.inicio], ["jugar", "Jugar", EXI.jugar], ["buscar", "Buscar", EXI.buscar], ["biblio", "Biblioteca", EXI.biblio], ["activ", "Actividad", EXI.activ]].map(([k, l, ic]) => `<button type="button" class="${t === k ? "on" : ""}" data-rb="ex-tab" data-t="${k}">${ic}${l}${k === "activ" && n ? `<span class="n">${n}</span>` : ""}</button>`).join("")}</nav>` + exContinuar();
   }
   function exContinuar() {
     const oc = leerOcultas(); const firmar = (R.data?.trabajos || []).filter((t) => t.estado === "firmar" && !yaFirmada(t) && !noFirmable(t) && esMia(t) && !oc[t.codigo]); if (!firmar.length || R.detalle || R.exFicha) return "";
@@ -3997,6 +3998,7 @@ ${empNom}`;
   }
   function pantallaExec() {
     const tab = exTab(); if (!R.oport) cargarOport();
+    if (tab === "jugar") { if (!["nuevas", "sel", "firmar", "papelera"].includes(R.oportTab || "nuevas")) R.oportTab = "nuevas"; return `<div class="rb-paso rb-ex-jugar">${vistaOport()}</div>`; }   // 🎮 el juego de siempre, dentro del modo ejecutivo
     return `<div class="rb-paso">${({ inicio: exInicio, buscar: exBuscar, biblio: exBiblio, activ: exActiv })[tab]()}</div>`;
   }
   /* ---- 👤 Perfiles del modo ejecutivo: cada uno entra y sabe qué hacer ---- */
@@ -4053,6 +4055,7 @@ ${empNom}`;
       <div class="rb-card" style="margin:0;padding:12px 14px"><div class="rb-env"><div><b style="font-size:1.6rem">${envHoy}</b> <span class="muted">de ${meta} enviadas hoy</span></div><div><b style="font-size:1.6rem;color:#f4c95d">${firmar.length}</b> <span class="muted">listas para firmar</span></div></div><div class="bar" style="height:6px;background:#2a2f38;border-radius:3px;margin-top:8px"><i style="display:block;height:100%;width:${pct}%;background:#1ed760;border-radius:3px"></i></div>
         ${firmar.length ? `<button class="btn rb-oro" type="button" data-rb="det" data-c="${esc(firmar[0].codigo)}" style="width:100%;margin-top:10px">▶ Siguiente: firmar ${esc(corta(firmar[0].nombre || firmar[0].codigo))} · ${clp(firmar[0].total)}</button>` : `<div class="muted" style="font-size:.82rem;margin-top:8px">Nada por firmar. Elige una oportunidad abajo y el robot te la deja lista.</div>`}</div>
       ${firmar.length ? `<div class="rb-ex-h2">Cola para firmar <small>${firmar.length} · 🗑 la saca del ambiente</small></div><div class="rb-card" style="padding:4px 14px;margin:0">${firmar.slice(0, 12).map((t) => exFila(t, `<button class="btn small" type="button" data-rb="ex-quitar" data-c="${esc(t.codigo)}" style="margin-left:auto;opacity:.8" title="Quitar">🗑</button>`)).join("")}</div>` : ""}
+      <div class="rb-card" style="margin:0 0 10px;padding:12px 14px;border-color:rgba(30,215,96,.5)"><b>🎮 ¿Cómo se juega?</b><div class="muted" style="font-size:.82rem;margin-top:4px">1) <b>Jugar</b>: desliza → apuesto / ← paso. 2) En ⭐ Jugar pones tu <b>precio</b> con la herramienta (compra · venta · margen). 3) <b>Ir a firmar</b>: el robot la deja lista y tú la ingresas en MP. El ritmo de siempre.</div><button class="btn rb-oro" type="button" data-rb="ex-tab" data-t="jugar" style="width:100%;margin-top:8px">🎮 Ir a Jugar</button></div>
       ${exJugar(op)}
       <div class="rb-ex-h2">Para preparar ahora <small>cierran primero · cuánto da</small></div><div class="rb-card" style="padding:4px 14px;margin:0">${prep.length ? prep.map((x) => exFila(x, daChip(x) + `<button class="btn small rb-oro" type="button" data-rb="oport-si" data-c="${esc(x.codigo)}" style="margin-left:auto">✍ Preparar</button>`)).join("") : `<div class="muted" style="padding:10px 0;font-size:.85rem">${R.oport ? "Nada por cerrar en tus rubros. Toca Buscar." : "Cargando…"}</div>`}</div>`;
   }
