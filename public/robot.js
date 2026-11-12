@@ -3209,7 +3209,8 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     inversion: { ico: "💰", corto: "Inversionista", portal: "inversion", h: "Pones la plata.<br><span>El negocio ya está ganado.</span>", sub: "Inviertes en negocios ya adjudicados y ves tu inversión crecer en tiempo real. Sin ClaveÚnica.", cta: "▶ ENTRAR A INVERTIR" },
   };
   // 👤 UX por roles: cada perfil ve SOLO sus portales (el inversor no ve licitaciones, etc.). El dueño ve todo.
-  const PORTALES_ROL = { juego: ["juego"], licita: ["licita"], ejecuta: ["ejecuta", "inversion"], inversion: ["inversion"] };
+  // 🎮 Todos cotizan: el ejecutor y el licitador también juegan (el negocio es de quien lo cotiza). El inversionista solo mira su plata.
+  const PORTALES_ROL = { juego: ["juego"], licita: ["juego", "licita"], ejecuta: ["juego", "ejecuta", "inversion"], inversion: ["inversion"] };
   const TABS_PORTAL = [["juego", "🎮 Cotiza"], ["licita", "📑 Licita"], ["ejecuta", "🛠 Ejecuta"], ["inversion", "💼 Inversión"]];
   function portalesVisibles() {
     if (esDueno()) return ["juego", "licita", "ejecuta", "inversion"];       // el dueño/admin ve todos
