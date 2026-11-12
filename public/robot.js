@@ -2970,10 +2970,19 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     sacarTarjeta(c, 1); sumarTab("sel", -1); sumarTab("firmar", 1);
     setTimeout(() => pintarHoja(true), 460);                     // aparece la siguiente para seguir jugando
     try {
-      const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "firmar", descuento }) });
-      toast(r._status === 409 ? "Ya estaba en manos del robot" : `✍ Apostaste ${clp(v)} · el robot la deja en Firmar`);
+      const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "firmar", descuento, firma_app: firmaApp(cod, v) }) });
+      toast(r._status === 409 ? "Ya estaba en manos del robot" : r.directo ? `⚡ Apostaste ${clp(v)} · ya está en Firmar` : `✍ Apostaste ${clp(v)} · el robot la deja en Firmar`);
       refrescar();
     } catch (e) { toast(e.message); delete R.selFuera[cod]; pintarHoja(true); }
+  }
+  // ⚡ precios por ítem desde el juego: el total apostado (c/IVA) se reparte en neto por unidad, proporcional al precio de referencia si lo hay
+  function firmaApp(cod, totalIVA) {
+    const x = (R.oport?.lista || []).find((y) => y.codigo === cod) || trabajo(cod) || {}; const its = itemsTodo(x).filter((i) => i.d).slice(0, 60);
+    if (!its.length || !(totalIVA > 0)) return null;
+    const neto = totalIVA / 1.19; const q = its.map((i) => Math.max(1, Number(i.q) || 1)); const ref = its.map((i) => Number(i.p) || 0);
+    const base = ref.every((p2) => p2 > 0) ? ref.map((p2, i) => p2 * q[i]) : q.map((n) => n);
+    const suma = base.reduce((a2, b2) => a2 + b2, 0) || 1; const precios = base.map((w, i) => Math.max(1, Math.round(neto * (w / suma) / q[i])));
+    return { precios, despacho: 0, detalle: `Oferta ${esc(x.nombre || cod)} según requerimiento. Precios netos por unidad, IVA incluido en el total. Despacho incluido. Validez 30 días.`, items: its.map((i, k) => ({ d: i.d, q: q[k], p: precios[k] })) };
   }
   // 🏆 OC: «nos da» avanza a Inversión · «no da» la deja en ❌ con el motivo
   async function ocSi(cod, el) {

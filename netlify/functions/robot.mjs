@@ -1355,6 +1355,18 @@ async function atender(req) {
       persona: texto(b.persona, 60) || previo?.persona || null,               // quién la pidió (nombre que puso en la app)
     };
     if (esLic) t.tipo = "licitacion";
+    // ⚡ Firma directa: si el robot no está conectado y la app manda los precios por ítem (del juego), la oferta queda LISTA PARA FIRMAR
+    //    al instante, sin esperar al robot. El PDF lo agrega el robot después si vuelve, sin sacarla de Firmar.
+    const fa = b.firma_app; const robotL = (await store.get("robot/latido", { type: "json" })) || {}; const robotOn = robotL.visto && Date.now() - Date.parse(robotL.visto) < ROBOT_INACTIVO_MS;
+    if (!esLic && accion === "firmar" && fa && Array.isArray(fa.precios) && fa.precios.length && (!robotOn || b.directo)) {
+      const precios = fa.precios.slice(0, 60).map((v) => Math.max(0, Math.round(Number(v) || 0)));
+      t.items = Array.isArray(fa.items) ? fa.items.slice(0, 60).map((i) => ({ d: texto(i?.d, 200) || "", q: Number(i?.q) || 1, p: Math.max(0, Math.round(Number(i?.p) || 0)) })) : previo?.items || null;
+      t.firma = { precios, despacho: Math.max(0, Math.round(Number(fa.despacho) || 0)), detalle: texto(fa.detalle, 900) || "", origen: "app", persona: t.persona };
+      t.neto = Math.round((t.items || []).reduce((s2, it, i) => s2 + (precios[i] || 0) * (it.q || 1), 0) + t.firma.despacho); t.total = Math.round(t.neto * 1.19);
+      t.accion = "pdf"; t.pdf = previo?.pdf || false;
+      anotar(t, "firmar", robotOn ? "Lista para firmar con tus precios (el robot agrega el PDF)." : "Lista para firmar con tus precios · el robot está apagado: va sin PDF, tú la ingresas en MP.");
+      return json({ trabajo: await escribir(store, t), directo: true });
+    }
     anotar(t, "en_cola", accion === "probar" ? "Prueba sin enviar: el robot la tomará en segundos." : esLic ? "Licitación: el robot bajará la ficha, las bases y los anexos." : "Esperando que el robot la tome.");
     return json({ trabajo: await escribir(store, t) });
   }
