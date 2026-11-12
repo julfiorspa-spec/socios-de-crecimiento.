@@ -2583,7 +2583,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       : filtro === "exp" ? x.tipo === "exp" : x.tipo !== "esp")))
       .sort((a, b) => { const poca = (x) => esSeg(x) && (x.ofertas ?? 9) <= 2;   // 2° llamado primero; los casi sin competencia, más arriba
         return (poca(b) - poca(a)) || (esSeg(b) - esSeg(a)) || (b.ganancia || 0) - (a.ganancia || 0); });
-    const n = R.oportN || 40;
+    const n = R.oportN || 15;   // ⚡ 15 tarjetas de partida: la pantalla vuela; «ver más» trae el resto
     const color = { exp: "#ffd88a", rev: "#9cc3ff", srv: "#d9c9ff", esp: "#999" };
     const fila = (x, modo) => {
       const h = Math.round((Date.parse(x.cierre) - ahora) / 3600000);
@@ -3136,7 +3136,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       const tab = R.oportTab || "nuevas";
       if (tab === "nuevas") return false;
       let prev = (R.tabHist || []).pop(); while (prev === tab) prev = (R.tabHist || []).pop();
-      R.oportTab = prev || "nuevas"; guardar({ oportTab: R.oportTab }); R.oportN = 40;
+      R.oportTab = prev || "nuevas"; guardar({ oportTab: R.oportTab }); R.oportN = 15;
     }
     sheet.scrollTop = 0; pintarHoja(true); return true;
   }
@@ -4515,10 +4515,10 @@ ${empNom}`;
       toast(todo ? "Mostrando todas las oportunidades" : "🔎 Buscando oportunidades de tu rubro…");
       return pintarHoja(true);
     }
-    if (a === "oport-q-borrar") { R.oportQ = ""; R.oportN = 40; pintarHoja(true); return; }
-    if (a === "oport-filtro") { R.oportFiltro = b.dataset.f; R.oportN = 40; return pintarHoja(); }
-    if (a === "oport-tab") { if ((R.oportTab || "nuevas") !== b.dataset.t) R.tabHist = [...(R.tabHist || []), R.oportTab || "nuevas"].slice(-12); R.oportTab = b.dataset.t; guardar({ oportTab: R.oportTab }); R.oportN = 40; sheet.scrollTop = 0; return pintarHoja(true); }
-    if (a === "oport-mas") { R.oportN = (R.oportN || 40) + 40; return pintarHoja(); }
+    if (a === "oport-q-borrar") { R.oportQ = ""; R.oportN = 15; pintarHoja(true); return; }
+    if (a === "oport-filtro") { R.oportFiltro = b.dataset.f; R.oportN = 15; return pintarHoja(); }
+    if (a === "oport-tab") { if ((R.oportTab || "nuevas") !== b.dataset.t) R.tabHist = [...(R.tabHist || []), R.oportTab || "nuevas"].slice(-12); R.oportTab = b.dataset.t; guardar({ oportTab: R.oportTab }); R.oportN = 15; sheet.scrollTop = 0; return pintarHoja(true); }
+    if (a === "oport-mas") { R.oportN = (R.oportN || 15) + 25; return pintarHoja(); }
     if (a === "oport-sel") { if (esSel(cod)) await quitarSel(cod); else { toast("⭐ A Seleccionadas"); await ponerSel(cod); } return pintarHoja(); }
     if (a === "sel-quitar") { await quitarSel(cod); toast("↩ De vuelta en Por preparar"); return pintarHoja(); }
     if (a === "seg-actualizar") { toast("Consultando Mercado Público…"); return cargarSeg(true); }
@@ -5243,7 +5243,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
   });
   sheet.addEventListener("input", (ev) => {           // 💲 precio de licitación en vivo · 🔎 búsqueda global
     const el = ev.target;
-    if (el.id === "rbOportQ") { R.oportQ = el.value; R.oportN = 40; clearTimeout(R._oq); R._oq = setTimeout(() => { const pos = el.selectionStart; pintarHoja(true); const n = $("#rbOportQ"); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch {} } }, 350); return; }
+    if (el.id === "rbOportQ") { R.oportQ = el.value; R.oportN = 15; clearTimeout(R._oq); R._oq = setTimeout(() => { const pos = el.selectionStart; pintarHoja(true); const n = $("#rbOportQ"); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch {} } }, 350); return; }
     if (el.id === "rbGlobalQ") { R.globalQ = el.value; clearTimeout(R._gq); R._gq = setTimeout(() => { const pos = el.selectionStart; pintarHoja(true); const n = $("#rbGlobalQ"); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch {} } }, 350); return; }
     if (!el.classList?.contains("rb-rango")) return;
     const box = el.closest(".rb-precio-lic"); if (!box) return;
