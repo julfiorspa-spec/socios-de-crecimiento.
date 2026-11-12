@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      3.4.3
+// @version      3.5.0
 // @description  Te lleva a tu Compra Ágil (una navegación, por tu toque) y rellena precios/despacho/detalle al pulsar Rellenar, con confirmación. No envía, no declara, no firma, no navega solo, no oculta la automatización: el envío y la firma los haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -315,6 +315,14 @@
     return coincide(el, v);
   };
   const espera = (ms) => new Promise(r => setTimeout(r, ms));
+  // 🔑 abre www.mercadopublico.cl en OTRA pestaña (si Safari bloquea window.open, usa un enlace real)
+  const LOGIN_URL = 'https://www.mercadopublico.cl/Home/Login';
+  const abrirLogin = () => {
+    let w = null; try { w = window.open(LOGIN_URL, '_blank'); } catch (_) {}
+    if (!w) { const a = document.createElement('a'); a.href = LOGIN_URL; a.target = '_blank'; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove(); }
+    say('🔑 Inicia sesión en la pestaña nueva y vuelve aquí; luego toca ↻ Reintentar.');
+  };
+  const ESPERA_CARGA_MS = 5000;   // ⏱ si en 5 s la compra no aparece, se ofrece entrar en otra pestaña
   // 👉 deja MARCADO el botón «Enviar cotización» (anillo dorado + etiqueta) hasta que lo toques. No lo toca por ti.
   // ⬇ baja la pantalla sola hasta «Enviar cotización». No lo toca ni lo decora.
   const marcarEnviar = () => { const btn = botonEnviar(); if (!btn) return false; try { btn.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {} return true; };
@@ -574,6 +582,7 @@
       foot.replaceChildren(
         button('🔎 ¿Enviar gris?', () => { const g = porQueGris(); say(g || '✅ «Enviar cotización» está habilitado. El envío y la firma los haces tú.'); }, 'ghost'),
         button('↻ Actualizar', () => { currentCode = ''; showWallet(code); }, 'ghost'),
+        button('🔑 Sesión (otra pestaña)', abrirLogin, 'ghost'),
         button('🩺 Diagnóstico', downloadLog, 'ghost'));
       debug('rellenado_disponible', code);
     } catch (e) { say(`No se pudo cargar la oferta (${e.message}). No se realizó ninguna acción en el portal.`); debug('error_carga', e.message); }
@@ -592,7 +601,7 @@
     { const txt = ((document.body && document.body.innerText) || '').trim(); const pide = /iniciar sesi|inicie sesi|ingrese (su )?(usuario|clave)|clave ?[uú]nica|sesi[oó]n (ha )?expirad|no autorizado|ha ocurrido un error|error inesperado|p[aá]gina no (disponible|encontrada)/i.test(txt) || (getPathCode() && txt.length < 80);
       if (pide && !confirmedCode()) {
         say('🔑 Mercado Público no cargó la compra (pide sesión o rebotó). Entra en otra pestaña y después vuelve aquí y toca Reintentar.');
-        actions.append(button('Iniciar sesión en otra pestaña', () => { window.open('https://www.mercadopublico.cl/Home/Login', '_blank'); }, 'primary'));
+        actions.append(button('🔑 Iniciar sesión en otra pestaña', abrirLogin, 'primary'));
         actions.append(button('↻ Reintentar', () => location.reload(), 'ghost'));
         actions.append(button('Volver a CotizÁgil', () => location.assign(APP + '/#robot'), 'ghost'));
         return; } }
@@ -625,7 +634,24 @@
       return;
     }
     const code = getPathCode();
-    if (code) { await showWallet(code); return; }
+    if (code) {
+      // ⏱ VIGÍA 5 s: si la compra sigue «cargando» (no aparece el código ni el formulario), MP está caído o pide sesión →
+      //    se ofrece de inmediato entrar en OTRA pestaña (www.mercadopublico.cl) y reintentar. No se toca nada del portal.
+      const ruta0 = route;
+      setTimeout(() => {
+        if (lastPath !== ruta0 || confirmedCode()) return;
+        const txt = (document.body && document.body.innerText) || '';
+        const lista = txt.includes(code) && document.querySelector('input, textarea, select');
+        if (lista) return;
+        debug('carga_lenta', code);
+        say(`⏱ ${code}: Mercado Público lleva más de 5 s sin mostrar la compra (caído o pide sesión). Entra en otra pestaña y vuelve a reintentar.`);
+        actions.replaceChildren();
+        actions.append(button('🔑 Iniciar sesión en otra pestaña', abrirLogin, 'primary'));
+        actions.append(button('↻ Reintentar', () => location.reload(), 'ghost'));
+        actions.append(button('Volver a CotizÁgil', () => location.assign(APP + '/#robot'), 'ghost'));
+      }, ESPERA_CARGA_MS);
+      await showWallet(code); return;
+    }
     currentCode = '';
     await renderPending();
   };
