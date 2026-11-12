@@ -1659,6 +1659,20 @@ async function atender(req) {
   if (ruta === "empresas" && req.method === "GET") {
     return json({ empresas: (await store.get("empresas/lista", { type: "json" })) || {} });
   }
+  // ⚡ prioridad de cola por empresa: sus compras ágiles las toma el robot antes que las demás (por horas; 0 = quitar)
+  if (ruta === "cola-prioridad") {
+    if (req.method === "POST") {
+      const b = await cuerpo(req);
+      const horas = Math.max(0, Math.min(24, Number(b.horas) || 0)), emp = texto(b.empresa, 40);
+      if (!horas || !emp) { await store.delete("cola/prioridad").catch(() => {}); return json({ ok: true, prioridad: null }); }
+      const L = (await store.get("empresas/lista", { type: "json" })) || {};
+      const p = { empresa: emp, nombre: L[emp]?.razon_social || emp, hasta: new Date(Date.now() + horas * 3600_000).toISOString(), por: texto(b.por, 60), t: ahora() };
+      await store.setJSON("cola/prioridad", p);
+      return json({ ok: true, prioridad: p });
+    }
+    const p = (await store.get("cola/prioridad", { type: "json" })) || null;
+    return json({ prioridad: p && Date.parse(p.hasta || 0) > Date.now() ? p : null });
+  }
   if (ruta === "empresa" && req.method === "POST") {
     const b = await cuerpo(req);
     const rut = String(b.rut || "").replace(/[^0-9kK]/g, "").toUpperCase();
@@ -2016,9 +2030,16 @@ async function atender(req) {
     // 🌿 RAMIFICAR por equipo/jugador: reparto JUSTO (round-robin). Los pedidos de tu iPhone, el de Cristopher y el
     // compu grande no se tapan entre sí: va primero el equipo que fue atendido hace más rato, así cada uno avanza por turno.
     const servido = (await store.get("cola/servido", { type: "json" })) || {};
-    const quien = (t) => texto(t.jugador || t.dispositivo || "_", 60) || "_";
-    const siguiente = cola2.sort((a, b) => (humano(b) - humano(a))
-      || (servido[quien(a)] || "").localeCompare(servido[quien(b)] || "")   // equipo menos atendido primero
+    // 🏢 cada EMPRESA es su propia cola: NS Comex nunca se mezcla ni espera detrás de PJANIC (y al revés). El turno
+    //    se reparte por empresa+persona. ⚡ Y si alguien pidió prioridad para una empresa (cola-prioridad), esa va primero.
+    const prio = (await store.get("cola/prioridad", { type: "json" })) || null;
+    const prioOn = prio && prio.empresa && Date.parse(prio.hasta || 0) > Date.now();
+    const empDe = (t) => texto(t.empresa, 40) || "principal";
+    const quien = (t) => empDe(t) + "|" + (texto(t.jugador || t.dispositivo || "_", 60) || "_");
+    const esPrio = (t) => (prioOn && empDe(t) === prio.empresa ? 1 : 0);
+    const siguiente = cola2.sort((a, b) => (esPrio(b) - esPrio(a))
+      || (humano(b) - humano(a))
+      || (servido[quien(a)] || "").localeCompare(servido[quien(b)] || "")   // empresa/persona menos atendida primero
       || a.creado.localeCompare(b.creado))[0];
     if (!siguiente) return json({ siguiente: null, ...op });
     servido[quien(siguiente)] = ahora();                                     // este equipo pasa al final de su turno

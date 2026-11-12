@@ -3495,7 +3495,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   // ☁️ robot en la nube 24/7: funciona aunque el PC esté apagado
   async function cargarNube() {
     if (R._cargNube) return; R._cargNube = true;
-    try { const [n, so] = await Promise.all([api("nube-estado"), api("nube-solicitudes").catch(() => ({}))]); R.nube = { ...n, solicitudes: so.solicitudes || [] }; R.nubeT = Date.now(); pintarHojaSiAbierta(); } catch {} finally { R._cargNube = false; }
+    try { const [n, so, pr] = await Promise.all([api("nube-estado"), api("nube-solicitudes").catch(() => ({})), api("cola-prioridad").catch(() => ({}))]); R.nube = { ...n, solicitudes: so.solicitudes || [], prioridad: pr.prioridad || null }; R.nubeT = Date.now(); pintarHojaSiAbierta(); } catch {} finally { R._cargNube = false; }
   }
   // 🔐 CONECTAR MERCADO PÚBLICO DESDE EL CELULAR: RUN y ClaveÚnica se cifran aquí con la llave pública del robot del PC
   // (RSA-OAEP). La nube solo los pasa sellados: no los puede leer ni los guarda. El robot los escribe en ClaveÚnica
@@ -3543,6 +3543,12 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       <div class="rb-etapas rb-modos" style="margin-top:6px">${b("pc", "🖥 PC")}${b("nube", "☁️ Nube")}${b("", "⚙ Auto")}</div>
       <button class="btn small rb-oro" type="button" data-rb="mp-safari" style="width:100%;margin-top:7px">🧑 Iniciar sesión en Mercado Público <small style="opacity:.85">(abre Safari)</small></button>
       <button class="btn small" type="button" data-rb="nube-pronto" style="width:100%;margin-top:6px;opacity:.5">☁️ Ingresar a la nube <small>(pronto)</small></button>
+      ${(() => { const P = R.nube?.prioridad, emp = empresaActual(), mia = P && P.empresa === miEmp();
+        const hasta = P ? new Date(P.hasta).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }) : "";
+        return `<div class="rb-prio" style="margin-top:8px;font-size:.78rem;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span style="flex:1;min-width:0">${P ? `⚡ Cola con prioridad: <b>${esc(corta(P.nombre || P.empresa))}</b> hasta las ${hasta}` : "⚡ Cada empresa tiene su propia cola (nadie se mezcla)"}</span>
+          ${P ? `<button class="btn small" type="button" data-rb="cola-prio" data-h="0">Quitar</button>` : ""}
+          ${!mia && emp ? `<button class="btn small rb-oro" type="button" data-rb="cola-prio" data-h="3">Apurar a ${esc(corta(emp.razon_social) || "mi empresa")} (3 h)</button>` : ""}</div>`; })()}
       ${conectado ? "" : `<div class="muted" style="font-size:.68rem;margin-top:5px">Si está en rojo: abre el robot en tu PC. Cuando se ponga 🟢, toca «Ingresar a Mercado Público».</div>`}
     </div>`;
   }
@@ -5074,6 +5080,12 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "marcador-arrastrar") { ev.preventDefault(); toast("Arrástralo a la barra de favoritos; se usa en Mercado Público"); return; }
     if (a === "nube-entrar") { await entrarNube(); return; }
     if (a === "mp-safari") { try { window.open("https://www.mercadopublico.cl/", "_blank", "noopener"); } catch (e) { location.href = "https://www.mercadopublico.cl/"; } toast("🧑 Abriendo Mercado Público — entra con tu cuenta y firma ahí mismo"); return; }
+    if (a === "cola-prio") {
+      const h = Number(b.dataset.h) || 0;
+      try { const r = await api("cola-prioridad", { method: "POST", body: JSON.stringify({ empresa: miEmp(), horas: h, por: persona()?.nombre || "" }) });
+        R.nube = { ...(R.nube || {}), prioridad: r.prioridad || null }; toast(r.prioridad ? `⚡ El robot toma primero las de ${corta(r.prioridad.nombre)} (${h} h)` : "Prioridad quitada: turnos parejos por empresa"); pintarHojaSiAbierta();
+      } catch (e) { toast("No pude cambiar la prioridad"); } return;
+    }
     if (a === "nube-pronto") { toast("☁️ La nube la activamos más adelante (con los permisos). Por ahora el robot trabaja en tu PC."); return; }
     if (a === "mpl-abrir") { R.pantalla = "mplogin"; R.mplCarg = false; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "mpl-salir") { R.pantalla = null; clearTimeout(R.mplTimer); R.mplCarg = false; return pintarHoja(true); }
