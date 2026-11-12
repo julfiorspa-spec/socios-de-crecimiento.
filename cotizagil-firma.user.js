@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      3.5.0
+// @version      3.5.1
 // @description  Te lleva a tu Compra Ágil (una navegación, por tu toque) y rellena precios/despacho/detalle al pulsar Rellenar, con confirmación. No envía, no declara, no firma, no navega solo, no oculta la automatización: el envío y la firma los haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -76,7 +76,14 @@
   const BLOQUEO = /comportamiento inusual|actividad inusual|demasiad[oa]s (intentos|solicitudes)|intenta (nuevamente )?m[aá]s tarde|acceso (no autorizado|denegado|restringido)|has sido bloquead|temporalmente bloquead/i;
   const hayBloqueoMP = () => BLOQUEO.test((document.body && document.body.innerText || '').slice(0, 4000));
   // la declaración jurada (perjurio / art. 210) es un acto legal tuyo: jamás la tocamos ni la rellenamos.
-  const hayDeclaracion = () => /perjurio|art[ií]culo\s*210|declaraci[oó]n jurada/i.test((document.body && document.body.innerText || '').slice(0, 4000));
+  // Se considera ABIERTA solo si hay un diálogo/modal visible con ese texto o el botón «Aceptar y enviar» a la vista.
+  // (La ficha de la compra puede mencionar «declaración jurada» en su texto sin que el modal esté abierto: eso NO bloquea.)
+  const hayDeclaracion = () => {
+    const vis = (e) => e && e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden';
+    if ([...document.querySelectorAll('button')].some(b => /aceptar\s+y\s+enviar/i.test(b.textContent || '') && vis(b))) return true;
+    return [...document.querySelectorAll('[role=dialog], .modal, .mat-dialog-container, .cdk-overlay-container, .MuiDialog-root, [class*="modal"], [class*="dialog"]')]
+      .some(d => vis(d) && /perjurio|art[ií]culo\s*210|declaraci[oó]n jurada/i.test(d.innerText || ''));
+  };
 
   // ===== ÚNICA navegación: una compra, una sola vez por sesión de pestaña, por acción tuya y solo si NO hay bloqueo =====
   let navegando = false;
