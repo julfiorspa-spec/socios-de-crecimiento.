@@ -2635,7 +2635,9 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       const costo = Number(x._sel.costo) || costoMk || 0;
       const real = !!costo, piso = pisoDe(costo || costoEst, pres);
       // 1er llamado: tope = el presupuesto · 🔥 2° llamado: se desbloquea, se puede ofertar sobre el presupuesto hasta 100 UTM
-      const tope = esSeg(x) ? TOPE_CA() : Math.min(pres, TOPE_CA()), precio0 = Math.round(Math.min(x._sel.precio || Math.max(pres * (1 - sugerido(x).d), real ? piso : 0), tope));
+      // 🧠 13-11: de 44 compras con proveedor seleccionado, el ganador ofertó entre 90 % y 97 % del presupuesto y perdimos 7 por ir
+      //    sobre el presupuesto en 2° llamado → el tope de la barra es SIEMPRE el presupuesto; sobre él solo a mano y confirmando.
+      const topeLegal = TOPE_CA(), tope = Math.min(pres, topeLegal), precio0 = Math.round(Math.min(x._sel.precio || Math.max(pres * (1 - sugerido(x).d), real ? piso : 0), tope));
       const h = x.cierre ? Math.round((Date.parse(x.cierre) - ahora) / 3600000) : null;
       const of = x.ofertas ?? null, seg = esSeg(x);
       const rival = of === 0 ? `<span class="rb-rival solo">🎯 Vas solo</span>` : of != null && of <= 2 ? `<span class="rb-rival pocos">${of} rival${of === 1 ? "" : "es"}</span>`
@@ -2667,7 +2669,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         <div class="rb-chips2"><button class="btn small" type="button" data-paso="-1">−1%</button>
           <button class="btn small rb-sugb" type="button" data-fijo="${vSug}" title="${esc(sg.por)}">💡 ${cortoG(vSug)}</button>
           <button class="btn small rb-soltar ${of != null && of <= 1 ? "brilla" : ""}" type="button" data-fijo="${pres}">🔓 Todo ${cortoG(pres)}</button>
-          ${tope > pres ? `<button class="btn small rb-soltar" type="button" style="grid-column:1/-1;order:9" data-fijo="${tope}" title="Tope legal de la Compra Ágil">🚀 Soltar hasta 100 UTM · ${clp(tope)}</button>` : `<button class="btn small rb-soltar ${of != null && of <= 1 ? "brilla" : ""}" type="button" style="grid-column:1/-1;order:9" data-fijo="${pres}" title="1er llamado: el tope es el presupuesto">🚀 Soltar · Presupuesto completo ${clp(pres)}</button><span class="muted" style="grid-column:1/-1;order:10;font-size:.64rem;text-align:center">1er llamado: tope = presupuesto · en 2° llamado se desbloquea hasta 100 UTM</span>`}
+          ${esSeg(x) && topeLegal > pres ? `<button class="btn small rb-sobre-pres" type="button" style="grid-column:1/-1;order:9;opacity:.75" data-fijo="${topeLegal}" data-arm="0" title="Solo a mano: el comprador casi siempre elige bajo su presupuesto">⚠ Ir sobre el presupuesto (hasta 100 UTM · ${cortoG(topeLegal)})</button>` : `<button class="btn small rb-soltar ${of != null && of <= 1 ? "brilla" : ""}" type="button" style="grid-column:1/-1;order:9" data-fijo="${pres}" title="1er llamado: el tope es el presupuesto">🚀 Soltar · Presupuesto completo ${clp(pres)}</button><span class="muted" style="grid-column:1/-1;order:10;font-size:.64rem;text-align:center">1er llamado: tope = presupuesto · en 2° llamado se desbloquea hasta 100 UTM</span>`}
           <button class="btn small" type="button" data-paso="1">+1%</button></div>
         <div class="muted" style="font-size:.7rem;margin-top:4px">💡 ${esc(sg.por)}</div>
         <details class="rb-det"><summary>✎ Mi costo: <b class="rb-cvis">${clp(costo || costoEst)}</b> <span class="rb-cest">${Number(x._sel.costo) ? "(tuyo)" : costoMk ? "(mercado, IA)" : `(estimado ${Math.round(margenRubro * 100)}% margen)`}</span></summary>
@@ -2683,10 +2685,11 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     // ---- 🎯 precio sugerido según el llamado y la competencia (lección: en 2° llamado casi nadie compite)
     const sugerido = (x) => {
       const seg = esSeg(x), of = x.ofertas ?? null;
-      let d = seg ? (of === 0 ? 0 : of === 1 ? 0.02 : of != null && of <= 3 ? 0.04 : 0.07) : (of != null && of <= 1 ? 0.04 : of != null && of <= 3 ? 0.06 : 0.09);
+      // 13-11: ganadores reales entre 90 % y 97 % del presupuesto → nunca sugerir el presupuesto completo salvo que vayas solo en 2° llamado
+      let d = seg ? (of === 0 ? 0.02 : of === 1 ? 0.04 : of != null && of <= 3 ? 0.06 : 0.09) : (of != null && of <= 1 ? 0.06 : of != null && of <= 3 ? 0.08 : 0.11);
       const ic = intel(), mr = (seg ? ic.medSeg : ic.medPri) ?? ic.med;
       if (ic.n >= 3 && mr != null && !(seg && of === 0)) d = Math.max(0, Math.min(0.35, (d + (1 - mr + 0.01)) / 2));   // mezcla: regla + lo que realmente gana
-      const por = seg ? (of === 0 ? "2° llamado y nadie ha cotizado: oferta el presupuesto completo"
+      const por = seg ? (of === 0 ? "2° llamado y nadie ha cotizado: casi todo el presupuesto (−2 %)"
         : of != null && of <= 3 ? `2° llamado con solo ${of} cotización${of === 1 ? "" : "es"}: pocos compiten, no regales margen`
         : "2° llamado: menos competencia que en el primero") : (of != null && of <= 3 ? `Primer llamado con ${of} cotizaciones` : "Primer llamado: más competencia, baja un poco más");
       return { d, por: por + (ic.n >= 3 && mr != null ? ` · 🧠 los que ganan cotizan ~${Math.round((1 - mr) * 100)}% bajo el presupuesto (${ic.n} casos)` : "") };
@@ -4440,7 +4443,7 @@ ${empNom}`;
     const codigo = String(datos.codigo || "").trim().toUpperCase();
     if (!COD_CA.test(codigo)) { toast("El robot trabaja Compras Ágiles (código …-COT26)"); return; }
     if (!R.token) { abrir(); return; }
-    R.conf = { ...datos, codigo, accion, editar: accion === "editar", descuento: leer().descuento ?? 0.08 };
+    R.conf = { ...datos, codigo, accion, editar: accion === "editar", descuento: leer().descuento ?? 0.10 };
     if (!sheet.classList.contains("on")) { sheet.classList.add("on"); back.classList.add("on"); }
     pintarHoja();
   }
@@ -4450,7 +4453,7 @@ ${empNom}`;
     const cods = [...new Set((String(texto || "").toUpperCase().match(COD_CA_G) || []))];
     if (cods.length <= 1) return pedirOferta({ codigo: cods[0] || texto });
     if (!R.token) { abrir(); return; }
-    const descuento = leer().descuento ?? 0.08;
+    const descuento = leer().descuento ?? 0.10;
     if (!confirm(`¿Preparar ${cods.length} compras para firmar con ${Math.round(descuento * 100)}% bajo el presupuesto?`)) return;
     let ok = 0;
     for (const codigo of cods) {
@@ -5381,6 +5384,10 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
   sheet.addEventListener("click", (ev) => {
     const b = ev.target.closest?.("[data-paso],[data-fijo]"); if (!b) return;
     const c = b.closest(".rb-sel"); if (!c) return; const r = c.querySelector(".rb-range");
+    if (b.classList.contains("rb-sobre-pres")) {                 // ⚠ sobre el presupuesto: solo a mano y en dos toques
+      if (b.dataset.arm !== "1") { b.dataset.arm = "1"; b.style.opacity = "1"; b.textContent = "¿Seguro? Casi nadie gana sobre el presupuesto · toca de nuevo para confirmar"; setTimeout(() => { if (b.isConnected && b.dataset.arm === "1") { b.dataset.arm = "0"; b.style.opacity = ".75"; b.textContent = `⚠ Ir sobre el presupuesto (hasta 100 UTM · ${cortoG(+b.dataset.fijo)})`; } }, 6000); return; }
+      r.dataset.hi = b.dataset.fijo; r.dataset.mid = Math.round(Math.min(+c.dataset.pres * 1.5, +b.dataset.fijo)); b.textContent = "🔓 Tope ampliado a 100 UTM";
+    }
     const base = c.dataset.v ? +c.dataset.v : precioDe(r), lo = +r.dataset.lo, hi = +r.dataset.hi;
     const nv = b.dataset.fijo ? Math.max(lo, Math.min(hi, +b.dataset.fijo)) : Math.max(lo, Math.min(hi, Math.round(base * (1 + b.dataset.paso / 100) / 10) * 10));
     r.value = posDe(r, nv); c.dataset.v = nv; pintarSel(c, true);
