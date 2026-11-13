@@ -737,7 +737,12 @@ async function siiIngesta(req) {
     }
     H.t = ahora(); await store.setJSON(kh, H);
     const idx = (await store.get("historico/_indice", { type: "json" })) || { terms: {} };
-    idx.terms[term] = { n: Object.keys(H.compras).length, t: ahora() }; await store.setJSON("historico/_indice", idx);
+    const L = Object.values(H.compras), med = (a) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+    const rs = L.filter((c) => c.pres > 0 && c.ganador?.total > 0).map((c) => c.ganador.total / c.pres);
+    idx.terms[term] = { n: L.length, t: ahora(), ratioMed: med(rs), ofMed: med(L.map((c) => c.nOf)), presMed: med(L.map((c) => c.pres)),
+      ratioSeg: med(L.filter((c) => /segundo/i.test(c.conv || "") && c.pres > 0 && c.ganador?.total > 0).map((c) => c.ganador.total / c.pres)),
+      ratioPri: med(L.filter((c) => !/segundo/i.test(c.conv || "") && c.pres > 0 && c.ganador?.total > 0).map((c) => c.ganador.total / c.pres)) };
+    await store.setJSON("historico/_indice", idx);
     return new Response(JSON.stringify({ ok: true, term, guardadas: nh, total: Object.keys(H.compras).length }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   }
   base.t = ahora(); await store.setJSON(k2, base);

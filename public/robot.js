@@ -1373,7 +1373,7 @@
   const esSel = (cod) => !!leerSel()[cod];
   async function cargarSel() {
     try { const r = await api("seleccionadas"); guardarSel(r.sel || {}); } catch {}
-    cargarMercado();
+    cargarMercado(); cargarHist();
   }
   // 💹 costo de mercado real (lo busca el PC con IA para cada seleccionada)
   async function cargarMercado() {
@@ -1387,6 +1387,25 @@
     const med = (a) => { if (!a.length) return null; const b = [...a].sort((x, y) => x - y); return b[Math.floor(b.length / 2)]; };
     return { n: v.length, med: med(v.map((x) => x.r)), medSeg: med(v.filter((x) => x.seg).map((x) => x.r)), medPri: med(v.filter((x) => !x.seg).map((x) => x.r)), todos: v.map((x) => x.r) };
   }
+  // 📚 HISTÓRICO DE MERCADO (TodoLicitaciones → nube): por familia, con qué % del presupuesto gana el ganador REAL y cuántos ofertan.
+  //    Se carga una vez por sesión; histDe(x) empareja la oportunidad con la familia por palabras clave del nombre/productos.
+  async function cargarHist() {
+    if (R._cargHist || (R.histT && Date.now() - R.histT < 10 * 60_000)) return; R._cargHist = true;
+    try { R.hist = (await api("historico")).terms || {}; R.histT = Date.now(); } catch {} R._cargHist = false;
+  }
+  const HIST_KW = { "cascos-seguridad": /casco/i, "elementos-proteccion-personal": /\bepp\b|protecci[oó]n personal|guante|zapato de seguridad|chaleco reflect|antiparra|lentes de seguridad|mascarilla/i,
+    "pletina-acero": /pletina|plancha de acero|acero/i, "fierro-perfil-metalico": /fierro|perfil met|tubo estructural|barra de acero|malla acma/i, "viruta-madera": /viruta|aserr[ií]n|cama de/i,
+    "bolsas-basura": /bolsa.*basura|bolsas? de (basura|residuo)/i, "bolsas-plasticas": /bolsa/i, "hormigon-aridos": /hormig[oó]n|[áa]rido|gravilla|arena|cemento|ripio/i, "alimento-perros": /alimento.*(perro|canino|mascota|gato)|croqueta/i,
+    "impresion-grafica": /impresi[oó]n|pendones?|gigantograf|folleter|afiche|tr[ií]ptico|volante|lienzo|gr[áa]fica/i, "mobiliario-oficina": /mobiliario|silla|escritorio|mesa|estante|kardex|locker/i, "insumos-aseo": /aseo|limpieza|detergente|cloro|papel higi[eé]nico|toalla de papel|jab[oó]n/i,
+    "terciado-madera": /terciado|madera|pino|melamina|mdf|osb/i, "pintura": /pintura|esmalte|l[áa]tex|barniz|rodillo/i, "herramientas": /herramienta|taladro|esmeril|sierra|motosierra|desmalezador|galletera/i, "señaletica": /se[ñn]al[eé]tica|letrero|placa|cono/i,
+    "carpa-toldo": /carpa|toldo|gazebo|evento|producci[oó]n de/i, "electrodomesticos": /electrodom|refrigerador|microondas|hervidor|lavadora|televisor|aire acondicionado/i, "estanterias-metalicas": /estanter[ií]a|rack|repisa/i, "juguetes-navidad": /juguete|navidad|regalo/i };
+  function histDe(x) {
+    if (!R.hist) return null;
+    const txt = [x.nombre, x.descripcion, x.desc, ...(x.productos || []).map((p) => p.nombre || p)].filter(Boolean).join(" ");
+    for (const [term, re] of Object.entries(HIST_KW)) { const h = R.hist[term]; if (h && h.n >= 8 && h.ratioMed && re.test(txt)) return { term, ...h }; }
+    return null;
+  }
+  const histTxt = (h) => h ? `📚 Mercado real «${h.term.replace(/-/g, " ")}»: el ganador va al <b>${Math.round(h.ratioMed * 100)} %</b> del presupuesto${h.ofMed != null ? `, ${h.ofMed} ofertas típicas` : ""} (${h.n} compras adjudicadas)` : "";
   // 📒 Libro del juego (el ERP que nace): vendido, comprado, facturado, utilidad, por mes; y tu nivel de jugador
   const NIVELES = [[0, "🥉 Bronce"], [2e6, "🥈 Plata"], [10e6, "🥇 Oro"], [30e6, "💎 Diamante"], [100e6, "👑 Leyenda"]];
   // 🏆 Éxitos: la vitrina de casos de éxito. Se llena sola cada vez que ganas una Compra Ágil o licitación.
@@ -1454,14 +1473,15 @@
     const seg = esSeg(x), of = x.ofertas ?? null;
     let p = of === 0 ? (seg ? 0.85 : 0.55) : of === 1 ? (seg ? 0.65 : 0.45) : of != null && of <= 3 ? (seg ? 0.45 : 0.32) : of != null && of <= 6 ? 0.18 : of != null ? 0.08 : (seg ? 0.40 : 0.25);
     if (x.tipo === "exp") p *= 1.15; else if (x.tipo === "esp") p *= 0.5; else if ((x.viab ?? 1) < 0.85) p *= 0.7;
-    if (ratio != null) { const ic = intel(), mr = (seg ? ic.medSeg : ic.medPri) ?? ic.med ?? (seg ? 0.94 : 0.92); p *= ratio <= mr - 0.02 ? 1.25 : ratio <= mr ? 1.1 : ratio <= mr + 0.03 ? 0.85 : ratio <= 1 ? 0.6 : 0.3; }
+    if (ratio != null) { const h = histDe(x), ic = intel(), mr = (h && (seg ? h.ratioSeg : h.ratioPri)) || h?.ratioMed || (seg ? ic.medSeg : ic.medPri) || ic.med || (seg ? 0.94 : 0.92); p *= ratio <= mr - 0.02 ? 1.25 : ratio <= mr ? 1.1 : ratio <= mr + 0.03 ? 0.85 : ratio <= 1 ? 0.6 : 0.3; }
     return Math.max(0.02, Math.min(0.95, p));
   }
-  // 🤖 el precio que pone Claude: justo bajo lo que gana (mediana real −1 pt), nunca bajo el piso ni sobre el presupuesto
+  // 🤖 el precio que pone Claude: justo bajo lo que gana (mediana real −1 pt), nunca bajo el piso ni sobre el presupuesto.
+  //    Si hay histórico de mercado para la familia (TodoLicitaciones), manda ese ratio del ganador real; si no, el nuestro.
   function precioClaude(x, pres, piso) {
-    const seg = esSeg(x), of = x.ofertas ?? null, ic = intel();
-    let r = (seg ? ic.medSeg : ic.medPri) ?? ic.med ?? (seg ? 0.94 : 0.92);
-    r = Math.min(seg && of === 0 ? 0.98 : 0.96, Math.max(0.85, r - 0.01));
+    const seg = esSeg(x), of = x.ofertas ?? null, ic = intel(), h = histDe(x);
+    let r = (h && (seg ? h.ratioSeg : h.ratioPri)) || h?.ratioMed || (seg ? ic.medSeg : ic.medPri) || ic.med || (seg ? 0.94 : 0.92);
+    r = Math.min(seg && of === 0 ? 0.98 : 0.96, Math.max(h ? 0.55 : 0.85, r - 0.01));
     if (!seg && of != null && of >= 4) r -= 0.02;
     let v = Math.floor(pres * r / 10) * 10;
     if (piso && v < piso) v = piso;
@@ -2714,12 +2734,13 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       const seg = esSeg(x), of = x.ofertas ?? null;
       // 13-11: ganadores reales entre 90 % y 97 % del presupuesto → nunca sugerir el presupuesto completo salvo que vayas solo en 2° llamado
       let d = seg ? (of === 0 ? 0.02 : of === 1 ? 0.04 : of != null && of <= 3 ? 0.06 : 0.09) : (of != null && of <= 1 ? 0.06 : of != null && of <= 3 ? 0.08 : 0.11);
-      const ic = intel(), mr = (seg ? ic.medSeg : ic.medPri) ?? ic.med;
-      if (ic.n >= 3 && mr != null && !(seg && of === 0)) d = Math.max(0, Math.min(0.35, (d + (1 - mr + 0.01)) / 2));   // mezcla: regla + lo que realmente gana
+      const ic = intel(), h = histDe(x), hr = h ? ((seg ? h.ratioSeg : h.ratioPri) || h.ratioMed) : null, mr = hr ?? ((seg ? ic.medSeg : ic.medPri) ?? ic.med);
+      if (hr != null && !(seg && of === 0)) d = Math.max(0, Math.min(0.45, 1 - hr + 0.01));                                    // histórico de mercado por familia: manda
+      else if (ic.n >= 3 && mr != null && !(seg && of === 0)) d = Math.max(0, Math.min(0.35, (d + (1 - mr + 0.01)) / 2));   // mezcla: regla + lo que realmente gana
       const por = seg ? (of === 0 ? "2° llamado y nadie ha cotizado: casi todo el presupuesto (−2 %)"
         : of != null && of <= 3 ? `2° llamado con solo ${of} cotización${of === 1 ? "" : "es"}: pocos compiten, no regales margen`
         : "2° llamado: menos competencia que en el primero") : (of != null && of <= 3 ? `Primer llamado con ${of} cotizaciones` : "Primer llamado: más competencia, baja un poco más");
-      return { d, por: por + (ic.n >= 3 && mr != null ? ` · 🧠 los que ganan cotizan ~${Math.round((1 - mr) * 100)}% bajo el presupuesto (${ic.n} casos)` : "") };
+      return { d, por: por + (h ? ` · ${histTxt(h)}` : ic.n >= 3 && mr != null ? ` · 🧠 los que ganan cotizan ~${Math.round((1 - mr) * 100)}% bajo el presupuesto (${ic.n} casos)` : "") };
     };
     // ---- marcador: lo que motiva (ganado, utilidad, tasa de éxito, en juego)
     const decididas = enviadosAll.filter((t) => { const g = segDe(t.codigo); return g && (g.ganada || g.estado === "proveedor_seleccionado"); });
