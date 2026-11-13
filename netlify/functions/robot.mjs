@@ -788,6 +788,35 @@ async function catalogoConstruir(store, rutEmp, corsH) {
   return new Response(JSON.stringify({ ok: true, procesados: pendientes.length, lineas: nl, items: Object.keys(C.items).length, faltan: Object.keys(T.docs).length - Object.keys(C.hechos).length }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
 }
 
+// 🧠 CEREBRO DE PRECIO (modo automático): familia por palabras clave → histórico de mercado (ganador real, rivales) → certeza y descuento.
+//    Misma calibración que la app (robot.js probGanar/precioClaude); el piso de costo lo aplica el robot con su propio costo.
+const CERTEZA_MIN = 0.40;
+const HIST_KW = { "cascos-seguridad": /casco/i, "elementos-proteccion-personal": /\bepp\b|protecci[oó]n personal|guante|zapato de seguridad|chaleco reflect|antiparra|lentes de seguridad|mascarilla/i,
+  "pletina": /pletina|plancha de acero/i, "acero": /acero|inoxidable/i, "fierro": /fierro|perfil met|tubo estructural|barra de acero|malla acma/i, "viruta": /viruta|cama de/i, "aserrin": /aserr[ií]n/i,
+  "bolsas-basura": /bolsa.*basura|bolsas? de (basura|residuo)/i, "bolsas-plasticas": /bolsa/i, "hormigon": /hormig[oó]n|cemento/i, "aridos": /[áa]rido|gravilla|arena|ripio|estabilizado/i, "alimento-perros": /alimento.*(perro|canino|mascota|gato)|croqueta/i,
+  "pendones": /pend[oó]n|gigantograf|lienzo|roller/i, "impresion": /impresi[oó]n|folleter|afiche|tr[ií]ptico|volante|gr[áa]fica|tarjeta/i, "mobiliario": /mobiliario|silla|escritorio|mesa|estante|kardex|locker/i, "insumos-aseo": /aseo|limpieza|detergente|cloro|papel higi[eé]nico|toalla de papel|jab[oó]n/i,
+  "terciado": /terciado|melamina|mdf|osb/i, "madera": /madera|pino|tabla|vigas?/i, "pintura": /pintura|esmalte|l[áa]tex|barniz|rodillo/i, "herramientas": /herramienta|taladro|esmeril|sierra|motosierra|desmalezador|galletera/i, "señaletica": /se[ñn]al[eé]tica|letrero|placa|cono/i,
+  "carpa": /carpa|toldo|gazebo/i, "electrodomesticos": /electrodom|refrigerador|microondas|hervidor|lavadora|televisor|aire acondicionado/i, "estanterias": /estanter[ií]a|rack|repisa/i, "juguetes": /juguete|navidad|regalo/i,
+  "guantes": /guante/i, "zapatos-seguridad": /zapato|bota|calzado/i, "chalecos": /chaleco/i, "uniformes": /uniforme|polera|pantal[oó]n|parka|poleron|buzo/i, "toner": /t[oó]ner|cartucho|tinta/i, "papel": /resma|papel carta|papel oficio/i, "articulos-oficina": /oficina|l[áa]piz|archivador|corchetera/i, "computador": /computador|pc\b|all in one/i, "notebook": /notebook|laptop/i, "impresora": /impresora|multifuncional|plotter/i };
+async function cerebroPrecio(store, codigo, b) {
+  const O = (await store.get("oportunidades/lista", { type: "json" })) || { lista: [] };
+  const x = (O.lista || []).find((y) => limpiaCodigo(y.codigo) === codigo) || {};
+  const nombre = [b.nombre, x.nombre, x.descripcion, ...((x.productos || []).map((p) => p?.nombre || p))].filter(Boolean).join(" ");
+  const pres = Number(b.monto) || Number(x.monto) || Number(x.presupuesto) || 0;
+  const of = x.ofertas != null ? Number(x.ofertas) : null, seg = /segundo|2/.test(String(x.llamado || x.convocatoria || ""));
+  const idx = (await store.get("historico/_indice", { type: "json" })) || { terms: {} };
+  let h = null; for (const [term, re] of Object.entries(HIST_KW)) { const t = idx.terms[term]; if (t && t.n >= 8 && t.ratioMed && re.test(nombre)) { h = { term, ...t }; break; } }
+  // certeza base por rivales y llamado (calibración 13-11-2026, 44 casos propios + histórico de mercado)
+  let p = of === 0 ? (seg ? 0.85 : 0.55) : of === 1 ? (seg ? 0.65 : 0.45) : of != null && of <= 3 ? (seg ? 0.45 : 0.32) : of != null && of <= 6 ? 0.18 : of != null ? 0.08 : (seg ? 0.40 : 0.25);
+  if (x.tipo === "exp") p *= 1.15; else if (x.tipo === "esp") p *= 0.5; else if ((x.viab ?? 1) < 0.85) p *= 0.7;
+  const mr = (h && (seg ? h.ratioSeg : h.ratioPri)) || h?.ratioMed || (seg ? 0.94 : 0.92);
+  let r = Math.min(seg && of === 0 ? 0.98 : 0.96, Math.max(h ? 0.55 : 0.85, mr - 0.01)); if (!seg && of != null && of >= 4) r -= 0.02;
+  p *= 1.1;   // cotizamos justo bajo la mediana del ganador
+  p = Math.max(0.02, Math.min(0.95, p));
+  const motivo = `${of == null ? "rivales desconocidos" : of + " rivales"}, ${seg ? "2° llamado" : "1er llamado"}${h ? `, mercado «${h.term}» gana al ${Math.round(mr * 100)} % (${h.n} compras)` : ", sin histórico de familia"}`;
+  return { prob: p, descuento: Math.max(0, Math.round((1 - r) * 1000) / 1000), ratio: r, familia: h?.term || null, pres, motivo };
+}
+
 async function atender(req) {
   if (/^\/bot\/sii-ingesta\/?$/.test(new URL(req.url).pathname)) return siiIngesta(req);
   if (/^\/bot\/informe\/?$/.test(new URL(req.url).pathname)) return informePublico(req);
@@ -1503,8 +1532,17 @@ async function atender(req) {
       anotar(previo, "en_cola", "El robot revisará en Mercado Público si ya quedó enviada.");
       return json({ trabajo: await escribir(store, previo) });
     }
+    // 🤖 MODO AUTOMÁTICO (el robot pide sin descuento): Claude decide con el histórico de mercado por familia.
+    //    Certeza < 40 % → la deja pasar (200 + saltada:true, el robot la marca hecha y sigue); si no, fija el descuento del ganador real.
+    let cerebro = null;
+    if (!esLic && b.descuento == null && !["verificar", "probar", "editar"].includes(accion)) {
+      try { cerebro = await cerebroPrecio(store, codigo, b); } catch { cerebro = null; }
+      if (cerebro && cerebro.prob < CERTEZA_MIN) {
+        return json({ trabajo: null, saltada: true, aviso: `🤖 Claude la deja pasar: certeza ${Math.round(cerebro.prob * 100)} % < ${Math.round(CERTEZA_MIN * 100)} % (${cerebro.motivo})` });
+      }
+    }
     // Compra Ágil: se puede ofertar sobre el presupuesto (descuento negativo) hasta el tope de 100 UTM que controla la app
-    const descuento = Math.min(0.6, Math.max(esLic ? 0 : -9, b.descuento != null ? Number(b.descuento) || 0 : esLic ? 0.17 : 0.08));
+    const descuento = Math.min(0.6, Math.max(esLic ? 0 : -9, b.descuento != null ? Number(b.descuento) || 0 : cerebro ? cerebro.descuento : esLic ? 0.17 : 0.08));
     const t = {
       codigo, accion, descuento,
       nombre: texto(b.nombre, 200), organismo: texto(b.organismo, 200), monto: Number(b.monto) || null,
@@ -1515,8 +1553,9 @@ async function atender(req) {
       jugador: jug(b.jugador) || previo?.jugador || null,         // qué celular (qué juego) la pidió
       dispositivo: texto(b.dispositivo, 60) || previo?.dispositivo || null,
       persona: texto(b.persona, 60) || previo?.persona || null,               // quién la pidió (nombre que puso en la app)
-      por: b.por === "claude" ? "claude" : (previo?.por || null),               // 🤖 "claude": el precio lo puso Claude (ronda jugada por la IA)
+      por: b.por === "claude" || cerebro ? "claude" : (previo?.por || null),    // 🤖 "claude": el precio lo puso Claude (ronda jugada por la IA o modo automático)
     };
+    if (cerebro) { t.prob = cerebro.prob; t.cerebro = cerebro.motivo; }
     if (esLic) t.tipo = "licitacion";
     // ⚡ Firma directa: si el robot no está conectado y la app manda los precios por ítem (del juego), la oferta queda LISTA PARA FIRMAR
     //    al instante, sin esperar al robot. El PDF lo agrega el robot después si vuelve, sin sacarla de Firmar.
