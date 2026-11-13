@@ -719,6 +719,13 @@ async function siiIngesta(req) {
     T.t = ahora(); await store.setJSON(kt, T);
   }
   if (b.accion === "catalogo") return catalogoConstruir(store, rutEmp, corsH);
+  if (b.accion === "catalogo_resumen") {   // lectura rápida del catálogo armado (para revisar la carga desde el navegador)
+    const C = (await store.get("catalogo/" + rutEmp, { type: "json" })) || { items: {}, hechos: {} };
+    const items = Object.values(C.items), fam = {};
+    for (const it of items) { const f = fam[it.familia] || (fam[it.familia] = { n: 0, neto: 0, productos: {} }); f.n++; f.neto += it.neto || 0; const p = f.productos[it.producto] || (f.productos[it.producto] = { n: 0, precios: [], prov: it.proveedor, unidad: it.unidad }); p.n++; p.precios.push(it.precio_unit); }
+    const out = Object.entries(fam).sort((a, b2) => b2[1].neto - a[1].neto).map(([k, f]) => ({ familia: k, lineas: f.n, neto: f.neto, top: Object.entries(f.productos).sort((a, b2) => b2[1].n - a[1].n).slice(0, Number(b.top) || 8).map(([p, v]) => ({ producto: p, n: v.n, unidad: v.unidad, prov: v.prov, precio_med: [...v.precios].sort((x, y) => x - y)[Math.floor(v.precios.length / 2)] })) }));
+    return new Response(JSON.stringify({ ok: true, rut: rutEmp, lineas: items.length, docs: Object.keys(C.hechos).length, familias: out }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
+  }
   // 📚 HISTÓRICO de compras ágiles adjudicadas (TodoLicitaciones, leído desde la sesión de Felipe): precio ganador por producto y organismo.
   //    Se guarda por término de búsqueda (familia) en historico/<term>; cada compra con todas sus ofertas, ganador y productos.
   if (b.accion === "historico") {
