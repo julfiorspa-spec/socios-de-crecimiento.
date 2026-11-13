@@ -1504,6 +1504,7 @@
   // 🎯 CERTEZA: probabilidad estimada de ganar, calibrada con 44 casos reales (13-11-2026): el ganador va al 90-97 % del
   //    presupuesto; con 0-1 rivales en 2° llamado se gana casi siempre; con 4+ rivales en 1er llamado casi nunca.
   const CERTEZA_MIN = 0.40;
+  const esSeg = (x) => /^segundo/i.test(x?.llamado || "");   // (también existe una copia local más abajo; esta es la de alcance general: sin ella probGanar/precioClaude lanzaban ReferenceError y la app quedaba en negro)
   function probGanar(x, ratio) {
     const seg = esSeg(x), of = x.ofertas ?? null;
     let p = of === 0 ? (seg ? 0.85 : 0.55) : of === 1 ? (seg ? 0.65 : 0.45) : of != null && of <= 3 ? (seg ? 0.45 : 0.32) : of != null && of <= 6 ? 0.18 : of != null ? 0.08 : (seg ? 0.40 : 0.25);
