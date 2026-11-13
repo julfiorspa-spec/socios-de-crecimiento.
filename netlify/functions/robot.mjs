@@ -719,6 +719,27 @@ async function siiIngesta(req) {
     T.t = ahora(); await store.setJSON(kt, T);
   }
   if (b.accion === "catalogo") return catalogoConstruir(store, rutEmp, corsH);
+  // 📚 HISTÓRICO de compras ágiles adjudicadas (TodoLicitaciones, leído desde la sesión de Felipe): precio ganador por producto y organismo.
+  //    Se guarda por término de búsqueda (familia) en historico/<term>; cada compra con todas sus ofertas, ganador y productos.
+  if (b.accion === "historico") {
+    const term = String(b.term || "varios").toLowerCase().replace(/[^a-z0-9ñ]+/g, "-").slice(0, 40) || "varios";
+    const kh = "historico/" + term;
+    const H = (await store.get(kh, { type: "json" })) || { term, compras: {} };
+    let nh = 0;
+    for (const c of (Array.isArray(b.compras) ? b.compras : []).slice(0, 500)) {
+      if (!c.codigo) continue;
+      H.compras[String(c.codigo).slice(0, 30)] = { codigo: texto(c.codigo, 30), nombre: texto(c.nombre, 160), org: texto(c.org, 120), rutOrg: texto(c.rutOrg, 14), region: texto(c.region, 60),
+        pres: Number(c.pres) || 0, cierre: texto(c.cierre, 16), conv: texto(c.conv, 20), nOf: Number(c.nOf) || 0, oc: texto(c.oc, 20), plazo: texto(c.plazo, 20),
+        ganador: c.ganador ? { nombre: texto(c.ganador.nombre, 100), rut: texto(c.ganador.rut, 14), total: Number(c.ganador.total) || 0, neto: Number(c.ganador.neto) || 0, despacho: Number(c.ganador.despacho) || 0 } : null,
+        ofertas: (Array.isArray(c.ofertas) ? c.ofertas : []).slice(0, 40).map((o) => ({ n: texto(o.n, 80), rut: texto(o.rut, 14), total: Number(o.total) || 0, adj: !!o.adj })),
+        productos: (Array.isArray(c.productos) ? c.productos : []).slice(0, 30).map((p) => ({ nombre: texto(p.nombre, 100), rubro: texto(p.rubro, 120), desc: texto(p.desc, 300), cant: Number(p.cant) || 0, unidad: texto(p.unidad, 16) })),
+        t: ahora() }; nh++;
+    }
+    H.t = ahora(); await store.setJSON(kh, H);
+    const idx = (await store.get("historico/_indice", { type: "json" })) || { terms: {} };
+    idx.terms[term] = { n: Object.keys(H.compras).length, t: ahora() }; await store.setJSON("historico/_indice", idx);
+    return new Response(JSON.stringify({ ok: true, term, guardadas: nh, total: Object.keys(H.compras).length }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
+  }
   base.t = ahora(); await store.setJSON(k2, base);
   return new Response(JSON.stringify({ ok: true, guardadas: n, textos: nd, proveedores: Object.keys(base.lista).length }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
 }
@@ -1183,6 +1204,15 @@ async function atender(req) {
     const C = rutE ? (await store.get("catalogo/" + rutE, { type: "json" })) : null;
     const items = Object.values(C?.items || {});
     return json({ empresa: emp, rut: rutE, t: C?.t || null, n: items.length, items: items.sort((a, b2) => (b2.fecha || "").split("/").reverse().join("").localeCompare((a.fecha || "").split("/").reverse().join(""))) });
+  }
+  if (ruta === "historico") {   // 📚 histórico de compras ágiles adjudicadas (precio ganador por producto/organismo), por término o resumen
+    const term = texto(url.searchParams.get("term"), 40);
+    const idx = (await store.get("historico/_indice", { type: "json" })) || { terms: {} };
+    if (!term) return json({ terms: idx.terms });
+    const H = (await store.get("historico/" + term.toLowerCase().replace(/[^a-z0-9ñ]+/g, "-"), { type: "json" })) || { term, compras: {} };
+    const compras = Object.values(H.compras);
+    const r = compras.filter((c) => c.pres > 0 && c.ganador?.total > 0).map((c) => c.ganador.total / c.pres).sort((a, b2) => a - b2);
+    return json({ term, t: H.t || null, n: compras.length, ratioMed: r.length ? r[Math.floor(r.length / 2)] : null, ofMed: compras.length ? compras.map((c) => c.nOf).sort((a, b2) => a - b2)[Math.floor(compras.length / 2)] : null, compras });
   }
   if (ruta === "operacion" && req.method === "POST") {
     const b = await cuerpo(req);
