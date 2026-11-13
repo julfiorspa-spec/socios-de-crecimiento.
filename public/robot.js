@@ -637,11 +637,16 @@
         o.jugador = miJug(); if (legado()) o.legado = true; if (!o.persona && typeof persona === "function" && persona()?.nombre) o.persona = persona().nombre; opt = { ...opt, body: JSON.stringify(o) }; } catch {}
     }
     if (/^(seleccionadas|oportunidades|oport-descartes)(\?|$)/.test(ruta)) ruta += (ruta.includes("?") ? "&" : "?") + "jugador=" + miJug() + (legado() ? "&legado=1" : "");
-    const r = await fetch("/bot/" + ruta, {
-      ...opt,
-      headers: { "x-robot-token": R.token, ...(opt.body ? { "content-type": "application/json" } : {}), ...(opt.headers || {}) },
-      cache: "no-store",
-    });
+    const ac = new AbortController(), tmr = setTimeout(() => ac.abort(), 25000);   // ⏱ nunca esperar para siempre: a los 25 s se avisa y se puede reintentar
+    let r;
+    try {
+      r = await fetch("/bot/" + ruta, {
+        ...opt,
+        headers: { "x-robot-token": R.token, ...(opt.body ? { "content-type": "application/json" } : {}), ...(opt.headers || {}) },
+        cache: "no-store", signal: opt.signal || ac.signal,
+      });
+    } catch (e) { clearTimeout(tmr); throw new Error(e?.name === "AbortError" ? "La nube no respondió en 25 s (" + ruta + "). Revisa tu señal y reintenta." : "Sin conexión con la nube (" + ruta + "): " + (e?.message || e)); }
+    clearTimeout(tmr);
     const tipo = r.headers.get("content-type") || "";
     const j = tipo.includes("json") ? await r.json().catch(() => ({})) : null;
     if (r.status === 401) { const e = new Error(j?.error || "Código de enlace inválido"); e.auth = true; throw e; }
@@ -687,12 +692,15 @@
   function filtrarEmpresa(d) { if (d) R.hayLegado = (d.trabajos || []).some((t) => !t.jugador); return d ? { ...d, trabajos: (d.trabajos || []).filter((t) => deMiJuego(t) || paraElDueno(t)) } : d; }
   const empresaActual = () => (R.empresas || {})[miEmp()] || null;
   async function cargarEmpresas() {
-    if (R._cargEmp) return; R._cargEmp = true;
+    if (R._cargEmp) return R._cargEmp;                       // ya hay una carga en curso: esperarla (antes devolvía sin datos y «Entrando…» se quedaba pegado)
+    R._cargEmp = (async () => {
     try { R.empresas = (await api("empresas")).empresas || {}; } catch (e) { R.empresas = R.empresas || {}; }
     // Solo autoselecciona PJANIC cuando hay UNA sola empresa (un único dueño). Con varias empresas, cada celular nuevo ELIGE la suya.
     try { const ye = miEmp() && (R.empresas || {})[miEmp()]; if (ye && leer().rubrosEmp !== ye.id && rubrosDeEmp(ye)) { aplicarRubrosEmp(ye); R.oport = null; } } catch {}
     try { if (!miEmp() && Object.keys(R.empresas || {}).length <= 1) { const pj = Object.values(R.empresas || {}).find((e) => /pjanic/i.test(e.razon_social || "") || (e.rut || "").replace(/[.\-]/g, "") === "784931145"); if (pj) guardar({ empresa: pj.id }); } } catch {}
-    R._cargEmp = false; pintarHoja(true);
+    })();
+    try { await R._cargEmp; } finally { R._cargEmp = false; }
+    pintarHoja(true);
   }
 
   /* ---------- quién envía + cerrar la pestaña de Mercado Público cuando queda enviada ---------- */
@@ -4955,7 +4963,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
         R.oportTab = "nuevas"; R.oportFiltro = "real"; R.ver = null; R.data = null; sheet.scrollTop = 0;
         if (!e.perfil || Date.now() - Date.parse(e.perfil.t || 0) > 30 * 86400000) descubrirEmpresa(v, /^Empresa \d/.test(e.razon_social) ? "" : e.razon_social);
         navigator.vibrate?.(20); refrescar();
-      } catch (er) { toast(er.message); b.disabled = false; b.textContent = "▶ JUGAR"; }
+      } catch (er) { toast(er.message); } finally { b.disabled = false; b.textContent = "▶ JUGAR"; }
       return pintarHoja(true);
     }
     if (a === "con") {
