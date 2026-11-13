@@ -1447,6 +1447,26 @@
   const MARGEN_MIN = 0.12;                                       // utilidad mínima sobre la venta neta para que «dé»
   const fijosDe = (pres) => (pres < 150000 ? 12000 : pres < 1000000 ? 20000 : 35000);   // despacho y gastos que no dependen del precio
   const pisoDe = (costoNeto, pres) => costoNeto ? Math.ceil((costoNeto + fijosDe(pres)) / (1 - MARGEN_MIN) * 1.19 / 10) * 10 : 0;
+  // 🎯 CERTEZA: probabilidad estimada de ganar, calibrada con 44 casos reales (13-11-2026): el ganador va al 90-97 % del
+  //    presupuesto; con 0-1 rivales en 2° llamado se gana casi siempre; con 4+ rivales en 1er llamado casi nunca.
+  const CERTEZA_MIN = 0.40;
+  function probGanar(x, ratio) {
+    const seg = esSeg(x), of = x.ofertas ?? null;
+    let p = of === 0 ? (seg ? 0.85 : 0.55) : of === 1 ? (seg ? 0.65 : 0.45) : of != null && of <= 3 ? (seg ? 0.45 : 0.32) : of != null && of <= 6 ? 0.18 : of != null ? 0.08 : (seg ? 0.40 : 0.25);
+    if (x.tipo === "exp") p *= 1.15; else if (x.tipo === "esp") p *= 0.5; else if ((x.viab ?? 1) < 0.85) p *= 0.7;
+    if (ratio != null) { const ic = intel(), mr = (seg ? ic.medSeg : ic.medPri) ?? ic.med ?? (seg ? 0.94 : 0.92); p *= ratio <= mr - 0.02 ? 1.25 : ratio <= mr ? 1.1 : ratio <= mr + 0.03 ? 0.85 : ratio <= 1 ? 0.6 : 0.3; }
+    return Math.max(0.02, Math.min(0.95, p));
+  }
+  // 🤖 el precio que pone Claude: justo bajo lo que gana (mediana real −1 pt), nunca bajo el piso ni sobre el presupuesto
+  function precioClaude(x, pres, piso) {
+    const seg = esSeg(x), of = x.ofertas ?? null, ic = intel();
+    let r = (seg ? ic.medSeg : ic.medPri) ?? ic.med ?? (seg ? 0.94 : 0.92);
+    r = Math.min(seg && of === 0 ? 0.98 : 0.96, Math.max(0.85, r - 0.01));
+    if (!seg && of != null && of >= 4) r -= 0.02;
+    let v = Math.floor(pres * r / 10) * 10;
+    if (piso && v < piso) v = piso;
+    return Math.min(v, pres);
+  }
   function datosOport(cod) {
     const x = (R.oport?.lista || []).find((y) => y.codigo === cod) || trabajo(cod) || {};
     return { codigo: cod, nombre: x.nombre, organismo: x.organismo, monto: x.monto, cierre: x.cierre, margen: x.margen };
@@ -2558,7 +2578,10 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       if (mk && pres && !dudoso) { const costo = mk.total_neto || (mk.total_con_iva || 0) / 1.19, venta = pres * (1 - (seg ? 0.02 : 0.06)) / 1.19;
         util = venta - costo - fijosDe(pres); m = venta ? util / venta : null;
         if (m != null && m < MARGEN_MIN) fuera.push(`no da: con el costo de mercado (${clp(mk.total_con_iva)}) queda ${Math.round(m * 100)}% de margen`); }
-      return { fuera, m, util, mk, dudoso };
+      const costoN = mk && !dudoso ? (mk.total_neto || (mk.total_con_iva || 0) / 1.19) : 0;
+      const precio = pres ? precioClaude(x, pres, pisoDe(costoN, pres)) : 0, prob = probGanar(x, pres ? precio / pres : null);
+      if (pres && prob < CERTEZA_MIN) fuera.push(`certeza ${Math.round(prob * 100)}% < ${Math.round(CERTEZA_MIN * 100)}%: ${(x.ofertas ?? 0) >= 4 ? "muchos rivales" : "poca información para apostar"}`);
+      return { fuera, m, util, mk, dudoso, prob, precio };
     };
     const EV = {}; for (const x of nuevas) EV[x.codigo] = evaluar(x);
     const EVg = (x) => EV[x.codigo] || evaluar(x);
@@ -2566,6 +2589,10 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const descartadas = nuevas.filter((x) => mio(x) && EV[x.codigo].fuera.length);
     const motivos = {}; for (const x of descartadas) { const k = EV[x.codigo].fuera[0].split(":")[0]; motivos[k] = (motivos[k] || 0) + 1; }
     const verif = reales.filter((x) => EV[x.codigo].m != null).length;
+    const yaSel = leerSel(), enRobot = new Set((R.data?.trabajos || []).map((t) => t.codigo));
+    R.jugada = reales.filter((x) => !yaSel[x.codigo]?.precio && !enRobot.has(x.codigo) && EV[x.codigo].prob >= CERTEZA_MIN && EV[x.codigo].precio > 0)
+      .sort((a, b) => EV[b.codigo].prob - EV[a.codigo].prob).slice(0, 12)
+      .map((x) => ({ codigo: x.codigo, nombre: x.nombre, pres: Number(x.monto) || 0, precio: EV[x.codigo].precio, prob: EV[x.codigo].prob }));
     // orden de prioridad (el mismo que usa el PC para verificar costos): 2° llamado, poca competencia, lo que ya vendemos, ganancia
     const prio = (x) => (esSeg(x) ? 4 : 0) + ((x.ofertas ?? 3) <= 1 ? 2 : (x.ofertas ?? 3) <= 3 ? 1 : 0) + (x.tipo === "exp" ? 2 : x.tipo === "rev" ? 1 : 0) + Math.min(2, (x.ganancia || 0) / 500000);
     const okV = reales.filter((x) => EV[x.codigo].m != null).sort((a, b) => EV[b.codigo].util - EV[a.codigo].util);
@@ -2886,6 +2913,11 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         <div class="muted" style="font-size:.7rem;margin-top:3px">Solo pasan las que se pueden ganar <b>y</b> dejan ≥${Math.round(MARGEN_MIN * 100)}%: sin guerra de precios, monto que soporta el despacho, abastecible y con tiempo. El PC verifica el costo real de las mejores en tiendas${esperan ? ` (${esperan} candidatas más en cola)` : ""}.</div>
         ${(() => { const f = R.oport?.oficial; if (!f) return ""; const c = f.ciclo; const t = !f.ticket ? "sin ticket: el robot aún no lo entregó (nube.json → ticket_api, reinicia el robot)" : f.error ? "error: " + esc(f.error) : c && !c.completo ? `leyendo Mercado Público… región ${c.region || 1} de 16, página ${c.siguiente}${c.total ? " de " + c.total : ""}${c.ultimo_error ? " · " + esc(c.ultimo_error) : ""} — toca ↻ otra vez` : f.n ? `${f.n} compras ágiles de la API oficial · ${f.fecha ? new Date(f.fecha).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }) : ""}` : c && c.ultimo_error ? "error: " + esc(c.ultimo_error) : "sin datos todavía — toca ↻"; return `<div class="muted" style="font-size:.7rem;margin-top:3px">☁️ Fuente oficial: ${t}</div>`; })()}
         ${descartadas.length ? `<button class="btn small rb-link" type="button" data-rb="oport-filtro" data-f="${filtro === "fuera" ? "real" : "fuera"}" style="margin-top:4px">${filtro === "fuera" ? "← Volver a las reales" : `🚫 ${descartadas.length} fuera: ${Object.entries(motivos).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${esc(k)} (${v})`).join(" · ")}`}</button>` : ""}</div>
+      ${R.jugada?.length ? `<div class="rb-op" style="margin:6px 0 8px;border-color:rgba(94,240,176,.45)">
+        <b>🤖 Claude juega esta ronda</b> <span class="muted" style="font-size:.75rem">· ${R.jugada.length} compras con certeza ≥ ${Math.round(CERTEZA_MIN * 100)} % · precio al ${Math.round(R.jugada.reduce((s2, j) => s2 + j.precio / j.pres, 0) / R.jugada.length * 100)} % del presupuesto en promedio</span>
+        <div class="muted" style="font-size:.72rem;margin:4px 0">${R.jugada.slice(0, 5).map((j) => `${esc(String(j.nombre || "").slice(0, 28))} · ${clp(j.precio)} (${Math.round(j.prob * 100)} %)`).join(" · ")}${R.jugada.length > 5 ? " · …" : ""}</div>
+        <button class="btn small rb-firmar" type="button" data-rb="claude-juega" data-arm="0">🎯 Que Claude ponga el precio y las deje en Firmar</button>
+        <div class="muted" style="font-size:.68rem;margin-top:3px">Tú solo firmas. Nunca sobre el presupuesto; con costo de mercado respeta el piso de ${Math.round(MARGEN_MIN * 100)} %.</div></div>` : ""}
       <div class="rb-filtros">
         <button class="btn small ${filtro === "real" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="real">🏆 Reales</button>
         <button class="btn small ${filtro === "mio" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="mio">🎯 Mi rubro</button>
@@ -3992,7 +4024,7 @@ ${empNom}`;
   const exFila = (x, extra) => { const d = x.cierre ? new Date(x.cierre) : null; const sel = leerSel()[x.codigo]; const t = trabajo(x.codigo);
     return `<div class="rb-ex-row" data-rb="${t ? "det" : "ex-ficha"}" data-c="${esc(x.codigo)}"><div class="d">${d ? `<b>${d.getDate()}</b><small>${["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"][d.getMonth()]} ${d.toTimeString().slice(0, 5)}</small>` : "<b>—</b>"}</div><div class="tx"><b>${esc(x.nombre || x.codigo)}</b><span>${esc(x.organismo || "")}${x.region ? " · " + esc(String(x.region).replace("Región ", "").replace(" de Santiago", "")) : ""}</span><span>${esc(x.codigo)}${x.monto ? " · ppto. " + clp(x.monto) : ""}</span><div>${exSeg(x) ? '<span class="rb-ex-st info">2° llamado</span>' : ""}${exHoras(x) != null && exHoras(x) > 0 ? `<span class="rb-ex-st ${exHoras(x) < 30 ? "cierre" : ""}">${exCierreTxt(x)}</span>` : ""}${sel ? `<span class="rb-ex-st ${sel.revisar ? "doc" : ""}">${sel.revisar ? "⚠ revisar" : "guardada"}</span>` : ""}${!t && pideAdjunto(x) ? `<span class="rb-ex-st" title="El detalle está en un adjunto">📎 pide ver adjunto</span>` : ""}${t ? `<span class="rb-ex-st ${HECHA.includes(t.estado) ? "env" : t.estado === "firmar" ? "doc" : ""}">${HECHA.includes(t.estado) ? "oferta enviada" : t.estado === "firmar" ? "falta tu firma" : esc(t.estado)}</span>${trazaChips(t)}` : ""}${extra || ""}</div></div></div>`; };
   // 👤 Trazabilidad del negocio: quién cotizó (persona que la pidió), quién ejecuta y quién invierte
-  const trazaDe = (t) => { const op = t.op || {}; const q = quienDe(t); return { cotizo: t.persona || q?.nombre || null, ejecuta: op.ejecutor_nombre || op.responsable || null, invierte: op.inversionista_nombre || null }; };
+  const trazaDe = (t) => { const op = t.op || {}; const q = quienDe(t); return { cotizo: t.por === "claude" ? "🤖 Claude" : (t.persona || q?.nombre || null), ejecuta: op.ejecutor_nombre || op.responsable || null, invierte: op.inversionista_nombre || null }; };
   const trazaChips = (t) => { const z = trazaDe(t); return `${z.cotizo ? `<span class="rb-ex-st" title="Cotizó">🎮 ${esc(z.cotizo.split(" ")[0])}</span>` : ""}${z.ejecuta ? `<span class="rb-ex-st info" title="Ejecuta">🛠 ${esc(z.ejecuta.split(" ")[0])}</span>` : ""}${z.invierte ? `<span class="rb-ex-st env" title="Invierte">💼 ${esc(z.invierte.split(" ")[0])}</span>` : ""}`; };
   function trazaHTML(t) {
     const z = trazaDe(t), op = t.op || {}; const gente = [...new Set([persona()?.nombre, ...Object.values(R.ejecutores || {}).map((e) => e?.nombre)].filter(Boolean))];
@@ -4536,6 +4568,22 @@ ${empNom}`;
     }
     if (a === "oport-q-borrar") { R.oportQ = ""; R.oportN = 15; pintarHoja(true); return; }
     if (a === "oport-filtro") { R.oportFiltro = b.dataset.f; R.oportN = 15; return pintarHoja(); }
+    if (a === "claude-juega") {
+      const J = R.jugada || []; if (!J.length) return toast("No hay compras con certeza suficiente ahora");
+      if (b.dataset.arm !== "1") { b.dataset.arm = "1"; b.textContent = `Confirmar: ${J.length} apuestas por ${clp(J.reduce((s2, j) => s2 + j.precio, 0))} en total`; setTimeout(() => { if (b.isConnected) { b.dataset.arm = "0"; b.textContent = "🎯 Que Claude ponga el precio y las deje en Firmar"; } }, 7000); return; }
+      b.disabled = true; b.textContent = "Jugando…"; let ok = 0, fallo = 0;
+      for (const j of J) {
+        try {
+          guardarSelLuego(j.codigo, { precio: j.precio, por: "claude", prob: j.prob });
+          const descuento = Math.max(0, Math.min(0.6, 1 - j.precio / j.pres));
+          const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: j.codigo, accion: "firmar", descuento, por: "claude", firma_app: firmaApp(j.codigo, j.precio) }) });
+          if (r && !r.error) ok++; else fallo++;
+        } catch { fallo++; }
+      }
+      R.jugada = [];
+      toast(`🤖 Claude apostó ${ok} compra${ok === 1 ? "" : "s"}${fallo ? ` · ${fallo} no entraron` : ""} · ya van camino a Firmar`);
+      try { await refrescar(); } catch {} R.oportFiltro = "real"; return pintarHoja();
+    }
     if (a === "oport-tab") { if ((R.oportTab || "nuevas") !== b.dataset.t) R.tabHist = [...(R.tabHist || []), R.oportTab || "nuevas"].slice(-12); R.oportTab = b.dataset.t; guardar({ oportTab: R.oportTab }); R.oportN = 15; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "oport-mas") { R.oportN = (R.oportN || 15) + 25; return pintarHoja(); }
     if (a === "oport-sel") { if (esSel(cod)) await quitarSel(cod); else { toast("⭐ A Seleccionadas"); await ponerSel(cod); } return pintarHoja(); }

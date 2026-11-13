@@ -1353,6 +1353,7 @@ async function atender(req) {
       jugador: jug(b.jugador) || previo?.jugador || null,         // qué celular (qué juego) la pidió
       dispositivo: texto(b.dispositivo, 60) || previo?.dispositivo || null,
       persona: texto(b.persona, 60) || previo?.persona || null,               // quién la pidió (nombre que puso en la app)
+      por: b.por === "claude" ? "claude" : (previo?.por || null),               // 🤖 "claude": el precio lo puso Claude (ronda jugada por la IA)
     };
     if (esLic) t.tipo = "licitacion";
     // ⚡ Firma directa: si el robot no está conectado y la app manda los precios por ítem (del juego), la oferta queda LISTA PARA FIRMAR
