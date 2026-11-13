@@ -1,3 +1,28 @@
+/* 🛟 Pantalla negra nunca más: si el script falla al arrancar o al pintar, se muestra el error y un botón para reiniciar la app (limpia caché local, no borra el enlace del robot). */
+(function () {
+  let mostrado = false;
+  function mostrar(msg) {
+    if (mostrado) return; mostrado = true;
+    setTimeout(() => {
+      if (document.body && document.body.innerText.trim().length > 40) return;   // la app sí pintó: no molestar
+      const d = document.createElement("div");
+      d.style.cssText = "position:fixed;inset:0;z-index:99999;background:#121417;color:#f4f5f7;font:15px/1.5 system-ui;padding:28px 20px;display:grid;align-content:center;gap:14px;text-align:center";
+      d.innerHTML = "<b style='font-size:1.2rem'>La app no pudo arrancar</b><div style='color:#9aa3b2;font-size:.8rem;word-break:break-word'>" + String(msg).replace(/</g, "&lt;").slice(0, 300) + "</div>" +
+        "<button id='rbReinicio' style='padding:14px;border-radius:12px;border:0;background:#1ed760;color:#06120a;font-weight:700;font-size:1rem'>🔄 Reiniciar la app</button><div style='color:#9aa3b2;font-size:.75rem'>Se borra la copia local (datos y versión vieja). El enlace con el robot se conserva.</div>";
+      document.body.appendChild(d);
+      d.querySelector("#rbReinicio").onclick = async () => {
+        try { const keep = {}; for (const k of Object.keys(localStorage)) if (/token|enlace|rb_cfg|cotizagil_cfg|empresa/i.test(k)) keep[k] = localStorage.getItem(k); localStorage.clear(); for (const k in keep) localStorage.setItem(k, keep[k]); } catch {}
+        try { sessionStorage.clear(); } catch {}
+        try { if (window.caches) for (const k of await caches.keys()) await caches.delete(k); } catch {}
+        try { if (navigator.serviceWorker) for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister(); } catch {}
+        location.href = location.pathname + "?r=" + Date.now();
+      };
+    }, 2500);
+  }
+  window.addEventListener("error", (e) => mostrar(e.message || e.error || "error"));
+  window.addEventListener("unhandledrejection", (e) => mostrar(e.reason?.message || e.reason || "promesa"));
+  setTimeout(() => { if (document.body && document.body.innerText.trim().length < 40) mostrar("La pantalla quedó vacía (versión en caché o error silencioso)."); }, 6000);
+})();
 /* CotizÁgil · Robot PJANIC
    Conecta la app del celular con el robot del PC.
    - "Hacer oferta" en cada Compra Ágil: el robot del PC lee la ficha, analiza los adjuntos, calcula el
@@ -1401,8 +1426,10 @@
     "carpa-toldo": /carpa|toldo|gazebo|evento|producci[oó]n de/i, "electrodomesticos": /electrodom|refrigerador|microondas|hervidor|lavadora|televisor|aire acondicionado/i, "estanterias-metalicas": /estanter[ií]a|rack|repisa/i, "juguetes-navidad": /juguete|navidad|regalo/i };
   function histDe(x) {
     if (!R.hist) return null;
-    const txt = [x.nombre, x.descripcion, x.desc, ...(x.productos || []).map((p) => p.nombre || p)].filter(Boolean).join(" ");
-    for (const [term, re] of Object.entries(HIST_KW)) { const h = R.hist[term]; if (h && h.n >= 8 && h.ratioMed && re.test(txt)) return { term, ...h }; }
+    try {
+      const txt = [x?.nombre, x?.descripcion, x?.desc, ...(Array.isArray(x?.productos) ? x.productos.map((p) => p?.nombre || p?.descripcion || (typeof p === "string" ? p : "")) : [])].filter((s) => typeof s === "string" && s).join(" ");
+      for (const [term, re] of Object.entries(HIST_KW)) { const h = R.hist[term]; if (h && h.n >= 8 && h.ratioMed && re.test(txt)) return { term, ...h }; }
+    } catch { }
     return null;
   }
   const histTxt = (h) => h ? `📚 Mercado real «${h.term.replace(/-/g, " ")}»: el ganador va al <b>${Math.round(h.ratioMed * 100)} %</b> del presupuesto${h.ofMed != null ? `, ${h.ofMed} ofertas típicas` : ""} (${h.n} compras adjudicadas)` : "";
@@ -5298,7 +5325,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     }
   });
   // probabilidad de ganar (estimada): menos rivales y precio más bajo bajo el presupuesto = más chances
-  function probGanar(of, seg, precio, pres) {
+  function probGanarSlider(of, seg, precio, pres) {
     if (!pres) return 0;
     const n = of == null || of === "" ? 3 : Math.min(+of, 6);
     const base = [0.82, 0.56, 0.42, 0.33, 0.27, 0.23, 0.2][n] + (seg ? 0.04 : 0);
@@ -5319,7 +5346,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     const p = q(".rb-pct"), d = v / pres - 1;
     p.textContent = (d > 0 ? "+" : "") + (d * 100).toFixed(1).replace(".", ",") + "% vs ppto."; p.className = "rb-pct " + (d < 0 ? "baja" : "sube");
     const neto = ve / 1.19, gan = neto - costo, mar = neto ? gan / neto : 0;
-    const pg = probGanar(c.dataset.of, !!c.dataset.seg, ve, pres);
+    const pg = probGanarSlider(c.dataset.of, !!c.dataset.seg, ve, pres);
     q(".rb-neto").textContent = clp(neto); q(".rb-inv").textContent = clp(costo); const cv = q(".rb-cvis"); if (cv) cv.textContent = clp(costo);
     q(".rb-cuota").textContent = costo > 0 ? "x" + (neto / costo).toFixed(2).replace(".", ",") : "x—";
     const g = q(".rb-gan"); g.textContent = (gan >= 0 ? "+" : "") + clp(gan); g.style.color = gan < 0 ? "#ff8a80" : "";
