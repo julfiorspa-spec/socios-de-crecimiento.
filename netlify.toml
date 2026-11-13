@@ -15,6 +15,10 @@
   for = "/cotizagil-historico.user.js"
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"
+[[headers]]
+  for = "/cotizagil-sii.user.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
 
 # Cualquier ruta (/app, /panel, ...) abre la app.
 [[redirects]]
