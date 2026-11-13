@@ -719,6 +719,16 @@ async function siiIngesta(req) {
     T.t = ahora(); await store.setJSON(kt, T);
   }
   if (b.accion === "catalogo") return catalogoConstruir(store, rutEmp, corsH);
+  if (b.accion === "historico_resumen") {   // índice del histórico de mercado + distribución de rivales por familia
+    const idx = (await store.get("historico/_indice", { type: "json" })) || { terms: {} };
+    const out = [];
+    for (const term of Object.keys(idx.terms)) { const H = (await store.get("historico/" + term, { type: "json" })) || { compras: {} }; const L = Object.values(H.compras);
+      const ofs = L.map((c) => c.nOf), rs = L.filter((c) => c.pres > 0 && c.ganador?.total > 0).map((c) => c.ganador.total / c.pres).sort((x, y) => x - y);
+      const q = (a, p) => a.length ? a[Math.min(a.length - 1, Math.floor(a.length * p))] : null;
+      out.push({ term, n: L.length, ofMed: idx.terms[term].ofMed, of0_1: ofs.filter((o) => o <= 1).length, of2_3: ofs.filter((o) => o >= 2 && o <= 3).length, of4p: ofs.filter((o) => o >= 4).length,
+        r25: q(rs, 0.25), r50: q(rs, 0.5), r75: q(rs, 0.75), presMed: idx.terms[term].presMed, seg: L.filter((c) => /segundo/i.test(c.conv || "")).length }); }
+    return new Response(JSON.stringify({ ok: true, familias: out }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
+  }
   if (b.accion === "catalogo_resumen") {   // lectura rápida del catálogo armado (para revisar la carga desde el navegador)
     const C = (await store.get("catalogo/" + rutEmp, { type: "json" })) || { items: {}, hechos: {} };
     const items = Object.values(C.items), fam = {};
