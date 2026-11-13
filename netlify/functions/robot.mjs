@@ -1,5 +1,6 @@
 // Puente entre CotizÁgil (celular) y el robot del PC.
 import caRubros from "./ca_rubros.json";
+import PROV_SEED from "./proveedores_seed.json";   // 📒 facturas de compra leídas del SII (13-11-2026) para sembrar la base de proveedores
 // El celular pide "Hacer oferta"; el robot del PC toma el pedido, prepara la oferta en
 // Mercado Público y va informando el estado. El envío final y la declaración jurada
 // los hace siempre la persona en mercadopublico.cl.
@@ -1096,7 +1097,17 @@ async function atender(req) {
       base.t = ahora(); await store.setJSON(k2, base);
       return json({ ok: true, proveedores: Object.keys(base.lista).length });
     }
-    const base = (await store.get(clave, { type: "json" })) || { lista: {} };
+    let base = (await store.get(clave, { type: "json" })) || { lista: {} };
+    if (!Object.keys(base.lista).length) {                                   // 🌱 primera vez: sembrar con lo leído del SII, según el RUT de la empresa
+      const L = (await store.get("empresas/lista", { type: "json" })) || {};
+      const rutEmp = String(L[emp]?.rut || (emp === "principal" ? "78493114-5" : "")).replace(/\./g, "").toUpperCase();
+      const semilla = PROV_SEED[rutEmp];
+      if (semilla) {
+        for (const f of semilla.facturas) { const rut = String(f.rut).toUpperCase(); const pv = base.lista[rut] || { rut, nombre: f.nombre, facturas: {}, rubro: null, nota: null };
+          pv.facturas[`${f.tipo}-${f.folio}`] = { tipo: String(f.tipo), folio: f.folio, fecha: f.fecha, neto: f.neto, iva: f.iva, total: f.total, periodo: f.periodo, origen: "sii", compra: f.compra || null, detalle: f.detalle || null }; base.lista[rut] = pv; }
+        base.t = ahora(); await store.setJSON(clave, base);
+      }
+    }
     const lista = Object.values(base.lista).map((pv) => { const fs = Object.values(pv.facturas || {}); const ncs = fs.filter((f) => f.tipo === "61"); const fac = fs.filter((f) => f.tipo !== "61");
       return { ...pv, facturas: fs.sort((a, b2) => (b2.fecha || "").split("/").reverse().join("").localeCompare((a.fecha || "").split("/").reverse().join(""))), n: fac.length, total: fac.reduce((s2, f) => s2 + f.total, 0) - ncs.reduce((s2, f) => s2 + f.total, 0), ultima: fac[0]?.fecha || null }; })
       .sort((a, b2) => b2.total - a.total);
