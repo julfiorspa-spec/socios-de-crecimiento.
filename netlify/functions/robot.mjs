@@ -1074,6 +1074,34 @@ async function atender(req) {
   const ETAPAS = ["previa", "ganada", "inversionista", "operacion", "transporte", "pago", "documentos", "despacho", "entrega", "cerrado", "rechazada"];
   // 💼 lo que se le avisa al inversionista en cada paso del negocio (y el PC le rehace su Excel con los costos reales)
   const AVISO_INV = { transporte: "🤝 Proveedor acordado", pago: "💸 Paga al proveedor", despacho: "🛣 Pedido en trayecto", entrega: "📦 Entregado: falta la recepción firmada", cerrado: "🥇 Negocio cerrado OK" };
+  // 📒 PROVEEDORES: base real de a quién le compramos (facturas recibidas según el SII + pagos registrados en la app)
+  if (ruta === "proveedores") {
+    const emp = texto(url.searchParams.get("empresa"), 40) || "principal";
+    const clave = "proveedores/" + emp;
+    if (req.method === "POST") {
+      const b = await cuerpo(req);
+      const e2 = texto(b.empresa, 40) || emp, k2 = "proveedores/" + e2;
+      const base = (await store.get(k2, { type: "json" })) || { lista: {} };
+      for (const f of (Array.isArray(b.facturas) ? b.facturas : []).slice(0, 2000)) {
+        const rut = String(f.rut || "").replace(/[^0-9kK-]/g, "").toUpperCase(); if (!rut) continue;
+        const pv = base.lista[rut] || { rut, nombre: texto(f.nombre, 120), facturas: {}, rubro: null, nota: null };
+        pv.nombre = texto(f.nombre, 120) || pv.nombre;
+        const id = `${f.tipo || "33"}-${f.folio}`;
+        pv.facturas[id] = { tipo: String(f.tipo || "33"), folio: Number(f.folio) || 0, fecha: texto(f.fecha, 10), neto: Number(f.neto) || 0, iva: Number(f.iva) || 0, total: Number(f.total) || 0, periodo: texto(f.periodo, 6), origen: texto(b.origen, 10) || "sii", compra: texto(f.compra, 30) || pv.facturas[id]?.compra || null, detalle: texto(f.detalle, 200) || pv.facturas[id]?.detalle || null };
+        base.lista[rut] = pv;
+      }
+      if (b.rut && (b.rubro != null || b.nota != null || b.compra)) {          // anotar un proveedor: rubro, nota o a qué compra fue una factura
+        const pv = base.lista[String(b.rut).toUpperCase()]; if (pv) { if (b.rubro != null) pv.rubro = texto(b.rubro, 60); if (b.nota != null) pv.nota = texto(b.nota, 200); if (b.compra && b.factura && pv.facturas[b.factura]) pv.facturas[b.factura].compra = texto(b.compra, 30); }
+      }
+      base.t = ahora(); await store.setJSON(k2, base);
+      return json({ ok: true, proveedores: Object.keys(base.lista).length });
+    }
+    const base = (await store.get(clave, { type: "json" })) || { lista: {} };
+    const lista = Object.values(base.lista).map((pv) => { const fs = Object.values(pv.facturas || {}); const ncs = fs.filter((f) => f.tipo === "61"); const fac = fs.filter((f) => f.tipo !== "61");
+      return { ...pv, facturas: fs.sort((a, b2) => (b2.fecha || "").split("/").reverse().join("").localeCompare((a.fecha || "").split("/").reverse().join(""))), n: fac.length, total: fac.reduce((s2, f) => s2 + f.total, 0) - ncs.reduce((s2, f) => s2 + f.total, 0), ultima: fac[0]?.fecha || null }; })
+      .sort((a, b2) => b2.total - a.total);
+    return json({ empresa: emp, t: base.t || null, lista });
+  }
   if (ruta === "operacion" && req.method === "POST") {
     const b = await cuerpo(req);
     const t = await leer(store, limpiaCodigo(b.codigo));
