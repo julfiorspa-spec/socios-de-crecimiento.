@@ -710,8 +710,39 @@ async function siiIngesta(req) {
     pv.facturas[`${f.tipo || "33"}-${f.folio}`] = { tipo: String(f.tipo || "33"), folio: Number(f.folio) || 0, fecha: texto(f.fecha, 10), neto: Number(f.neto) || 0, iva: Number(f.iva) || 0, total: Number(f.total) || 0, periodo: texto(f.periodo, 6), origen: "sii" };
     base.lista[rut] = pv; n++;
   }
+  // 📄 textos de los PDF de las facturas (extraídos en el navegador): se guardan para construir el catálogo de productos
+  let nd = 0;
+  if (Array.isArray(b.docs) && b.docs.length) {
+    const kt = "siitexto/" + rutEmp;
+    const T = (await store.get(kt, { type: "json" })) || { docs: {} };
+    for (const d of b.docs.slice(0, 200)) { const id = `${d.tipo || "33"}-${String(d.rut || "").toUpperCase()}-${d.folio}`; if (!d.texto) continue; T.docs[id] = { tipo: String(d.tipo || "33"), rut: String(d.rut || "").toUpperCase(), nombre: texto(d.nombre, 120), folio: Number(d.folio) || 0, fecha: texto(d.fecha, 10), total: Number(d.total) || 0, texto: String(d.texto).slice(0, 6000) }; nd++; }
+    T.t = ahora(); await store.setJSON(kt, T);
+  }
+  if (b.accion === "catalogo") return catalogoConstruir(store, rutEmp, corsH);
   base.t = ahora(); await store.setJSON(k2, base);
-  return new Response(JSON.stringify({ ok: true, guardadas: n, proveedores: Object.keys(base.lista).length }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
+  return new Response(JSON.stringify({ ok: true, guardadas: n, textos: nd, proveedores: Object.keys(base.lista).length }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
+}
+// 🧠 CATÁLOGO: Claude lee los textos de las facturas y arma familia → producto → cantidad/unidad → precio unitario neto
+async function catalogoConstruir(store, rutEmp, corsH) {
+  const key = process.env.ANTHROPIC_API_KEY || "";
+  if (!key) return new Response(JSON.stringify({ error: "sin ANTHROPIC_API_KEY" }), { status: 500, headers: corsH });
+  const T = (await store.get("siitexto/" + rutEmp, { type: "json" })) || { docs: {} };
+  const kc = "catalogo/" + rutEmp;
+  const C = (await store.get(kc, { type: "json" })) || { items: {}, hechos: {} };
+  const pendientes = Object.entries(T.docs).filter(([id]) => !C.hechos[id]).slice(0, 12);
+  if (!pendientes.length) return new Response(JSON.stringify({ ok: true, listo: true, items: Object.keys(C.items).length }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
+  const prompt = `Eres el analista de compras de PJANIC SpA. Te paso el texto (extraído de PDF, puede venir desordenado) de facturas de compra recibidas. Para CADA documento extrae sus líneas de producto o servicio. Responde SOLO con JSON: {"docs":[{"id":"<id>","lineas":[{"familia":"<una de: bolsas y plástico, áridos y hormigón, viruta y madera, alimento animal, impresión y gráfica, metalmecánica, construcción y ferretería, eventos y producción, pasajes y transporte, mobiliario, tecnología, asesorías y servicios, financiero y bancario, telecomunicaciones, otros>","producto":"<nombre limpio, con medida/modelo>","cantidad":<número>,"unidad":"<kg|un|m3|m2|ml|global|hora|mes|servicio|...>","precio_unit":<precio unitario NETO en CLP, número>,"neto":<total neto de la línea>}]}]}. Si una factura es solo un servicio sin líneas claras, igual pon una línea con cantidad 1 unidad "global". No inventes: si no hay precio unitario, calcula neto/cantidad.\n\n` + pendientes.map(([id, d]) => `=== ${id} | ${d.nombre} | ${d.fecha} | total ${d.total}\n${d.texto.slice(0, 3500)}`).join("\n\n");
+  const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5", max_tokens: 4000, messages: [{ role: "user", content: prompt }] }) });
+  if (!r.ok) return new Response(JSON.stringify({ error: "claude " + r.status }), { status: 502, headers: corsH });
+  const d = await r.json(); const out = (d.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
+  let js = null; try { js = JSON.parse(out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1)); } catch { js = null; }
+  let nl = 0;
+  for (const doc of (js?.docs || [])) { const src = T.docs[doc.id]; if (!src) continue; C.hechos[doc.id] = ahora();
+    for (const l of (doc.lineas || [])) { if (!l.producto) continue; const k = `${doc.id}#${nl++}`; C.items[k] = { doc: doc.id, rut: src.rut, proveedor: src.nombre, fecha: src.fecha, familia: texto(l.familia, 40) || "otros", producto: texto(l.producto, 140), cantidad: Number(l.cantidad) || 1, unidad: texto(l.unidad, 12) || "un", precio_unit: Math.round(Number(l.precio_unit) || 0), neto: Math.round(Number(l.neto) || 0) }; } }
+  for (const [id] of pendientes) if (!C.hechos[id]) C.hechos[id] = "sin_lineas";
+  C.t = ahora(); await store.setJSON(kc, C);
+  return new Response(JSON.stringify({ ok: true, procesados: pendientes.length, lineas: nl, items: Object.keys(C.items).length, faltan: Object.keys(T.docs).length - Object.keys(C.hechos).length }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
 }
 
 async function atender(req) {
@@ -1144,6 +1175,14 @@ async function atender(req) {
       return { ...pv, facturas: fs.sort((a, b2) => (b2.fecha || "").split("/").reverse().join("").localeCompare((a.fecha || "").split("/").reverse().join(""))), n: fac.length, total: fac.reduce((s2, f) => s2 + f.total, 0) - ncs.reduce((s2, f) => s2 + f.total, 0), ultima: fac[0]?.fecha || null }; })
       .sort((a, b2) => b2.total - a.total);
     return json({ empresa: emp, t: base.t || null, lista });
+  }
+  if (ruta === "catalogo") {   // 📚 catálogo de productos/precios de la empresa activa (construido desde las facturas del SII)
+    const emp = texto(url.searchParams.get("empresa"), 40) || "principal";
+    const L0 = (await store.get("empresas/lista", { type: "json" })) || {};
+    const rutE = String(L0[emp]?.rut || (emp === "principal" ? "78493114-5" : "")).replace(/\./g, "").toUpperCase();
+    const C = rutE ? (await store.get("catalogo/" + rutE, { type: "json" })) : null;
+    const items = Object.values(C?.items || {});
+    return json({ empresa: emp, rut: rutE, t: C?.t || null, n: items.length, items: items.sort((a, b2) => (b2.fecha || "").split("/").reverse().join("").localeCompare((a.fecha || "").split("/").reverse().join(""))) });
   }
   if (ruta === "operacion" && req.method === "POST") {
     const b = await cuerpo(req);
