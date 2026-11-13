@@ -2635,7 +2635,8 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         util = venta - costo - fijosDe(pres); m = venta ? util / venta : null;
         if (m != null && m < MARGEN_MIN) fuera.push(`no da: con el costo de mercado (${clp(mk.total_con_iva)}) queda ${Math.round(m * 100)}% de margen`); }
       const costoN = mk && !dudoso ? (mk.total_neto || (mk.total_con_iva || 0) / 1.19) : 0;
-      const precio = pres ? precioClaude(x, pres, pisoDe(costoN, pres)) : 0, prob = probGanar(x, pres ? precio / pres : null);
+      let precio = 0, prob = 0.5;   // blindado: un error aquí no debe dejar la pantalla en negro
+      try { precio = pres ? precioClaude(x, pres, pisoDe(costoN, pres)) : 0; prob = probGanar(x, pres ? precio / pres : null); } catch (e) { console.warn("evaluar", x.codigo, e); precio = pres ? Math.floor(pres * 0.92 / 10) * 10 : 0; }
       if (pres && prob < CERTEZA_MIN) fuera.push(`certeza ${Math.round(prob * 100)}% < ${Math.round(CERTEZA_MIN * 100)}%: ${(x.ofertas ?? 0) >= 4 ? "muchos rivales" : "poca información para apostar"}`);
       return { fuera, m, util, mk, dudoso, prob, precio };
     };
