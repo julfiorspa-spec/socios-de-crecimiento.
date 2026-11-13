@@ -689,7 +689,33 @@ async function informePublico(req) {
   return json({ resp: inf.resp || {}, ultimo: inf.ultimo || null });
 }
 
+// 📥 INGESTA SII (temporal, 13-11-2026): recibe facturas de compra leídas desde la sesión del SII en el navegador de Felipe.
+//    Protegida por clave de un solo uso (SII_INGESTA_K); CORS abierto solo en esta ruta. Quitar cuando termine la carga.
+const SII_INGESTA_K = "4a81bc9e0466a9e773f9235b04867ba3";
+const corsH = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type", "access-control-allow-methods": "POST, OPTIONS" };
+async function siiIngesta(req) {
+  if (req.method === "OPTIONS") return new Response("", { status: 204, headers: corsH });
+  const b = await cuerpo(req);
+  if (b.k !== SII_INGESTA_K) return new Response(JSON.stringify({ error: "clave" }), { status: 401, headers: { ...corsH, "content-type": "application/json" } });
+  const store = getStore({ name: STORE, consistency: "strong" });
+  const rutEmp = String(b.rut_empresa || "").replace(/\./g, "").toUpperCase(); if (!rutEmp) return new Response(JSON.stringify({ error: "rut_empresa" }), { status: 400, headers: corsH });
+  const k2 = "proveedores/sii/" + rutEmp;
+  const base = (await store.get(k2, { type: "json" })) || { lista: {}, nombre: null };
+  if (b.nombre_empresa) base.nombre = texto(b.nombre_empresa, 120);
+  let n = 0;
+  for (const f of (Array.isArray(b.facturas) ? b.facturas : []).slice(0, 5000)) {
+    const rut = String(f.rut || "").toUpperCase(); if (!rut) continue;
+    const pv = base.lista[rut] || { rut, nombre: texto(f.nombre, 120), facturas: {}, rubro: null, nota: null };
+    pv.nombre = texto(f.nombre, 120) || pv.nombre;
+    pv.facturas[`${f.tipo || "33"}-${f.folio}`] = { tipo: String(f.tipo || "33"), folio: Number(f.folio) || 0, fecha: texto(f.fecha, 10), neto: Number(f.neto) || 0, iva: Number(f.iva) || 0, total: Number(f.total) || 0, periodo: texto(f.periodo, 6), origen: "sii" };
+    base.lista[rut] = pv; n++;
+  }
+  base.t = ahora(); await store.setJSON(k2, base);
+  return new Response(JSON.stringify({ ok: true, guardadas: n, proveedores: Object.keys(base.lista).length }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
+}
+
 async function atender(req) {
+  if (/^\/bot\/sii-ingesta\/?$/.test(new URL(req.url).pathname)) return siiIngesta(req);
   if (/^\/bot\/informe\/?$/.test(new URL(req.url).pathname)) return informePublico(req);
   if (/^\/bot\/wa\/?$/.test(new URL(req.url).pathname)) return waWebhook(req);
   if (/^\/bot\/nube-pedir\/?$/.test(new URL(req.url).pathname)) return nubePedir(req);
@@ -1098,6 +1124,12 @@ async function atender(req) {
       return json({ ok: true, proveedores: Object.keys(base.lista).length });
     }
     let base = (await store.get(clave, { type: "json" })) || { lista: {} };
+    {   // 📥 mezclar lo ingresado desde el SII por RUT de la empresa
+      const L0 = (await store.get("empresas/lista", { type: "json" })) || {};
+      const rutE = String(L0[emp]?.rut || (emp === "principal" ? "78493114-5" : "")).replace(/\./g, "").toUpperCase();
+      const ing = rutE ? await store.get("proveedores/sii/" + rutE, { type: "json" }) : null;
+      if (ing?.lista) for (const [rut, pv] of Object.entries(ing.lista)) { const cur = base.lista[rut] || { rut, nombre: pv.nombre, facturas: {}, rubro: null, nota: null }; cur.nombre = cur.nombre || pv.nombre; Object.assign(cur.facturas, pv.facturas); cur.rubro = cur.rubro || pv.rubro || null; base.lista[rut] = cur; }
+    }
     if (!Object.keys(base.lista).length) {                                   // 🌱 primera vez: sembrar con lo leído del SII, según el RUT de la empresa
       const L = (await store.get("empresas/lista", { type: "json" })) || {};
       const rutEmp = String(L[emp]?.rut || (emp === "principal" ? "78493114-5" : "")).replace(/\./g, "").toUpperCase();
