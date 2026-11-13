@@ -3296,7 +3296,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   const corta = (n) => String(n || "").replace(/^(sociedad (de )?(inversiones )?(y gesti[oó]n )?|comercial(izadora)? |empresa )/i, "").replace(/\s+(spa|ltda\.?|s\.a\.|eirl|limitada)\.?$/i, "").slice(0, 26);
   // ================= 🏆 PORTADA: deseo de jugar · RUT de la empresa · conexiones (Gmail, WhatsApp, Marketplace) =================
   const PORT = "sdc:portada", CONEX = "sdc:conex";
-  const portadaVista = () => { try { return sessionStorage.getItem(PORT) === "1"; } catch { return true; } };
+  const portadaVista = () => { if (R.portadaOK) return true; try { return sessionStorage.getItem(PORT) === "1"; } catch { return true; } };   // bandera en memoria: en iPhone sessionStorage a veces no guarda y la portada se quedaba pegada
   const conex = () => { try { return JSON.parse(localStorage.getItem(CONEX)) || {}; } catch { return {}; } };
   const rutLimpio = (r) => String(r || "").replace(/[^0-9kK]/g, "").toUpperCase();
   const rutOk = (r) => { const c = rutLimpio(r); if (c.length < 8) return false; const cuerpo = c.slice(0, -1), dv = c.slice(-1);
@@ -3364,6 +3364,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       <div class="rb-p-stats"><div><b>${L.length || "…"}</b><small>compras abiertas</small></div><div><b>${total ? fmt(total) : "…"}</b><small>en juego hoy</small></div><div><b>${seg || "…"}</b><small>🔥 2° llamado</small></div></div>
       <label class="rb-p-rut"><span>RUT de tu empresa</span><input id="rbRut" value="${esc(rutFmt(rut))}" placeholder="76.123.456-7" autocomplete="off" autocapitalize="characters" inputmode="text"></label>
       <button class="btn rb-oro rb-p-jugar" type="button" data-rb="portada-jugar">${RC.cta}</button>
+      ${R.portadaError ? `<div style="color:#ff8a80;font-size:.8rem;margin-top:6px;text-align:center">⚠ ${esc(R.portadaError)}</div>` : ""}
       <div class="rb-p-nota">Sin formularios: con tu RUT descubro qué vende tu empresa y te muestro primero lo que puedes ganar.</div>
       <div class="rb-p-con-t">Conecta tus herramientas</div>
       <div class="rb-p-con">${btnC("gmail", "✉️", "Gmail", "correos a proveedores")}${btnC("whatsapp", "💬", "WhatsApp", "avisos y clientes")}${btnC("marketplace", "🛒", "Marketplace", "proveedores 2ª opción")}</div>
@@ -4953,17 +4954,18 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "portada-jugar") {
       const v = $("#rbRut")?.value || ""; R.rutTmp = v;
       if (!rutOk(v)) { toast("Revisa el RUT (ej. 76.123.456-7)"); $("#rbRut")?.focus(); return; }
-      const limpio = rutLimpio(v); b.disabled = true; b.textContent = "⏳ Entrando…";
+      const limpio = rutLimpio(v); b.disabled = true; b.textContent = "⏳ Entrando…"; R.portadaError = null;
+      { const ya = empresaActual(); if (ya && rutLimpio(ya.rut) === limpio) { R.portadaOK = true; try { sessionStorage.setItem(PORT, "1"); } catch {} R.oportTab = "nuevas"; R.oportFiltro = "real"; sheet.scrollTop = 0; refrescar(); return pintarHoja(true); } }   // ya estás en esa empresa: entra directo, sin esperar la nube
       if (!R.empresas) await cargarEmpresas();
       let e = Object.values(R.empresas || {}).find((x) => rutLimpio(x.rut) === limpio);
       try {
         if (!e) { const r = await api("empresa", { method: "POST", body: JSON.stringify({ rut: rutFmt(v), razon_social: "Empresa " + rutFmt(v) }) }); R.empresas = r.empresas; e = r.empresa; }
         guardar({ empresa: e.id, rubroListo: 1, ...(e.perfil?.rubros?.length && !(leer().rubros || []).length ? { rubros: e.perfil.rubros } : {}) });
-        try { sessionStorage.setItem(PORT, "1"); } catch {}
+        R.portadaOK = true; try { sessionStorage.setItem(PORT, "1"); } catch {}
         R.oportTab = "nuevas"; R.oportFiltro = "real"; R.ver = null; R.data = null; sheet.scrollTop = 0;
         if (!e.perfil || Date.now() - Date.parse(e.perfil.t || 0) > 30 * 86400000) descubrirEmpresa(v, /^Empresa \d/.test(e.razon_social) ? "" : e.razon_social);
         navigator.vibrate?.(20); refrescar();
-      } catch (er) { toast(er.message); } finally { b.disabled = false; b.textContent = "▶ JUGAR"; }
+      } catch (er) { R.portadaError = er.message; toast(er.message); } finally { b.disabled = false; b.textContent = "▶ JUGAR"; }
       return pintarHoja(true);
     }
     if (a === "con") {
