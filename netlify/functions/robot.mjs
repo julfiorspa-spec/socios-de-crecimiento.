@@ -719,6 +719,14 @@ async function siiIngesta(req) {
     T.t = ahora(); await store.setJSON(kt, T);
   }
   if (b.accion === "catalogo") return catalogoConstruir(store, rutEmp, corsH);
+  if (b.accion === "cola_resumen") {   // diagnóstico temporal: últimos trabajos y su estado (para revisar por qué no llegan a Firmar)
+    const { blobs } = await store.list({ prefix: "trabajo/" });
+    const L = [];
+    for (const bl of blobs.slice(-400)) { const t = await store.get(bl.key, { type: "json" }); if (t) L.push(t); }
+    L.sort((a, b2) => String(b2.actualizado || b2.creado || "").localeCompare(String(a.actualizado || a.creado || "")));
+    const rob = (await store.get("robot/latido", { type: "json" })) || null;
+    return new Response(JSON.stringify({ ok: true, robot: rob, n: L.length, ultimos: L.slice(0, 25).map((t) => ({ codigo: t.codigo, estado: t.estado, accion: t.accion, por: t.por, prob: t.prob, descuento: t.descuento, empresa: t.empresa, jugador: t.jugador, creado: t.creado, actualizado: t.actualizado, mensaje: String(t.mensaje || "").slice(0, 160), cerebro: t.cerebro })) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
+  }
   if (b.accion === "historico_resumen") {   // índice del histórico de mercado + distribución de rivales por familia
     const idx = (await store.get("historico/_indice", { type: "json" })) || { terms: {} };
     const out = [];
