@@ -846,14 +846,20 @@ async function concretar(store, t, opts = {}) {
     const prompt = `Eres el jefe de compras de ${t.empresa_nombre || "PJANIC SpA"} (proveedor del Estado de Chile). Ganamos la compra ágil ${t.codigo} (${t.nombre || ""}) del organismo ${t.oc_compra?.organismo || t.organismo || ""}; OC ${t.op?.oc_codigo || ""}. Entrega: ${t.oc_compra?.direccion || t.op?.informe?.direccion || "(ver OC)"}.
 Para cada ítem cotizado te doy: lo que ofrecimos (texto de nuestra cotización), cantidad, precio unitario NETO de venta, candidatos REALES encontrados en tiendas (título, link, precio con IVA leído de la página; null si no se pudo leer) y productos que ya le compramos antes a proveedores propios (catálogo de facturas).
 Tu trabajo: decir dónde concretar cada ítem. REGLAS: (1) usa SOLO links y proveedores de la lista; jamás inventes tiendas, teléfonos ni precios: si un candidato no trae precio, pon precio_unit_iva null y dilo; (2) el producto elegido debe cumplir lo cotizado (capacidad, medidas, uso médico/industrial si lo dice el texto); si ninguno calza, elegido null y explica qué buscar; (3) explica en una frase por qué calza con lo que cotizamos y por qué cotizamos así (p. ej. "cotizamos caja isotérmica 16 L para cadena de frío: este cooler rígido de 15–16 L lo cumple"); (4) alerta riesgos (stock, plazo, producto chino con envío internacional no sirve para entregar en 3 días).
-Responde SOLO JSON: {"items":[{"i":<índice>,"elegido":{"tipo":"link"|"proveedor","titulo":"","url":"","proveedor":"","precio_unit_iva":<número o null>,"porque":""}|null,"alternativas":[{"titulo":"","url":"","precio_unit_iva":<número o null>}],"riesgo":"","buscar":""}],"resumen":"<2 frases: qué hacer primero y cuánto se gana>"}
+Responde SOLO JSON compacto (una línea, sin comentarios, strings cortas sin comillas internas, máximo 2 alternativas por ítem): {"items":[{"i":<índice>,"elegido":{"tipo":"link"|"proveedor","titulo":"","url":"","proveedor":"","precio_unit_iva":<número o null>,"porque":"<máx 160 caracteres>"}|null,"alternativas":[{"titulo":"","url":"","precio_unit_iva":<número o null>}],"riesgo":"<máx 120>","buscar":"<máx 120>"}],"resumen":"<2 frases: qué hacer primero y cuánto se gana>"}
 
 ` + porItem.map((x, i) => `ÍTEM ${i}: "${x.item.d}" · cantidad ${x.item.q} · venta unit. neto $${x.item.p}\n  candidatos: ${JSON.stringify(x.candidatos)}\n  propios: ${JSON.stringify(x.propios)}`).join("\n\n");
     try {
       const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-        body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5", max_tokens: 2500, messages: [{ role: "user", content: prompt }] }), signal: AbortSignal.timeout(20000) });
+        body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5", max_tokens: 4500, messages: [{ role: "user", content: prompt }] }), signal: AbortSignal.timeout(28000) });
       const j = await r.json(); const txt = (j.content || []).map((c) => c.text || "").join("");
-      const m = txt.match(/\{[\s\S]*\}/); plan = m ? JSON.parse(m[0]) : null;
+      const m = txt.match(/\{[\s\S]*\}/); let raw = m ? m[0] : "";
+      try { plan = raw ? JSON.parse(raw) : null; } catch {
+        // respuesta cortada: rescatar los ítems completos
+        for (const cierre of ['"}]}', '}]}', ']}', '"}}]}', '}}]}']) { const k = raw.lastIndexOf("}"); try { plan = JSON.parse(raw.slice(0, k + 1).replace(/,\s*$/, "") + cierre); break; } catch {} }
+        if (!plan) { const mi = raw.match(/"items"\s*:\s*\[([\s\S]*)/); if (mi) { const parts = []; let depth = 0, cur = ""; for (const ch of mi[1]) { cur += ch; if (ch === "{") depth++; if (ch === "}") { depth--; if (depth === 0) { try { parts.push(JSON.parse(cur.trim().replace(/^,/, ""))); } catch {} cur = ""; } } if (ch === "]" && depth === 0) break; } if (parts.length) plan = { items: parts, resumen: "" }; } }
+        if (plan) aviso = "Claude se quedó sin espacio: rescaté " + (plan.items || []).length + " ítem(s).";
+      }
       if (!plan) aviso = "Claude no devolvió un plan legible: " + txt.slice(0, 120);
     } catch (e) { aviso = "Claude no respondió: " + String(e.message || e).slice(0, 80); }
   } else aviso = "Falta ANTHROPIC_API_KEY en Netlify: muestro solo los candidatos encontrados.";
