@@ -996,9 +996,8 @@ async function siiIngesta(req) {
   if (b.accion === "prov_clasificar") return new Response(JSON.stringify(await clasificarProveedores(store)), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   if (b.accion === "concretar") { const t = await leer(store, String(b.codigo || "")); if (!t) return new Response(JSON.stringify({ error: "no existe" }), { status: 404, headers: corsH }); const r = await concretar(store, t); if (r.ok) { t.op = t.op || { etapa: "ganada", historial: [] }; t.op.concrecion = r; await store.setJSON("trabajo/" + t.codigo, t); } return new Response(JSON.stringify(r), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); }
   if (b.accion === "hoy") {   // diagnóstico: trabajos tocados desde una fecha, con empresa (para ver qué metió cada una y que no se crucen)
-    const desde = String(b.desde || new Date(Date.now() - 24 * 3600e3).toISOString()); const { blobs } = await store.list({ prefix: "trabajo/" });
-    const ult = blobs.slice(-400); const L = []; for (let i = 0; i < ult.length; i += 25) L.push(...(await Promise.all(ult.slice(i, i + 25).map((x) => store.get(x.key, { type: "json" }).catch(() => null)))));
-    const out = L.filter((t) => t && String(t.actualizado || t.creado || "") >= desde).map((t) => ({ codigo: t.codigo, empresa: t.empresa || null, rut_empresa: t.rut_empresa || null, estado: t.estado, accion: t.accion, por: t.por, jugador: t.jugador, persona: t.persona, nombre: texto(t.nombre, 80), organismo: texto(t.organismo, 60), total: t.total, llamado: t.llamado || t.op?.informe?.llamado || null, creado: t.creado, actualizado: t.actualizado, fecha_envio: t.fecha_envio || null, oc: t.op?.oc_codigo || null, etapa: t.op?.etapa || null, dispositivo: t.dispositivo || null }));
+    const desde = String(b.desde || new Date(Date.now() - 24 * 3600e3).toISOString()); const L = await todos(store);   // TODOS los trabajos (caché), no solo los últimos por código
+    const out = L.filter((t) => t && (String(t.actualizado || t.creado || "") >= desde || String(t.fecha_envio || "") >= desde)).map((t) => ({ codigo: t.codigo, empresa: t.empresa || null, rut_empresa: t.rut_empresa || null, estado: t.estado, accion: t.accion, por: t.por, jugador: t.jugador, persona: t.persona, nombre: texto(t.nombre, 80), organismo: texto(t.organismo, 60), total: t.total, llamado: t.llamado || t.op?.informe?.llamado || null, creado: t.creado, actualizado: t.actualizado, fecha_envio: t.fecha_envio || null, oc: t.op?.oc_codigo || null, etapa: t.op?.etapa || null, dispositivo: t.dispositivo || null }));
     return new Response(JSON.stringify({ ok: true, n: out.length, trabajos: out }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   }
   if (b.accion === "fotos_ultimo") return new Response(JSON.stringify({ ok: true, u: await store.get("robot/fotos_ultimo", { type: "json" }) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
@@ -1890,7 +1889,7 @@ async function atender(req) {
       creado: ahora(), estado: null, mensaje: null, historial: [],
       total: null, neto: null, plazo: null, detalle: null, items: null, pdf: false,
       envios: previo?.envios || 0, // cuántas veces quedó enviada antes (para editar)
-      empresa: texto(b.empresa, 40) || previo?.empresa || null,   // con qué empresa (RUT y datos) se arma la oferta
+      empresa: texto(b.empresa, 40) || previo?.empresa || "principal",   // con qué empresa (RUT y datos) se arma la oferta; sin etiqueta = PJANIC (principal)
       jugador: jug(b.jugador) || previo?.jugador || null,         // qué celular (qué juego) la pidió
       dispositivo: texto(b.dispositivo, 60) || previo?.dispositivo || null,
       persona: texto(b.persona, 60) || previo?.persona || null,               // quién la pidió (nombre que puso en la app)
@@ -2133,7 +2132,7 @@ async function atender(req) {
     const corto = (x, n) => (x == null ? null : String(x).slice(0, n));
     return json({
       jugadores: (await store.get("ejecutores/lista", { type: "json" })) || {},
-      trabajos: lista.slice(0, 700).map((t) => ({
+      trabajos: lista.slice(0, 1200).map((t) => ({
         codigo: t.codigo, nombre: corto(t.nombre, 160), organismo: corto(t.organismo, 120), estado: t.estado, accion: t.accion, tipo: t.tipo || null,
         total: t.total, jugador: t.jugador || null, persona: t.persona || null, dispositivo: t.dispositivo || null, empresa: t.empresa || null,
         creado: t.creado, actualizado: t.actualizado, fecha_envio: t.fecha_envio || null, externa: !!t.externa, detalle: corto(t.detalle, 240),
@@ -2141,9 +2140,15 @@ async function atender(req) {
         oc_compra: t.oc_compra ? { organismo: corto(t.oc_compra.organismo, 120), unidad: corto(t.oc_compra.unidad, 120), direccion: corto(t.oc_compra.direccion, 160),
           mail: t.oc_compra.mail || null, fono: t.oc_compra.fono || null, nombre: corto(t.oc_compra.nombre, 160),
           items: (t.oc_compra.items || []).slice(0, 6).map((i) => ({ nombre: corto(i.nombre, 80), especificacion: corto(i.especificacion, 100) })) } : null,
+        neto: t.neto || null, llamado: t.llamado || t.op?.informe?.llamado || null, prob: t.prob ?? null, por: t.por || null, envios: t.envios || 0,
         op: t.op ? { etapa: t.op.etapa, oc_codigo: t.op.oc_codigo || null, precio_acordado: t.op.precio_acordado || null, proveedor: corto(t.op.proveedor, 80),
+          costo_transporte: t.op.costo_transporte || 0, cerrado: t.op.cerrado || null, nos_da: t.op.nos_da ?? null, sin_factura: !!t.op.sin_factura,
+          ganada_t: (t.op.historial || []).find((h) => h.etapa === "ganada")?.t || null, historial: (t.op.historial || []).slice(-8).map((h) => ({ t: h.t, etapa: h.etapa })),
+          inversionista_nombre: corto(t.op.inversionista_nombre, 40), ejecutor_nombre: corto(t.op.ejecutor_nombre, 40),
           docs: (t.op.docs || []).filter((d) => d.tipo === "oc"),
-          informe: t.op.informe ? { final: t.op.informe.final ?? null, direccion: corto(t.op.informe.direccion, 160), comprador: t.op.informe.comprador || null,
+          informe: t.op.informe ? { final: t.op.informe.final ?? null, utilidad: t.op.informe.utilidad ?? null, repartir: t.op.informe.repartir ?? null, compras: t.op.informe.compras ?? null,
+            inversionista: t.op.informe.inversionista ?? null, comision: t.op.informe.comision ?? null, julfior: t.op.informe.julfior ?? null, impuesto: t.op.informe.impuesto ?? null, factoring: t.op.informe.factoring ?? null, iva_pagar: t.op.informe.iva_pagar ?? null,
+            direccion: corto(t.op.informe.direccion, 160), comprador: t.op.informe.comprador || null,
             que_comprar: (t.op.informe.que_comprar || []).slice(0, 4).map((x) => ({ que: corto(x.que, 100) })) } : null } : null,
       })),
     });
