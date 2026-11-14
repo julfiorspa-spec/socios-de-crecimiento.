@@ -734,6 +734,26 @@ async function buscarFotos(q) {
 //    1) candidatos reales por ítem (buscarFotos → páginas de tienda) 2) precio leído de la página 3) catálogo propio (a quién ya le compraste)
 //    4) Claude elige y explica por qué calza con lo cotizado. Se guarda en t.op.concrecion. Nada inventado: solo links/proveedores que existen.
 const TIENDA_RE = /mercadolibre\.cl|falabella\.com|sodimac\.cl|easy\.cl|lider\.cl|paris\.cl|ripley\.cl|pcfactory\.cl|dimerc\.cl|prisa\.cl|casaideas\.cl|construmart\.cl|imperial\.cl|abcdin\.cl|lapolar\.cl|hites\.com|spdigital\.cl|tenbox\.cl|amazon\.com/i;
+// 🛒 Listado de Mercado Libre Chile (HTML público): título, precio, link y foto de los primeros resultados.
+async function mlListado(q, soloLocal = true) {
+  const slug = String(q || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const u = "https://listado.mercadolibre.cl/" + slug + (soloLocal ? "_Envio_Local" : "");
+  const r = await fetch(u, { headers: { "user-agent": FOTO_UA, "accept-language": "es-CL,es;q=0.9", accept: "text/html,*/*" }, signal: AbortSignal.timeout(8000) });
+  if (!r.ok) throw new Error("ML listado " + r.status);
+  const h = await r.text(); const out = [];
+  const bloques = h.split(/<li class="ui-search-layout__item|<div class="poly-card poly-card--list|<div class="poly-card poly-card--grid/).slice(1);
+  for (const b of bloques) {
+    const tit = (b.match(/class="poly-component__title"[^>]*>([^<]{3,200})</) || b.match(/<h3[^>]*>\s*<a[^>]*>([^<]{3,200})</) || [])[1];
+    const link = (b.match(/class="poly-component__title"[^>]*href="([^"]+)"/) || b.match(/href="(https:\/\/(?:www|articulo)\.mercadolibre\.cl\/[^"]+)"/) || [])[1];
+    const pr = (b.match(/poly-price__current[\s\S]{0,400}?andes-money-amount__fraction[^>]*>([\d.]+)</) || b.match(/andes-money-amount__fraction[^>]*>([\d.]+)</) || [])[1];
+    const img = (b.match(/<img[^>]+(?:data-src|src)="(https:\/\/http2\.mlstatic\.com[^"]+)"/) || [])[1];
+    const ad = /mclics\/clicks/.test(link || "");
+    if (tit && link && pr) out.push({ titulo: tit.replace(/&amp;/g, "&").trim(), url: link.split("#")[0].split("?")[0], precio_iva: Number(pr.replace(/\./g, "")), foto: img || null, fuente: "mercadolibre.cl", ad });
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
 async function precioPagina(url) {
   try {
     const r = await fetch(url, { headers: { "user-agent": FOTO_UA, "accept-language": "es-CL,es;q=0.9", accept: "text/html,*/*" }, signal: AbortSignal.timeout(7000), redirect: "follow" });
@@ -828,6 +848,7 @@ async function siiIngesta(req) {
     T.t = ahora(); await store.setJSON(kt, T);
   }
   if (b.accion === "catalogo") return catalogoConstruir(store, rutEmp, corsH);
+  if (b.accion === "ml_listado") { try { return new Response(JSON.stringify({ ok: true, r: await mlListado(b.q, b.local !== false) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); } catch (e) { return new Response(JSON.stringify({ error: String(e.message || e) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); } }
   if (b.accion === "concretar") { const t = await leer(store, String(b.codigo || "")); if (!t) return new Response(JSON.stringify({ error: "no existe" }), { status: 404, headers: corsH }); const r = await concretar(store, t); if (r.ok) { t.op = t.op || { etapa: "ganada", historial: [] }; t.op.concrecion = r; await store.setJSON("trabajo/" + t.codigo, t); } return new Response(JSON.stringify(r), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); }
   if (b.accion === "fotos_ultimo") return new Response(JSON.stringify({ ok: true, u: await store.get("robot/fotos_ultimo", { type: "json" }) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   if (b.accion === "foto") return new Response(JSON.stringify({ ok: true, ...(await buscarFotos(b.q)) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
