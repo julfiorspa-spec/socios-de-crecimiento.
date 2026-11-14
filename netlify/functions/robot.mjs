@@ -721,7 +721,9 @@ async function siiIngesta(req) {
   if (b.accion === "catalogo") return catalogoConstruir(store, rutEmp, corsH);
   if (b.accion === "buscar_trabajo") {   // diagnóstico temporal: busca un texto en los trabajos (ítems, precios, nombre)
     const q = String(b.q || "").toLowerCase(); const { blobs } = await store.list({ prefix: "trabajo/" }); const out = [];
-    for (const bl of blobs) { const t = await store.get(bl.key, { type: "json" }); if (!t) continue; const s = JSON.stringify(t).toLowerCase(); if (q && !s.includes(q)) continue;
+    const ult = blobs.slice(-(Number(b.max) || 250)).reverse();   // solo los últimos, en paralelo (antes recorría todo en serie y daba timeout)
+    const todos = []; for (let i = 0; i < ult.length; i += 25) todos.push(...(await Promise.all(ult.slice(i, i + 25).map((bl) => store.get(bl.key, { type: "json" }).catch(() => null)))));
+    for (const t of todos) { if (!t) continue; const s = JSON.stringify(t).toLowerCase(); if (q && !s.includes(q)) continue;
       out.push({ codigo: t.codigo, estado: t.estado, nombre: texto(t.nombre || t.titulo, 120), organismo: texto(t.organismo, 80), presupuesto: t.presupuesto || t.monto || null, descuento: t.descuento, precioTotal: t.precio_total || t.total || t.oferta?.total || null, items: (t.items || t.productos || t.oferta?.items || t.ficha?.items || []).slice(0, 12).map((it) => ({ n: texto(it.nombre || it.producto || it.descripcion, 90), cant: it.cantidad ?? it.cant, pu: it.precio_unitario ?? it.precio_unit ?? it.precio ?? it.pu, modelo: texto(it.modelo || it.detalle, 90) })), actualizado: t.actualizado }); if (out.length >= 5) break; }
     return new Response(JSON.stringify({ ok: true, n: out.length, trabajos: out }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   }
