@@ -924,15 +924,16 @@ async function clasificarProveedores(store) {
   const key = process.env.ANTHROPIC_API_KEY || ""; if (!key) return { error: "sin ANTHROPIC_API_KEY" };
   const base = await baseProveedores(store, true);
   const R = (await store.get("proveedores/_rubros", { type: "json" }).catch(() => null)) || {};
-  const pend = base.lista.filter((x) => !R[x.rut]).slice(0, 40);
+  const pend = base.lista.filter((x) => !R[x.rut]).slice(0, 25);
   if (!pend.length) return { ok: true, listo: true, clasificados: Object.keys(R).length };
   const prompt = `Clasifica proveedores chilenos (facturas de compra de un grupo de empresas que vende al Estado). Para cada uno di su rubro y qué productos/servicios típicos vende, y si sirve como proveedor para revender a organismos públicos ("util": true) o es un gasto interno (banco, luz, telecom, arriendo, combustible, SII, AFP, seguros: "util": false). Responde SOLO JSON: {"p":[{"rut":"","rubro":"<2-4 palabras>","tipicos":["<hasta 5 productos/servicios>"],"util":true|false}]}\n\n` +
     pend.map((x) => `${x.rut} | ${x.nombre} | compras: ${x.productos.slice(0, 4).map((q) => q.producto).join("; ") || "(sin detalle)"} | facturas ${x.facturas} | total $${Math.round(x.total)}`).join("\n");
   const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5", max_tokens: 2500, messages: [{ role: "user", content: prompt }] }), signal: AbortSignal.timeout(20000) });
   const j = await r.json(); const txt = (j.content || []).map((c) => c.text || "").join(""); const m = txt.match(/\{[\s\S]*\}/);
-  let out = null; try { out = m ? JSON.parse(m[0]) : null; } catch { const mi = txt.match(/\{"rut"[^}]*\}/g) || []; out = { p: mi.map((x) => { try { return JSON.parse(x); } catch { return null; } }).filter(Boolean) }; }
-  let n = 0; for (const x of out?.p || []) { const rut = String(x.rut || "").replace(/\./g, "").toUpperCase(); if (!rut) continue; R[rut] = { rubro: texto(x.rubro, 60), tipicos: (x.tipicos || []).slice(0, 6).map((q) => texto(q, 60)), util: x.util !== false }; n++; }
+  let out = null; try { out = m ? JSON.parse(m[0]) : null; } catch { const mi = txt.match(/\{[^{}]*"rut"[^{}]*\}/g) || []; out = { p: mi.map((x) => { try { return JSON.parse(x); } catch { return null; } }).filter(Boolean) }; }
+  let n = 0; const porRut = Object.fromEntries(pend.map((x) => [x.rut.replace(/[^0-9K]/g, ""), x.rut]));
+  for (const x of out?.p || []) { const rut = porRut[String(x.rut || "").toUpperCase().replace(/[^0-9K]/g, "")] || ""; if (!rut) continue; R[rut] = { rubro: texto(x.rubro, 60), tipicos: (x.tipicos || []).slice(0, 6).map((q) => texto(q, 60)), util: x.util !== false }; n++; }
   await store.setJSON("proveedores/_rubros", R);
   await baseProveedores(store, true);
   return { ok: true, clasificados_ahora: n, total: Object.keys(R).length, faltan: Math.max(0, base.lista.length - Object.keys(R).length) };
