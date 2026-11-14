@@ -695,7 +695,7 @@ const SII_INGESTA_K = "4a81bc9e0466a9e773f9235b04867ba3";
 const corsH = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type", "access-control-allow-methods": "POST, OPTIONS" };
 async function siiIngesta(req) {
   if (req.method === "OPTIONS") return new Response("", { status: 204, headers: corsH });
-  const b = await cuerpo(req);
+  const b = req.method === "GET" ? Object.fromEntries(new URL(req.url).searchParams.entries()) : await cuerpo(req);
   if (b.k !== SII_INGESTA_K) return new Response(JSON.stringify({ error: "clave" }), { status: 401, headers: { ...corsH, "content-type": "application/json" } });
   const store = getStore({ name: STORE, consistency: "strong" });
   const rutEmp = String(b.rut_empresa || "").replace(/\./g, "").toUpperCase(); if (!rutEmp) return new Response(JSON.stringify({ error: "rut_empresa" }), { status: 400, headers: corsH });
