@@ -771,18 +771,46 @@ async function webBuscar(q, n = 12) {
 }
 
 async function precioPagina(url) {
+  // Lee UNA página de tienda y devuelve sus productos con precio (con IVA) y stock. Tiendas Shopify (muchas pymes chilenas:
+  // tubotiquin, ecompany, ivmedical…) exponen /products.json; el resto se lee por JSON-LD / meta / regex.
+  const H = { "user-agent": FOTO_UA, "accept-language": "es-CL,es;q=0.9", accept: "text/html,application/json,*/*" };
+  const host = (() => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; } })();
+  const prods = [];
   try {
-    const r = await fetch(url, { headers: { "user-agent": FOTO_UA, "accept-language": "es-CL,es;q=0.9", accept: "text/html,*/*" }, signal: AbortSignal.timeout(7000), redirect: "follow" });
-    if (!r.ok) return { estado: r.status };
+    const r = await fetch(url, { headers: H, signal: AbortSignal.timeout(7000), redirect: "follow" });
+    if (!r.ok) return { estado: r.status, productos: [] };
     const h = (await r.text()).slice(0, 900000);
-    const tit = (h.match(/<title[^>]*>([^<]{3,160})</i) || [])[1] || (h.match(/property="og:title" content="([^"]{3,160})"/) || [])[1] || "";
+    const tit = ((h.match(/property="og:title" content="([^"]{3,160})"/) || h.match(/<title[^>]*>([^<]{3,160})</i) || [])[1] || "").replace(/\s*[|·–-]\s*(MercadoLibre|Falabella|Sodimac|Tienda Online).*$/i, "").trim();
+    const esShopify = /cdn\.shopify\.com|Shopify\.theme|shopify-section/.test(h);
+    if (esShopify) {
+      const u = new URL(url); const base = u.origin;
+      const mp = u.pathname.match(/\/products\/([^/?#]+)/), mc = u.pathname.match(/\/collections\/([^/?#]+)/);
+      const ju = mp ? `${base}/products/${mp[1]}.js` : `${base}${mc ? "/collections/" + mc[1] : ""}/products.json?limit=12`;
+      try {
+        const rj = await fetch(ju, { headers: H, signal: AbortSignal.timeout(6000) });
+        if (rj.ok) {
+          const j = await rj.json(); const L = mp ? [j] : (j.products || []);
+          for (const pr of L.slice(0, 12)) {
+            const v = (pr.variants || [])[0] || {}; const pre = mp ? Number(pr.price) / 100 : Number(v.price);
+            if (!pr.title || !pre) continue;
+            prods.push({ titulo: String(pr.title).slice(0, 140), url: mp ? url : `${base}/products/${pr.handle}`, precio_iva: Math.round(pre), disponible: mp ? pr.available !== false : v.available !== false, foto: mp ? (pr.featured_image || null) : (pr.images?.[0]?.src || null), fuente: host });
+          }
+        }
+      } catch {}
+      if (prods.length) return { estado: 200, productos: prods, tienda: "shopify" };
+    }
     let precio = null;
-    const m1 = h.match(/"price"\s*:\s*"?(\d{3,8})(?:\.\d+)?"?/) || h.match(/itemprop="price"\s+content="(\d{3,8})/) || h.match(/"priceAmount"\s*:\s*(\d{3,8})/) || h.match(/andes-money-amount__fraction[^>]*>([\d.]{4,11})</);
-    if (m1) precio = Number(String(m1[1]).replace(/\./g, ""));
+    for (const m of h.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/g)) {
+      try { const j = JSON.parse(m[1]); const L = Array.isArray(j) ? j : [j, ...(j["@graph"] || [])];
+        for (const o of L) { if (/Product/.test(String(o?.["@type"]))) { const of = Array.isArray(o.offers) ? o.offers[0] : o.offers; const pr = Number(of?.price || of?.lowPrice); if (pr) { precio = Math.round(pr); break; } } } } catch {}
+      if (precio) break;
+    }
+    if (!precio) { const m1 = h.match(/property="product:price:amount" content="([\d.]+)"/) || h.match(/itemprop="price"\s+content="([\d.]+)"/) || h.match(/"priceAmount"\s*:\s*(\d{3,8})/) || h.match(/andes-money-amount__fraction[^>]*>([\d.]{4,11})</); if (m1) precio = Math.round(Number(String(m1[1]).replace(/\.(?=\d{3}\b)/g, ""))); }
     if (precio && (precio < 500 || precio > 50000000)) precio = null;
-    const sinStock = /sin stock|agotado|no disponible|publicaci[oó]n pausada|finalizada/i.test(h.slice(0, 200000)) && !/en stock|disponible/i.test(h.slice(0, 50000));
-    return { precio, titulo: tit.replace(/\s*[|·-]\s*(MercadoLibre|Falabella|Sodimac).*$/i, "").trim(), sinStock, estado: r.status };
-  } catch (e) { return { error: String(e.message || e).slice(0, 60) }; }
+    const sinStock = /sin stock|agotado|no disponible|publicaci[oó]n pausada|finalizada/i.test(h.slice(0, 200000)) && !/en stock|disponible|agregar al carro|comprar ahora/i.test(h.slice(0, 200000));
+    if (tit && !/^Mercado Libre$/i.test(tit)) prods.push({ titulo: tit.slice(0, 140), url, precio_iva: precio, disponible: !sinStock, foto: (h.match(/property="og:image" content="([^"]+)"/) || [])[1] || null, fuente: host });
+    return { estado: r.status, productos: prods };
+  } catch (e) { return { error: String(e.message || e).slice(0, 60), productos: [] }; }
 }
 async function concretar(store, t, opts = {}) {
   const key = process.env.ANTHROPIC_API_KEY || "";
@@ -793,17 +821,24 @@ async function concretar(store, t, opts = {}) {
   const C = (await store.get("catalogo/" + rutEmp, { type: "json" }).catch(() => null)) || { items: {} };
   const catal = Object.values(C.items || {});
   const kw = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z0-9]+/).filter((w) => w.length > 3 && !["para", "con", "segun", "tipo", "unidad", "requiere"].includes(w));
-  // 1) candidatos por ítem, en paralelo
+  // 1) candidatos por ítem, en paralelo: búsqueda web (tiendas chilenas) + páginas de las fotos; cada página se lee y puede traer varios productos
   const porItem = await Promise.all(items.map(async (it) => {
-    const q = it.d.replace(/\(c[oó]digo [^)]*\)|seg[uú]n (especificaci[oó]n|eett|ttr).*|o similar/gi, "").replace(/\b(Biotecmed|C[oó]rcega|CD-C\d+|CIP\s?\d+L?|BC\d+L)\b/g, "").replace(/\s+/g, " ").trim();
-    let cands = [];
-    try { cands = (await buscarFotos(q)).fotos.filter((f) => f.pagina && TIENDA_RE.test(f.pagina)); } catch {}
-    const vistas = new Set(); cands = cands.filter((f) => { const u = f.pagina.split("#")[0].split("?")[0]; if (vistas.has(u)) return false; vistas.add(u); f.pagina = u; return true; }).slice(0, 4);
-    const conPrecio = await Promise.all(cands.map(async (f) => ({ ...f, ...(await precioPagina(f.pagina)) })));
+    const q = it.d.replace(/\(c[oó]digo [^)]*\)|seg[uú]n (especificaci[oó]n|eett|ttr).*|o similar/gi, "").replace(/\b(Biotecmed|C[oó]rcega|CD-C\d+|CIP\s?\d+L?|BC\d+L|ADC)\b/g, "").replace(/\s+/g, " ").trim().slice(0, 80);
+    const [w1, f1] = await Promise.allSettled([webBuscar(q + " precio chile", 10), buscarFotos(q)]);
+    let pags = [];
+    if (w1.status === "fulfilled") pags.push(...w1.value.map((x) => x.url));
+    if (f1.status === "fulfilled") pags.push(...f1.value.fotos.map((f) => f.pagina).filter(Boolean));
+    pags = pags.map((u) => String(u).split("#")[0]).filter((u) => /^https?:\/\//.test(u) && !/duckduckgo|amazon\.|aliexpress|alibaba|\.es\/|\.ar\/|\.pe\/|\.mx\/|\.co\/|wikipedia|youtube|facebook|instagram|pinterest/i.test(u));
+    const vistas = new Set(); pags = pags.filter((u) => !vistas.has(u) && vistas.add(u)).slice(0, 7);
+    const leidas = await Promise.all(pags.map((u) => precioPagina(u)));
+    let cands = leidas.flatMap((x) => x.productos || []);
+    const vu = new Set(); cands = cands.filter((c) => c.titulo && !vu.has(c.url) && vu.add(c.url));
+    cands.sort((a, b2) => (a.precio_iva ? 0 : 1) - (b2.precio_iva ? 0 : 1));
+    cands = cands.slice(0, 14);
     const ks = kw(it.d);
     const propios = catal.map((c) => ({ c, n: kw(c.producto).filter((w) => ks.includes(w)).length })).filter((x) => x.n >= 1).sort((a, b2) => b2.n - a.n).slice(0, 3)
       .map((x) => ({ producto: x.c.producto, proveedor: x.c.proveedor, precio_unit_neto: x.c.precio_unit, unidad: x.c.unidad, fecha: x.c.fecha }));
-    return { item: it, candidatos: conPrecio.filter((f) => !f.error).map((f) => ({ titulo: (f.titulo || "").slice(0, 120), url: f.pagina, foto: f.url, fuente: f.fuente, precio_iva: f.precio || null, sin_stock: !!f.sinStock })), propios };
+    return { item: it, q, candidatos: cands.map((c) => ({ titulo: c.titulo, url: c.url, foto: c.foto, fuente: c.fuente, precio_iva: c.precio_iva || null, sin_stock: c.disponible === false })), propios };
   }));
   // 2) Claude decide
   let plan = null, aviso = null;
