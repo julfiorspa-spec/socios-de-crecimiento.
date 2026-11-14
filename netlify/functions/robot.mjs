@@ -716,7 +716,7 @@ async function fotoDDG(q) {
   const m = h.match(/vqd=([\d-]+)/) || h.match(/vqd="([\d-]+)"/) || h.match(/vqd=\\'([\d-]+)/); if (!m) return [];
   const r = await fetch("https://duckduckgo.com/i.js?" + new URLSearchParams({ l: "cl-es", o: "json", q, vqd: m[1], f: ",,,,,", p: "1" }), { headers: { "user-agent": FOTO_UA, referer: "https://duckduckgo.com/", accept: "application/json" }, signal: AbortSignal.timeout(6000) });
   const j = await r.json();
-  return (j.results || []).filter((x) => x.image && (x.width || 0) >= 300 && (x.height || 0) >= 300).map((x) => ({ url: x.image, fuente: (() => { try { return new URL(x.image).hostname.replace(/^www\./, ""); } catch { return ""; } })(), titulo: x.title, motor: "ddg" }));
+  return (j.results || []).filter((x) => x.image && (x.width || 0) >= 300 && (x.height || 0) >= 300).map((x) => ({ url: x.image, fuente: (() => { try { return new URL(x.url || x.image).hostname.replace(/^www\./, ""); } catch { return ""; } })(), titulo: x.title, pagina: x.url, motor: "ddg" }));
 }
 async function buscarFotos(q) {
   q = String(q || "").replace(/\(c[oó]digo [^)]*\)|seg[uú]n (especificaci[oó]n|eett).*|o similar/gi, "").replace(/\s+/g, " ").trim().slice(0, 90);
@@ -728,6 +728,78 @@ async function buscarFotos(q) {
   out = out.filter((f) => { const lu = f.url.toLowerCase(); if (vistas.has(f.url) || FOTO_MALAS.some((m) => lu.includes(m))) return false; vistas.add(f.url); return true; });
   out.sort((a, b2) => (FOTO_TIENDAS.some((t) => (a.url + a.fuente).toLowerCase().includes(t)) ? 0 : 1) - (FOTO_TIENDAS.some((t) => (b2.url + b2.fuente).toLowerCase().includes(t)) ? 0 : 1));
   return { q, fotos: out.slice(0, 20), errores };
+}
+
+// 🎯 CONCRETAR: para una OC ganada, dice dónde comprar cada ítem DE VERDAD (link o proveedor), a qué precio y cuánto se gana.
+//    1) candidatos reales por ítem (buscarFotos → páginas de tienda) 2) precio leído de la página 3) catálogo propio (a quién ya le compraste)
+//    4) Claude elige y explica por qué calza con lo cotizado. Se guarda en t.op.concrecion. Nada inventado: solo links/proveedores que existen.
+const TIENDA_RE = /mercadolibre\.cl|falabella\.com|sodimac\.cl|easy\.cl|lider\.cl|paris\.cl|ripley\.cl|pcfactory\.cl|dimerc\.cl|prisa\.cl|casaideas\.cl|construmart\.cl|imperial\.cl|abcdin\.cl|lapolar\.cl|hites\.com|spdigital\.cl|tenbox\.cl|amazon\.com/i;
+async function precioPagina(url) {
+  try {
+    const r = await fetch(url, { headers: { "user-agent": FOTO_UA, "accept-language": "es-CL,es;q=0.9", accept: "text/html,*/*" }, signal: AbortSignal.timeout(7000), redirect: "follow" });
+    if (!r.ok) return { estado: r.status };
+    const h = (await r.text()).slice(0, 900000);
+    const tit = (h.match(/<title[^>]*>([^<]{3,160})</i) || [])[1] || (h.match(/property="og:title" content="([^"]{3,160})"/) || [])[1] || "";
+    let precio = null;
+    const m1 = h.match(/"price"\s*:\s*"?(\d{3,8})(?:\.\d+)?"?/) || h.match(/itemprop="price"\s+content="(\d{3,8})/) || h.match(/"priceAmount"\s*:\s*(\d{3,8})/) || h.match(/andes-money-amount__fraction[^>]*>([\d.]{4,11})</);
+    if (m1) precio = Number(String(m1[1]).replace(/\./g, ""));
+    if (precio && (precio < 500 || precio > 50000000)) precio = null;
+    const sinStock = /sin stock|agotado|no disponible|publicaci[oó]n pausada|finalizada/i.test(h.slice(0, 200000)) && !/en stock|disponible/i.test(h.slice(0, 50000));
+    return { precio, titulo: tit.replace(/\s*[|·-]\s*(MercadoLibre|Falabella|Sodimac).*$/i, "").trim(), sinStock, estado: r.status };
+  } catch (e) { return { error: String(e.message || e).slice(0, 60) }; }
+}
+async function concretar(store, t, opts = {}) {
+  const key = process.env.ANTHROPIC_API_KEY || "";
+  const items = (Array.isArray(t.items) && t.items.length ? t.items : (t.oc_compra?.items || []).map((i) => ({ d: i.especificacion || i.nombre, q: i.cantidad, p: i.precio })))
+    .filter((i) => i && i.d).slice(0, 8).map((i) => ({ d: String(i.d).slice(0, 160), q: Number(i.q) || 1, p: Number(i.p) || 0 }));
+  if (!items.length) return { error: "La oferta no tiene ítems guardados." };
+  const rutEmp = String(t.rut_empresa || t.empresa_rut || "78493114-5").replace(/\./g, "").toUpperCase();
+  const C = (await store.get("catalogo/" + rutEmp, { type: "json" }).catch(() => null)) || { items: {} };
+  const catal = Object.values(C.items || {});
+  const kw = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z0-9]+/).filter((w) => w.length > 3 && !["para", "con", "segun", "tipo", "unidad", "requiere"].includes(w));
+  // 1) candidatos por ítem, en paralelo
+  const porItem = await Promise.all(items.map(async (it) => {
+    const q = it.d.replace(/\(c[oó]digo [^)]*\)|seg[uú]n (especificaci[oó]n|eett|ttr).*|o similar/gi, "").replace(/\b(Biotecmed|C[oó]rcega|CD-C\d+|CIP\s?\d+L?|BC\d+L)\b/g, "").replace(/\s+/g, " ").trim();
+    let cands = [];
+    try { cands = (await buscarFotos(q)).fotos.filter((f) => f.pagina && TIENDA_RE.test(f.pagina)); } catch {}
+    const vistas = new Set(); cands = cands.filter((f) => { const u = f.pagina.split("#")[0].split("?")[0]; if (vistas.has(u)) return false; vistas.add(u); f.pagina = u; return true; }).slice(0, 4);
+    const conPrecio = await Promise.all(cands.map(async (f) => ({ ...f, ...(await precioPagina(f.pagina)) })));
+    const ks = kw(it.d);
+    const propios = catal.map((c) => ({ c, n: kw(c.producto).filter((w) => ks.includes(w)).length })).filter((x) => x.n >= 1).sort((a, b2) => b2.n - a.n).slice(0, 3)
+      .map((x) => ({ producto: x.c.producto, proveedor: x.c.proveedor, precio_unit_neto: x.c.precio_unit, unidad: x.c.unidad, fecha: x.c.fecha }));
+    return { item: it, candidatos: conPrecio.filter((f) => !f.error).map((f) => ({ titulo: (f.titulo || "").slice(0, 120), url: f.pagina, foto: f.url, fuente: f.fuente, precio_iva: f.precio || null, sin_stock: !!f.sinStock })), propios };
+  }));
+  // 2) Claude decide
+  let plan = null, aviso = null;
+  if (key) {
+    const prompt = `Eres el jefe de compras de ${t.empresa_nombre || "PJANIC SpA"} (proveedor del Estado de Chile). Ganamos la compra ágil ${t.codigo} (${t.nombre || ""}) del organismo ${t.oc_compra?.organismo || t.organismo || ""}; OC ${t.op?.oc_codigo || ""}. Entrega: ${t.oc_compra?.direccion || t.op?.informe?.direccion || "(ver OC)"}.
+Para cada ítem cotizado te doy: lo que ofrecimos (texto de nuestra cotización), cantidad, precio unitario NETO de venta, candidatos REALES encontrados en tiendas (título, link, precio con IVA leído de la página; null si no se pudo leer) y productos que ya le compramos antes a proveedores propios (catálogo de facturas).
+Tu trabajo: decir dónde concretar cada ítem. REGLAS: (1) usa SOLO links y proveedores de la lista; jamás inventes tiendas, teléfonos ni precios: si un candidato no trae precio, pon precio_unit_iva null y dilo; (2) el producto elegido debe cumplir lo cotizado (capacidad, medidas, uso médico/industrial si lo dice el texto); si ninguno calza, elegido null y explica qué buscar; (3) explica en una frase por qué calza con lo que cotizamos y por qué cotizamos así (p. ej. "cotizamos caja isotérmica 16 L para cadena de frío: este cooler rígido de 15–16 L lo cumple"); (4) alerta riesgos (stock, plazo, producto chino con envío internacional no sirve para entregar en 3 días).
+Responde SOLO JSON: {"items":[{"i":<índice>,"elegido":{"tipo":"link"|"proveedor","titulo":"","url":"","proveedor":"","precio_unit_iva":<número o null>,"porque":""}|null,"alternativas":[{"titulo":"","url":"","precio_unit_iva":<número o null>}],"riesgo":"","buscar":""}],"resumen":"<2 frases: qué hacer primero y cuánto se gana>"}
+
+` + porItem.map((x, i) => `ÍTEM ${i}: "${x.item.d}" · cantidad ${x.item.q} · venta unit. neto $${x.item.p}\n  candidatos: ${JSON.stringify(x.candidatos)}\n  propios: ${JSON.stringify(x.propios)}`).join("\n\n");
+    try {
+      const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5", max_tokens: 2500, messages: [{ role: "user", content: prompt }] }), signal: AbortSignal.timeout(20000) });
+      const j = await r.json(); const txt = (j.content || []).map((c) => c.text || "").join("");
+      const m = txt.match(/\{[\s\S]*\}/); plan = m ? JSON.parse(m[0]) : null;
+      if (!plan) aviso = "Claude no devolvió un plan legible: " + txt.slice(0, 120);
+    } catch (e) { aviso = "Claude no respondió: " + String(e.message || e).slice(0, 80); }
+  } else aviso = "Falta ANTHROPIC_API_KEY en Netlify: muestro solo los candidatos encontrados.";
+  // 3) armar el plan final con números
+  const filas = porItem.map((x, i) => {
+    const pj = (plan?.items || []).find((y) => Number(y.i) === i) || {};
+    let el = pj.elegido || null;
+    if (!el && x.candidatos.length) { const c = x.candidatos.filter((c) => c.precio_iva && !c.sin_stock).sort((a, b2) => a.precio_iva - b2.precio_iva)[0]; if (c) el = { tipo: "link", titulo: c.titulo, url: c.url, precio_unit_iva: c.precio_iva, porque: "El más barato con precio leído de la tienda (sin revisión de Claude)." }; }
+    if (el && el.url && !x.candidatos.some((c) => c.url === el.url) && !/^https?:\/\//.test(el.url)) el.url = null;
+    const costoU = el?.precio_unit_iva ? Math.round(el.precio_unit_iva / 1.19) : null;
+    const ventaU = x.item.p, q = x.item.q;
+    return { i, item: x.item.d, cantidad: q, venta_unit_neto: ventaU, venta_neto: ventaU * q, elegido: el, costo_unit_neto: costoU, costo_neto: costoU != null ? costoU * q : null,
+      ganancia: costoU != null ? (ventaU - costoU) * q : null, alternativas: (pj.alternativas || x.candidatos.slice(0, 3)).slice(0, 4), riesgo: pj.riesgo || "", buscar: pj.buscar || "", propios: x.propios, candidatos: x.candidatos, foto: x.candidatos[0]?.foto || null };
+  });
+  const tot = { venta_neto: filas.reduce((s, f) => s + f.venta_neto, 0), costo_neto: filas.reduce((s, f) => s + (f.costo_neto || 0), 0), sin_precio: filas.filter((f) => f.costo_neto == null).length };
+  tot.ganancia = tot.venta_neto - tot.costo_neto;
+  return { ok: true, codigo: t.codigo, t: ahora(), items: filas, total: tot, resumen: plan?.resumen || "", aviso };
 }
 
 async function siiIngesta(req) {
@@ -756,6 +828,7 @@ async function siiIngesta(req) {
     T.t = ahora(); await store.setJSON(kt, T);
   }
   if (b.accion === "catalogo") return catalogoConstruir(store, rutEmp, corsH);
+  if (b.accion === "concretar") { const t = await leer(store, String(b.codigo || "")); if (!t) return new Response(JSON.stringify({ error: "no existe" }), { status: 404, headers: corsH }); const r = await concretar(store, t); if (r.ok) { t.op = t.op || { etapa: "ganada", historial: [] }; t.op.concrecion = r; await store.setJSON("trabajo/" + t.codigo, t); } return new Response(JSON.stringify(r), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); }
   if (b.accion === "fotos_ultimo") return new Response(JSON.stringify({ ok: true, u: await store.get("robot/fotos_ultimo", { type: "json" }) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   if (b.accion === "foto") return new Response(JSON.stringify({ ok: true, ...(await buscarFotos(b.q)) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   if (b.accion === "buscar_trabajo") {   // diagnóstico temporal: busca un texto en los trabajos (ítems, precios, nombre)
@@ -889,6 +962,13 @@ async function atender(req) {
   // Inyecta cotizaciones FICTICIAS para probar el flujo (cola → por firmar → firma) SIN Mercado Público real.
   // Blindaje total: el simulador SIEMPRE usa su propio store "robot-sim", nunca el real ("robot"). Por eso puede
   // correr incluso en producción sin tocar un solo dato verdadero. Las simuladas llevan sim:true y código SIM-….
+  if (ruta === "concretar" && req.method === "POST") {   // 🎯 plan para concretar una OC ganada con proveedores/links reales
+    const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return json({ error: "No existe." }, 404);
+    if (t.op?.concrecion && !b.forzar && Date.now() - new Date(t.op.concrecion.t).getTime() < 6 * 3600e3) return json(t.op.concrecion);
+    const r = await concretar(store, t); if (r.error) return json(r, 400);
+    t.op = t.op || { etapa: "ganada", historial: [] }; t.op.concrecion = r; t.actualizado = ahora(); await store.setJSON("trabajo/" + t.codigo, t);
+    return json(r);
+  }
   if (ruta === "foto" && req.method === "GET") {   // 📷 fotos reales para el robot (deja huella para saber que el parche corre)
     const res = await buscarFotos(url.searchParams.get("q"));
     try { await store.setJSON("robot/fotos_ultimo", { q: res.q, n: res.fotos.length, errores: res.errores, t: ahora(), equipo: req.headers.get("user-agent") }); } catch {}
