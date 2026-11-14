@@ -708,7 +708,7 @@ async function fotoML(q) {
 async function fotoBing(q) {
   const r = await fetch("https://www.bing.com/images/search?" + new URLSearchParams({ q, form: "HDRSC2", first: "1", cc: "CL", setlang: "es" }), { headers: { "user-agent": FOTO_UA, "accept-language": "es-CL,es;q=0.9" }, signal: AbortSignal.timeout(9000) });
   const h = await r.text(); const out = [];
-  for (const m of h.matchAll(/murl&quot;:&quot;(https?:\/\/[^&]+?)&quot;/g)) { try { const u = decodeURIComponent(m[1]); out.push({ url: u, fuente: new URL(u).hostname.replace(/^www\./, ""), motor: "bing" }); } catch {} }
+  for (const m of h.matchAll(/murl&quot;:&quot;(https?:\/\/[^&]+?)&quot;[\s\S]{0,600}?(?:&quot;t&quot;:&quot;([^&]{3,160})&quot;)?[\s\S]{0,400}?(?:purl&quot;:&quot;(https?:\/\/[^&]+?)&quot;)?/g)) { try { const u = decodeURIComponent(m[1]); out.push({ url: u, fuente: new URL(m[3] ? decodeURIComponent(m[3]) : u).hostname.replace(/^www\./, ""), titulo: m[2] ? decodeURIComponent(m[2]).replace(/&amp;/g, "&") : null, pagina: m[3] ? decodeURIComponent(m[3]) : null, motor: "bing" }); } catch {} }
   return out;
 }
 async function fotoDDG(q) {
