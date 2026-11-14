@@ -693,6 +693,43 @@ async function informePublico(req) {
 //    Protegida por clave de un solo uso (SII_INGESTA_K); CORS abierto solo en esta ruta. Quitar cuando termine la carga.
 const SII_INGESTA_K = "4a81bc9e0466a9e773f9235b04867ba3";
 const corsH = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type", "access-control-allow-methods": "POST, OPTIONS" };
+
+// 📷 FOTOS REALES de producto para las fichas: busca en Mercado Libre Chile (API pública), Bing Imágenes y DuckDuckGo
+//    desde la nube (el PC a veces no puede). Devuelve candidatos ordenados: tiendas chilenas primero.
+const FOTO_TIENDAS = ["mercadolibre", "mlstatic", "falabella", "paris.cl", "ripley", "sodimac", "easy.cl", "lider.cl", "pcfactory", "dimerc", "prisa", "casaideas", "homecenter", "construmart", "imperial.cl", "abcdin", "lapolar", "hites", "linio", "spdigital", "amazon", "walmart", "tenbox", "coleman"];
+const FOTO_MALAS = ["logo", "icon", "sprite", "banner", "placeholder", "avatar", "favicon", "pinterest", "facebook", "instagram", "wikipedia", "youtube", ".svg", ".gif", "tiktok", "whatsapp", "flyer", "afiche", "freepik", "shutterstock", "istock", "dreamstime", "depositphotos", "alamy", "123rf", "vecteezy", "pngtree", "canva"];
+const FOTO_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+async function fotoML(q) {
+  const r = await fetch("https://api.mercadolibre.com/sites/MLC/search?limit=12&q=" + encodeURIComponent(q), { headers: { "user-agent": FOTO_UA, accept: "application/json" }, signal: AbortSignal.timeout(6000) });
+  if (!r.ok) throw new Error("ML " + r.status);
+  const j = await r.json();
+  return (j.results || []).filter((x) => x.thumbnail).map((x) => ({ url: String(x.thumbnail).replace(/-I\.(jpg|webp|png)$/i, "-O.$1").replace(/^http:/, "https:"), fuente: "mercadolibre.cl", titulo: x.title, precio: x.price, pagina: x.permalink, motor: "ml" }));
+}
+async function fotoBing(q) {
+  const r = await fetch("https://www.bing.com/images/search?" + new URLSearchParams({ q, form: "HDRSC2", first: "1", cc: "CL", setlang: "es" }), { headers: { "user-agent": FOTO_UA, "accept-language": "es-CL,es;q=0.9" }, signal: AbortSignal.timeout(7000) });
+  const h = await r.text(); const out = [];
+  for (const m of h.matchAll(/murl&quot;:&quot;(https?:\/\/[^&]+?)&quot;/g)) { try { const u = decodeURIComponent(m[1]); out.push({ url: u, fuente: new URL(u).hostname.replace(/^www\./, ""), motor: "bing" }); } catch {} }
+  return out;
+}
+async function fotoDDG(q) {
+  const h = await (await fetch("https://duckduckgo.com/?" + new URLSearchParams({ q, iax: "images", ia: "images" }), { headers: { "user-agent": FOTO_UA }, signal: AbortSignal.timeout(6000) })).text();
+  const m = h.match(/vqd=([\d-]+)/) || h.match(/vqd="([\d-]+)"/) || h.match(/vqd=\\'([\d-]+)/); if (!m) return [];
+  const r = await fetch("https://duckduckgo.com/i.js?" + new URLSearchParams({ l: "cl-es", o: "json", q, vqd: m[1], f: ",,,,,", p: "1" }), { headers: { "user-agent": FOTO_UA, referer: "https://duckduckgo.com/", accept: "application/json" }, signal: AbortSignal.timeout(6000) });
+  const j = await r.json();
+  return (j.results || []).filter((x) => x.image && (x.width || 0) >= 300 && (x.height || 0) >= 300).map((x) => ({ url: x.image, fuente: (() => { try { return new URL(x.image).hostname.replace(/^www\./, ""); } catch { return ""; } })(), titulo: x.title, motor: "ddg" }));
+}
+async function buscarFotos(q) {
+  q = String(q || "").replace(/\(c[oó]digo [^)]*\)|seg[uú]n (especificaci[oó]n|eett).*|o similar/gi, "").replace(/\s+/g, " ").trim().slice(0, 90);
+  if (q.length < 4) return { q, fotos: [], errores: ["consulta corta"] };
+  const errores = []; let out = [];
+  const res = await Promise.allSettled([fotoML(q), fotoBing(q), fotoDDG(q)]);
+  for (const r of res) { if (r.status === "fulfilled") out.push(...r.value); else errores.push(String(r.reason?.message || r.reason).slice(0, 80)); }
+  const vistas = new Set();
+  out = out.filter((f) => { const lu = f.url.toLowerCase(); if (vistas.has(f.url) || FOTO_MALAS.some((m) => lu.includes(m))) return false; vistas.add(f.url); return true; });
+  out.sort((a, b2) => (FOTO_TIENDAS.some((t) => (a.url + a.fuente).toLowerCase().includes(t)) ? 0 : 1) - (FOTO_TIENDAS.some((t) => (b2.url + b2.fuente).toLowerCase().includes(t)) ? 0 : 1));
+  return { q, fotos: out.slice(0, 20), errores };
+}
+
 async function siiIngesta(req) {
   if (req.method === "OPTIONS") return new Response("", { status: 204, headers: corsH });
   const b = req.method === "GET" ? Object.fromEntries(new URL(req.url).searchParams.entries()) : await cuerpo(req);
@@ -719,6 +756,7 @@ async function siiIngesta(req) {
     T.t = ahora(); await store.setJSON(kt, T);
   }
   if (b.accion === "catalogo") return catalogoConstruir(store, rutEmp, corsH);
+  if (b.accion === "foto") return new Response(JSON.stringify({ ok: true, ...(await buscarFotos(b.q)) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   if (b.accion === "buscar_trabajo") {   // diagnóstico temporal: busca un texto en los trabajos (ítems, precios, nombre)
     const q = String(b.q || "").toLowerCase(); const { blobs } = await store.list({ prefix: String(b.prefijo || "trabajo/").slice(0, 40) }); const out = [];
     if (b.solo_claves) return new Response(JSON.stringify({ ok: true, n: blobs.length, claves: blobs.slice(-300).map((x) => x.key) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
@@ -850,6 +888,7 @@ async function atender(req) {
   // Inyecta cotizaciones FICTICIAS para probar el flujo (cola → por firmar → firma) SIN Mercado Público real.
   // Blindaje total: el simulador SIEMPRE usa su propio store "robot-sim", nunca el real ("robot"). Por eso puede
   // correr incluso en producción sin tocar un solo dato verdadero. Las simuladas llevan sim:true y código SIM-….
+  if (ruta === "foto" && req.method === "GET") return json({ ok: true, ...(await buscarFotos(url.searchParams.get("q"))) });   // 📷 fotos reales para el robot
   if (ruta === "simular" && req.method === "POST") {
     const sim = storeSim();
     const b = await cuerpo(req);
