@@ -1874,7 +1874,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const T = c.total || {}, hechos = Object.keys(conc).length, n = (c.items || []).length;
     return `<div class="rb-mision rb-concretar"><div class="rb-env"><b>🎯 Concretar esta OC</b><b>${hechos}/${n}</b></div>
       <div class="rb-barra"><i style="width:${n ? Math.min(100, hechos / n * 100) : 0}%"></i></div>
-      <div style="font-size:.78rem;margin:4px 0">Venta neta <b>${f(T.venta_neto)}</b>${T.costo_neto ? ` · costo ${f(T.costo_neto)} · <b class="rb-vivo-t">ganancia ${f(T.ganancia)}</b>` : ""}${T.sin_precio ? ` · <span style="color:#f5cf6b">${T.sin_precio} ítem(s) sin precio aún</span>` : ""}</div>
+      <div style="font-size:.78rem;margin:4px 0">Venta neta <b>${f(T.venta_neto)}</b>${T.ganancia != null ? ` · costo ${f(T.costo_neto)} · <b class="rb-vivo-t">ganancia ${f(T.ganancia)}</b>` : T.ganancia_parcial ? ` · ganancia parcial ${f(T.ganancia_parcial)}` : ""}${T.sin_precio ? ` · <span style="color:#f5cf6b">${T.sin_precio} ítem(s) sin precio aún</span>` : ""}</div>
       ${c.resumen ? `<div class="muted" style="font-size:.7rem">🤖 ${esc(c.resumen)}</div>` : ""}${c.aviso ? `<div class="muted" style="font-size:.66rem">⚠ ${esc(c.aviso)}</div>` : ""}
       ${filas}
       <div class="rb-row"><button class="btn small" type="button" data-rb="ej-concretar" data-c="${esc(cod)}" data-forzar="1" ${cargando ? "disabled" : ""}>${cargando ? '<span class="spinner"></span> buscando…' : "🔄 Buscar de nuevo"}</button><span class="muted" style="font-size:.64rem;align-self:center">${esc(hace(c.t))}</span></div></div>`;

@@ -782,6 +782,8 @@ async function precioPagina(url) {
     const h = (await r.text()).slice(0, 900000);
     const tit = ((h.match(/property="og:title" content="([^"]{3,160})"/) || h.match(/<title[^>]*>([^<]{3,160})</i) || [])[1] || "").replace(/\s*[|·–-]\s*(MercadoLibre|Falabella|Sodimac|Tienda Online).*$/i, "").trim();
     const esShopify = /cdn\.shopify\.com|Shopify\.theme|shopify-section/.test(h);
+    const telm = h.match(/href="tel:([+\d\s()-]{8,20})"/) || h.match(/href="https:\/\/(?:wa\.me|api\.whatsapp\.com\/send\?phone=)(56\d{9})/) || h.replace(/<[^>]+>/g, " ").match(/(\+?56\s?9\s?\d{4}\s?\d{4}|\+?56\s?2\s?\d{4}\s?\d{4}|\b9\s?\d{4}\s?\d{4}\b)/);
+    const telefono = telm ? String(telm[1]).replace(/[^\d+]/g, "").replace(/^(\d{9})$/, "+56$1").replace(/^56/, "+56").slice(0, 16) : null;
     if (esShopify) {
       const u = new URL(url); const base = u.origin;
       const mp = u.pathname.match(/\/products\/([^/?#]+)/), mc = u.pathname.match(/\/collections\/([^/?#]+)/);
@@ -793,7 +795,7 @@ async function precioPagina(url) {
           for (const pr of L.slice(0, 12)) {
             const v = (pr.variants || [])[0] || {}; const pre = mp ? Number(pr.price) / 100 : Number(v.price);
             if (!pr.title || !pre) continue;
-            prods.push({ titulo: String(pr.title).slice(0, 140), url: mp ? url : `${base}/products/${pr.handle}`, precio_iva: Math.round(pre), disponible: mp ? pr.available !== false : v.available !== false, foto: mp ? (pr.featured_image || null) : (pr.images?.[0]?.src || null), fuente: host });
+            prods.push({ titulo: String(pr.title).slice(0, 140), url: mp ? url : `${base}/products/${pr.handle}`, precio_iva: Math.round(pre), disponible: mp ? pr.available !== false : v.available !== false, foto: mp ? (pr.featured_image || null) : (pr.images?.[0]?.src || null), fuente: host, telefono });
           }
         }
       } catch {}
@@ -808,7 +810,7 @@ async function precioPagina(url) {
     if (!precio) { const m1 = h.match(/property="product:price:amount" content="([\d.]+)"/) || h.match(/itemprop="price"\s+content="([\d.]+)"/) || h.match(/"priceAmount"\s*:\s*(\d{3,8})/) || h.match(/andes-money-amount__fraction[^>]*>([\d.]{4,11})</); if (m1) precio = Math.round(Number(String(m1[1]).replace(/\.(?=\d{3}\b)/g, ""))); }
     if (precio && (precio < 500 || precio > 50000000)) precio = null;
     const sinStock = /sin stock|agotado|no disponible|publicaci[oó]n pausada|finalizada/i.test(h.slice(0, 200000)) && !/en stock|disponible|agregar al carro|comprar ahora/i.test(h.slice(0, 200000));
-    if (tit && !/^Mercado Libre$/i.test(tit)) prods.push({ titulo: tit.slice(0, 140), url, precio_iva: precio, disponible: !sinStock, foto: (h.match(/property="og:image" content="([^"]+)"/) || [])[1] || null, fuente: host });
+    if (tit && !/^Mercado Libre$/i.test(tit)) prods.push({ titulo: tit.slice(0, 140), url, precio_iva: precio, disponible: !sinStock, foto: (h.match(/property="og:image" content="([^"]+)"/) || [])[1] || null, fuente: host, telefono });
     return { estado: r.status, productos: prods };
   } catch (e) { return { error: String(e.message || e).slice(0, 60), productos: [] }; }
 }
@@ -838,7 +840,7 @@ async function concretar(store, t, opts = {}) {
     const ks = kw(it.d);
     const propios = catal.map((c) => ({ c, n: kw(c.producto).filter((w) => ks.includes(w)).length })).filter((x) => x.n >= 1).sort((a, b2) => b2.n - a.n).slice(0, 3)
       .map((x) => ({ producto: x.c.producto, proveedor: x.c.proveedor, precio_unit_neto: x.c.precio_unit, unidad: x.c.unidad, fecha: x.c.fecha }));
-    return { item: it, q, candidatos: cands.map((c) => ({ titulo: c.titulo, url: c.url, foto: c.foto, fuente: c.fuente, precio_iva: c.precio_iva || null, sin_stock: c.disponible === false })), propios };
+    return { item: it, q, candidatos: cands.map((c) => ({ titulo: c.titulo, url: c.url, foto: c.foto, fuente: c.fuente, precio_iva: c.precio_iva || null, sin_stock: c.disponible === false, telefono: c.telefono || null })), propios };
   }));
   // 2) Claude decide
   let plan = null, aviso = null;
@@ -846,7 +848,7 @@ async function concretar(store, t, opts = {}) {
     const prompt = `Eres el jefe de compras de ${t.empresa_nombre || "PJANIC SpA"} (proveedor del Estado de Chile). Ganamos la compra ágil ${t.codigo} (${t.nombre || ""}) del organismo ${t.oc_compra?.organismo || t.organismo || ""}; OC ${t.op?.oc_codigo || ""}. Entrega: ${t.oc_compra?.direccion || t.op?.informe?.direccion || "(ver OC)"}.
 Para cada ítem cotizado te doy: lo que ofrecimos (texto de nuestra cotización), cantidad, precio unitario NETO de venta, candidatos REALES encontrados en tiendas (título, link, precio con IVA leído de la página; null si no se pudo leer) y productos que ya le compramos antes a proveedores propios (catálogo de facturas).
 Tu trabajo: decir dónde concretar cada ítem. REGLAS: (1) usa SOLO links y proveedores de la lista; jamás inventes tiendas, teléfonos ni precios: si un candidato no trae precio, pon precio_unit_iva null y dilo; (2) el producto elegido debe cumplir lo cotizado (capacidad, medidas, uso médico/industrial si lo dice el texto); si ninguno calza, elegido null y explica qué buscar; (3) explica en una frase por qué calza con lo que cotizamos y por qué cotizamos así (p. ej. "cotizamos caja isotérmica 16 L para cadena de frío: este cooler rígido de 15–16 L lo cumple"); (4) alerta riesgos (stock, plazo, producto chino con envío internacional no sirve para entregar en 3 días).
-Responde SOLO JSON compacto (una línea, sin comentarios, strings cortas sin comillas internas, máximo 2 alternativas por ítem): {"items":[{"i":<índice>,"elegido":{"tipo":"link"|"proveedor","titulo":"","url":"","proveedor":"","precio_unit_iva":<número o null>,"porque":"<máx 160 caracteres>"}|null,"alternativas":[{"titulo":"","url":"","precio_unit_iva":<número o null>}],"riesgo":"<máx 120>","buscar":"<máx 120>"}],"resumen":"<2 frases: qué hacer primero y cuánto se gana>"}
+Responde SOLO JSON compacto (una línea, sin comentarios, strings cortas sin comillas internas, máximo 2 alternativas por ítem): {"items":[{"i":<índice>,"elegido":{"tipo":"link"|"proveedor","titulo":"","url":"","proveedor":"","telefono":"<solo si el candidato trae telefono>","precio_unit_iva":<número o null>,"porque":"<máx 160 caracteres>"}|null,"alternativas":[{"titulo":"","url":"","precio_unit_iva":<número o null>}],"riesgo":"<máx 120>","buscar":"<máx 120>"}],"resumen":"<2 frases: qué hacer primero y cuánto se gana>"}
 
 ` + porItem.map((x, i) => `ÍTEM ${i}: "${x.item.d}" · cantidad ${x.item.q} · venta unit. neto $${x.item.p}\n  candidatos: ${JSON.stringify(x.candidatos)}\n  propios: ${JSON.stringify(x.propios)}`).join("\n\n");
     try {
@@ -869,13 +871,15 @@ Responde SOLO JSON compacto (una línea, sin comentarios, strings cortas sin com
     let el = pj.elegido || null;
     if (!el && x.candidatos.length) { const c = x.candidatos.filter((c) => c.precio_iva && !c.sin_stock).sort((a, b2) => a.precio_iva - b2.precio_iva)[0]; if (c) el = { tipo: "link", titulo: c.titulo, url: c.url, precio_unit_iva: c.precio_iva, porque: "El más barato con precio leído de la tienda (sin revisión de Claude)." }; }
     if (el && el.url && !x.candidatos.some((c) => c.url === el.url) && !/^https?:\/\//.test(el.url)) el.url = null;
+    if (el) { const cand = x.candidatos.find((c) => c.url === el.url); el.telefono = cand?.telefono || (x.candidatos.some((c) => c.telefono === el.telefono) ? el.telefono : null); el.fuente = el.fuente || cand?.fuente || null; }
     const costoU = el?.precio_unit_iva ? Math.round(el.precio_unit_iva / 1.19) : null;
     const ventaU = x.item.p, q = x.item.q;
     return { i, item: x.item.d, cantidad: q, venta_unit_neto: ventaU, venta_neto: ventaU * q, elegido: el, costo_unit_neto: costoU, costo_neto: costoU != null ? costoU * q : null,
       ganancia: costoU != null ? (ventaU - costoU) * q : null, alternativas: (pj.alternativas || x.candidatos.slice(0, 3)).slice(0, 4), riesgo: pj.riesgo || "", buscar: pj.buscar || "", propios: x.propios, candidatos: x.candidatos, foto: x.candidatos[0]?.foto || null };
   });
   const tot = { venta_neto: filas.reduce((s, f) => s + f.venta_neto, 0), costo_neto: filas.reduce((s, f) => s + (f.costo_neto || 0), 0), sin_precio: filas.filter((f) => f.costo_neto == null).length };
-  tot.ganancia = tot.venta_neto - tot.costo_neto;
+  tot.ganancia = tot.sin_precio ? null : tot.venta_neto - tot.costo_neto;
+  tot.ganancia_parcial = filas.reduce((s2, f) => s2 + (f.ganancia || 0), 0);
   return { ok: true, codigo: t.codigo, t: ahora(), items: filas, total: tot, resumen: plan?.resumen || "", aviso };
 }
 
