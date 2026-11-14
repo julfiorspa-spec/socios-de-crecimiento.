@@ -720,7 +720,9 @@ async function siiIngesta(req) {
   }
   if (b.accion === "catalogo") return catalogoConstruir(store, rutEmp, corsH);
   if (b.accion === "buscar_trabajo") {   // diagnóstico temporal: busca un texto en los trabajos (ítems, precios, nombre)
-    const q = String(b.q || "").toLowerCase(); const { blobs } = await store.list({ prefix: "trabajo/" }); const out = [];
+    const q = String(b.q || "").toLowerCase(); const { blobs } = await store.list({ prefix: String(b.prefijo || "trabajo/").slice(0, 40) }); const out = [];
+    if (b.solo_claves) return new Response(JSON.stringify({ ok: true, n: blobs.length, claves: blobs.slice(-300).map((x) => x.key) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
+    if (b.crudo) { const t = await store.get(String(b.crudo), { type: "json" }); return new Response(JSON.stringify({ ok: true, t }), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); }
     const ult = blobs.slice(-(Number(b.max) || 250)).reverse();   // solo los últimos, en paralelo (antes recorría todo en serie y daba timeout)
     const todos = []; for (let i = 0; i < ult.length; i += 25) todos.push(...(await Promise.all(ult.slice(i, i + 25).map((bl) => store.get(bl.key, { type: "json" }).catch(() => null)))));
     for (const t of todos) { if (!t) continue; const s = JSON.stringify(t).toLowerCase(); if (q && !s.includes(q)) continue;
