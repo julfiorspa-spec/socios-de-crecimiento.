@@ -755,6 +755,21 @@ async function mlListado(q, soloLocal = true) {
   return out;
 }
 
+// 🔎 Búsqueda web (DuckDuckGo HTML): título, link y resumen; sirve para leer precios "$ 44.991" de tiendas en el resumen.
+async function webBuscar(q, n = 12) {
+  const r = await fetch("https://html.duckduckgo.com/html/?" + new URLSearchParams({ q, kl: "cl-es" }), { headers: { "user-agent": FOTO_UA, "accept-language": "es-CL,es;q=0.9" }, signal: AbortSignal.timeout(8000) });
+  if (!r.ok) throw new Error("DDG html " + r.status);
+  const h = await r.text(); const out = [];
+  const des = (t) => t.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+  for (const m of h.matchAll(/<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g)) {
+    let u = m[1]; const mu = u.match(/uddg=([^&]+)/); if (mu) u = decodeURIComponent(mu[1]);
+    const sn = des(m[3]); const pm = sn.match(/\$\s?([\d.]{4,11})(?!\d)/);
+    out.push({ titulo: des(m[2]).slice(0, 140), url: u, resumen: sn.slice(0, 260), precio_iva: pm ? Number(pm[1].replace(/\./g, "")) : null, fuente: (() => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } })() });
+    if (out.length >= n) break;
+  }
+  return out;
+}
+
 async function precioPagina(url) {
   try {
     const r = await fetch(url, { headers: { "user-agent": FOTO_UA, "accept-language": "es-CL,es;q=0.9", accept: "text/html,*/*" }, signal: AbortSignal.timeout(7000), redirect: "follow" });
@@ -849,6 +864,7 @@ async function siiIngesta(req) {
     T.t = ahora(); await store.setJSON(kt, T);
   }
   if (b.accion === "catalogo") return catalogoConstruir(store, rutEmp, corsH);
+  if (b.accion === "web") { try { return new Response(JSON.stringify({ ok: true, r: await webBuscar(b.q) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); } catch (e) { return new Response(JSON.stringify({ error: String(e.message || e) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); } }
   if (b.accion === "ml_listado") { globalThis.__mlDebug = !!b.debug; try { return new Response(JSON.stringify({ ok: true, r: await mlListado(b.q, b.local !== false) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); } catch (e) { return new Response(JSON.stringify({ error: String(e.message || e) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); } }
   if (b.accion === "concretar") { const t = await leer(store, String(b.codigo || "")); if (!t) return new Response(JSON.stringify({ error: "no existe" }), { status: 404, headers: corsH }); const r = await concretar(store, t); if (r.ok) { t.op = t.op || { etapa: "ganada", historial: [] }; t.op.concrecion = r; await store.setJSON("trabajo/" + t.codigo, t); } return new Response(JSON.stringify(r), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); }
   if (b.accion === "fotos_ultimo") return new Response(JSON.stringify({ ok: true, u: await store.get("robot/fotos_ultimo", { type: "json" }) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
