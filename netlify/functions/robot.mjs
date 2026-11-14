@@ -838,8 +838,8 @@ async function concretar(store, t, opts = {}) {
     cands.sort((a, b2) => (a.precio_iva ? 0 : 1) - (b2.precio_iva ? 0 : 1));
     cands = cands.slice(0, 14);
     const ks = kw(it.d);
-    const propios = catal.map((c) => { const txt = [c.nombre, c.rubro, ...(c.tipicos || []), ...c.productos.map((q) => q.producto)].join(" "); const n = kw(txt).filter((w) => ks.includes(w)).length; return { c, n }; })
-      .filter((x) => x.n >= 1).sort((a, b2) => b2.n - a.n || b2.c.total - a.c.total).slice(0, 4)
+    const propios = catal.map((c) => { const n = kw(c.nombre).filter((w) => ks.includes(w)).length + 2 * kw([c.rubro, ...(c.tipicos || [])].join(" ")).filter((w) => ks.includes(w)).length + 2 * kw(c.productos.map((q) => q.producto).join(" ")).filter((w) => ks.includes(w)).length; return { c, n }; })
+      .filter((x) => x.n >= 2).sort((a, b2) => b2.n - a.n || b2.c.total - a.c.total).slice(0, 4)
       .map((x) => ({ proveedor: x.c.nombre, rut: x.c.rut, empresas: x.c.empresas, rubro: x.c.rubro, tipicos: (x.c.tipicos || []).slice(0, 4), compras: x.c.productos.filter((q) => kw(q.producto).some((w) => ks.includes(w))).slice(0, 3).map((q) => ({ producto: q.producto, precio_unit_neto: q.precio_unit || null, empresa: q.empresa, fecha: q.fecha })), facturas: x.c.facturas, telefono: x.c.telefono || null, web: x.c.web || null }));
     // 📞 contacto del proveedor propio mejor rankeado: lo busca en la web (sitio + teléfono) y lo deja guardado
     if (propios[0] && !propios[0].telefono) { try { const w = (await webBuscar(propios[0].proveedor + " chile", 4)).filter((r) => !/duckduckgo|linkedin|facebook|instagram|sii\.cl|mercadopublico|dicom|boletin/i.test(r.url))[0];
