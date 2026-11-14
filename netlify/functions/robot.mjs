@@ -756,6 +756,7 @@ async function siiIngesta(req) {
     T.t = ahora(); await store.setJSON(kt, T);
   }
   if (b.accion === "catalogo") return catalogoConstruir(store, rutEmp, corsH);
+  if (b.accion === "fotos_ultimo") return new Response(JSON.stringify({ ok: true, u: await store.get("robot/fotos_ultimo", { type: "json" }) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   if (b.accion === "foto") return new Response(JSON.stringify({ ok: true, ...(await buscarFotos(b.q)) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   if (b.accion === "buscar_trabajo") {   // diagnóstico temporal: busca un texto en los trabajos (ítems, precios, nombre)
     const q = String(b.q || "").toLowerCase(); const { blobs } = await store.list({ prefix: String(b.prefijo || "trabajo/").slice(0, 40) }); const out = [];
@@ -888,7 +889,11 @@ async function atender(req) {
   // Inyecta cotizaciones FICTICIAS para probar el flujo (cola → por firmar → firma) SIN Mercado Público real.
   // Blindaje total: el simulador SIEMPRE usa su propio store "robot-sim", nunca el real ("robot"). Por eso puede
   // correr incluso en producción sin tocar un solo dato verdadero. Las simuladas llevan sim:true y código SIM-….
-  if (ruta === "foto" && req.method === "GET") return json({ ok: true, ...(await buscarFotos(url.searchParams.get("q"))) });   // 📷 fotos reales para el robot
+  if (ruta === "foto" && req.method === "GET") {   // 📷 fotos reales para el robot (deja huella para saber que el parche corre)
+    const res = await buscarFotos(url.searchParams.get("q"));
+    try { await store.setJSON("robot/fotos_ultimo", { q: res.q, n: res.fotos.length, errores: res.errores, t: ahora(), equipo: req.headers.get("user-agent") }); } catch {}
+    return json({ ok: true, ...res });
+  }
   if (ruta === "simular" && req.method === "POST") {
     const sim = storeSim();
     const b = await cuerpo(req);
