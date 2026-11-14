@@ -2576,6 +2576,24 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       <div class="rb-row" style="margin-top:6px"><button class="btn small rb-firmar" type="button" data-rb="cons-csv" data-d="${dias}">📊 Exportar consolidado (Excel)</button></div>
       <div class="muted" style="font-size:.66rem;margin-top:4px">El repartijo es automático <b>por consolidado</b> (cada ${dias} días), no negocio por negocio: cada ${dias} días cierras el corte y cada socio recibe un solo pago. La frecuencia la defines tú según la liquidez.</div></div>`;
   }
+  // 🏭 BASE DE PROVEEDORES DEL GRUPO: a quién ya le compraron PJANIC, Julfior y Barasal (SII), con rubro y lo que venden.
+  async function cargarProvBase(forzar) { try { R.provBase = await api("proveedores-base" + (forzar ? "?forzar=1" : "")); } catch (e) { R.provBaseErr = e.message; } pintarHoja(true); }
+  function provBaseHTML() {
+    if (!R.provBase && !R.provBaseErr) { setTimeout(() => cargarProvBase(false), 0); return `<div class="empty"><span class="spinner"></span> Cargando la base del grupo…</div>`; }
+    if (!R.provBase) return `<div class="empty">${esc(R.provBaseErr || "")}</div>`;
+    const q = sinTilde(R.provQ || ""), L = (R.provBase.lista || []).filter((x) => x.util !== false || R.provTodos);
+    const F = q ? L.filter((x) => sinTilde([x.nombre, x.rubro, ...(x.tipicos || []), ...x.productos.map((p) => p.producto)].join(" ")).includes(q)) : L;
+    const sinRubro = L.filter((x) => !x.rubro).length;
+    return `<div class="rb-mision"><div class="rb-env"><b>🏭 ${R.provBase.n} proveedores</b><span class="muted" style="font-size:.68rem">PJANIC · Julfior · Barasal (facturas SII)${sinRubro ? ` · ${sinRubro} sin rubro aún` : ""}</span></div>
+      <input class="rb-in" id="rbProvQ" placeholder="Buscar: hormigón, bolsas, imprenta, toldo…" value="${esc(R.provQ || "")}">
+      <label class="rb-lab" style="flex-direction:row;gap:6px;align-items:center;font-size:.7rem"><input type="checkbox" id="rbProvTodos" ${R.provTodos ? "checked" : ""}> mostrar también gastos internos (bancos, luz, telecom)</label></div>
+      ${F.slice(0, 60).map((x) => `<div class="rb-op"><div class="rb-env"><b>${esc(x.nombre)}</b><span class="muted" style="font-size:.66rem">${x.empresas.map(esc).join(" · ")}</span></div>
+        <div style="font-size:.74rem">${x.rubro ? `<b>${esc(x.rubro)}</b>` : '<span class="muted">rubro pendiente</span>'}${(x.tipicos || []).length ? ` · ${x.tipicos.map(esc).join(", ")}` : ""}</div>
+        ${x.productos.length ? `<div class="muted" style="font-size:.68rem">🧾 ${x.productos.slice(0, 3).map((p) => esc(p.producto) + (p.precio_unit ? " " + clp(p.precio_unit) : "")).join(" · ")}${x.productos.length > 3 ? ` · +${x.productos.length - 3}` : ""}</div>` : ""}
+        <div class="rb-row"><span class="muted" style="font-size:.66rem;align-self:center">RUT ${esc(x.rut)} · ${x.facturas} fact. · ${cortoG(x.total)}</span>
+          ${x.telefono ? `<a class="btn small" href="tel:${esc(telNum(x.telefono))}">📞</a>` : ""}${waNum(x.telefono) ? `<a class="btn small" href="https://wa.me/${waNum(x.telefono)}" target="_blank" rel="noopener">💬</a>` : ""}${x.web ? `<a class="btn small" href="${esc(x.web)}" target="_blank" rel="noopener">🌐</a>` : ""}</div></div>`).join("") || `<div class="empty">Nada con "${esc(R.provQ || "")}"</div>`}
+      ${F.length > 60 ? `<div class="muted" style="font-size:.7rem">Mostrando 60 de ${F.length}: afina la búsqueda.</div>` : ""}`;
+  }
   function portalEjecuta() {
     const yo = (R.ejecutores || {})[miJug()];
     if (!R.ejecutores) cargarEjecutores();
@@ -2603,7 +2621,8 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     }
     return `<div class="rb-tira"><span>🛠 <b>${esc(yo.nombre)}</b></span><span>💰 <b class="${ahorro >= 0 ? "rb-vivo-t" : "rb-neg-t"}">${cortoG(ahorro)}</b> ahorro</span><span>🥇 <b>${cerr}</b>${cerr ? ` · ${cumplidos} a tiempo` : ""}</span><span>${atrasados ? `🔴 <b>${atrasados}</b> atrasado${atrasados > 1 ? "s" : ""}` : `⏳ <b>${L.length - cerr}</b>`}</span></div>
       ${libroERP(L)}
-      <div class="rb-etapas">${ETAPAS_EJ.map(([k, n]) => `<button type="button" class="${tab === k ? "on" : ""}" data-rb="ej-tab" data-e="${k}">${n} ${L.filter((t) => et(t) === k).length}</button>`).join("")}</div>
+      <div class="rb-etapas">${ETAPAS_EJ.map(([k, n]) => `<button type="button" class="${tab === k ? "on" : ""}" data-rb="ej-tab" data-e="${k}">${n} ${L.filter((t) => et(t) === k).length}</button>`).join("")}<button type="button" class="${tab === "provbase" ? "on" : ""}" data-rb="ej-tab" data-e="provbase">🏭 Proveedores del grupo${R.provBase ? " " + R.provBase.n : ""}</button></div>
+      ${tab === "provbase" ? provBaseHTML() : ""}
       ${tab === "cerrado" ? barraConsolidado(L) : ""}
       ${!R.ejec ? `<div class="empty"><span class="spinner"></span></div>` : (() => {
         const luego = leerLuego(), resp = (t) => (t.op?.respuestas || []).filter((r) => !r.visto).length;
@@ -4757,7 +4776,7 @@ ${empNom}`;
       return;
     }
     if (a === "portal") { guardar({ portal: b.dataset.v }); R.pantalla = null; sheet.scrollTop = 0; return pintarHoja(true); }
-    if (a === "ej-tab") { R.ejTab = b.dataset.e; return pintarHoja(true); }
+    if (a === "ej-tab") { R.ejTab = b.dataset.e; if (b.dataset.e === "provbase" && !R.provBase) cargarProvBase(false); return pintarHoja(true); }
     if (a === "consolidar") { R.consCerr = !R.consCerr; return pintarHoja(true); }
     if (a === "cons-dias") { R.consDias = +b.dataset.d || 5; R.consCerr = true; return pintarHoja(true); }
     if (a === "cons-csv") {
@@ -5438,6 +5457,10 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     const d = (+el.value || 0) / 100, pres = +box.dataset.pres || 0, cant = +box.dataset.cant || 1;
     const neto_max = box.dataset.coniva === "1" ? pres / 1.19 : pres, unit = Math.floor(neto_max * (1 - d) / cant / 10) * 10, neto = unit * cant;
     box.querySelector('[data-v="desc"]').textContent = (+el.value).toLocaleString("es-CL"); box.querySelector('[data-v="unit"]').textContent = clp(unit); box.querySelector('[data-v="total"]').textContent = clp(Math.round(neto * 1.19));
+  });
+  sheet.addEventListener("input", (ev) => {            // 🏭 buscar en la base de proveedores del grupo
+    if (ev.target.id === "rbProvQ") { R.provQ = ev.target.value; const pos = sheet.scrollTop; pintarHoja(true); sheet.scrollTop = pos; const q = $("#rbProvQ"); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
+    if (ev.target.id === "rbProvTodos") { R.provTodos = ev.target.checked; pintarHoja(true); }
   });
   sheet.addEventListener("input", (ev) => {            // 🔎 Buscar (modo ejecutivo) en vivo
     if (ev.target.id !== "rbExQ") return; R.exQ = ev.target.value; const pos = sheet.scrollTop; R.toque = 0; pintarHoja(true); sheet.scrollTop = pos; const q = $("#rbExQ"); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
