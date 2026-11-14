@@ -825,14 +825,15 @@ async function concretar(store, t, opts = {}) {
   // 1) candidatos por ítem, en paralelo: búsqueda web (tiendas chilenas) + páginas de las fotos; cada página se lee y puede traer varios productos
   const porItem = await Promise.all(items.map(async (it) => {
     const q = it.d.replace(/\(c[oó]digo [^)]*\)|seg[uú]n (especificaci[oó]n|eett|ttr).*|o similar/gi, "").replace(/\b(Biotecmed|C[oó]rcega|CD-C\d+|CIP\s?\d+L?|BC\d+L|ADC)\b/g, "").replace(/\s+/g, " ").trim().slice(0, 80);
-    const [w1, f1] = await Promise.allSettled([webBuscar(q + " precio chile", 10), buscarFotos(q)]);
+    const [w1, f1, m1] = await Promise.allSettled([webBuscar(q + " precio chile", 10), buscarFotos(q), mlBuscar(store, q, 8)]);
+    const deML = m1.status === "fulfilled" ? (m1.value.fotos || []).filter((x) => x.local !== false) : [];
     let pags = [];
     if (w1.status === "fulfilled") pags.push(...w1.value.map((x) => x.url));
     if (f1.status === "fulfilled") pags.push(...f1.value.fotos.map((f) => f.pagina).filter(Boolean));
     pags = pags.map((u) => String(u).split("#")[0]).filter((u) => /^https?:\/\//.test(u) && !/duckduckgo|amazon\.|aliexpress|alibaba|\.es\/|\.ar\/|\.pe\/|\.mx\/|\.co\/|wikipedia|youtube|facebook|instagram|pinterest/i.test(u));
     const vistas = new Set(); pags = pags.filter((u) => !vistas.has(u) && vistas.add(u)).slice(0, 7);
     const leidas = await Promise.all(pags.map((u) => precioPagina(u)));
-    let cands = leidas.flatMap((x) => x.productos || []);
+    let cands = [...deML, ...leidas.flatMap((x) => x.productos || [])];
     const vu = new Set(); cands = cands.filter((c) => c.titulo && !vu.has(c.url) && vu.add(c.url));
     cands.sort((a, b2) => (a.precio_iva ? 0 : 1) - (b2.precio_iva ? 0 : 1));
     cands = cands.slice(0, 14);
@@ -935,6 +936,28 @@ async function clasificarProveedores(store) {
   await store.setJSON("proveedores/_rubros", R);
   await baseProveedores(store, true);
   return { ok: true, clasificados_ahora: n, total: Object.keys(R).length, faltan: Math.max(0, base.lista.length - Object.keys(R).length) };
+}
+
+// 🛒 MERCADO LIBRE OFICIAL (API con OAuth). La nube no puede leer el sitio (bloquea tráfico de servidores), pero la API sí:
+//    1) Felipe crea una aplicación en developers.mercadolibre.cl con redirect URI https://cotizagil.netlify.app/bot/ml-callback
+//    2) guarda client_id/secret con POST /bot/ml-config  3) abre /bot/ml-auth una vez y autoriza  → tokens en ml/token (se refrescan solos).
+async function mlConfig(store) { return (await store.get("ml/app", { type: "json" }).catch(() => null)) || { client_id: process.env.ML_CLIENT_ID || "", client_secret: process.env.ML_CLIENT_SECRET || "" }; }
+async function mlToken(store) {
+  const app = await mlConfig(store); if (!app.client_id || !app.client_secret) return null;
+  const tk = await store.get("ml/token", { type: "json" }).catch(() => null); if (!tk?.refresh_token) return null;
+  if (tk.access_token && Date.now() < (tk.expira || 0) - 60e3) return tk.access_token;
+  const r = await fetch("https://api.mercadolibre.com/oauth/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
+    body: new URLSearchParams({ grant_type: "refresh_token", client_id: app.client_id, client_secret: app.client_secret, refresh_token: tk.refresh_token }), signal: AbortSignal.timeout(8000) });
+  const j = await r.json(); if (!j.access_token) { await store.setJSON("ml/token", { ...tk, error: texto(JSON.stringify(j), 300), t: ahora() }); return null; }
+  await store.setJSON("ml/token", { access_token: j.access_token, refresh_token: j.refresh_token || tk.refresh_token, user_id: j.user_id, expira: Date.now() + (j.expires_in || 21600) * 1000, t: ahora() });
+  return j.access_token;
+}
+async function mlBuscar(store, q, n = 10) {
+  const tok = await mlToken(store); if (!tok) return { fotos: [], error: "ML sin conectar" };
+  const r = await fetch("https://api.mercadolibre.com/sites/MLC/search?" + new URLSearchParams({ q, limit: String(n), shipping: "", sort: "price_asc" }), { headers: { authorization: "Bearer " + tok, accept: "application/json" }, signal: AbortSignal.timeout(8000) });
+  if (!r.ok) return { fotos: [], error: "ML " + r.status };
+  const j = await r.json();
+  return { fotos: (j.results || []).filter((x) => x.available_quantity !== 0).map((x) => ({ titulo: x.title, url: x.permalink, foto: String(x.thumbnail || "").replace(/-I\.(jpg|webp|png)$/i, "-O.$1").replace(/^http:/, "https:"), precio_iva: Math.round(x.price), fuente: "mercadolibre.cl", disponible: x.available_quantity > 0, cantidad_disp: x.available_quantity, vendedor: x.seller?.nickname || null, envio_gratis: !!x.shipping?.free_shipping, local: (x.seller_address?.country?.id || "CL") === "CL", motor: "ml" })) };
 }
 
 async function siiIngesta(req) {
@@ -1093,6 +1116,19 @@ async function atender(req) {
   if (/^\/bot\/wa\/?$/.test(new URL(req.url).pathname)) return waWebhook(req);
   if (/^\/bot\/nube-pedir\/?$/.test(new URL(req.url).pathname)) return nubePedir(req);
   if (/^\/bot\/webpay-retorno\/?$/.test(new URL(req.url).pathname)) return webpayRetorno(req);
+  if (/^\/bot\/ml-callback\/?$/.test(new URL(req.url).pathname)) {   // 🛒 vuelta de la autorización de Mercado Libre
+    const store0 = getStore({ name: STORE, consistency: "strong" }); const u0 = new URL(req.url); const code = u0.searchParams.get("code");
+    if (!code) return new Response("Falta el código de Mercado Libre.", { status: 400 });
+    const app = await mlConfig(store0);
+    const r = await fetch("https://api.mercadolibre.com/oauth/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
+      body: new URLSearchParams({ grant_type: "authorization_code", client_id: app.client_id, client_secret: app.client_secret, code, redirect_uri: "https://cotizagil.netlify.app/bot/ml-callback" }) });
+    const j = await r.json();
+    if (!j.access_token) return new Response("Mercado Libre no entregó token: " + JSON.stringify(j).slice(0, 300), { status: 400, headers: { "content-type": "text/plain; charset=utf-8" } });
+    await store0.setJSON("ml/token", { access_token: j.access_token, refresh_token: j.refresh_token, user_id: j.user_id, expira: Date.now() + (j.expires_in || 21600) * 1000, t: ahora() });
+    return new Response("<html><body style='font-family:system-ui;padding:30px'><h2>✅ Mercado Libre conectado a CotizÁgil</h2><p>Ya puedes cerrar esta pestaña. El robot buscará productos y precios en Mercado Libre Chile desde ahora.</p></body></html>", { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
+  }
+  if (/^\/bot\/ml-auth\/?$/.test(new URL(req.url).pathname)) { const st = getStore({ name: STORE, consistency: "strong" }); const app = await mlConfig(st); if (!app.client_id) return json({ error: "Primero guarda client_id/secret con ml-config." }, 400);
+    return Response.redirect("https://auth.mercadolibre.cl/authorization?" + new URLSearchParams({ response_type: "code", client_id: app.client_id, redirect_uri: "https://cotizagil.netlify.app/bot/ml-callback" }), 302); }
   if (!autorizado(req)) return json({ error: "Código de enlace inválido o no configurado." }, 401);
   const store = getStore({ name: STORE, consistency: "strong" });
   const url = new URL(req.url);
@@ -1102,6 +1138,11 @@ async function atender(req) {
   // Inyecta cotizaciones FICTICIAS para probar el flujo (cola → por firmar → firma) SIN Mercado Público real.
   // Blindaje total: el simulador SIEMPRE usa su propio store "robot-sim", nunca el real ("robot"). Por eso puede
   // correr incluso en producción sin tocar un solo dato verdadero. Las simuladas llevan sim:true y código SIM-….
+  if (ruta === "ml-config" && req.method === "POST") { const b = await cuerpo(req); await store.setJSON("ml/app", { client_id: texto(b.client_id, 40), client_secret: texto(b.client_secret, 120), t: ahora() }); return json({ ok: true, auth_url: "https://cotizagil.netlify.app/bot/ml-auth" }); }
+  if (ruta === "ml-auth" && req.method === "GET") { const app = await mlConfig(store); if (!app.client_id) return json({ error: "Primero guarda client_id/secret con ml-config." }, 400);
+    return Response.redirect("https://auth.mercadolibre.cl/authorization?" + new URLSearchParams({ response_type: "code", client_id: app.client_id, redirect_uri: "https://cotizagil.netlify.app/bot/ml-callback" }), 302); }
+  if (ruta === "ml-estado" && req.method === "GET") { const app = await mlConfig(store); const tk = await store.get("ml/token", { type: "json" }).catch(() => null); const tok = await mlToken(store).catch(() => null); return json({ app: !!app.client_id, autorizado: !!tk?.refresh_token, token_ok: !!tok, user_id: tk?.user_id || null, error: tk?.error || null }); }
+  if (ruta === "ml-buscar" && req.method === "GET") return json(await mlBuscar(store, url.searchParams.get("q") || ""));
   if (ruta === "proveedores-base" && req.method === "GET") return json(await baseProveedores(store, url.searchParams.get("forzar") === "1"));
   if (ruta === "proveedores-clasificar" && req.method === "POST") return json(await clasificarProveedores(store));
   if (ruta === "concretar" && req.method === "POST") {   // 🎯 plan para concretar una OC ganada con proveedores/links reales
