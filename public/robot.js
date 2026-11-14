@@ -316,6 +316,15 @@
   .btn.rb-firmar{background:linear-gradient(100deg,#7c4dff,#5a2fd6);border-color:transparent;color:#fff}
   .rb-pasos{margin:10px 0 0;padding-left:18px;font-size:.8rem;color:var(--ink-dim);line-height:1.55}
   .rb-copias{width:100%;border-collapse:collapse;margin-top:8px;font-size:.78rem}
+  .rb-stiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0}
+  .rb-stile{background:var(--bg-soft,#161a20);border:1px solid var(--line-soft,#2a3039);border-radius:14px;padding:10px 12px;min-width:0}
+  .rb-stile.mal{border-color:#e5484d55}.rb-stile-l{font-size:.68rem;opacity:.8;text-transform:uppercase;letter-spacing:.04em}
+  .rb-stile-v{font-size:1.45rem;font-weight:800;line-height:1.2;margin-top:2px;color:#f5cf6b}.rb-stile-s{font-size:.66rem;opacity:.75;margin-top:2px}
+  .rb-barras14{display:flex;gap:4px;align-items:flex-end;height:84px;padding:6px 2px 0}
+  .rb-b14{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;position:relative;min-width:0}
+  .rb-b14 i{display:block;width:100%;background:linear-gradient(180deg,#f5cf6b,#b8892c);border-radius:4px 4px 0 0;min-height:2px}
+  .rb-b14 b{position:absolute;top:-2px;font-size:.6rem;color:#5ef0b0}.rb-b14 span{font-size:.58rem;opacity:.7;margin-top:2px}
+  .rb-sttab th{text-align:left;font-size:.66rem;opacity:.7;padding:4px}.rb-sttab td.n,.rb-sttab th.n{text-align:right}
   .rb-copias td{padding:5px 4px;border-top:1px solid var(--line-soft);vertical-align:middle}
   .rb-copias td.n{font-family:"IBM Plex Mono",monospace;color:#fff;white-space:nowrap}
   .rb-cp{border:1px solid var(--line);background:var(--bg-2);color:var(--ink-dim);border-radius:8px;padding:3px 8px;font-size:.7rem;cursor:pointer}
@@ -3840,6 +3849,84 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       <div class="rb-rchips">${chips}</div>
       ${L.length ? bloques : `<div class="empty">Todavía no hay órdenes de compra${todas ? "" : " de tu empresa"}. Cuando te adjudiquen, aparecen aquí solas.</div>`}</div>`;
   }
+  // 🏟️ ESTADÍSTICAS tipo marcador: hoy / semana / mes · metidas (firmadas en MP), salieron (OC), dieron / no dieron,
+  //    vendido, utilidad y a dónde se fue la plata. Por empresa y por cotizador. Fuente: todos los trabajos de la nube.
+  const ST_PER = [["hoy", "Hoy"], ["ayer", "Ayer"], ["sem", "Esta semana"], ["semant", "Semana pasada"], ["mes", "Este mes"], ["mesant", "Mes pasado"], ["todo", "Todo"]];
+  function rangoPer(k) {
+    const d0 = new Date(); d0.setHours(0, 0, 0, 0); const dia = 864e5, dow = (d0.getDay() + 6) % 7;   // lunes = 0
+    const lun = new Date(d0 - dow * dia), m0 = new Date(d0.getFullYear(), d0.getMonth(), 1), mPrev = new Date(d0.getFullYear(), d0.getMonth() - 1, 1);
+    return { hoy: [d0, new Date(+d0 + dia)], ayer: [new Date(d0 - dia), d0], sem: [lun, new Date(+lun + 7 * dia)], semant: [new Date(lun - 7 * dia), lun],
+      mes: [m0, new Date(d0.getFullYear(), d0.getMonth() + 1, 1)], mesant: [mPrev, m0], todo: [new Date(2000, 0, 1), new Date(2100, 0, 1)] }[k] || [new Date(2000, 0, 1), new Date(2100, 0, 1)];
+  }
+  const enRango = (iso, [a, b]) => { if (!iso) return false; const t = new Date(iso); return t >= a && t < b; };
+  const empNom = (id) => { const e = (R.empresas || {})[id]; if (e) return e.nombre_fantasia || (e.razon_social || "").split(" ").slice(0, 3).join(" "); return id === "principal" || !id ? "PJANIC" : id; };
+  const empDe = (t) => t.empresa || "principal";
+  function statsDe(L, k) {
+    const rg = rangoPer(k), P = PARAM_NEG;
+    const firm = L.filter((t) => HECHA.includes(t.estado) && enRango(t.enviada_t || t.fecha_envio, rg));          // ✍️ firmadas en Mercado Público en el período
+    const gan = L.filter((t) => (t.op?.oc_codigo || t.op?.ganada_t || t.estado === "confirmada") && enRango(t.op?.ganada_t || t.op?.historial?.find((h) => h.etapa === "ganada")?.t || (t.estado === "confirmada" ? t.actualizado : null), rg));
+    const netoDe2 = (v) => (v ? Math.round(v / 1.19) : 0);
+    let dio = 0, noDio = 0, pend = 0, vendido = 0, vendidoN = 0, utilReal = 0, utilEst = 0, rep = { inversionista: 0, comision: 0, julfior: 0, impuesto: 0, factoring: 0, ejecutador: 0, empresa: 0, iva: 0 };
+    for (const t of gan) {
+      const op = t.op || {}, inf = op.informe || {}, venta = Number(t.total) || 0, ventaN = Number(t.neto) || netoDe2(venta);
+      vendido += venta; vendidoN += ventaN;
+      if (op.etapa === "rechazada") { noDio++; continue; }
+      if (op.precio_acordado) { const m = ventaN - (op.sin_factura ? op.precio_acordado : netoDe2(op.precio_acordado)) - (Number(op.costo_transporte) || 0); utilReal += m; if (m > 0) dio++; else noDio++; }
+      else if (op.nos_da === false) noDio++; else if (op.nos_da === true || (inf.final || 0) > 0) { pend++; } else pend++;
+      const fin = Number(inf.final) || (op.precio_acordado ? ventaN - netoDe2(op.precio_acordado) : 0);
+      utilEst += Number(inf.final) || 0;
+      rep.inversionista += Number(inf.inversionista) || 0; rep.comision += Number(inf.comision) || 0; rep.julfior += Number(inf.julfior) || 0;
+      rep.impuesto += Number(inf.impuesto) || 0; rep.factoring += Number(inf.factoring) || 0; rep.iva += Number(inf.iva_pagar) || 0;
+      rep.ejecutador += Math.max(0, fin) * P.ejecutador; rep.empresa += fin - (Number(inf.inversionista) || 0) - Math.max(0, fin) * P.ejecutador - (Number(inf.comision) || 0);
+    }
+    const prep = L.filter((t) => ["en_cola", "preparando", "tomado", "firmar", "lista"].includes(t.estado) && enRango(t.actualizado, rg)).length;
+    const err = L.filter((t) => t.estado === "error" && enRango(t.actualizado, rg)).length;
+    return { firm, gan, n: firm.length, monto: firm.reduce((a, t) => a + (Number(t.total) || 0), 0), g: gan.length, dio, noDio, pend, vendido, vendidoN, utilReal, utilEst, rep, prep, err,
+      tasa: firm.length ? gan.length / firm.length : null };
+  }
+  function pantallaStats() {
+    if (!R.global || Date.now() - (R.globalT || 0) > 60000) setTimeout(cargarGlobal, 0);
+    if (!R.empresas) setTimeout(cargarEmpresas, 0);
+    const G = R.global; if (!G) return `<div class="empty"><span class="spinner"></span> Juntando todo…</div>`;
+    const k = R.stPer || "hoy", fe = R.stEmp || "todas", fj = R.stJug || "";
+    const L0 = G.trabajos.filter((t) => !t.externa || t.estado === "confirmada");
+    const L = L0.filter((t) => (fe === "todas" || empDe(t) === fe) && (!fj || (t.jugador || "_") === fj));
+    const S = statsDe(L, k), f = (v) => clp(Math.round(v || 0));
+    const emps = [...new Set(L0.map(empDe))];
+    const nomJ = (t) => { const e = G.jugadores[t.jugador] || (R.ejecutores || {})[t.jugador]; return e?.nombre || t.persona || t.dispositivo || (t.jugador ? "Juego " + t.jugador.slice(-4) : "Sin juego"); };
+    const porE = emps.map((e) => [e, statsDe(L0.filter((t) => empDe(t) === e && (!fj || (t.jugador || "_") === fj)), k)]).sort((a, b) => b[1].n - a[1].n);
+    const jugs = {}; for (const t of L0) if (fe === "todas" || empDe(t) === fe) { const j = t.jugador || "_"; (jugs[j] = jugs[j] || { nom: nomJ(t), L: [] }).L.push(t); }
+    const porJ = Object.entries(jugs).map(([j, x]) => [j, x.nom, statsDe(x.L, k)]).filter((x) => x[2].n || x[2].g).sort((a, b) => b[2].n - a[2].n);
+    // 📊 barras de los últimos 14 días (firmadas y OC por día)
+    const dias = []; for (let i = 13; i >= 0; i--) { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i); const rg = [d, new Date(+d + 864e5)];
+      dias.push({ d, n: L.filter((t) => HECHA.includes(t.estado) && enRango(t.enviada_t || t.fecha_envio, rg)).length, g: L.filter((t) => enRango(t.op?.ganada_t, rg)).length }); }
+    const mx = Math.max(1, ...dias.map((x) => x.n));
+    const tile = (ico, lab, val, sub, cls) => `<div class="rb-stile ${cls || ""}"><div class="rb-stile-l">${ico} ${lab}</div><div class="rb-stile-v">${val}</div>${sub ? `<div class="rb-stile-s">${sub}</div>` : ""}</div>`;
+    const fila = (nom, X) => `<tr><td>${esc(nom)}</td><td class="n">${X.n}</td><td class="n">${cortoG(X.monto)}</td><td class="n">${X.g}</td><td class="n">${X.dio}/${X.noDio}</td><td class="n">${cortoG(X.vendido)}</td><td class="n">${cortoG(X.utilEst || X.utilReal)}</td></tr>`;
+    return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">🏟️ Marcador</h2><button class="btn small" type="button" data-rb="global-cerrar">← Volver</button></div>
+      <div class="muted rb-sub">Enviada = <b>firmada en Mercado Público</b>. Salió = llegó la orden de compra. Dio / no dio = utilidad real con el costo del proveedor (las sin costo quedan "por costear").</div>
+      <div class="rb-etapas">${ST_PER.map(([kk, n]) => `<button type="button" class="${k === kk ? "on" : ""}" data-rb="st-per" data-v="${kk}">${n}</button>`).join("")}</div>
+      <div class="rb-row" style="gap:6px;flex-wrap:wrap;margin:6px 0">${["todas", ...emps].map((e) => `<button type="button" class="btn small ${fe === e ? "rb-oro" : ""}" data-rb="st-emp" data-v="${esc(e)}">${e === "todas" ? "🏢 Todas" : esc(empNom(e))}</button>`).join("")}
+        ${fj ? `<button type="button" class="btn small" data-rb="st-jug" data-v="">👤 ${esc((jugs[fj] || {}).nom || "jugador")} ✕</button>` : `<button type="button" class="btn small" data-rb="st-jug" data-v="${esc(miJug())}">👤 Solo yo</button>`}</div>
+      <div class="rb-stiles">
+        ${tile("✍️", "Enviadas", S.n, cortoG(S.monto) + " ofertados" + (S.prep ? ` · ${S.prep} en preparación` : "") + (S.err ? ` · ${S.err} error` : ""))}
+        ${tile("🏆", "Salieron (OC)", S.g, S.tasa != null ? Math.round(S.tasa * 100) + "% de las enviadas" : "")}
+        ${tile("✅", "Dieron", S.dio, `❌ ${S.noDio} no dieron · ⏳ ${S.pend} por costear`, S.noDio > S.dio ? "mal" : "")}
+        ${tile("💰", "Vendido", cortoG(S.vendido), "neto " + cortoG(S.vendidoN))}
+        ${tile("📈", "Utilidad", cortoG(S.utilEst || S.utilReal), S.utilReal ? "real con costo: " + cortoG(S.utilReal) : "estimada por el robot")}
+        ${tile("🧮", "Empresa se queda", cortoG(S.rep.empresa), "después de inversionista, ejecutador y comisión")}
+      </div>
+      <div class="rb-sec">💸 Dónde se repartió la plata ${k === "todo" ? "" : "(OC del período)"}</div>
+      <table class="rb-copias"><tr><td>💼 Inversionista (capital + ganancia)</td><td class="n">${f(S.rep.inversionista)}</td></tr><tr><td>🎮 Comisión cotizador</td><td class="n">${f(S.rep.comision)}</td></tr><tr><td>🚚 Ejecutador (${Math.round(PARAM_NEG.ejecutador * 100)}%)</td><td class="n">${f(S.rep.ejecutador)}</td></tr><tr><td>🏢 Empresa</td><td class="n"><b>${f(S.rep.empresa)}</b></td></tr><tr><td>🧾 Impuesto estimado</td><td class="n">${f(S.rep.impuesto)}</td></tr><tr><td>🏦 Factoring</td><td class="n">${f(S.rep.factoring)}</td></tr><tr><td>IVA a pagar</td><td class="n">${f(S.rep.iva)}</td></tr></table>
+      <div class="rb-sec">📅 Últimos 14 días</div>
+      <div class="rb-barras14">${dias.map((x) => `<div class="rb-b14" title="${x.d.toLocaleDateString("es-CL")} · ${x.n} enviadas · ${x.g} OC"><i style="height:${Math.round(x.n / mx * 100)}%"></i>${x.g ? `<b>${x.g}</b>` : ""}<span>${x.d.getDate()}</span></div>`).join("")}</div>
+      <div class="rb-sec">🏢 Por empresa</div>
+      <div style="overflow-x:auto"><table class="rb-copias rb-sttab"><tr><th>Empresa</th><th>Env.</th><th>Ofertado</th><th>OC</th><th>Dio/No</th><th>Vendido</th><th>Utilidad</th></tr>${porE.map(([e, X]) => fila(empNom(e), X)).join("")}</table></div>
+      <div class="rb-sec">👤 Por cotizador</div>
+      <div style="overflow-x:auto"><table class="rb-copias rb-sttab"><tr><th>Cotizador</th><th>Env.</th><th>Ofertado</th><th>OC</th><th>Dio/No</th><th>Vendido</th><th>Utilidad</th></tr>${porJ.map(([j, nom, X]) => fila((j === miJug() ? "⭐ " : "") + nom, X)).join("") || "<tr><td colspan=7 class='muted'>Sin movimientos en el período</td></tr>"}</table></div>
+      <div class="muted" style="font-size:.66rem;margin-top:8px">Fuente: la nube (${L0.length} compras). La lista oficial es "Mis cotizaciones" de Mercado Público; el robot la cruzará a diario.</div>
+    </div>`;
+  }
   function pantallaGlobal() {
     if (!R.global || Date.now() - (R.globalT || 0) > 60000) setTimeout(cargarGlobal, 0);
     const G = R.global; if (!G) return `<div class="empty"><span class="spinner"></span> Juntando todo lo de la app…</div>`;
@@ -4461,7 +4548,7 @@ ${empNom}`;
     if (R.vista === "oport") {
       const mp = R.data?.mp, emp = empresaActual();
       if (!R.empresas) cargarEmpresas();
-      const iconos = `<button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button><button class="rb-ico" type="button" data-rb="analizador" aria-label="Analizador de proyectos" title="Analizador de proyectos — Excel en vivo">📊</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico" type="button" data-rb="oc" aria-label="Órdenes de compra" title="Solo las órdenes de compra: operadas, en operación, nuevas">📦</button><button class="rb-ico rb-claude" type="button" data-rb="claude" aria-label="Chatear con Claude" title="Chatea con Claude, el cerebro de la app">💬</button><button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>`;
+      const iconos = `<button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button><button class="rb-ico" type="button" data-rb="stats" aria-label="Marcador" title="Marcador: hoy, semana, mes — enviadas, OC, utilidad y reparto">🏟️</button><button class="rb-ico" type="button" data-rb="analizador" aria-label="Analizador de proyectos" title="Analizador de proyectos — Excel en vivo">📊</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico" type="button" data-rb="oc" aria-label="Órdenes de compra" title="Solo las órdenes de compra: operadas, en operación, nuevas">📦</button><button class="rb-ico rb-claude" type="button" data-rb="claude" aria-label="Chatear con Claude" title="Chatea con Claude, el cerebro de la app">💬</button><button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>`;
       // ◧ modo ejecutivo: una sola línea limpia (empresa · quién · robot/MP · ⋯ · ✕); los íconos viven en el menú ⋯
       const cab = execOn() ? `<div class="rb-top2 rb-top-ex">
         <button class="rb-emp" type="button" data-rb="empresa-editar">🏢 <span>${esc(corta(emp?.razon_social) || "Mi empresa")}</span> ▾</button>
@@ -4487,6 +4574,7 @@ ${empNom}`;
       else if (R.pantalla === "analizador") cuerpo = pantallaAnalizador();
       else if (R.pantalla === "correos") cuerpo = pantallaCorreos();
       else if (R.pantalla === "global") cuerpo = pantallaGlobal();
+      else if (R.pantalla === "stats") cuerpo = pantallaStats();
       else if (R.pantalla === "oc") cuerpo = pantallaOC();
       else if (R.pantalla === "planes") cuerpo = pantallaPlanes();
       else if (R.pantalla === "mplogin") cuerpo = pantallaLoginMP();
@@ -4511,7 +4599,7 @@ ${empNom}`;
         <div class="rb-row" style="margin-top:8px"><button class="btn small" type="button" data-rb="copiar-marcador">Copiar marcador «Rellenar» (sin extensión)</button>
           ${R.push ? `<button class="btn small" type="button" data-rb="push-probar">Probar aviso</button>` : ""}<button class="btn small" type="button" data-rb="desenlazar">Desenlazar</button></div>
       </details>`;
-      return cab2 + cuerpo + (R.pantalla === "llamada" || R.pantalla === "claude" || R.pantalla === "oc" || R.pantalla === "analizador" || R.empresaEditar || R.rubroEditar || R.personaEditar ? "" : mas) + (execOn() ? navExec() : "");
+      return cab2 + cuerpo + (R.pantalla === "llamada" || R.pantalla === "claude" || R.pantalla === "oc" || R.pantalla === "analizador" || R.pantalla === "stats" || R.empresaEditar || R.rubroEditar || R.personaEditar ? "" : mas) + (execOn() ? navExec() : "");
     }
     return `
       <div class="rb-sheet-head"><h2 style="margin:0">Robot de ofertas</h2><button class="rb-x" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
@@ -4999,6 +5087,10 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "plan-activar") { try { await api("plan", { method: "POST", body: JSON.stringify({ jugador: b.dataset.j, plan: b.dataset.v, activar: true }) }); toast("👑 Plan activado"); R.planT = 0; await cargarPlan(); } catch (e) { toast(e.message); } return; }
     if (a === "global") { R.pantalla = "global"; sheet.scrollTop = 0; cargarGlobal(); if (!R.ejecutores) cargarEjecuta(); return pintarHoja(true); }
     if (a === "global-cerrar") { R.pantalla = null; return pintarHoja(true); }
+    if (a === "stats") { R.pantalla = "stats"; sheet.scrollTop = 0; cargarGlobal(); if (!R.ejecutores) cargarEjecuta(); return pintarHoja(true); }
+    if (a === "st-per") { R.stPer = b.dataset.v; return pintarHoja(true); }
+    if (a === "st-emp") { R.stEmp = b.dataset.v; return pintarHoja(true); }
+    if (a === "st-jug") { R.stJug = b.dataset.v || ""; return pintarHoja(true); }
     if (a === "oc") { R.pantalla = "oc"; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "oc-cerrar") { R.pantalla = null; return pintarHoja(true); }
     if (a === "oc-bloque") { R.ocB = R.ocB === b.dataset.b ? "" : b.dataset.b; return pintarHoja(true); }
