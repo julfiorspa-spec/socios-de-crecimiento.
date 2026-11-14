@@ -706,24 +706,26 @@ async function fotoML(q) {
   return (j.results || []).filter((x) => x.thumbnail).map((x) => ({ url: String(x.thumbnail).replace(/-I\.(jpg|webp|png)$/i, "-O.$1").replace(/^http:/, "https:"), fuente: "mercadolibre.cl", titulo: x.title, precio: x.price, pagina: x.permalink, motor: "ml" }));
 }
 async function fotoBing(q) {
-  const r = await fetch("https://www.bing.com/images/search?" + new URLSearchParams({ q, form: "HDRSC2", first: "1", cc: "CL", setlang: "es" }), { headers: { "user-agent": FOTO_UA, "accept-language": "es-CL,es;q=0.9" }, signal: AbortSignal.timeout(7000) });
+  const r = await fetch("https://www.bing.com/images/search?" + new URLSearchParams({ q, form: "HDRSC2", first: "1", cc: "CL", setlang: "es" }), { headers: { "user-agent": FOTO_UA, "accept-language": "es-CL,es;q=0.9" }, signal: AbortSignal.timeout(9000) });
   const h = await r.text(); const out = [];
   for (const m of h.matchAll(/murl&quot;:&quot;(https?:\/\/[^&]+?)&quot;/g)) { try { const u = decodeURIComponent(m[1]); out.push({ url: u, fuente: new URL(u).hostname.replace(/^www\./, ""), motor: "bing" }); } catch {} }
   return out;
 }
 async function fotoDDG(q) {
-  const h = await (await fetch("https://duckduckgo.com/?" + new URLSearchParams({ q, iax: "images", ia: "images" }), { headers: { "user-agent": FOTO_UA }, signal: AbortSignal.timeout(6000) })).text();
+  const h = await (await fetch("https://duckduckgo.com/?" + new URLSearchParams({ q, iax: "images", ia: "images" }), { headers: { "user-agent": FOTO_UA }, signal: AbortSignal.timeout(9000) })).text();
   const m = h.match(/vqd=([\d-]+)/) || h.match(/vqd="([\d-]+)"/) || h.match(/vqd=\\'([\d-]+)/); if (!m) return [];
-  const r = await fetch("https://duckduckgo.com/i.js?" + new URLSearchParams({ l: "cl-es", o: "json", q, vqd: m[1], f: ",,,,,", p: "1" }), { headers: { "user-agent": FOTO_UA, referer: "https://duckduckgo.com/", accept: "application/json" }, signal: AbortSignal.timeout(6000) });
+  const r = await fetch("https://duckduckgo.com/i.js?" + new URLSearchParams({ l: "cl-es", o: "json", q, vqd: m[1], f: ",,,,,", p: "1" }), { headers: { "user-agent": FOTO_UA, referer: "https://duckduckgo.com/", accept: "application/json" }, signal: AbortSignal.timeout(9000) });
   const j = await r.json();
   return (j.results || []).filter((x) => x.image && (x.width || 0) >= 300 && (x.height || 0) >= 300).map((x) => ({ url: x.image, fuente: (() => { try { return new URL(x.url || x.image).hostname.replace(/^www\./, ""); } catch { return ""; } })(), titulo: x.title, pagina: x.url, motor: "ddg" }));
 }
 async function buscarFotos(q) {
-  q = String(q || "").replace(/\(c[oó]digo [^)]*\)|seg[uú]n (especificaci[oó]n|eett).*|o similar/gi, "").replace(/\s+/g, " ").trim().slice(0, 90);
+  // consulta corta y limpia: sin viñetas ni frases largas de la ficha; las primeras 7 palabras útiles del producto
+  q = String(q || "").replace(/\(c[oó]digo [^)]*\)|seg[uú]n (especificaci[oó]n|eett|ttr).*|o similar/gi, "").replace(/[•·|/\\]+/g, " ").split(/\s+/).filter((w) => w && !/^(de|del|la|el|los|las|con|para|por|en|un|una|y|o|alta|calidad|tipo|uso)$/i.test(w)).slice(0, 7).join(" ").trim().slice(0, 70);
   if (q.length < 4) return { q, fotos: [], errores: ["consulta corta"] };
   const errores = []; let out = [];
-  const res = await Promise.allSettled([fotoML(q), fotoBing(q), fotoDDG(q)]);
+  const res = await Promise.allSettled([fotoBing(q), fotoDDG(q)]);
   for (const r of res) { if (r.status === "fulfilled") out.push(...r.value); else errores.push(String(r.reason?.message || r.reason).slice(0, 80)); }
+  if (!out.length && q.split(" ").length > 3) { try { out.push(...(await fotoDDG(q.split(" ").slice(0, 3).join(" ")))); } catch (e) { errores.push("corta: " + String(e.message || e).slice(0, 60)); } }
   const vistas = new Set();
   out = out.filter((f) => { const lu = f.url.toLowerCase(); if (vistas.has(f.url) || FOTO_MALAS.some((m) => lu.includes(m))) return false; vistas.add(f.url); return true; });
   out.sort((a, b2) => (FOTO_TIENDAS.some((t) => (a.url + a.fuente).toLowerCase().includes(t)) ? 0 : 1) - (FOTO_TIENDAS.some((t) => (b2.url + b2.fuente).toLowerCase().includes(t)) ? 0 : 1));
