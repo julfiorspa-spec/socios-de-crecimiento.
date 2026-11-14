@@ -1846,6 +1846,45 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         <a class="btn small" href="https://dashboard.twitch.tv/u/${encodeURIComponent(canal)}/content/video-producer" target="_blank" rel="noopener">Buscar el video en Twitch</a>` : ""}
       ${op.video_prueba ? `<div class="rb-resp nueva">🎞 Prueba de entrega en video: <a href="${esc(op.video_prueba)}" target="_blank" rel="noopener">ver</a></div>` : ""}</div>`;
   }
+  // 🎯 CONCRETAR: el robot analiza la cotización que mandamos y dice dónde comprar DE VERDAD cada ítem (link o proveedor real),
+  //    a qué precio y cuánto se gana. La persona toca el link o llama, y marca "Concreté aquí": eso queda como proveedor real del negocio.
+  function concretarHTML(t) {
+    const op = t.op || {}, c = op.concrecion, cod = t.codigo, conc = op.concretados || {};
+    const cargando = (R._concretando || {})[cod];
+    if (!c) return `<div class="rb-mision rb-concretar"><div class="rb-env"><b>🎯 Concretar esta OC</b><span class="muted" style="font-size:.68rem">${(t.items || []).length || itemsDe(t).length} ítem(s)</span></div>
+      <div class="muted" style="font-size:.7rem">El robot revisa la cotización que enviamos, busca cada producto en tiendas y proveedores reales de Chile, lee precio y stock y te dice: <b>compra aquí, a este precio, y ganas esto</b>.</div>
+      <button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-concretar" data-c="${esc(cod)}" ${cargando ? "disabled" : ""}>${cargando ? '<span class="spinner"></span> Buscando proveedores reales… (30–60 s)' : "🎯 Concretar: dónde comprar y cuánto gano"}</button></div>`;
+    const f = (v) => clp(Math.round(v || 0));
+    const filas = (c.items || []).map((it) => { const el = it.elegido, k = String(it.i), hecho = conc[k];
+      const alt = (it.alternativas || []).filter((a) => a.url && (!el || a.url !== el.url)).slice(0, 3);
+      const pu = hecho?.precio_unit_iva || el?.precio_unit_iva || null, costoU = pu ? Math.round(pu / 1.19) : null, gan = costoU != null ? (it.venta_unit_neto - costoU) * it.cantidad : null;
+      const tel = telNum(el?.telefono), wa = waNum(el?.telefono);
+      return `<div class="rb-op ${hecho ? "on" : ""}"><div class="rb-env"><b>${esc(it.cantidad)} × ${esc(String(it.item).slice(0, 70))}</b><span class="muted" style="font-size:.68rem">vendes ${f(it.venta_unit_neto)} neto c/u</span></div>
+        ${el ? `<div style="font-size:.78rem;margin:4px 0"><b>${el.tipo === "proveedor" ? "📞 " : "🛒 "}${esc(el.titulo || el.proveedor || "")}</b>${el.fuente || (el.url ? " · " + esc(String(el.url).replace(/^https?:\/\/(www\.)?/, "").split("/")[0]) : "")}
+            ${pu ? ` · <b>${f(pu)}</b> c/u con IVA` : ' · <span style="color:#f5cf6b">sin precio en la página: pídelo</span>'}</div>
+          <div class="muted" style="font-size:.7rem">${esc(el.porque || "")}</div>` : `<div style="font-size:.76rem;color:#f5cf6b">⚠ No encontré un producto que calce. ${esc(it.buscar || "")}</div>`}
+        ${gan != null ? `<div style="font-size:.8rem;margin-top:3px">${gan >= 0 ? `✅ <b class="rb-vivo-t">ganas ${f(gan)}</b>` : `❌ <b class="rb-neg-t">pierdes ${f(-gan)}</b>`} <span class="muted">(costo neto ${f(costoU)} vs venta ${f(it.venta_unit_neto)} × ${it.cantidad})</span></div>` : ""}
+        ${it.riesgo ? `<div class="rb-ojo">👁 ${esc(it.riesgo)}</div>` : ""}
+        <div class="rb-row" style="margin-top:4px">${el?.url ? `<a class="btn small rb-oro" href="${esc(el.url)}" target="_blank" rel="noopener">🌐 Abrir y comprar</a>` : ""}
+          ${tel ? `<a class="btn small" href="tel:${esc(tel)}">📞 Llamar</a>` : ""}${wa ? `<a class="btn small" href="https://wa.me/${wa}" target="_blank" rel="noopener">💬</a>` : ""}
+          ${el ? (hecho ? `<span class="rb-cerraste" style="flex:1"><span>✅ Concretado${hecho.precio_unit_iva ? " a " + f(hecho.precio_unit_iva) + " c/u" : ""}</span><button class="btn small" type="button" data-rb="ej-desconcretar" data-c="${esc(cod)}" data-i="${k}">Quitar</button></span>`
+            : `<button class="btn small rb-firmar" type="button" data-rb="ej-concrete" data-c="${esc(cod)}" data-i="${k}">✅ Concreté aquí</button>`) : ""}</div>
+        ${alt.length ? `<details class="rb-det"><summary>Otras opciones (${alt.length})</summary>${alt.map((a) => `<div class="rb-resp" style="font-size:.72rem"><a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(String(a.titulo || a.url).slice(0, 70))}</a>${a.precio_unit_iva || a.precio_iva ? ` · ${f(a.precio_unit_iva || a.precio_iva)}` : ""}</div>`).join("")}</details>` : ""}
+        ${(it.propios || []).length ? `<div class="muted" style="font-size:.66rem">🧾 Ya le compraste parecido a: ${it.propios.map((p) => `${esc(p.proveedor)} (${esc(String(p.producto).slice(0, 40))} · ${f(p.precio_unit_neto)} neto)`).join(" · ")}</div>` : ""}</div>`; }).join("");
+    const T = c.total || {}, hechos = Object.keys(conc).length, n = (c.items || []).length;
+    return `<div class="rb-mision rb-concretar"><div class="rb-env"><b>🎯 Concretar esta OC</b><b>${hechos}/${n}</b></div>
+      <div class="rb-barra"><i style="width:${n ? Math.min(100, hechos / n * 100) : 0}%"></i></div>
+      <div style="font-size:.78rem;margin:4px 0">Venta neta <b>${f(T.venta_neto)}</b>${T.costo_neto ? ` · costo ${f(T.costo_neto)} · <b class="rb-vivo-t">ganancia ${f(T.ganancia)}</b>` : ""}${T.sin_precio ? ` · <span style="color:#f5cf6b">${T.sin_precio} ítem(s) sin precio aún</span>` : ""}</div>
+      ${c.resumen ? `<div class="muted" style="font-size:.7rem">🤖 ${esc(c.resumen)}</div>` : ""}${c.aviso ? `<div class="muted" style="font-size:.66rem">⚠ ${esc(c.aviso)}</div>` : ""}
+      ${filas}
+      <div class="rb-row"><button class="btn small" type="button" data-rb="ej-concretar" data-c="${esc(cod)}" data-forzar="1" ${cargando ? "disabled" : ""}>${cargando ? '<span class="spinner"></span> buscando…' : "🔄 Buscar de nuevo"}</button><span class="muted" style="font-size:.64rem;align-self:center">${esc(hace(c.t))}</span></div></div>`;
+  }
+  async function concretarPedir(cod, forzar) {
+    R._concretando = { ...(R._concretando || {}), [cod]: true }; pintarHoja(true);
+    try { await api("concretar", { method: "POST", body: JSON.stringify({ codigo: cod, forzar: !!forzar }) }); toast("🎯 Plan listo: dónde comprar y cuánto ganas"); }
+    catch (e) { toast(e.message || "No pude armar el plan"); }
+    finally { delete R._concretando[cod]; R.ejecT = 0; await cargarEjecuta(); pintarHoja(true); }
+  }
   function tarjetaEj(t) {
     const op = t.op || {}, inf = op.informe || {}, et = op.etapa || "operacion", cod = t.codigo;
     const F = (R.fichas || {})[cod]; if (!F && !(R._pidiendo || {})[cod]) setTimeout(() => cargarDocs(cod), 0);
@@ -1911,7 +1950,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
           ${(q || r) && !desc[o.k] ? ((op.cerrados || {})[o.k]
             ? `<div class="rb-cerraste"><span>✅ Cerrado con ${esc(o.proveedor.split(" ")[0])} · <b>${clp(op.cerrados[o.k].precio)}</b></span><button class="btn small" type="button" data-rb="ej-descerrar" data-c="${esc(cod)}" data-k="${esc(o.k)}">Quitar</button></div>`
             : `<div class="rb-cerraste"><span>🤝 ¿Cerraste con ${esc(o.proveedor.split(" ")[0])}?</span><button class="btn small rb-oro" type="button" data-rb="ej-cerre" data-c="${esc(cod)}" data-k="${esc(o.k)}">Sí, cerré</button><button class="btn small" type="button" data-rb="ej-descartar" data-c="${esc(cod)}" data-k="${esc(o.k)}">No</button></div>`) : ""}</div>`; };
-      cuerpoS = (op.etapa === "previa" ? `<div class="rb-sug" style="border-color:#5ef0b0">📞 <b>Aún sin OC:</b> vas 1°. Adelanta precios y stock con un toque, sin comprar todavía.</div>` : "") + bloqueCliente + `
+      cuerpoS = (op.etapa === "previa" ? `<div class="rb-sug" style="border-color:#5ef0b0">📞 <b>Aún sin OC:</b> vas 1°. Adelanta precios y stock con un toque, sin comprar todavía.</div>` : "") + bloqueCliente + concretarHTML(t) + `
       <div class="rb-mision"><div class="rb-env"><b>🔎 El robot cotiza con ${meta} proveedores por ti</b><b>${Math.min(hechos, meta)}/${meta}</b></div>
         <div class="rb-barra"><i style="width:${Math.min(100, hechos / meta * 100)}%"></i></div>
         ${conMail.length ? `<button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-mail-todos" data-c="${esc(cod)}">📨 Que el robot les pida precio (${conMail.length}) · 1 toque</button>` : ""}
@@ -4760,6 +4799,16 @@ ${empNom}`;
       toast("🧑 Abriendo Mercado Público: rechaza la OC ahí mismo (es tu decisión)"); return; }
     if (a === "ej-cerrar-card") { R.ejAbierto = null; return pintarHoja(true); }
     if (a === "ej-modo") { R.ejModo = b.dataset.m || null; sheet.scrollTop = 0; return pintarHoja(true); }
+    if (a === "ej-concretar") { R.ejAbierto = cod; return concretarPedir(cod, b.dataset.forzar === "1"); }
+    if (a === "ej-concrete" || a === "ej-desconcretar") { const t = tEj(); if (!t) return; const op = t.op || {}, c = op.concrecion || {}, conc = { ...(op.concretados || {}) };
+      if (a === "ej-concrete") { const it = (c.items || []).find((x) => String(x.i) === b.dataset.i); if (!it || !it.elegido) return; const el = it.elegido;
+        conc[b.dataset.i] = { titulo: el.titulo || el.proveedor || "", url: el.url || "", fuente: el.fuente || "", proveedor: el.proveedor || "", telefono: el.telefono || "", precio_unit_iva: el.precio_unit_iva || 0, cantidad: it.cantidad }; }
+      else delete conc[b.dataset.i];
+      const L = Object.values(conc), total = L.reduce((s2, x) => s2 + (x.precio_unit_iva || 0) * (x.cantidad || 0), 0);
+      const prov = [...new Set(L.map((x) => x.proveedor || x.fuente || (x.url ? String(x.url).replace(/^https?:\/\/(www\.)?/, "").split("/")[0] : "")).filter(Boolean))].join(" + ");
+      R.ejAbierto = cod;
+      return ejOp({ concretados: conc, ...(L.length ? { proveedor: prov, precio_acordado: total || null, despacho_modo: op.despacho_modo || "proveedor" } : { proveedor: "", precio_acordado: null }) }, null,
+        a === "ej-concrete" ? `✅ Concretado · compra ${clp(total)} con IVA` : "Quitado"); }
     if (a === "ej-mail") { const t = tEj(), o = t && candsDe(t).find((x) => x.k === b.dataset.k); if (!o) return;
       return enviarCorreos(cod, [{ to: o.email, asunto: `Cotización con factura · ${t.nombre || cod}`, cuerpo: cuerpoCot(t, o), k: o.k, nombre: o.proveedor, tipo: "cotizacion" }]); }
     if (a === "ej-mail-todos") { const t = tEj(); if (!t) return; const cont = t.op?.contactados || {};

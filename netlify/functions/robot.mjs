@@ -1512,6 +1512,13 @@ async function atender(req) {
       const k = texto(d.cotizacion.k, 80), v = Math.max(0, Math.round(Number(d.cotizacion.v) || 0));
       if (k) { op.cotizaciones = { ...(op.cotizaciones || {}) }; if (v) op.cotizaciones[k] = { v, nombre: texto(d.cotizacion.nombre, 120), t: ahora() }; else delete op.cotizaciones[k]; }
     }
+    if (d.concretados && typeof d.concretados === "object") {          // 🎯 dónde se concretó cada ítem (link/proveedor real elegido por la persona)
+      const c = {}; let i = 0;
+      for (const kk of Object.keys(d.concretados)) { if (i++ >= 12) break; const x = d.concretados[kk]; if (!x) continue;
+        c[texto(kk, 8)] = { titulo: texto(x.titulo, 140), url: texto(x.url, 400), fuente: texto(x.fuente, 80), proveedor: texto(x.proveedor, 120), telefono: texto(x.telefono, 40),
+          precio_unit_iva: Math.max(0, Math.round(Number(x.precio_unit_iva) || 0)), cantidad: Math.max(0, Math.round(Number(x.cantidad) || 0)), t: ahora() }; }
+      op.concretados = c;
+    }
     if (d.cerrados && typeof d.cerrados === "object") {              // 🤝 varios proveedores que SUMAN en la misma misión
       const c = {}; let i = 0;
       for (const kk of Object.keys(d.cerrados)) { if (i++ >= 12) break; const x = d.cerrados[kk] || {};

@@ -2,7 +2,7 @@
    - Hace la app instalable en el celular (Android e iPhone) y que abra aunque no haya señal.
    - Recibe los avisos push del robot aunque la app esté cerrada.
    Nunca guarda en caché las llamadas al robot (/bot/...). */
-const CACHE = "cotizagil-v12";
+const CACHE = "cotizagil-v13";
 const BASICOS = ["/", "/public/robot.js?v=20261106g", "/manifest.webmanifest", "/icon-180.png", "/icon-512.png"];
 
 self.addEventListener("install", (e) => {
