@@ -741,6 +741,7 @@ async function mlListado(q, soloLocal = true) {
   const r = await fetch(u, { headers: { "user-agent": FOTO_UA, "accept-language": "es-CL,es;q=0.9", accept: "text/html,*/*" }, signal: AbortSignal.timeout(8000) });
   if (!r.ok) throw new Error("ML listado " + r.status);
   const h = await r.text(); const out = [];
+  if (globalThis.__mlDebug) return { len: h.length, poly: (h.match(/poly-card/g) || []).length, title: (h.match(/<title>([^<]*)</) || [])[1], frac: (h.match(/andes-money-amount__fraction/g) || []).length, muestra: h.slice(0, 300), idx: h.indexOf("poly-component__title"), ctx: h.slice(Math.max(0, h.indexOf("poly-component__title") - 300), h.indexOf("poly-component__title") + 600) };
   const bloques = h.split(/<li class="ui-search-layout__item|<div class="poly-card poly-card--list|<div class="poly-card poly-card--grid/).slice(1);
   for (const b of bloques) {
     const tit = (b.match(/class="poly-component__title"[^>]*>([^<]{3,200})</) || b.match(/<h3[^>]*>\s*<a[^>]*>([^<]{3,200})</) || [])[1];
@@ -848,7 +849,7 @@ async function siiIngesta(req) {
     T.t = ahora(); await store.setJSON(kt, T);
   }
   if (b.accion === "catalogo") return catalogoConstruir(store, rutEmp, corsH);
-  if (b.accion === "ml_listado") { try { return new Response(JSON.stringify({ ok: true, r: await mlListado(b.q, b.local !== false) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); } catch (e) { return new Response(JSON.stringify({ error: String(e.message || e) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); } }
+  if (b.accion === "ml_listado") { globalThis.__mlDebug = !!b.debug; try { return new Response(JSON.stringify({ ok: true, r: await mlListado(b.q, b.local !== false) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); } catch (e) { return new Response(JSON.stringify({ error: String(e.message || e) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); } }
   if (b.accion === "concretar") { const t = await leer(store, String(b.codigo || "")); if (!t) return new Response(JSON.stringify({ error: "no existe" }), { status: 404, headers: corsH }); const r = await concretar(store, t); if (r.ok) { t.op = t.op || { etapa: "ganada", historial: [] }; t.op.concrecion = r; await store.setJSON("trabajo/" + t.codigo, t); } return new Response(JSON.stringify(r), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); }
   if (b.accion === "fotos_ultimo") return new Response(JSON.stringify({ ok: true, u: await store.get("robot/fotos_ultimo", { type: "json" }) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   if (b.accion === "foto") return new Response(JSON.stringify({ ok: true, ...(await buscarFotos(b.q)) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
