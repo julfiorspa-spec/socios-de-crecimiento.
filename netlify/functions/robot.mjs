@@ -819,9 +819,8 @@ async function concretar(store, t, opts = {}) {
   const items = (Array.isArray(t.items) && t.items.length ? t.items : (t.oc_compra?.items || []).map((i) => ({ d: i.especificacion || i.nombre, q: i.cantidad, p: i.precio })))
     .filter((i) => i && i.d).slice(0, 8).map((i) => ({ d: String(i.d).slice(0, 160), q: Number(i.q) || 1, p: Number(i.p) || 0 }));
   if (!items.length) return { error: "La oferta no tiene ítems guardados." };
-  const rutEmp = String(t.rut_empresa || t.empresa_rut || "78493114-5").replace(/\./g, "").toUpperCase();
-  const C = (await store.get("catalogo/" + rutEmp, { type: "json" }).catch(() => null)) || { items: {} };
-  const catal = Object.values(C.items || {});
+  const base = await baseProveedores(store).catch(() => ({ lista: [] }));
+  const catal = base.lista.filter((x) => x.util !== false);
   const kw = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z0-9]+/).filter((w) => w.length > 3 && !["para", "con", "segun", "tipo", "unidad", "requiere"].includes(w));
   // 1) candidatos por ítem, en paralelo: búsqueda web (tiendas chilenas) + páginas de las fotos; cada página se lee y puede traer varios productos
   const porItem = await Promise.all(items.map(async (it) => {
@@ -838,15 +837,19 @@ async function concretar(store, t, opts = {}) {
     cands.sort((a, b2) => (a.precio_iva ? 0 : 1) - (b2.precio_iva ? 0 : 1));
     cands = cands.slice(0, 14);
     const ks = kw(it.d);
-    const propios = catal.map((c) => ({ c, n: kw(c.producto).filter((w) => ks.includes(w)).length })).filter((x) => x.n >= 1).sort((a, b2) => b2.n - a.n).slice(0, 3)
-      .map((x) => ({ producto: x.c.producto, proveedor: x.c.proveedor, precio_unit_neto: x.c.precio_unit, unidad: x.c.unidad, fecha: x.c.fecha }));
+    const propios = catal.map((c) => { const txt = [c.nombre, c.rubro, ...(c.tipicos || []), ...c.productos.map((q) => q.producto)].join(" "); const n = kw(txt).filter((w) => ks.includes(w)).length; return { c, n }; })
+      .filter((x) => x.n >= 1).sort((a, b2) => b2.n - a.n || b2.c.total - a.c.total).slice(0, 4)
+      .map((x) => ({ proveedor: x.c.nombre, rut: x.c.rut, empresas: x.c.empresas, rubro: x.c.rubro, tipicos: (x.c.tipicos || []).slice(0, 4), compras: x.c.productos.filter((q) => kw(q.producto).some((w) => ks.includes(w))).slice(0, 3).map((q) => ({ producto: q.producto, precio_unit_neto: q.precio_unit || null, empresa: q.empresa, fecha: q.fecha })), facturas: x.c.facturas, telefono: x.c.telefono || null, web: x.c.web || null }));
+    // 📞 contacto del proveedor propio mejor rankeado: lo busca en la web (sitio + teléfono) y lo deja guardado
+    if (propios[0] && !propios[0].telefono) { try { const w = (await webBuscar(propios[0].proveedor + " chile", 4)).filter((r) => !/duckduckgo|linkedin|facebook|instagram|sii\.cl|mercadopublico|dicom|boletin/i.test(r.url))[0];
+      if (w) { const pg = await precioPagina(w.url); const tel = (pg.productos || [])[0]?.telefono || null; propios[0].web = w.url; propios[0].telefono = tel; const R2 = (await store.get("proveedores/_rubros", { type: "json" }).catch(() => null)) || {}; R2[propios[0].rut] = { ...(R2[propios[0].rut] || {}), web: w.url, telefono: tel }; await store.setJSON("proveedores/_rubros", R2); } } catch {} }
     return { item: it, q, candidatos: cands.map((c) => ({ titulo: c.titulo, url: c.url, foto: c.foto, fuente: c.fuente, precio_iva: c.precio_iva || null, sin_stock: c.disponible === false, telefono: c.telefono || null })), propios };
   }));
   // 2) Claude decide
   let plan = null, aviso = null;
   if (key) {
     const prompt = `Eres el jefe de compras de ${t.empresa_nombre || "PJANIC SpA"} (proveedor del Estado de Chile). Ganamos la compra ágil ${t.codigo} (${t.nombre || ""}) del organismo ${t.oc_compra?.organismo || t.organismo || ""}; OC ${t.op?.oc_codigo || ""}. Entrega: ${t.oc_compra?.direccion || t.op?.informe?.direccion || "(ver OC)"}.
-Para cada ítem cotizado te doy: lo que ofrecimos (texto de nuestra cotización), cantidad, precio unitario NETO de venta, candidatos REALES encontrados en tiendas (título, link, precio con IVA leído de la página; null si no se pudo leer) y productos que ya le compramos antes a proveedores propios (catálogo de facturas).
+Para cada ítem cotizado te doy: lo que ofrecimos (texto de nuestra cotización), cantidad, precio unitario NETO de venta, candidatos REALES encontrados en tiendas (título, link, precio con IVA leído de la página; null si no se pudo leer) y PROVEEDORES PROPIOS: empresas a las que el grupo (PJANIC, Julfior, Barasal) ya les compró según facturas del SII, con rubro, lo que se les compró y precio; prefiérelos cuando calcen porque ya hay relación comercial, y en ese caso elegido.tipo="proveedor" con su nombre y teléfono si viene.
 Tu trabajo: decir dónde concretar cada ítem. REGLAS: (1) usa SOLO links y proveedores de la lista; jamás inventes tiendas, teléfonos ni precios: si un candidato no trae precio, pon precio_unit_iva null y dilo; (2) el producto elegido debe cumplir lo cotizado (capacidad, medidas, uso médico/industrial si lo dice el texto); si ninguno calza, elegido null y explica qué buscar; (3) explica en una frase por qué calza con lo que cotizamos y por qué cotizamos así (p. ej. "cotizamos caja isotérmica 16 L para cadena de frío: este cooler rígido de 15–16 L lo cumple"); (4) alerta riesgos (stock, plazo, producto chino con envío internacional no sirve para entregar en 3 días).
 Responde SOLO JSON compacto (una línea, sin comentarios, strings cortas sin comillas internas, máximo 2 alternativas por ítem): {"items":[{"i":<índice>,"elegido":{"tipo":"link"|"proveedor","titulo":"","url":"","proveedor":"","telefono":"<solo si el candidato trae telefono>","precio_unit_iva":<número o null>,"porque":"<máx 160 caracteres>"}|null,"alternativas":[{"titulo":"","url":"","precio_unit_iva":<número o null>}],"riesgo":"<máx 120>","buscar":"<máx 120>"}],"resumen":"<2 frases: qué hacer primero y cuánto se gana>"}
 
@@ -883,6 +886,57 @@ Responde SOLO JSON compacto (una línea, sin comentarios, strings cortas sin com
   return { ok: true, codigo: t.codigo, t: ahora(), items: filas, total: tot, resumen: plan?.resumen || "", aviso };
 }
 
+// 🏭 BASE ÚNICA DE PROVEEDORES del grupo (PJANIC + Julfior + Barasal): todo lo que ya se compró (catálogos de facturas SII,
+//    listas de proveedores del SII, semilla) en una sola lista con rubro. Claude clasifica el rubro de los que solo tienen nombre.
+const EMPRESAS_GRUPO = { "78493114-5": "PJANIC", "78047617-6": "Julfior", "77003913-4": "Barasal" };
+async function baseProveedores(store, forzar = false) {
+  const kb = "proveedores/_base";
+  const prev = await store.get(kb, { type: "json" }).catch(() => null);
+  if (prev && !forzar && Date.now() - new Date(prev.t).getTime() < 24 * 3600e3) return prev;
+  const P = {};
+  const add = (rut, nombre, empresa, extra = {}) => { rut = String(rut || "").replace(/\./g, "").toUpperCase(); if (!rut) return null;
+    const x = P[rut] || (P[rut] = { rut, nombre: nombre || "", empresas: [], productos: [], facturas: 0, total: 0, rubro: null, tipicos: [] });
+    if (nombre && (!x.nombre || nombre.length > x.nombre.length)) x.nombre = nombre; if (empresa && !x.empresas.includes(empresa)) x.empresas.push(empresa); return x; };
+  // 1) catálogos de productos (líneas de factura ya interpretadas)
+  for (const [rutE, emp] of Object.entries(EMPRESAS_GRUPO)) {
+    const C = await store.get("catalogo/" + rutE, { type: "json" }).catch(() => null);
+    for (const it of Object.values(C?.items || {})) { const x = add(it.rut, it.proveedor, emp); if (!x) continue;
+      if (x.productos.length < 40) x.productos.push({ producto: texto(it.producto, 100), familia: it.familia, precio_unit: it.precio_unit, unidad: it.unidad, fecha: it.fecha, empresa: emp }); }
+    const S = await store.get("proveedores/sii/" + rutE, { type: "json" }).catch(() => null);
+    for (const pv of Object.values(S?.lista || {})) { const x = add(pv.rut, pv.nombre, emp); if (!x) continue; const F = Object.values(pv.facturas || {}); x.facturas += F.length; x.total += F.reduce((a, f) => a + (Number(f.total) || 0), 0); if (pv.rubro) x.rubro = pv.rubro;
+      for (const f of F) if (f.detalle && x.productos.length < 40 && !x.productos.some((q) => q.producto === f.detalle)) x.productos.push({ producto: texto(f.detalle, 100), empresa: emp, fecha: f.fecha, neto: f.neto }); }
+    const semilla = PROV_SEED[rutE];
+    for (const f of semilla?.facturas || []) { const x = add(f.rut, f.nombre, emp); if (!x) continue; x.facturas += 1; x.total += Number(f.total) || 0;
+      if (f.detalle && x.productos.length < 40 && !x.productos.some((q) => q.producto === f.detalle)) x.productos.push({ producto: texto(f.detalle, 100), empresa: emp, fecha: f.fecha, neto: f.neto }); }
+  }
+  const prin = await store.get("proveedores/principal", { type: "json" }).catch(() => null);
+  for (const pv of Object.values(prin?.lista || {})) { const x = add(pv.rut, pv.nombre, "PJANIC"); if (x && pv.rubro) x.rubro = pv.rubro; if (x && pv.nota) x.nota = pv.nota; }
+  // 2) rubros guardados de antes
+  const R = (await store.get("proveedores/_rubros", { type: "json" }).catch(() => null)) || {};
+  for (const x of Object.values(P)) { const r = R[x.rut]; if (r) { x.rubro = x.rubro || r.rubro; x.tipicos = r.tipicos || []; x.util = r.util; x.web = r.web || null; x.telefono = r.telefono || null; } }
+  const base = { t: ahora(), n: Object.keys(P).length, lista: Object.values(P).sort((a, b2) => b2.total - a.total) };
+  await store.setJSON(kb, base);
+  return base;
+}
+// Clasifica con Claude hasta 120 proveedores sin rubro (por nombre + lo que se les compró). Se llama varias veces hasta terminar.
+async function clasificarProveedores(store) {
+  const key = process.env.ANTHROPIC_API_KEY || ""; if (!key) return { error: "sin ANTHROPIC_API_KEY" };
+  const base = await baseProveedores(store, true);
+  const R = (await store.get("proveedores/_rubros", { type: "json" }).catch(() => null)) || {};
+  const pend = base.lista.filter((x) => !R[x.rut]).slice(0, 120);
+  if (!pend.length) return { ok: true, listo: true, clasificados: Object.keys(R).length };
+  const prompt = `Clasifica proveedores chilenos (facturas de compra de un grupo de empresas que vende al Estado). Para cada uno di su rubro y qué productos/servicios típicos vende, y si sirve como proveedor para revender a organismos públicos ("util": true) o es un gasto interno (banco, luz, telecom, arriendo, combustible, SII, AFP, seguros: "util": false). Responde SOLO JSON: {"p":[{"rut":"","rubro":"<2-4 palabras>","tipicos":["<hasta 5 productos/servicios>"],"util":true|false}]}\n\n` +
+    pend.map((x) => `${x.rut} | ${x.nombre} | compras: ${x.productos.slice(0, 4).map((q) => q.producto).join("; ") || "(sin detalle)"} | facturas ${x.facturas} | total $${Math.round(x.total)}`).join("\n");
+  const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5", max_tokens: 6000, messages: [{ role: "user", content: prompt }] }), signal: AbortSignal.timeout(27000) });
+  const j = await r.json(); const txt = (j.content || []).map((c) => c.text || "").join(""); const m = txt.match(/\{[\s\S]*\}/);
+  let out = null; try { out = m ? JSON.parse(m[0]) : null; } catch { const mi = txt.match(/\{"rut"[^}]*\}/g) || []; out = { p: mi.map((x) => { try { return JSON.parse(x); } catch { return null; } }).filter(Boolean) }; }
+  let n = 0; for (const x of out?.p || []) { const rut = String(x.rut || "").replace(/\./g, "").toUpperCase(); if (!rut) continue; R[rut] = { rubro: texto(x.rubro, 60), tipicos: (x.tipicos || []).slice(0, 6).map((q) => texto(q, 60)), util: x.util !== false }; n++; }
+  await store.setJSON("proveedores/_rubros", R);
+  await baseProveedores(store, true);
+  return { ok: true, clasificados_ahora: n, total: Object.keys(R).length, faltan: Math.max(0, base.lista.length - Object.keys(R).length) };
+}
+
 async function siiIngesta(req) {
   if (req.method === "OPTIONS") return new Response("", { status: 204, headers: corsH });
   const b = req.method === "GET" ? Object.fromEntries(new URL(req.url).searchParams.entries()) : await cuerpo(req);
@@ -912,6 +966,8 @@ async function siiIngesta(req) {
   if (b.accion === "pagina") return new Response(JSON.stringify({ ok: true, r: await precioPagina(String(b.url || "")) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   if (b.accion === "web") { try { return new Response(JSON.stringify({ ok: true, r: await webBuscar(b.q) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); } catch (e) { return new Response(JSON.stringify({ error: String(e.message || e) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); } }
   if (b.accion === "ml_listado") { globalThis.__mlDebug = !!b.debug; try { return new Response(JSON.stringify({ ok: true, r: await mlListado(b.q, b.local !== false) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); } catch (e) { return new Response(JSON.stringify({ error: String(e.message || e) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); } }
+  if (b.accion === "prov_base") return new Response(JSON.stringify({ ok: true, ...(await baseProveedores(store, !!b.forzar)) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
+  if (b.accion === "prov_clasificar") return new Response(JSON.stringify(await clasificarProveedores(store)), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   if (b.accion === "concretar") { const t = await leer(store, String(b.codigo || "")); if (!t) return new Response(JSON.stringify({ error: "no existe" }), { status: 404, headers: corsH }); const r = await concretar(store, t); if (r.ok) { t.op = t.op || { etapa: "ganada", historial: [] }; t.op.concrecion = r; await store.setJSON("trabajo/" + t.codigo, t); } return new Response(JSON.stringify(r), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); }
   if (b.accion === "fotos_ultimo") return new Response(JSON.stringify({ ok: true, u: await store.get("robot/fotos_ultimo", { type: "json" }) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   if (b.accion === "foto") return new Response(JSON.stringify({ ok: true, ...(await buscarFotos(b.q)) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
@@ -1046,6 +1102,8 @@ async function atender(req) {
   // Inyecta cotizaciones FICTICIAS para probar el flujo (cola → por firmar → firma) SIN Mercado Público real.
   // Blindaje total: el simulador SIEMPRE usa su propio store "robot-sim", nunca el real ("robot"). Por eso puede
   // correr incluso en producción sin tocar un solo dato verdadero. Las simuladas llevan sim:true y código SIM-….
+  if (ruta === "proveedores-base" && req.method === "GET") return json(await baseProveedores(store, url.searchParams.get("forzar") === "1"));
+  if (ruta === "proveedores-clasificar" && req.method === "POST") return json(await clasificarProveedores(store));
   if (ruta === "concretar" && req.method === "POST") {   // 🎯 plan para concretar una OC ganada con proveedores/links reales
     const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return json({ error: "No existe." }, 404);
     if (t.op?.concrecion && !b.forzar && Date.now() - new Date(t.op.concrecion.t).getTime() < 6 * 3600e3) return json(t.op.concrecion);
