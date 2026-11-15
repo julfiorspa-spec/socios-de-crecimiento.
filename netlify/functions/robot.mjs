@@ -979,6 +979,36 @@ async function mlBuscar(store, q, n = 10) {
 const isoDe = (v) => { if (!v) return null; const m = String(v).match(/^(\d{2})-(\d{2})-(\d{4})(?:\s+(\d{2}):(\d{2}))?/); if (m) return `${m[3]}-${m[2]}-${m[1]}T${m[4] || "12"}:${m[5] || "00"}:00-03:00`; return String(v); };
 const enviadaT = (t) => isoDe(t.fecha_envio) || (t.historial || []).find((h) => /^enviad|^confirmada/.test(h.estado || ""))?.t || null;
 
+// 📎 ANEXOS DEL COMPRADOR → lo que de verdad se entrega: productos, cantidades, especificaciones, requisitos y brief de vistas.
+async function analizarAnexo(store, b) {
+  const key = process.env.ANTHROPIC_API_KEY || ""; if (!key) return { error: "Falta ANTHROPIC_API_KEY" };
+  const txt = String(b.texto || "").slice(0, 60000); const it = b.item || {}, c = b.compra || {};
+  const h = (() => { let x = 0; for (const ch of txt.slice(0, 4000) + String(it.nombre || "")) x = (x * 31 + ch.charCodeAt(0)) >>> 0; return x.toString(36); })();
+  const ck = "anexo/" + texto(b.codigo, 40) + "/" + h;
+  const prev = await store.get(ck, { type: "json" }).catch(() => null); if (prev?.analisis && !b.forzar) return { analisis: prev.analisis, cache: true };
+  const prompt = `Eres el jefe técnico de un proveedor del Estado de Chile. Compra ágil ${b.codigo} «${c.nombre || ""}» del organismo ${c.organismo || ""}${c.direccion ? ", entrega en " + c.direccion : ""}.
+El portal muestra el ítem genérico: «${it.nombre || ""}» (cantidad ${it.cantidad || 1} ${it.unidad || ""}). Lo que realmente se compra está en los ANEXOS del comprador (texto abajo).
+Extrae con precisión y SIN inventar (si algo no está en el anexo, omítelo):
+1) productos: cada prenda/producto/servicio pedido con cantidad y unidad, tallas o medidas, material, color, logo/bordado si lo piden, y cualquier detalle que defina cómo se ve.
+2) especificaciones: pares [clave, valor] comunes a todo el encargo (materiales, normas, plazos, garantía, rotulado, embalaje).
+3) requisitos: la matriz de lo exigido: [requisito, texto exigido (resumido fiel), cómo lo cumplimos] — máximo 20 filas, lo que el comprador evaluará.
+4) brief para imágenes (el comprador debe VER lo que recibirá): {"tipo":"producto"|"montaje"|"servicio","encargo":"<qué es, en una línea>","escena":"<dónde se usará / contexto real del organismo>","conservar":["<lo que no puede cambiar: colores, logos institucionales descritos, medidas>"],"mostrar":["<elementos visibles que deben aparecer, uno por producto>"],"medidas":"<medidas/tallas/proporciones>","detalle":"<componente clave para el primer plano>"}
+5) nombre_corto: nombre comercial claro del encargo (máx 90 caracteres), p. ej. «Uniformes municipales varones: parka, polar, polera y pantalón con logo».
+6) texto_vistas: descripción visual en 1–2 frases de cómo se ve el conjunto entregado.
+7) resumen: 2 frases de lo que se cotiza.
+Responde SOLO JSON compacto: {"productos":[{"nombre":"","cantidad":0,"unidad":"","detalle":""}],"especificaciones":[["",""]],"requisitos":[["","",""]],"brief":{},"nombre_corto":"","texto_vistas":"","resumen":""}
+
+ANEXOS:
+${txt}`;
+  const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5", max_tokens: 5000, messages: [{ role: "user", content: prompt }] }), signal: AbortSignal.timeout(90000) });
+  const j = await r.json(); const out = (j.content || []).map((x) => x.text || "").join(""); const m = out.match(/\{[\s\S]*\}/);
+  let an = null; try { an = m ? JSON.parse(m[0]) : null; } catch { try { const k2 = m[0].lastIndexOf("}"); an = JSON.parse(m[0].slice(0, k2 + 1).replace(/,\s*$/, "") + "}"); } catch {} }
+  if (!an) return { error: "Claude no devolvió un análisis legible: " + out.slice(0, 150) };
+  await store.setJSON(ck, { t: ahora(), codigo: texto(b.codigo, 40), item: texto(it.nombre, 160), analisis: an });
+  return { analisis: an };
+}
+
 async function siiIngesta(req) {
   if (req.method === "OPTIONS") return new Response("", { status: 204, headers: corsH });
   const b = req.method === "GET" ? Object.fromEntries(new URL(req.url).searchParams.entries()) : await cuerpo(req);
@@ -1166,6 +1196,7 @@ async function atender(req) {
   if (ruta === "ml-auth" && req.method === "GET") { const app = await mlConfig(store); if (!app.client_id) return json({ error: "Primero guarda client_id/secret con ml-config." }, 400);
     return Response.redirect("https://auth.mercadolibre.cl/authorization?" + new URLSearchParams({ response_type: "code", client_id: app.client_id, redirect_uri: "https://cotizagil.netlify.app/bot/ml-callback" }), 302); }
   if (ruta === "ml-estado" && req.method === "GET") { const app = await mlConfig(store); const tk = await store.get("ml/token", { type: "json" }).catch(() => null); const tok = await mlToken(store).catch(() => null); return json({ app: !!app.client_id, autorizado: !!tk?.refresh_token, token_ok: !!tok, user_id: tk?.user_id || null, error: tk?.error || null }); }
+  if (ruta === "anexo" && req.method === "POST") { const b = await cuerpo(req); const r = await analizarAnexo(store, b); return json(r, r.error ? 400 : 200); }   // 📎 anexos → lo que se entrega
   if (ruta === "ml-pendientes" && req.method === "GET") { const { blobs } = await store.list({ prefix: "ml/cola/" }); const L = []; for (const b2 of blobs.slice(0, 10)) { const x = await store.get(b2.key, { type: "json" }).catch(() => null); if (x) L.push(x); } return json({ ok: true, pendientes: L }); }
   if (ruta === "ml-resultado" && req.method === "POST") { const b = await cuerpo(req); const k = texto(b.k, 20); if (!k) return json({ error: "falta k" }, 400);
     const fotos = (Array.isArray(b.fotos) ? b.fotos : []).slice(0, 15).map((x) => ({ titulo: texto(x.titulo, 160), url: texto(x.url, 400), foto: texto(x.foto, 400) || null, precio_iva: Math.round(Number(x.precio_iva) || 0) || null, fuente: "mercadolibre.cl", disponible: x.disponible !== false, vendedor: texto(x.vendedor, 60) || null, envio_gratis: !!x.envio_gratis, local: x.local !== false, motor: "ml-pc" }));
