@@ -955,8 +955,20 @@ async function mlToken(store) {
   await store.setJSON("ml/token", { access_token: j.access_token, refresh_token: j.refresh_token || tk.refresh_token, user_id: j.user_id, expira: Date.now() + (j.expires_in || 21600) * 1000, t: ahora() });
   return j.access_token;
 }
+// 🧩 Puente PC: cuando no hay API oficial, la búsqueda se encola (ml/cola/<k>) y el PC grande (ml_puente.py, IP de casa)
+//    la resuelve leyendo mercadolibre.cl y deja el resultado en ml/res/<k> (caché 24 h). Concretar espera hasta ~8 s.
+const mlKey = (q) => { let h = 0; for (const ch of String(q).toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h.toString(36); };
+async function mlPuente(store, q, esperaMs = 8000) {
+  const k = mlKey(q);
+  const res = await store.get("ml/res/" + k, { type: "json" }).catch(() => null);
+  if (res && Date.now() - new Date(res.t).getTime() < 24 * 3600e3) return { fotos: res.fotos || [], origen: "pc", t: res.t, error: res.error || null };
+  await store.setJSON("ml/cola/" + k, { k, q, t: ahora() });
+  const fin = Date.now() + esperaMs;
+  while (Date.now() < fin) { await new Promise((r) => setTimeout(r, 1500)); const r2 = await store.get("ml/res/" + k, { type: "json" }).catch(() => null); if (r2 && new Date(r2.t).getTime() > Date.now() - 60e3) return { fotos: r2.fotos || [], origen: "pc", t: r2.t, error: r2.error || null }; }
+  return { fotos: [], error: "ML: el PC no respondió a tiempo (queda en cola; en la próxima búsqueda estará)" };
+}
 async function mlBuscar(store, q, n = 10) {
-  const tok = await mlToken(store); if (!tok) return { fotos: [], error: "ML sin conectar" };
+  const tok = await mlToken(store); if (!tok) return mlPuente(store, q);
   const r = await fetch("https://api.mercadolibre.com/sites/MLC/search?" + new URLSearchParams({ q, limit: String(n), shipping: "", sort: "price_asc" }), { headers: { authorization: "Bearer " + tok, accept: "application/json" }, signal: AbortSignal.timeout(8000) });
   if (!r.ok) return { fotos: [], error: "ML " + r.status };
   const j = await r.json();
@@ -1154,6 +1166,10 @@ async function atender(req) {
   if (ruta === "ml-auth" && req.method === "GET") { const app = await mlConfig(store); if (!app.client_id) return json({ error: "Primero guarda client_id/secret con ml-config." }, 400);
     return Response.redirect("https://auth.mercadolibre.cl/authorization?" + new URLSearchParams({ response_type: "code", client_id: app.client_id, redirect_uri: "https://cotizagil.netlify.app/bot/ml-callback" }), 302); }
   if (ruta === "ml-estado" && req.method === "GET") { const app = await mlConfig(store); const tk = await store.get("ml/token", { type: "json" }).catch(() => null); const tok = await mlToken(store).catch(() => null); return json({ app: !!app.client_id, autorizado: !!tk?.refresh_token, token_ok: !!tok, user_id: tk?.user_id || null, error: tk?.error || null }); }
+  if (ruta === "ml-pendientes" && req.method === "GET") { const { blobs } = await store.list({ prefix: "ml/cola/" }); const L = []; for (const b2 of blobs.slice(0, 10)) { const x = await store.get(b2.key, { type: "json" }).catch(() => null); if (x) L.push(x); } return json({ ok: true, pendientes: L }); }
+  if (ruta === "ml-resultado" && req.method === "POST") { const b = await cuerpo(req); const k = texto(b.k, 20); if (!k) return json({ error: "falta k" }, 400);
+    const fotos = (Array.isArray(b.fotos) ? b.fotos : []).slice(0, 15).map((x) => ({ titulo: texto(x.titulo, 160), url: texto(x.url, 400), foto: texto(x.foto, 400) || null, precio_iva: Math.round(Number(x.precio_iva) || 0) || null, fuente: "mercadolibre.cl", disponible: x.disponible !== false, vendedor: texto(x.vendedor, 60) || null, envio_gratis: !!x.envio_gratis, local: x.local !== false, motor: "ml-pc" }));
+    await store.setJSON("ml/res/" + k, { k, q: texto(b.q, 120), fotos, error: texto(b.error, 200) || null, t: ahora() }); try { await store.delete("ml/cola/" + k); } catch {} return json({ ok: true, n: fotos.length }); }
   if (ruta === "ml-buscar" && req.method === "GET") return json(await mlBuscar(store, url.searchParams.get("q") || ""));
   if (ruta === "proveedores-base" && req.method === "GET") return json(await baseProveedores(store, url.searchParams.get("forzar") === "1"));
   if (ruta === "proveedores-clasificar" && req.method === "POST") return json(await clasificarProveedores(store));
