@@ -963,6 +963,10 @@ async function mlBuscar(store, q, n = 10) {
   return { fotos: (j.results || []).filter((x) => x.available_quantity !== 0).map((x) => ({ titulo: x.title, url: x.permalink, foto: String(x.thumbnail || "").replace(/-I\.(jpg|webp|png)$/i, "-O.$1").replace(/^http:/, "https:"), precio_iva: Math.round(x.price), fuente: "mercadolibre.cl", disponible: x.available_quantity > 0, cantidad_disp: x.available_quantity, vendedor: x.seller?.nickname || null, envio_gratis: !!x.shipping?.free_shipping, local: (x.seller_address?.country?.id || "CL") === "CL", motor: "ml" })) };
 }
 
+// fechas de envío: las antiguas vienen «dd-mm-aaaa HH:MM» (hora Chile); se normalizan a ISO para comparar y para el marcador
+const isoDe = (v) => { if (!v) return null; const m = String(v).match(/^(\d{2})-(\d{2})-(\d{4})(?:\s+(\d{2}):(\d{2}))?/); if (m) return `${m[3]}-${m[2]}-${m[1]}T${m[4] || "12"}:${m[5] || "00"}:00-03:00`; return String(v); };
+const enviadaT = (t) => isoDe(t.fecha_envio) || (t.historial || []).find((h) => /^enviad|^confirmada/.test(h.estado || ""))?.t || null;
+
 async function siiIngesta(req) {
   if (req.method === "OPTIONS") return new Response("", { status: 204, headers: corsH });
   const b = req.method === "GET" ? Object.fromEntries(new URL(req.url).searchParams.entries()) : await cuerpo(req);
@@ -997,7 +1001,7 @@ async function siiIngesta(req) {
   if (b.accion === "concretar") { const t = await leer(store, String(b.codigo || "")); if (!t) return new Response(JSON.stringify({ error: "no existe" }), { status: 404, headers: corsH }); const r = await concretar(store, t); if (r.ok) { t.op = t.op || { etapa: "ganada", historial: [] }; t.op.concrecion = r; await store.setJSON("trabajo/" + t.codigo, t); } return new Response(JSON.stringify(r), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); }
   if (b.accion === "hoy") {   // diagnóstico: trabajos tocados desde una fecha, con empresa (para ver qué metió cada una y que no se crucen)
     const desde = String(b.desde || new Date(Date.now() - 24 * 3600e3).toISOString()); const L = await todos(store);   // TODOS los trabajos (caché), no solo los últimos por código
-    const out = L.filter((t) => t && (String(t.actualizado || t.creado || "") >= desde || String(t.fecha_envio || "") >= desde)).map((t) => ({ codigo: t.codigo, empresa: t.empresa || null, rut_empresa: t.rut_empresa || null, estado: t.estado, accion: t.accion, por: t.por, jugador: t.jugador, persona: t.persona, nombre: texto(t.nombre, 80), organismo: texto(t.organismo, 60), total: t.total, llamado: t.llamado || t.op?.informe?.llamado || null, creado: t.creado, actualizado: t.actualizado, fecha_envio: t.fecha_envio || null, enviada_t: t.fecha_envio || (t.historial || []).find((h) => /^enviad|^confirmada/.test(h.estado || ""))?.t || null, oc: t.op?.oc_codigo || null, etapa: t.op?.etapa || null, dispositivo: t.dispositivo || null }));
+    const out = L.filter((t) => t && (String(t.actualizado || t.creado || "") >= desde || String(enviadaT(t) || "") >= desde)).map((t) => ({ codigo: t.codigo, empresa: t.empresa || null, rut_empresa: t.rut_empresa || null, estado: t.estado, accion: t.accion, por: t.por, jugador: t.jugador, persona: t.persona, nombre: texto(t.nombre, 80), organismo: texto(t.organismo, 60), total: t.total, llamado: t.llamado || t.op?.informe?.llamado || null, creado: t.creado, actualizado: t.actualizado, fecha_envio: t.fecha_envio || null, enviada_t: enviadaT(t), oc: t.op?.oc_codigo || null, etapa: t.op?.etapa || null, dispositivo: t.dispositivo || null }));
     return new Response(JSON.stringify({ ok: true, n: out.length, trabajos: out }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   }
   if (b.accion === "fotos_ultimo") return new Response(JSON.stringify({ ok: true, u: await store.get("robot/fotos_ultimo", { type: "json" }) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
@@ -2136,7 +2140,7 @@ async function atender(req) {
         codigo: t.codigo, nombre: corto(t.nombre, 160), organismo: corto(t.organismo, 120), estado: t.estado, accion: t.accion, tipo: t.tipo || null,
         total: t.total, jugador: t.jugador || null, persona: t.persona || null, dispositivo: t.dispositivo || null, empresa: t.empresa || null,
         creado: t.creado, actualizado: t.actualizado, fecha_envio: t.fecha_envio || null, externa: !!t.externa, detalle: corto(t.detalle, 240),
-        enviada_t: t.fecha_envio || (t.historial || []).find((h) => /^enviad|^confirmada/.test(h.estado || ""))?.t || null,
+        enviada_t: enviadaT(t),
         items: (t.items || []).slice(0, 6),
         oc_compra: t.oc_compra ? { organismo: corto(t.oc_compra.organismo, 120), unidad: corto(t.oc_compra.unidad, 120), direccion: corto(t.oc_compra.direccion, 160),
           mail: t.oc_compra.mail || null, fono: t.oc_compra.fono || null, nombre: corto(t.oc_compra.nombre, 160),
