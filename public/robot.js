@@ -113,7 +113,7 @@
     en_cola:    { txt: "En cola",            cls: "gris",  activo: true },
     tomado:     { txt: "Preparando",         cls: "azul",  activo: true },
     preparando: { txt: "Preparando",         cls: "azul",  activo: true },
-    lista:      { txt: "Falta tu clic",      cls: "ambar", activo: true },
+    lista:      { txt: "Revisar oferta",     cls: "ambar", activo: true },
     firmar:     { txt: "Lista para firmar",  cls: "violeta" },
     probada:    { txt: "Prueba lista",       cls: "azul" },
     enviada:    { txt: "Enviada",            cls: "verde" },
@@ -511,6 +511,9 @@
   .rb-oc-d.tarde{background:rgba(201,75,75,.25);color:#ff9a9a}.rb-oc-d.pronto{background:rgba(245,207,107,.22)}
   .rb-oc-tag{display:inline-block;padding:1px 7px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);font-size:.68rem}
   .rb-oc-resp{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+  .rb-ej-card{padding:10px 12px;margin:12px 0;border:1px dashed rgba(245,207,107,.5)}.rb-ej-tag{font-size:.62rem;letter-spacing:.08em;color:#f5cf6b;margin-bottom:4px}
+  .rb-mp-est{display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12)}.rb-mp-est>div{flex:1;min-width:0}.rb-mp-est small{display:block;font-size:.68rem;opacity:.75}
+  .rb-mp-est i{width:12px;height:12px;border-radius:50%;background:#ff6b6b;flex:none}.rb-mp-est.ok i{background:#5ef0b0;box-shadow:0 0 8px #5ef0b0}.rb-mp-est.aten i{background:#f5cf6b}.rb-link-b{background:none;border:0;color:#f5cf6b;font:inherit;font-size:inherit;padding:0;cursor:pointer;text-decoration:underline}
   .rb-fr.ab{border-color:rgba(245,207,107,.45)}.rb-fr-flujo{margin-top:8px;border-top:1px dashed rgba(255,255,255,.14);padding-top:6px}.rb-fr-sec{margin:8px 0 4px;padding-left:8px;border-left:2px solid rgba(255,255,255,.14)}
   .rb-fr-flujo .rb-rep>span{display:none}.rb-fr-flujo .rb-rep{padding:6px 8px}.rb-fr-flujo .rb-rep.pagado{opacity:.75}.rb-fr-flujo .rb-rep.oro b{color:#f5cf6b}.rb-fr-form{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0;padding:8px;border:1px solid rgba(245,207,107,.4);border-radius:10px}.rb-fr-form .rb-in{flex:1;min-width:110px}.rb-oc-tag.ok{border-color:rgba(79,209,139,.5);color:#8ff0b8}.rb-oc-tag.mal{border-color:rgba(255,120,120,.5);color:#ff9a9a}
   .rb-llamar{border-radius:16px;padding:10px;background:linear-gradient(160deg,rgba(255,226,140,.12),rgba(255,255,255,.03));border:1px solid rgba(245,207,107,.35)}
@@ -1629,7 +1632,7 @@
   // ======================= 🛠 EJECUTA: el portal de los socios ejecutadores =======================
   // El que ganó deriva el negocio (o lo ejecuta él). El ejecutador negocia con proveedores, fija el precio de compra,
   // pide la transferencia al inversionista, prepara la entrega y cierra con la guía y la factura firmadas.
-  const ETAPAS_EJ = [["operacion", "💼 Oportunidades de negocio"], ["pago", "💸 Pago"], ["transporte", "🚚 Despacho"], ["despacho", "🛣 En trayecto"], ["entrega", "📦 Recepción"], ["cerrado", "🥇 Cerrados"]];
+  const ETAPAS_EJ = [["operacion", "💼 Por concretar"], ["pago", "💸 Pago al proveedor"], ["transporte", "🚚 En despacho"], ["despacho", "🛣 En trayecto"], ["entrega", "📦 Recepción conforme"], ["cerrado", "🧾 Factura y cobro"]];
   const etEj = (t) => (["previa", "ganada", "inversionista"].includes(t.op?.etapa) ? "operacion" : t.op?.etapa === "documentos" ? "pago" : t.op?.etapa || "operacion");
   const TARIFA_KM_STGO = 900;            // 🚚 flete en Santiago: $900 por km
   const netoDe = (v) => (v ? Math.round(v / 1.19) : 0);
@@ -2474,7 +2477,10 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   const invSesion = () => { try { return JSON.parse(localStorage.getItem(INVSES)) || null; } catch { return null; } };
   function pantallaInvLogin() {
     return `<div class="rb-paso" style="max-width:420px;margin:0 auto">
-      <div style="text-align:center;margin:12px 0"><div style="font-size:2.6rem">💼</div><h2 class="rb-h" style="margin:4px 0">Portal del Inversionista</h2><div class="muted" style="font-size:.78rem">Inicia sesión para ver las oportunidades de inversión.</div></div>
+      <div style="text-align:center;margin:12px 0"><div style="font-size:2.6rem">💼</div><h2 class="rb-h" style="margin:4px 0">Invertir en negocios</h2><div class="muted" style="font-size:.78rem">Aportas el capital de la compra en un negocio ya adjudicado y recibes capital + ganancia cuando el Estado paga.</div></div>
+      <div class="rb-card rb-ej-card"><div class="rb-ej-tag">EJEMPLO · así se ve una inversión</div><div class="rb-fnom">Mobiliario para sala de reuniones · PJANIC SpA</div>
+        <table class="rb-copias" style="margin-top:4px"><tr><td>Aporte</td><td class="n"><b>$3.000.000</b></td></tr><tr><td>Ganancia proyectada</td><td class="n">$225.000</td></tr><tr><td>Total estimado a recibir</td><td class="n"><b>$3.225.000</b></td></tr><tr><td>Fecha estimada</td><td class="n">pendiente de confirmar</td></tr><tr><td>Se paga cuando</td><td class="n">el factoring o Tesorería deposite la factura</td></tr></table>
+        <div class="rb-kv" style="font-size:.72rem;margin-top:4px"><span class="rb-oc-tag">Aporte confirmado</span><span class="rb-oc-tag">Pendiente de devolución</span><span class="rb-oc-tag">Pago parcial</span><span class="rb-oc-tag ok">Pagado</span></div></div>
       <label class="rb-lab">Usuario<input class="rb-in" id="rbInvUsr" placeholder="Tu nombre" autocomplete="username"></label>
       <label class="rb-lab">Clave<input class="rb-in" id="rbInvPwd" type="password" placeholder="••••" autocomplete="current-password"></label>
       <button class="btn rb-oro rb-big-btn" type="button" data-rb="inv-entrar">Iniciar sesión</button>
@@ -2661,11 +2667,17 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   function portalEjecuta() {
     const yo = (R.ejecutores || {})[miJug()];
     if (!R.ejecutores) cargarEjecutores();
-    if (!yo) return `<div class="rb-paso"><div class="rb-paso-n">🛠 Ejecuta</div><h2 class="rb-h">Hazte socio ejecutador</h2>
-      <div class="muted rb-sub">Aquí llegan los negocios ganados que te asignen: negocias con proveedores, fijas el precio de compra, pides la transferencia, entregas y cierras con la guía y la factura firmadas.</div>
+    if (!yo) { const pend = R.ejAbierto ? (R.todos || R.data?.trabajos || []).find((t) => t.codigo === R.ejAbierto) : null;
+      return `<div class="rb-paso"><div class="rb-paso-n">🛠 Ejecuta</div><h2 class="rb-h">Ejecutar órdenes de compra</h2>
+      <div class="muted rb-sub">Cada OC aceptada llega como una tarea: qué entregar, dónde, para cuándo, qué se espera de ti y cuánto cobras. Siempre ves la próxima acción.</div>
+      ${pend ? `<div class="rb-sug" style="border-color:#f5cf6b">📦 Estabas viendo la OC <b>${esc(pend.op?.oc_codigo || pend.codigo)}</b> · ${esc((pend.nombre || "").slice(0, 50))}. Al completar tu perfil vuelves directo a ella.</div>` : ""}
+      <div class="rb-card rb-ej-card"><div class="rb-ej-tag">EJEMPLO · así se ve una tarea</div><div class="rb-fnom">Mobiliario para sala de reuniones · OC 1057536-3441-AG26</div>
+        <div class="rb-kv" style="font-size:.76rem"><span>📍 Municipalidad de Puerto Montt, Puerto Montt</span><span>📅 entrega 25/11</span><span>💰 OC $4.165.000</span></div>
+        <div class="rb-kv" style="font-size:.76rem;margin-top:3px"><span>🛠 tu trabajo: pedir precio real, confirmar stock y fecha, coordinar despacho, subir recepción conforme</span><span>💵 cobras 10% de la utilidad final ≈ $62.000</span></div>
+        <div style="font-size:.78rem;margin-top:4px;color:var(--oro,#f5cf6b)">→ Próxima acción: pedir precio al proveedor</div></div>
       <label class="rb-lab">Tu nombre<input class="rb-in" id="rbEjNom" value="${esc(persona()?.nombre || (dispositivo(false) === "iPhone" ? "" : dispositivo(false)))}" placeholder="Ej: Cristopher"></label>
       <label class="rb-lab">Tu WhatsApp<input class="rb-in" id="rbEjTel" inputmode="tel" value="${esc(persona()?.telefono || "")}" placeholder="+56 9 ..."></label>
-      <button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-registro">Entrar a Ejecuta</button></div>`;
+      <button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-registro">${pend ? "Entrar y volver a la OC" : "Entrar a Ejecuta"}</button></div>`; }
     if (!R.ejec || Date.now() - (R.ejecT || 0) > 15000) setTimeout(cargarEjecuta, 0);
     const L = R.ejec || [], et = etEj;
     const tab = R.ejTab || "operacion";
@@ -2809,8 +2821,9 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
           </div></div>
         <div class="row" style="margin-top:6px;gap:6px">${modo === "papelera"
           ? `<button class="btn small rb-firmar" type="button" data-rb="oport-restaurar" data-c="${esc(x.codigo)}">↩ Recuperar</button>`
-          : `<button class="btn small" type="button" data-rb="oport-no" data-c="${esc(x.codigo)}">✕ No</button>
-             <button class="btn small rb-firmar" type="button" data-rb="oport-si" data-c="${esc(x.codigo)}">${lic(x) ? "📑 Participar" : "✍ Preparar"}</button>`}
+          : `<button class="btn small rb-firmar" type="button" data-rb="oport-si" data-c="${esc(x.codigo)}">${lic(x) ? "📑 Participar" : "✍ Preparar oferta"}</button>
+             ${lic(x) ? "" : `<button class="btn small" type="button" data-rb="oport-sel" data-c="${esc(x.codigo)}">${esSel(x.codigo) ? "★ Guardada" : "⭐ Guardar"}</button>`}
+             <button class="btn small" type="button" data-rb="oport-no" data-c="${esc(x.codigo)}">✕ Descartar</button>`}
           <a class="btn small" href="${lic(x) ? `https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion=${encodeURIComponent(x.codigo)}` : portalDe(x.codigo)}" target="_blank" rel="noopener noreferrer">Ver ↗</a></div></div>`;
     };
     const hecha = (x) => x._oport
@@ -3096,7 +3109,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       ${R.jugada?.length ? `<div class="rb-op" style="margin:6px 0 8px;border-color:rgba(94,240,176,.45)">
         <b>🤖 Claude juega esta ronda</b> <span class="muted" style="font-size:.75rem">· ${R.jugada.length} compras con certeza ≥ ${Math.round(CERTEZA_MIN * 100)} % · precio al ${Math.round(R.jugada.reduce((s2, j) => s2 + j.precio / j.pres, 0) / R.jugada.length * 100)} % del presupuesto en promedio</span>
         <div class="muted" style="font-size:.72rem;margin:4px 0">${R.jugada.slice(0, 5).map((j) => `${esc(String(j.nombre || "").slice(0, 28))} · ${clp(j.precio)} (${Math.round(j.prob * 100)} %)`).join(" · ")}${R.jugada.length > 5 ? " · …" : ""}</div>
-        <button class="btn small rb-firmar" type="button" data-rb="claude-juega" data-arm="0">🎯 Que Claude ponga el precio y las deje en Firmar</button>
+        <button class="btn small rb-firmar" type="button" data-rb="claude-juega" data-arm="0">🎯 Preparar ofertas para revisar</button>
         <div class="muted" style="font-size:.68rem;margin-top:3px">Tú solo firmas. Nunca sobre el presupuesto; con costo de mercado respeta el piso de ${Math.round(MARGEN_MIN * 100)} %.</div></div>` : ""}
       <div class="rb-filtros">
         <button class="btn small ${filtro === "real" ? "rb-firmar" : ""}" type="button" data-rb="oport-filtro" data-f="real">🏆 Reales</button>
@@ -3154,7 +3167,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const tira = `<div class="rb-tira"><span>🏆 <b class="rb-oro-t" data-cnt="${ganadoMonto}" data-k="ganado" data-fmt="corto">${corto(ganadoMonto)}</b></span>
       <span>💰 <b class="rb-vivo-t" data-cnt="${utilidadG}" data-k="util" data-fmt="corto">${corto(utilidadG)}</b></span>
       <span>🎯 <b>${tasa == null ? "—" : tasa + "%"}</b></span><span>⏳ <b>${corto(enJuego)}</b></span></div>`;
-    const banLeg = leer().legado === undefined && R.hayLegado ? `<div class="rb-sug" style="border-color:#f5cf6b">🎮 Ahora <b>cada celular juega su propio juego</b>. ¿Este celular debe ver también las ofertas de antes (las de todos)?
+    const banLeg = false && leer().legado === undefined && R.hayLegado ? `<div class="rb-sug" style="border-color:#f5cf6b">🎮 Ahora <b>cada celular juega su propio juego</b>. ¿Este celular debe ver también las ofertas de antes (las de todos)?
       <div class="rb-row"><button class="btn small rb-oro" type="button" data-rb="legado" data-v="1">Sí, es el celular principal</button><button class="btn small" type="button" data-rb="legado" data-v="0">No, juego nuevo</button></div></div>` : "";
     return `${banLeg}${tab === "nuevas" ? tira : tab === "ganadas" ? marcador : ""}
       ${cuerpo}
@@ -3251,6 +3264,8 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   }
   async function oportDecidir(cod, si, el) {
     const x = (R.oport?.lista || []).find((y) => y.codigo === cod);
+    const ya = si && trabajo(cod);                    // ya hay una preparación o borrador para esta compra y empresa: se abre, no se duplica
+    if (ya) { R.oportTab = HECHA.includes(ya.estado) || yaFirmada(ya) ? "hechas" : "firmar"; R.detalle = cod; R.exFicha = null; toast(`Ya existe: ${est(ya.estado).txt}`); return pintarHoja(true); }
     const esLic = x?.fuente === "licitacion";
     const deTab = el?.dataset.modo === "papelera" ? "papelera" : "nuevas";
     sacarTarjeta(el, si ? 1 : -1); sumarTab(deTab, -1);
@@ -3455,20 +3470,44 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const act = portalActivo();
     return `<div class="rb-portal">${TABS_PORTAL.filter(([p]) => vis.includes(p)).map(([p, lbl]) => `<button type="button" class="${act === p ? "on" : ""}" data-rb="portal" data-v="${p}">${lbl}</button>`).join("")}</div>`;
   }
+  // 🚪 ENTRADA: qué hace la app en una pantalla, una oportunidad de ejemplo antes de pedir nada, y el estado de Mercado Público
+  function estadoMP() {
+    const r = R.data?.robot, mp = R.data?.mp, on = !!(r && (r.conectado || Date.now() - Date.parse(r.visto || 0) < 120000));
+    if (on && mp?.conectado) return { k: "ok", txt: "Conectado", sub: "robot y sesión de Mercado Público activos" };
+    if (on) return { k: "aten", txt: "Requiere atención", sub: "el robot está encendido pero falta tu sesión de Mercado Público" };
+    return { k: "off", txt: "Desconectado", sub: R.token ? "el robot está apagado" : "aún no enlazas tu Mercado Público" };
+  }
+  function tarjetaEjemplo(x, ejemplo) {
+    const h = x.cierre ? Math.max(0, Math.round((Date.parse(x.cierre) - Date.now()) / 3600000)) : 30;
+    return `<div class="rb-card rb-ej-card"><div class="rb-ej-tag">${ejemplo ? "EJEMPLO · así se ve una oportunidad" : "OPORTUNIDAD REAL · ahora en Mercado Público"}</div>
+      <div style="font-size:.76rem"><b>${esc(x.codigo)}</b> · ${esc(x.rubro || "Compra Ágil")}${/^segundo/i.test(x.llamado || "") ? ' · <b style="color:#ffb347">🔥 2° llamado</b>' : ""}</div>
+      <div class="rb-fnom">${esc(x.nombre)}</div>
+      <div class="muted" style="font-size:.74rem">${esc(x.organismo || "")}</div>
+      <div class="rb-kv" style="font-size:.78rem;margin-top:4px"><span>piden <b>${esc(x.que || "ver detalle")}</b></span><span>presupuesto <b>${clp(x.monto)}</b></span><span style="${h < 12 ? "color:#ff8a80" : ""}">cierra en <b>${h} h</b></span></div>
+      <div class="rb-kv" style="font-size:.74rem;margin-top:3px"><span>${x.margen_txt || "margen estimado por rubro · falta cotización de proveedor"}</span></div>
+      <div class="row" style="margin-top:6px;gap:6px"><span class="btn small rb-firmar" style="pointer-events:none">✍ Preparar oferta</span><span class="btn small" style="pointer-events:none">⭐ Guardar</span><span class="btn small" style="pointer-events:none">✕ Descartar</span></div></div>`;
+  }
   function selectorRol() {
-    const puerta = (v, ico, t, sub) => `<button type="button" class="rb-puerta" data-rb="rol-elegir" data-v="${v}"><span class="rb-puerta-i">${ico}</span><span class="rb-puerta-t"><b>${t}</b><small>${sub}</small></span><span class="rb-puerta-f">›</span></button>`;
+    const puerta = (v, ico, t, sub, cls) => `<button type="button" class="rb-puerta ${cls || ""}" data-rb="rol-elegir" data-v="${v}"><span class="rb-puerta-i">${ico}</span><span class="rb-puerta-t"><b>${t}</b><small>${sub}</small></span><span class="rb-puerta-f">›</span></button>`;
+    if (!R.oport && R.token) cargarOport();
+    const real = (R.oport?.lista || []).filter((x) => x.fuente !== "licitacion" && Date.parse(x.cierre) - Date.now() > 3600000 && Number(x.monto) > 500000).sort((a, b) => (b.ganancia || 0) - (a.ganancia || 0))[0];
+    const ej = real ? { ...real, que: (real.items || real.productos || [])[0]?.nombre || (real.items || real.productos || [])[0] || null, margen_txt: real.ganancia ? `gana ≈ ${clp(real.ganancia)} · margen estimado por rubro` : null }
+      : { codigo: "1057536-1386-COT26", nombre: "Adquisición de mobiliario para sala de reuniones", organismo: "Municipalidad de Puerto Montt", rubro: "Mobiliario", monto: 4165000, que: "6 sillas, 1 mesa, 1 mueble", llamado: "Segundo llamado", margen_txt: "margen estimado 22% por rubro · falta cotización de proveedor" };
+    const m = estadoMP();
     return `<div class="rb-portada">
       <div class="rb-p-brillo"></div>
-      <div class="rb-p-top"><span class="rb-p-logo">◆ Socios de Crecimiento</span>${R.verRoles ? `<button type="button" class="rb-p-cambiar" data-rb="roles-cerrar">✕ cerrar</button>` : ""}</div>
-      <h1 class="rb-p-h">¿Qué quieres hacer?</h1>
-      <div class="rb-p-sub">Toca tu perfil. Puedes ser más de uno.</div>
-      <div class="rb-puertas">
-        ${puerta("juego", "🎮", "Cotizador", "Cotizas Compras Ágiles del Estado. El robot arma la oferta; tú firmas con tu ClaveÚnica y cobras.")}
-        ${puerta("licita", "📑", "Licitador", "Vas por las licitaciones grandes: postulas, compites y te adjudicas proyectos. (Portal en construcción.)")}
-        ${puerta("ejecuta", "🛠", "Ejecutor", "Ejecutas las órdenes de compra ya ganadas: compras, entregas, instalas, y muestras el avance en vivo.")}
-        ${puerta("inversion", "💰", "Inversionista", "Pones capital en negocios ya adjudicados y ves tu inversión crecer en tiempo real. Sin ClaveÚnica.")}
+      <div class="rb-p-top"><span class="rb-p-logo">◆ Socios de Crecimiento · CotizÁgil</span>${R.verRoles ? `<button type="button" class="rb-p-cambiar" data-rb="roles-cerrar">✕ cerrar</button>` : ""}</div>
+      <h1 class="rb-p-h" style="font-size:1.45rem">Encuentra Compras Ágiles, prepara tu oferta y sigue tus órdenes hasta el cobro.</h1>
+      <div class="rb-p-sub">El robot busca las compras del Estado que calzan con tu empresa, arma la oferta con precio y ficha técnica, tú la revisas y firmas, y después sigues la orden de compra: proveedor, despacho, factura y reparto.</div>
+      <button class="btn rb-oro rb-p-jugar" type="button" data-rb="rol-elegir" data-v="juego" style="margin-top:12px">🎯 Ver oportunidades</button>
+      <div class="rb-puertas" style="margin-top:10px">
+        ${puerta("ejecuta", "🛠", "Ejecutar órdenes", "Órdenes de compra aceptadas: proveedor real, compra, despacho y recepción conforme.")}
+        ${puerta("inversion", "💰", "Invertir en negocios", "Aportas el capital de la compra en negocios ya adjudicados y recibes capital + ganancia al cobrar.")}
       </div>
-      <div class="rb-p-nota" style="margin-top:14px">Puedes cambiar o sumar perfiles cuando quieras. <b>Pronto:</b> cada perfil con su plan (básico · medio · premium).</div>
+      ${tarjetaEjemplo(ej, !real)}
+      <div class="rb-p-con-t">Mercado Público</div>
+      <div class="rb-mp-est ${m.k}"><i></i><div><b>${m.txt}</b><small>${esc(m.sub)}</small></div>${m.k === "ok" ? "" : `<button class="btn small rb-oro" type="button" data-rb="conectar-mp">Conectar Mercado Público</button>`}</div>
+      <div class="rb-p-nota" style="margin-top:10px">Solo se pide la conexión cuando vas a preparar una oferta real. Nombre del usuario y celular principal se configuran en ⚙ Más opciones. <button type="button" class="rb-link-b" data-rb="rol-elegir" data-v="licita">También: 📑 Licitaciones</button></div>
     </div>`;
   }
   function pantallaPortada() {
@@ -4970,7 +5009,7 @@ ${empNom}`;
     if (a === "oport-filtro") { R.oportFiltro = b.dataset.f; R.oportN = 15; return pintarHoja(); }
     if (a === "claude-juega") {
       const J = R.jugada || []; if (!J.length) return toast("No hay compras con certeza suficiente ahora");
-      if (b.dataset.arm !== "1") { b.dataset.arm = "1"; b.textContent = `Confirmar: ${J.length} apuestas por ${clp(J.reduce((s2, j) => s2 + j.precio, 0))} en total`; setTimeout(() => { if (b.isConnected) { b.dataset.arm = "0"; b.textContent = "🎯 Que Claude ponga el precio y las deje en Firmar"; } }, 7000); return; }
+      if (b.dataset.arm !== "1") { b.dataset.arm = "1"; b.textContent = `Confirmar: ${J.length} apuestas por ${clp(J.reduce((s2, j) => s2 + j.precio, 0))} en total`; setTimeout(() => { if (b.isConnected) { b.dataset.arm = "0"; b.textContent = "🎯 Preparar ofertas para revisar"; } }, 7000); return; }
       b.disabled = true; b.textContent = "Jugando…"; let ok = 0, fallo = 0;
       for (const j of J) {
         try {
