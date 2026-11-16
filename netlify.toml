@@ -25,3 +25,7 @@
   from = "/*"
   to = "/index.html"
   status = 200
+[[headers]]
+  for = "/cotizagil-oc.user.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
