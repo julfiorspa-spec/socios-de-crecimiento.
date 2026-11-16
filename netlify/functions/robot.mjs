@@ -853,31 +853,36 @@ async function concretar(store, t, opts = {}) {
     return { item: it, q, candidatos: cands.map((c) => ({ titulo: c.titulo, url: c.url, foto: c.foto, fuente: c.fuente, precio_iva: c.precio_iva || null, sin_stock: c.disponible === false, telefono: c.telefono || null })), propios };
   }));
   if (fase === "1") { t.op = t.op || { etapa: "ganada", historial: [] }; t.op.concrecion_tmp = { t: ahora(), porItem }; await store.setJSON("trabajo/" + t.codigo, t); return { ok: true, fase: 1, items: porItem.length }; }
-  // 2) Claude decide
+  // 2) Claude decide — por ÍTEM, uno por llamada (fase "2": siguiente ítem pendiente), para caber en el tiempo de la nube.
+  //    Cada decisión se guarda en t.op.concrecion_tmp.plan[i]; cuando están todos, un último paso (fase "3") escribe pasos + resumen.
   let plan = null, aviso = null;
-  if (key) {
-    const prompt = `Eres el jefe de compras de ${t.empresa_nombre || "PJANIC SpA"} (proveedor del Estado de Chile). Ganamos la compra ágil ${t.codigo} (${t.nombre || ""}) del organismo ${t.oc_compra?.organismo || t.organismo || ""}; OC ${t.op?.oc_codigo || ""}. Entrega: ${t.oc_compra?.direccion || t.op?.informe?.direccion || "(ver OC)"}.
-Para cada ítem cotizado te doy: lo que ofrecimos (texto de nuestra cotización), cantidad, precio unitario NETO de venta, candidatos REALES encontrados en tiendas (título, link, precio con IVA leído de la página; null si no se pudo leer) y PROVEEDORES PROPIOS: empresas a las que el grupo (PJANIC, Julfior, Barasal) ya les compró según facturas del SII, con rubro, lo que se les compró y precio; prefiérelos cuando calcen porque ya hay relación comercial, y en ese caso elegido.tipo="proveedor" con su nombre y teléfono si viene.
-Además, para cada ítem te doy los números de negociación: precio_objetivo_iva (lo que debemos conseguir pidiendo descuento por volumen) y precio_maximo_iva (sobre ese precio el negocio deja de convenir: margen mínimo 20 %). Escribe para cada ítem un "guion" corto de llamada/chat con el proveedor (2–4 frases, tono chileno profesional: quién somos, qué compramos, cantidad, que es para una orden de compra del Estado con pago seguro, pedir precio por volumen, plazo y despacho a la dirección) y 2–3 "argumentos" de negociación (volumen, pago contra factura/OC pública, recompra futura, retiro propio, competencia de otra tienda con precio X).
-Y un "pasos" global: lista ordenada de 4–7 pasos concretos para el ejecutador desde ahora hasta entregar (a quién llamar primero y por qué, qué confirmar, cuándo comprar, cómo despachar, qué documento adjuntar), cada paso una frase.
-Tu trabajo: decir dónde concretar cada ítem. REGLAS: (1) usa SOLO links y proveedores de la lista; jamás inventes tiendas, teléfonos ni precios: si un candidato no trae precio, pon precio_unit_iva null y dilo; (2) el producto elegido debe cumplir lo cotizado (capacidad, medidas, uso médico/industrial si lo dice el texto); si ninguno calza, elegido null y explica qué buscar; (3) explica en una frase por qué calza con lo que cotizamos y por qué cotizamos así (p. ej. "cotizamos caja isotérmica 16 L para cadena de frío: este cooler rígido de 15–16 L lo cumple"); (4) alerta riesgos (stock, plazo, producto chino con envío internacional no sirve para entregar en 3 días).
-Responde SOLO JSON compacto (una línea, sin comentarios, strings cortas sin comillas internas, máximo 2 alternativas por ítem): {"items":[{"i":<índice>,"elegido":{"tipo":"link"|"proveedor","titulo":"","url":"","proveedor":"","telefono":"<solo si el candidato trae telefono>","precio_unit_iva":<número o null>,"porque":"<máx 160 caracteres>"}|null,"alternativas":[{"titulo":"","url":"","precio_unit_iva":<número o null>}],"riesgo":"<máx 120>","buscar":"<máx 120>","guion":"<máx 400>","argumentos":["<máx 100>"]}],"pasos":["<paso 1>","<paso 2>"],"resumen":"<2 frases: qué hacer primero y cuánto se gana>"}
-
-` + porItem.map((x, i) => { const mejor = x.candidatos.filter((c) => c.precio_iva && !c.sin_stock).sort((a, b2) => a.precio_iva - b2.precio_iva)[0]; const maxIva = Math.round(x.item.p * 0.8 * 1.19); const obj = Math.min(maxIva, Math.round((mejor?.precio_iva || maxIva) * 0.9));
-      return `ÍTEM ${i}: "${x.item.d}" · cantidad ${x.item.q} · venta unit. neto $${x.item.p} · precio_objetivo_iva $${obj} · precio_maximo_iva $${maxIva}\n  candidatos: ${JSON.stringify(x.candidatos)}\n  propios: ${JSON.stringify(x.propios)}`; }).join("\n\n");
-    try {
-      const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-        body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5", max_tokens: 4000, messages: [{ role: "user", content: prompt }] }), signal: AbortSignal.timeout(24000) });
-      const j = await r.json(); const txt = (j.content || []).map((c) => c.text || "").join("");
-      const m = txt.match(/\{[\s\S]*\}/); let raw = m ? m[0] : "";
-      try { plan = raw ? JSON.parse(raw) : null; } catch {
-        // respuesta cortada: rescatar los ítems completos
-        for (const cierre of ['"}]}', '}]}', ']}', '"}}]}', '}}]}']) { const k = raw.lastIndexOf("}"); try { plan = JSON.parse(raw.slice(0, k + 1).replace(/,\s*$/, "") + cierre); break; } catch {} }
-        if (!plan) { const mi = raw.match(/"items"\s*:\s*\[([\s\S]*)/); if (mi) { const parts = []; let depth = 0, cur = ""; for (const ch of mi[1]) { cur += ch; if (ch === "{") depth++; if (ch === "}") { depth--; if (depth === 0) { try { parts.push(JSON.parse(cur.trim().replace(/^,/, ""))); } catch {} cur = ""; } } if (ch === "]" && depth === 0) break; } if (parts.length) plan = { items: parts, resumen: "" }; } }
-        if (plan) aviso = "Claude se quedó sin espacio: rescaté " + (plan.items || []).length + " ítem(s).";
-      }
-      if (!plan) aviso = "Claude no devolvió un plan legible: " + txt.slice(0, 120);
-    } catch (e) { aviso = "Claude no respondió: " + String(e.message || e).slice(0, 80); }
+  const tmp = t.op?.concrecion_tmp || {}; tmp.plan = tmp.plan || {};
+  const cabecera = `Eres el jefe de compras de ${t.empresa_nombre || "PJANIC SpA"} (proveedor del Estado de Chile). Ganamos la compra ágil ${t.codigo} (${t.nombre || ""}) del organismo ${t.oc_compra?.organismo || t.organismo || ""}; OC ${t.op?.oc_codigo || ""}. Entrega: ${t.oc_compra?.direccion || t.op?.informe?.direccion || "(ver OC)"}.`;
+  const reglas = `REGLAS: (1) usa SOLO links y proveedores de la lista; jamás inventes tiendas, teléfonos ni precios: si un candidato no trae precio, pon precio_unit_iva null y dilo; (2) el producto elegido debe cumplir lo cotizado (capacidad, medidas, uso médico/industrial si lo dice el texto); si ninguno calza, elegido null y explica qué buscar; (3) "porque": una frase de por qué calza con lo cotizado; (4) "riesgo": stock, plazo, envío internacional no sirve para entregar en días; (5) PROVEEDORES PROPIOS = empresas a las que el grupo (PJANIC, Julfior, Barasal) ya les compró según el SII: prefiérelos cuando calcen (tipo "proveedor", con su nombre y teléfono si viene). (6) "guion": 2–4 frases para llamar/escribir al proveedor elegido (tono chileno profesional: quién somos, qué compramos y cuánto, que es para una OC del Estado con pago seguro, pedir precio por volumen, plazo y despacho a la dirección), y 2–3 "argumentos" de negociación (volumen, pago contra OC pública, recompra, retiro propio, precio de la competencia con cifra si la hay).`;
+  const esquema = `Responde SOLO JSON compacto (una línea, strings cortas sin comillas internas, máximo 2 alternativas): {"i":<índice>,"elegido":{"tipo":"link"|"proveedor","titulo":"","url":"","proveedor":"","telefono":"<solo si el candidato trae telefono>","precio_unit_iva":<número o null>,"porque":"<máx 160>"}|null,"alternativas":[{"titulo":"","url":"","precio_unit_iva":<número o null>}],"riesgo":"<máx 120>","buscar":"<máx 120>","guion":"<máx 380>","argumentos":["<máx 100>"]}`;
+  const llamar = async (contenido, maxTok, ms) => { const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5", max_tokens: maxTok, messages: [{ role: "user", content: contenido }] }), signal: AbortSignal.timeout(ms) });
+    const j = await r.json(); const txt = (j.content || []).map((c) => c.text || "").join(""); const m = txt.match(/\{[\s\S]*\}/); if (!m) throw new Error("sin JSON: " + txt.slice(0, 80));
+    try { return JSON.parse(m[0]); } catch { const k2 = m[0].lastIndexOf("}"); return JSON.parse(m[0].slice(0, k2 + 1).replace(/,\s*$/, "") + "}"); } };
+  if (key && fase !== "ambas") {
+    const pend = porItem.map((x, i) => i).filter((i) => !tmp.plan[i]);
+    if (fase === "2" && pend.length) {
+      const i = pend[0], x = porItem[i];
+      const mejor = x.candidatos.filter((c) => c.precio_iva && !c.sin_stock).sort((a, b2) => a.precio_iva - b2.precio_iva)[0]; const maxIva = Math.round(x.item.p * 0.8 * 1.19); const obj = Math.min(maxIva, Math.round((mejor?.precio_iva || maxIva) * 0.9));
+      try { tmp.plan[i] = await llamar(`${cabecera}\n${reglas}\n${esquema}\n\nÍTEM ${i}: "${x.item.d}" · cantidad ${x.item.q} · venta unit. neto $${x.item.p} · precio_objetivo_iva $${obj} · precio_maximo_iva $${maxIva}\n  candidatos: ${JSON.stringify(x.candidatos.slice(0, 10))}\n  propios: ${JSON.stringify(x.propios)}`, 1500, 22000); }
+      catch (e) { tmp.plan[i] = { i, elegido: null, error: String(e.message || e).slice(0, 100) }; }
+      t.op = t.op || { etapa: "ganada", historial: [] }; t.op.concrecion_tmp = tmp; await store.setJSON("trabajo/" + t.codigo, t);
+      return { ok: true, fase: 2, hecho: i, faltan: pend.length - 1 };
+    }
+    // fase "3" (o "2" sin pendientes): pasos + resumen con lo decidido
+    const dec = porItem.map((x, i) => ({ i, item: x.item.d, cant: x.item.q, venta_neto_u: x.item.p, elegido: tmp.plan[i]?.elegido || null }));
+    try { const g = await llamar(`${cabecera}\nYa decidimos dónde concretar cada ítem: ${JSON.stringify(dec)}.\nEscribe para el ejecutador: "pasos": lista ordenada de 4–7 pasos concretos desde ahora hasta entregar (a quién llamar primero y por qué, qué confirmar, cuándo comprar, cómo despachar, qué documento adjuntar), una frase cada uno; y "resumen": 2 frases (qué hacer primero y cuánto se gana si se consiguen los precios). Responde SOLO JSON: {"pasos":[""],"resumen":""}`, 900, 20000);
+      plan = { items: Object.values(tmp.plan), pasos: g.pasos || [], resumen: g.resumen || "" }; }
+    catch (e) { plan = { items: Object.values(tmp.plan), pasos: [], resumen: "" }; aviso = "Pasos no disponibles: " + String(e.message || e).slice(0, 80); }
+  } else if (key) {
+    // modo "ambas" (compatibilidad): una sola llamada, sin guion largo
+    try { const todo = await llamar(`${cabecera}\n${reglas}\nResponde SOLO JSON: {"items":[${esquema.split("): ")[1]}],"pasos":[""],"resumen":""}\n\n` + porItem.map((x, i) => `ÍTEM ${i}: "${x.item.d}" · cantidad ${x.item.q} · venta unit. neto $${x.item.p}\n  candidatos: ${JSON.stringify(x.candidatos.slice(0, 6))}\n  propios: ${JSON.stringify(x.propios)}`).join("\n\n"), 3000, 22000); plan = todo; }
+    catch (e) { aviso = "Claude no respondió: " + String(e.message || e).slice(0, 80); }
   } else aviso = "Falta ANTHROPIC_API_KEY en Netlify: muestro solo los candidatos encontrados.";
   // 3) armar el plan final con números
   const filas = porItem.map((x, i) => {
@@ -1054,7 +1059,7 @@ async function siiIngesta(req) {
   if (b.accion === "ml_listado") { globalThis.__mlDebug = !!b.debug; try { return new Response(JSON.stringify({ ok: true, r: await mlListado(b.q, b.local !== false) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); } catch (e) { return new Response(JSON.stringify({ error: String(e.message || e) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); } }
   if (b.accion === "prov_base") return new Response(JSON.stringify({ ok: true, ...(await baseProveedores(store, !!b.forzar)) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   if (b.accion === "prov_clasificar") return new Response(JSON.stringify(await clasificarProveedores(store)), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
-  if (b.accion === "concretar") { const t = await leer(store, String(b.codigo || "")); if (!t) return new Response(JSON.stringify({ error: "no existe" }), { status: 404, headers: corsH }); const r = await concretar(store, t, { fase: b.fase ? String(b.fase) : "ambas" }); if (r.ok && r.fase !== 1) { t.op = t.op || { etapa: "ganada", historial: [] }; t.op.concrecion = r; await store.setJSON("trabajo/" + t.codigo, t); } return new Response(JSON.stringify(r), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); }
+  if (b.accion === "concretar") { const t = await leer(store, String(b.codigo || "")); if (!t) return new Response(JSON.stringify({ error: "no existe" }), { status: 404, headers: corsH }); const r = await concretar(store, t, { fase: b.fase ? String(b.fase) : "ambas" }); if (r.ok && r.fase !== 1 && r.fase !== 2) { t.op = t.op || { etapa: "ganada", historial: [] }; t.op.concrecion = r; await store.setJSON("trabajo/" + t.codigo, t); } return new Response(JSON.stringify(r), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); }
   if (b.accion === "anexo") { const r = await analizarAnexo(store, b); return new Response(JSON.stringify(r), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); }
   if (b.accion === "hoy") {   // diagnóstico: trabajos tocados desde una fecha, con empresa (para ver qué metió cada una y que no se crucen)
     const desde = String(b.desde || new Date(Date.now() - 24 * 3600e3).toISOString()); const L = await todos(store);   // TODOS los trabajos (caché), no solo los últimos por código
@@ -1223,7 +1228,7 @@ async function atender(req) {
     const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return json({ error: "No existe." }, 404);
     if (t.op?.concrecion && !b.forzar && Date.now() - new Date(t.op.concrecion.t).getTime() < 6 * 3600e3) return json(t.op.concrecion);
     const r = await concretar(store, t, { fase: b.fase ? String(b.fase) : "ambas" }); if (r.error) return json(r, 400);
-    if (r.fase === 1) return json(r);
+    if (r.fase === 1 || r.fase === 2) return json(r);
     t.op = t.op || { etapa: "ganada", historial: [] }; t.op.concrecion = r; t.op.concretar_pendiente = false; delete t.op.concrecion_tmp; t.actualizado = ahora(); await store.setJSON("trabajo/" + t.codigo, t);
     if (b.auto) { const e0 = (r.items || []).find((x) => x.elegido); const dir = e0?.elegido?.telefono ? "📞 llama al " + e0.elegido.telefono : e0?.elegido?.url ? "🛒 compra en " + String(e0.elegido.url).replace(/^https?:\/\/(www\.)?/, "").split("/")[0] : "revisa el plan";
       await avisarTexto(store, "🎯 Plan listo · " + t.codigo, `${(t.nombre || "").slice(0, 60)} · ${dir}${r.total?.ganancia != null ? " · ganas " + clpS(r.total.ganancia) : r.total?.ganancia_parcial ? " · ganancia parcial " + clpS(r.total.ganancia_parcial) : ""}. Abre Ejecuta → Concretar.`, "concretar-" + t.codigo, "/#robot", true).catch(() => {}); }
