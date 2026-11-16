@@ -862,8 +862,12 @@ async function concretar(store, t, opts = {}) {
   const esquema = `Responde SOLO JSON compacto (una línea, strings cortas sin comillas internas, máximo 2 alternativas): {"i":<índice>,"elegido":{"tipo":"link"|"proveedor","titulo":"","url":"","proveedor":"","telefono":"<solo si el candidato trae telefono>","precio_unit_iva":<número o null>,"porque":"<máx 160>"}|null,"alternativas":[{"titulo":"","url":"","precio_unit_iva":<número o null>}],"riesgo":"<máx 120>","buscar":"<máx 120>","guion":"<máx 380>","argumentos":["<máx 100>"]}`;
   const llamar = async (contenido, maxTok, ms) => { const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5", max_tokens: maxTok, messages: [{ role: "user", content: contenido }] }), signal: AbortSignal.timeout(ms) });
-    const j = await r.json(); const txt = (j.content || []).map((c) => c.text || "").join(""); const m = txt.match(/\{[\s\S]*\}/); if (!m) throw new Error("sin JSON: " + txt.slice(0, 80));
-    try { return JSON.parse(m[0]); } catch { const k2 = m[0].lastIndexOf("}"); return JSON.parse(m[0].slice(0, k2 + 1).replace(/,\s*$/, "") + "}"); } };
+    const j = await r.json(); const txt = (j.content || []).map((c) => c.text || "").join(""); const m = txt.match(/\{[\s\S]*/); if (!m) throw new Error("sin JSON: " + txt.slice(0, 80));
+    const raw = m[0]; try { return JSON.parse(raw); } catch {}
+    // respuesta cortada: cerrar lo abierto
+    for (const corte of [raw, raw.slice(0, raw.lastIndexOf("}") + 1), raw.slice(0, raw.lastIndexOf('",') + 1), raw.slice(0, raw.lastIndexOf('"') + 1)]) { if (!corte) continue;
+      for (const cierre of ["", "}", "]}", '"]}', '"}]}', '"}}', "}]}", '"]}]}']) { try { return JSON.parse(corte.replace(/,\s*$/, "") + cierre); } catch {} } }
+    throw new Error("JSON cortado: " + txt.slice(-60)); };
   if (key && fase !== "ambas") {
     const pend = porItem.map((x, i) => i).filter((i) => !tmp.plan[i]);
     if (fase === "2" && pend.length) {
@@ -876,7 +880,7 @@ async function concretar(store, t, opts = {}) {
     }
     // fase "3" (o "2" sin pendientes): pasos + resumen con lo decidido
     const dec = porItem.map((x, i) => ({ i, item: x.item.d, cant: x.item.q, venta_neto_u: x.item.p, elegido: tmp.plan[i]?.elegido || null }));
-    try { const g = await llamar(`${cabecera}\nYa decidimos dónde concretar cada ítem: ${JSON.stringify(dec)}.\nEscribe para el ejecutador: "pasos": lista ordenada de 4–7 pasos concretos desde ahora hasta entregar (a quién llamar primero y por qué, qué confirmar, cuándo comprar, cómo despachar, qué documento adjuntar), una frase cada uno; y "resumen": 2 frases (qué hacer primero y cuánto se gana si se consiguen los precios). Responde SOLO JSON: {"pasos":[""],"resumen":""}`, 900, 20000);
+    try { const g = await llamar(`${cabecera}\nYa decidimos dónde concretar cada ítem: ${JSON.stringify(dec)}.\nEscribe para el ejecutador: "pasos": lista ordenada de 4–7 pasos concretos desde ahora hasta entregar (a quién llamar primero y por qué, qué confirmar, cuándo comprar, cómo despachar, qué documento adjuntar), una frase cada uno; y "resumen": 2 frases (qué hacer primero y cuánto se gana si se consiguen los precios). Responde SOLO JSON compacto, pasos de máximo 140 caracteres: {"pasos":[""],"resumen":""}`, 1600, 20000);
       plan = { items: Object.values(tmp.plan), pasos: g.pasos || [], resumen: g.resumen || "" }; }
     catch (e) { plan = { items: Object.values(tmp.plan), pasos: [], resumen: "" }; aviso = "Pasos no disponibles: " + String(e.message || e).slice(0, 80); }
   } else if (key) {
