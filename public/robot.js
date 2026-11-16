@@ -316,6 +316,8 @@
   .btn.rb-firmar{background:linear-gradient(100deg,#7c4dff,#5a2fd6);border-color:transparent;color:#fff}
   .rb-pasos{margin:10px 0 0;padding-left:18px;font-size:.8rem;color:var(--ink-dim);line-height:1.55}
   .rb-copias{width:100%;border-collapse:collapse;margin-top:8px;font-size:.78rem}
+  .rb-oc-est{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;font-size:.7rem}.rb-oc-est span{background:#1b2027;border:1px solid #2a3039;border-radius:8px;padding:1px 6px}.rb-oc-est span.ok{border-color:#5ef0b066;color:#5ef0b0}.rb-oc-est span.mal{border-color:#e5484d66;color:#ff9a9a}.rb-oc-est span.pronto{border-color:#f5cf6b66;color:#f5cf6b}
+  .rb-caja-oc{border:1px solid #2a3039;border-radius:14px;padding:10px}.rb-caja-oc.A{border-color:#5ef0b044}.rb-caja-oc.P{border-color:#f5cf6b55}
   .rb-negocia{background:#1a1f14;border:1px solid #5ef0b033;border-radius:10px;padding:6px 8px;margin-top:6px}
   .rb-ol{margin:4px 0 0 18px;padding:0}.rb-ol li{margin:2px 0}.rb-ul{margin:4px 0 0 16px;padding:0}
   .rb-stiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0}
@@ -3817,51 +3819,74 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     R._cargGlobal = (async () => { try { const r = await api("global"); R.global = { trabajos: r.trabajos || [], jugadores: r.jugadores || {} }; R.globalT = Date.now(); pintarHojaSiAbierta(); } catch {} finally { R._cargGlobal = null; } })();
     return R._cargGlobal;
   }
-  // ---------- 📦 Órdenes de compra: una caja con SOLO las OC, en el orden en que se operan ----------
+  // ---------- 📦 CAJA OC: solo órdenes de compra. Aceptadas (las acepté en MP → se ejecutan) · Por aceptar (estudiarlas
+  //            antes de aceptar) · dentro de "por aceptar", EN OPCIONES: compras donde vamos 1° y nos pueden llamar ----------
+  const OC_ACEPTADA = /aceptad|recepci[oó]n|en proceso|pagad|facturad|cerrad|entregad/i;
   function clasificarOC(t) {
     const o = t.op || {}, est = String(o.oc_estado || "");
-    if (/cancelad|anulad|rechazad/i.test(est)) return "D";
-    if (o.cerrado || o.cobrado || ["cerrado", "entrega", "entregado"].includes(o.etapa)) return "A";
-    if (o.proveedor || o.precio_acordado || o.proveedor_pagado || ["pago", "transporte", "despacho"].includes(o.etapa)) return "B";
-    return "C";
+    if (/cancelad|anulad|rechazad/i.test(est) || o.etapa === "rechazada") return "D";
+    if (!(o.oc_codigo || o.oc)) return o.etapa === "previa" ? "O" : null;                 // O = en opciones (vamos 1°, sin OC aún)
+    if (OC_ACEPTADA.test(est) || o.oc_aceptada || o.cerrado || o.cobrado || o.proveedor_pagado || ["pago", "transporte", "despacho", "entrega", "cerrado"].includes(o.etapa)) return "A";
+    return "P";                                                                                // P = por aceptar (OC emitida, aún no aceptada en MP)
   }
-  const OC_BLOQUES = { A: ["✅ Ya operadas", "entregadas o cerradas: cobrar y archivar"], B: ["🔧 En operación", "con proveedor acordado: pagar, despachar, pedir recepción"], C: ["🆕 OC nuevas", "ganadas esta semana: aceptar la OC en MP y cerrar proveedor"], D: ["⚠️ Canceladas · revisar", "la OC se canceló: no pagar ni comprar; verificar en MP"] };
+  const OC_BLOQUES = { A: ["✅ OC aceptadas", "las acepté en Mercado Público: se ejecutan (proveedor, compra, despacho, cobro)"],
+    P: ["📝 OC por aceptar", "la OC llegó pero aún no la acepto en MP: estudiarla (costo real, plazo, riesgo) y recién aceptar"],
+    O: ["🔭 En opciones", "vamos 1° y nos pueden llamar: dejar precios y proveedor listos antes de que llegue la OC"],
+    D: ["⚠️ Canceladas · revisar", "la OC se canceló: no pagar ni comprar; verificar en MP"] };
   function pasoOC(t, b) {
-    const o = t.op || {}, est = String(o.oc_estado || "");
+    const o = t.op || {}, c = o.concrecion;
     if (b === "D") return o.proveedor_pagado ? "Proveedor pagado con OC cancelada: recuperar o reasignar" : "Avisar al proveedor y cerrar";
-    if (b === "A") return o.cobrado ? "Cobrado · archivar" : "Emitir factura y cobrar";
-    if (b === "B") { if (!o.proveedor_pagado && o.precio_acordado) return "Pagar al proveedor " + clp(o.precio_acordado); if (/enviada a proveedor/i.test(est)) return "Aceptar la OC en MP y despachar"; if (o.etapa === "transporte" || o.etapa === "despacho") return "Confirmar entrega y pedir recepción conforme"; return "Pedir recepción conforme y facturar"; }
-    return /enviada a proveedor/i.test(est) ? "Aceptar la OC en MP · buscar proveedor" : "Cerrar proveedor y agendar entrega";
+    if (b === "O") return c ? "Precios listos · si llaman: " + (c.items?.[0]?.elegido?.telefono ? "proveedor " + (c.items[0].elegido.proveedor || c.items[0].elegido.titulo || "").slice(0, 24) : "ver plan") : "Preparar precios y proveedor por si llaman";
+    if (b === "P") return !c ? "Estudiar: costo real, plazo y riesgo → luego aceptar en MP" : c.total?.ganancia != null ? (c.total.ganancia > 0 ? `Conviene: ganas ${clp(c.total.ganancia)} → aceptar en MP` : `No conviene: pierdes ${clp(-c.total.ganancia)} → renegociar o rechazar`) : `Faltan ${c.total?.sin_precio || 0} precio(s): llamar proveedores antes de aceptar`;
+    if (o.cobrado) return "Cobrado · archivar"; if (o.cerrado || ["entrega", "cerrado"].includes(o.etapa)) return "Emitir factura y cobrar";
+    if (!o.proveedor_pagado && o.precio_acordado) return "Pagar al proveedor " + clp(o.precio_acordado);
+    if (o.etapa === "transporte" || o.etapa === "despacho") return "Confirmar entrega y pedir recepción conforme";
+    const h = Object.keys(o.concretados || {}).length, n = (c?.items || []).length;
+    return n ? `Concretar ${h}/${n} ítems con proveedor real` : "Ejecutar: 🎯 Concretar (proveedor, precio, guion)";
   }
+  const urlOC = (cod) => "https://www.mercadopublico.cl/PurchaseOrder/Modules/PO/DetailsPurchaseOrder.aspx?codigoOC=" + encodeURIComponent(cod || "");
   function pantallaOC() {
     const todas = esDueno() && R.ocTodas !== false;
     const base = (R.todos || R.data?.trabajos || []).filter((t) => todas || deMiEmpresa(t));   // las OC son de la empresa, no de un juego
-    const L = base.filter((t) => t.op && (t.op.oc_codigo || t.op.oc));
     const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
     const dias = (t) => t.op?.plazo_fecha ? Math.floor((new Date(t.op.plazo_fecha + "T12:00") - hoy) / 86400000) : null;
-    const grupos = { A: [], B: [], C: [], D: [] };
-    for (const t of L) grupos[clasificarOC(t)].push(t);
+    const grupos = { A: [], P: [], O: [], D: [] };
+    for (const t of base) { const k = clasificarOC(t); if (k) grupos[k].push(t); }
     const llego = (t) => t.op?.oc_fecha || (t.op?.historial || []).find((h) => h.etapa === "ganada")?.t || t.actualizado || "";
-    const ordenar = (xs) => xs.sort((a, b) => llego(a).localeCompare(llego(b)));   // 🕒 en el orden en que llegaron: así se atienden en parrilla
+    const ordenar = (xs) => xs.sort((a, b) => llego(b).localeCompare(llego(a)));   // las más recientes arriba
     const suma = (xs) => xs.reduce((s, t) => s + (Number(t.total) || 0), 0);
-    const fila = (t, b) => { const o = t.op || {}, d = dias(t), emp = (R.empresas || {})[t.empresa || "principal"]; const tarde = d != null && d < 0;
-      return `<div class="rb-card rb-oc-f" data-rb="det" data-c="${esc(t.codigo)}" style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;margin:6px 0;cursor:pointer">
-        <div class="rb-oc-d ${tarde ? "tarde" : d != null && d <= 2 ? "pronto" : ""}">${d == null ? "<b>—</b><small>s/f</small>" : `<b>${Math.abs(d)}</b><small>${tarde ? "atrás" : d === 0 ? "hoy" : "días"}</small>`}</div>
+    const estudio = (t) => { const o = t.op || {}, c = o.concrecion, inf = o.informe || {}; const g = c?.total?.ganancia ?? null, gp = c?.total?.ganancia_parcial || 0, est = Number(inf.final) || 0;
+      const d = dias(t), ne = Number(t.neto) || Math.round((Number(t.total) || 0) / 1.19);
+      return `<div class="rb-oc-est">${c ? `<span class="${g != null && g <= 0 ? "mal" : "ok"}">${g != null ? "utilidad real " + clp(g) : gp ? "parcial " + clp(gp) + " · faltan " + (c.total?.sin_precio || 0) + " precios" : "sin precios aún"}</span>` : est ? `<span>estimado ${clp(est)}</span>` : `<span class="muted">sin estudio</span>`}
+        <span>neto ${clp(ne)}</span>${d != null ? `<span class="${d < 0 ? "mal" : d <= 2 ? "pronto" : ""}">${d < 0 ? Math.abs(d) + " días atrasada" : d === 0 ? "entrega hoy" : "entrega en " + d + " días"}</span>` : ""}${inf.aviso_plazo || o.aviso_plazo ? `<span class="mal">⚠ plazo</span>` : ""}${(c?.items || []).some((x) => x.riesgo) ? `<span class="mal">⚠ ${esc(String(c.items.find((x) => x.riesgo).riesgo).slice(0, 60))}</span>` : ""}</div>`; };
+    const fila = (t, b) => { const o = t.op || {}, d = dias(t), emp = (R.empresas || {})[t.empresa || "principal"]; const tarde = d != null && d < 0; const oc = String(o.oc_codigo || o.oc || "");
+      const acciones = b === "P" ? `<div class="rb-row" style="margin-top:6px"><button class="btn small rb-oro" type="button" data-rb="oc-estudiar" data-c="${esc(t.codigo)}">${o.concrecion ? "🔎 Ver estudio" : "🔎 Estudiar"}</button><a class="btn small rb-firmar" href="${urlOC(oc)}" target="_blank" rel="noopener">✅ Aceptar en MP</a><button class="btn small" type="button" data-rb="oc-aceptada" data-c="${esc(t.codigo)}">Ya la acepté</button><button class="btn small" type="button" data-rb="oc-rechazar" data-c="${esc(t.codigo)}">✕ Rechazar</button></div>`
+        : b === "O" ? `<div class="rb-row" style="margin-top:6px"><button class="btn small rb-oro" type="button" data-rb="oc-estudiar" data-c="${esc(t.codigo)}">${o.concrecion ? "📞 Ver precios por si llaman" : "📞 Preparar precios por si llaman"}</button></div>`
+        : b === "A" ? `<div class="rb-row" style="margin-top:6px"><button class="btn small rb-oro" type="button" data-rb="oc-ejecutar" data-c="${esc(t.codigo)}">🎯 Ejecutar</button></div>` : "";
+      return `<div class="rb-card rb-oc-f" style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;margin:6px 0">
+        <div class="rb-oc-d ${tarde ? "tarde" : d != null && d <= 2 ? "pronto" : ""}" data-rb="det" data-c="${esc(t.codigo)}" style="cursor:pointer">${d == null ? "<b>—</b><small>s/f</small>" : `<b>${Math.abs(d)}</b><small>${tarde ? "atrás" : d === 0 ? "hoy" : "días"}</small>`}</div>
         <div style="flex:1;min-width:0">
-          <div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.nombre || t.codigo)}</b><b style="font-size:.9rem;white-space:nowrap">${clp(t.total)}</b></div>
+          <div style="display:flex;justify-content:space-between;gap:8px;cursor:pointer" data-rb="det" data-c="${esc(t.codigo)}"><b style="font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.nombre || t.codigo)}</b><b style="font-size:.9rem;white-space:nowrap">${clp(t.total)}</b></div>
           <div class="muted" style="font-size:.74rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.organismo || "")}${todas && emp ? " · " + esc(corta(emp.razon_social, 18)) : ""}</div>
-          <div style="font-size:.74rem;margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="rb-oc-tag">OC ${esc(String(o.oc_codigo || o.oc))}</span>${o.oc_estado ? `<span class="rb-oc-tag ${/aceptada/i.test(o.oc_estado) ? "ok" : /cancelad/i.test(o.oc_estado) ? "mal" : ""}">${esc(o.oc_estado)}</span>` : ""}${o.proveedor ? `<span class="rb-oc-tag">${esc(corta(typeof o.proveedor === "object" ? o.proveedor.nombre || "" : o.proveedor, 16))}${o.proveedor_pagado ? " ✓ pagado" : ""}</span>` : ""}</div>
-          <div style="font-size:.78rem;margin-top:4px;color:${b === "D" ? "#ff9a9a" : "var(--oro, #f5cf6b)"}">→ ${esc(pasoOC(t, b))}</div>
+          <div style="font-size:.74rem;margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">${oc ? `<span class="rb-oc-tag">OC ${esc(oc)}</span>` : `<span class="rb-oc-tag">vamos 1°</span>`}${o.oc_estado ? `<span class="rb-oc-tag ${OC_ACEPTADA.test(o.oc_estado) ? "ok" : /cancelad/i.test(o.oc_estado) ? "mal" : ""}">${esc(o.oc_estado)}</span>` : ""}${o.proveedor ? `<span class="rb-oc-tag">${esc(corta(typeof o.proveedor === "object" ? o.proveedor.nombre || "" : o.proveedor, 16))}${o.proveedor_pagado ? " ✓ pagado" : ""}</span>` : ""}</div>
+          ${b === "P" || b === "O" ? estudio(t) : ""}
+          <div style="font-size:.78rem;margin-top:4px;color:${b === "D" ? "#ff9a9a" : "var(--oro, #f5cf6b)"}">→ ${esc(pasoOC(t, b))}</div>${acciones}
         </div></div>`; };
     const sel = R.ocB || "";
-    const chips = Object.keys(OC_BLOQUES).map((k) => `<button type="button" class="rb-rchip ${sel === k ? "on" : ""}" data-rb="oc-bloque" data-b="${k}">${OC_BLOQUES[k][0].replace(/^\S+\s/, "")}<i>${grupos[k].length}</i></button>`).join("");
-    const bloques = Object.keys(OC_BLOQUES).filter((k) => !sel || sel === k).map((k) => grupos[k].length ? `<div style="margin-top:14px"><div style="display:flex;justify-content:space-between;align-items:baseline"><b>${OC_BLOQUES[k][0]} · ${grupos[k].length}</b><span class="muted" style="font-size:.78rem">${clp(suma(grupos[k]))}</span></div><div class="muted" style="font-size:.72rem;margin-bottom:4px">${OC_BLOQUES[k][1]}</div>${ordenar(grupos[k]).map((t) => fila(t, k)).join("")}</div>` : "").join("");
-    const vivas = [...grupos.A, ...grupos.B, ...grupos.C];
-    return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">📦 Órdenes de compra</h2><button class="btn small" type="button" data-rb="oc-cerrar">← Volver</button></div>
-      <div class="muted rb-sub">Solo las compras que ya tienen orden de compra, en el orden en que se operan: por plazo de entrega. ${esDueno() ? `<button class="btn small rb-link" type="button" data-rb="oc-todas">${todas ? "Todas las empresas" : "Solo mi empresa"} ▾</button>` : ""}</div>
-      <div class="rb-marcador" style="margin:8px 0"><div class="rb-m oro"><span>📦 OC vivas</span><b>${vivas.length}</b><small>${clp(suma(vivas))} vendido</small></div><div class="rb-m verde"><span>🔧 En operación</span><b>${grupos.B.length}</b><small>${clp(suma(grupos.B))}</small></div><div class="rb-m"><span>🆕 Nuevas</span><b>${grupos.C.length}</b><small>${clp(suma(grupos.C))}</small></div></div>
+    const chips = ["A", "P", "D"].map((k) => `<button type="button" class="rb-rchip ${sel === k ? "on" : ""}" data-rb="oc-bloque" data-b="${k}">${OC_BLOQUES[k][0].replace(/^\S+\s/, "")}<i>${k === "P" ? grupos.P.length + grupos.O.length : grupos[k].length}</i></button>`).join("");
+    const caja = (k, inner) => `<div class="rb-caja-oc ${k}" style="margin-top:14px"><div style="display:flex;justify-content:space-between;align-items:baseline"><b>${OC_BLOQUES[k][0]} · ${grupos[k].length}</b><span class="muted" style="font-size:.78rem">${clp(suma(grupos[k]))}</span></div><div class="muted" style="font-size:.72rem;margin-bottom:4px">${OC_BLOQUES[k][1]}</div>${inner}</div>`;
+    const bloques = ["A", "P", "D"].filter((k) => !sel || sel === k).map((k) => {
+      if (k === "P") { const inner = (grupos.P.length ? ordenar(grupos.P).map((t) => fila(t, "P")).join("") : `<div class="empty" style="padding:8px">No hay OC esperando aceptación.</div>`)
+          + `<div class="rb-caja-oc O" style="margin:10px 0 0 10px;padding-left:10px;border-left:2px solid #5ef0b055"><div style="display:flex;justify-content:space-between;align-items:baseline"><b>${OC_BLOQUES.O[0]} · ${grupos.O.length}</b><span class="muted" style="font-size:.78rem">${clp(suma(grupos.O))}</span></div><div class="muted" style="font-size:.72rem;margin-bottom:4px">${OC_BLOQUES.O[1]}</div>${grupos.O.length ? ordenar(grupos.O).map((t) => fila(t, "O")).join("") : `<div class="empty" style="padding:8px">Ninguna compra en 1° lugar esperando adjudicación.</div>`}</div>`;
+        return caja("P", inner); }
+      return grupos[k].length ? caja(k, ordenar(grupos[k]).map((t) => fila(t, k)).join("")) : (k === "A" ? caja("A", `<div class="empty" style="padding:8px">Todavía no has aceptado OC en Mercado Público.</div>`) : "");
+    }).join("");
+    const vivas = [...grupos.A, ...grupos.P];
+    return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">📦 Caja OC</h2><button class="btn small" type="button" data-rb="oc-cerrar">← Volver</button></div>
+      <div class="muted rb-sub">Solo órdenes de compra. <b>Aceptadas</b> = las acepté en Mercado Público y se ejecutan. <b>Por aceptar</b> = llegó la OC: estudiar antes de aceptar. Dentro, <b>En opciones</b> = vamos 1° y nos pueden llamar. ${esDueno() ? `<button class="btn small rb-link" type="button" data-rb="oc-todas">${todas ? "Todas las empresas" : "Solo mi empresa"} ▾</button>` : ""}</div>
+      <div class="rb-marcador" style="margin:8px 0"><div class="rb-m verde"><span>✅ Aceptadas</span><b>${grupos.A.length}</b><small>${clp(suma(grupos.A))}</small></div><div class="rb-m oro"><span>📝 Por aceptar</span><b>${grupos.P.length}</b><small>${clp(suma(grupos.P))}</small></div><div class="rb-m"><span>🔭 En opciones</span><b>${grupos.O.length}</b><small>${clp(suma(grupos.O))}</small></div></div>
       <div class="rb-rchips">${chips}</div>
-      ${L.length ? bloques : `<div class="empty">Todavía no hay órdenes de compra${todas ? "" : " de tu empresa"}. Cuando te adjudiquen, aparecen aquí solas.</div>`}</div>`;
+      ${vivas.length || grupos.O.length ? bloques : `<div class="empty">Todavía no hay órdenes de compra${todas ? "" : " de tu empresa"}. Cuando te adjudiquen, aparecen aquí solas.</div>`}</div>`;
   }
   // 🏟️ ESTADÍSTICAS tipo marcador: hoy / semana / mes · metidas (firmadas en MP), salieron (OC), dieron / no dieron,
   //    vendido, utilidad y a dónde se fue la plata. Por empresa y por cotizador. Fuente: todos los trabajos de la nube.
@@ -5101,6 +5126,10 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "plan-activar") { try { await api("plan", { method: "POST", body: JSON.stringify({ jugador: b.dataset.j, plan: b.dataset.v, activar: true }) }); toast("👑 Plan activado"); R.planT = 0; await cargarPlan(); } catch (e) { toast(e.message); } return; }
     if (a === "global") { R.pantalla = "global"; sheet.scrollTop = 0; cargarGlobal(); if (!R.ejecutores) cargarEjecuta(); return pintarHoja(true); }
     if (a === "global-cerrar") { R.pantalla = null; return pintarHoja(true); }
+    if (a === "oc-estudiar") { R.pantalla = null; R.ejAbierto = cod; R.ejTab = "operacion"; cargarEjecuta(); pintarHoja(true); const t = (R.todos || R.data?.trabajos || []).find((x) => x.codigo === cod); if (t && !t.op?.concrecion) concretarPedir(cod, false, false); return; }
+    if (a === "oc-ejecutar") { R.pantalla = null; R.ejAbierto = cod; R.ejTab = "operacion"; cargarEjecuta(); return pintarHoja(true); }
+    if (a === "oc-aceptada") { R.ejAbierto = cod; return ejOp({ oc_aceptada: true, oc_estado: "Aceptada" }, null, "✅ OC marcada como aceptada: pasa a Ejecutar"); }
+    if (a === "oc-rechazar") { R.ejAbierto = cod; return ejOp({}, "rechazada", "OC rechazada: queda fuera de la caja"); }
     if (a === "stats") { R.pantalla = "stats"; sheet.scrollTop = 0; cargarGlobal(); if (!R.ejecutores) cargarEjecuta(); return pintarHoja(true); }
     if (a === "st-per") { R.stPer = b.dataset.v; return pintarHoja(true); }
     if (a === "st-emp") { R.stEmp = b.dataset.v; return pintarHoja(true); }
