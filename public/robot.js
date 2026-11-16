@@ -2076,7 +2076,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       caja("excel", "📊 Excel en vivo", X.compras ? `utilidad ${clp(X.final)} · ${X.fuente}` : "esperando precio", X.compras ? "vivo" : "luego", excelVivo(t, X), false),
       caja("terreno", "🚚 Terreno (en vivo)", E === "despacho" ? (op.en_vivo ? "🔴 transmitiendo" : "en trayecto") : iE > 3 ? "✓ entregado" : "despacho y transmisión", est(E === "despacho" ? "despacho" : "transporte"), E === "despacho" ? etapaHTML("despacho") : etapaHTML("transporte") + bloqueVivo(t), E === "transporte" || E === "despacho"),
       caja("docs", "🧾 Guía, factura y recepción", (op.docs || []).some((d) => d.tipo === "guia") ? "✓ guía firmada" : "guía, factura y firma del cliente", est("entrega"), etapaHTML("entrega"), E === "entrega"),
-      caja("fact", "💸 Factoring y reparto", repartoListo(op) ? "🥇 repartido" : op.cobrado ? "💰 llegó la plata · repartir" : op.cerrado ? "esperando el factoring" : "al cerrar", repartoListo(op) || E === "cerrado" ? "oro" : op.cobrado ? "ahora" : "luego", repartoFinal(t, X) + eerrNegocio(t), E === "cerrado" || !!op.cobrado),
+      caja("fact", "💸 Factoring y reparto", repartoListo(op) ? "🥇 repartido" : op.cobrado ? "💰 llegó la plata · repartir" : op.cerrado ? "esperando el factoring" : "al cerrar", repartoListo(op) || E === "cerrado" ? "oro" : op.cobrado ? "ahora" : "luego", bloqueFactoringWA(t) + repartoFinal(t, X) + eerrNegocio(t), E === "cerrado" || !!op.cobrado),
     ].join("");
     const negHead = `<div class="rb-env" data-rb="ej-cerrar-card" data-c="${esc(cod)}" style="cursor:pointer"><div style="min-width:0"><div style="font-size:.74rem"><b>${esc(cod)}</b>${ocN ? " · OC " + esc(ocN) : ""} <span class="muted">▲ cerrar</span></div><div class="rb-fnom">${esc(t.nombre || "")}</div>
         <div class="muted" style="font-size:.72rem">${esc(t.oc_compra?.organismo || t.organismo || "")}${dir ? " · " + esc(dir.slice(0, 60)) : ""}</div></div>
@@ -2097,7 +2097,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     }
     if (R.ejModo === "revision") return envoltorio(ejRevision(t, X), `<span class="rb-pill" style="background:rgba(245,207,107,.15);color:#f5cf6b">🔍 Revisión</span>`);
     if (R.ejModo === "simulada") return envoltorio(ejSimulada(t, X), `<span class="rb-pill" style="background:rgba(90,169,255,.15);color:#5aa9ff">🔵 Simulada</span>`);
-    return envoltorio(ejReal(t, X) + `<details class="rb-det" style="margin-top:10px" ${R.ejEtapas ? "open" : ""}><summary>🧭 Etapas: proveedor → pago → despacho → recepción → factura y cobro</summary>${cajas}</details>`, `<span class="rb-pill" style="background:rgba(63,220,138,.15);color:#3fdc8a">🟢 Real</span>`);
+    return envoltorio(contactoCliente(t) + ejReal(t, X) + `<details class="rb-det" style="margin-top:10px" ${R.ejEtapas ? "open" : ""}><summary>🧭 Etapas: proveedor → pago → despacho → recepción → factura y cobro</summary>${cajas}</details>`, `<span class="rb-pill" style="background:rgba(63,220,138,.15);color:#3fdc8a">🟢 Real</span>`);
   }
   // 🔵 EJECUCIÓN SIMULADA: el robot lee qué pidió el comprador → arma partidas → costea → resultado con explicación por partida y fuente fechada
   const SIM_FASES = { req: "Leyendo requerimiento", falta_adjunto: "Falta el adjunto del comprador", partidas: "Armando partidas", costeo: "Costeando", listo: "Resultado" };
@@ -4376,6 +4376,68 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         + `<div class="muted" style="font-size:.66rem;margin-top:4px">Cuadre: ${clp(c.invGan)} + ${clp(c.ejec)} + ${clp(c.empresa)} = ${clp(c.invGan + c.ejec + c.empresa)} = utilidad final ${clp(X.final)} ${c.invGan + c.ejec + c.empresa === X.final ? "✓" : "✗"}</div>
         <div class="rb-row" style="margin-top:6px"><button class="btn small rb-oro" type="button" data-rb="oc-ir" data-e="cerrado" data-c="${esc(cod)}">💸 Marcar pagos del reparto</button></div>`)}</div>`;
   }
+
+  // 👤 CONTACTO CON CLIENTE: primero en la OC. Oficial (de la OC) vs operativo (con quien hablé); se guarda en la OC y lo reutiliza Factoring.
+  function contactoCliente(t) {
+    const op = t.op || {}, oc = t.oc_compra || {}, cod = t.codigo;
+    const nombre = op.cliente_nombre || oc.contacto || op.informe?.comprador?.nombre || "", tel = op.cliente_tel || oc.fono || op.informe?.comprador?.telefono || "", mail = op.cliente_mail || oc.mail || op.informe?.comprador?.email || "";
+    const campo = (k, lab, v, ph, im) => `<label class="rb-lab" style="flex:1;min-width:120px">${lab}<input class="rb-neg-in" data-campo="${k}" data-c="${esc(cod)}" value="${esc(v || "")}" placeholder="${ph}" ${im ? `inputmode="${im}"` : ""}></label>`;
+    const distinto = op.cliente_nombre && oc.contacto && op.cliente_nombre !== oc.contacto;
+    return `<div class="rb-card" style="padding:10px 12px;margin:6px 0;border-color:rgba(94,240,176,.35)"><div class="rb-env"><b>👤 Contacto con cliente</b><span class="muted" style="font-size:.68rem">${distinto ? "operativo (distinto del oficial)" : op.cliente_nombre ? "operativo guardado" : "de la OC"}</span></div>
+      <div class="rb-row">${campo("cliente_nombre", "Nombre", nombre, "Con quien coordinas")}${campo("cliente_tel", "Teléfono", tel, "+56 9 …", "tel")}${campo("cliente_mail", "Correo", mail, "correo@organismo.cl", "email")}</div>
+      <div class="rb-row" style="margin-top:4px">${telNum(tel) ? `<a class="btn small" href="tel:${esc(telNum(tel))}">📞 Llamar</a>` : ""}${waNum(tel) ? `<a class="btn small" href="https://wa.me/${waNum(tel)}?text=${encodeURIComponent("Hola " + (nombre || "") + ", le escribo por la orden de compra " + (op.oc_codigo || "") + ".")}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ""}${mail ? `<a class="btn small" href="mailto:${esc(mail)}?subject=${encodeURIComponent("OC " + (op.oc_codigo || ""))}">✉ Correo</a>` : ""}</div>
+      <div class="muted" style="font-size:.66rem;margin-top:3px">${oc.contacto ? "Contacto oficial de la OC: " + esc(oc.contacto) + (oc.fono ? " · " + esc(oc.fono) : "") + (oc.mail ? " · " + esc(oc.mail) : "") + ". " : ""}${op.entrega_contacto ? "Recepción: " + esc(op.entrega_contacto) + "." : "La persona que recibe se anota aparte en Despacho."}</div></div>`;
+  }
+  // 💬 SOLICITAR SIMULACIÓN POR WHATSAPP (al ejecutivo de factoring): factura emitida + guías referenciadas + contacto del cliente, todo de la misma OC
+  async function cargarFactorings() { if (R.factorings && Date.now() - (R.factoringsT || 0) < 60000) return; try { R.factorings = (await api("factorings?empresa=" + encodeURIComponent(leer().empresa || "principal"))).factorings || []; R.factoringsT = Date.now(); } catch { R.factorings = R.factorings || []; } }
+  function mensajeFactoring(t, F, fa, guias) {
+    const op = t.op || {}, emp = empresaActual() || {};
+    return `Hola, ${F?.ejecutivo || F?.nombre || "[ejecutivo de factoring]"}. ¿Me simulas esta operación, por favor?
+
+Empresa emisora: ${emp.razon_social || "[empresa]"}${emp.rut ? " · RUT " + emp.rut : ""}
+Cliente/deudor: ${t.oc_compra?.organismo || t.organismo || "[organismo]"}${t.oc_compra?.rut_organismo ? " · RUT " + t.oc_compra.rut_organismo : ""}
+OC: ${op.oc_codigo || op.oc || "[número]"}
+Factura: ${fa ? "N° " + fa.folio + ", emitida el " + (fa.fecha || "") + ", por " + clp(fa.total) : "[folio, fecha, total]"}
+Guía(s) de despacho: ${guias.length ? guias.map((g) => "N° " + g.folio).join(", ") : "[folios]"}
+
+Contacto del cliente con quien coordiné la operación: ${op.cliente_nombre || t.oc_compra?.contacto || "[nombre]"}
+Teléfono: ${op.cliente_tel || t.oc_compra?.fono || "[teléfono]"}
+Correo: ${op.cliente_mail || t.oc_compra?.mail || "[correo]"}
+
+Te comparto la factura y la guía. Indícame cuánto se puede anticipar, el costo total, cuánto líquido recibiríamos y en qué fechas se depositaría cada abono. Gracias.`;
+  }
+  function bloqueFactoringWA(t) {
+    const op = t.op || {}, cod = t.codigo, D = op.documentos || [], facts = D.filter((d) => d.tipo === "factura" && d.estado !== "borrador"), sol = op.factoring_sol || null, resp = op.factoring_resp || null;
+    if (!R.factorings) setTimeout(cargarFactorings, 0);
+    const F = R.factorings || [], fi = R.faSel?.cod === cod ? R.faSel : { cod, f: 0, fac: facts.length ? facts[facts.length - 1].id : null };
+    const fsel = F[fi.f] || null, fa = facts.find((d) => d.id === fi.fac) || facts[facts.length - 1] || null;
+    const guias = fa ? D.filter((d) => d.tipo === "guia" && d.estado !== "borrador" && (fa.referencias || []).some((r) => r.tipo === "GD" && String(r.folio) === String(d.folio))) : [];
+    const respaldos = (op.docs || []).filter((d) => d.tipo === "guia");   // foto de guía firmada / recepción conforme
+    const abierto = R.faAb === cod;
+    const estadoTxt = resp ? "✅ Respondida" : sol?.estado === "enviada" ? "📨 Enviada " + hace(sol.t_enviada) : sol ? "📝 Preparada " + hace(sol.t_preparada) : null;
+    const cab = `<div class="rb-row" style="margin:4px 0 8px"><button class="btn rb-oro" type="button" data-rb="fa-abrir" data-c="${esc(cod)}" style="flex:1">💬 Solicitar simulación por WhatsApp</button>${estadoTxt ? `<span class="rb-oc-tag ${resp ? "ok" : ""}">${estadoTxt}</span>` : ""}</div>`;
+    if (!abierto) return cab + (resp ? `<div class="rb-sug" style="border-color:#8a63d2;font-size:.74rem">📊 Simulación del factoring: anticipo líquido <b>${clp(resp.anticipo_liquido)}</b>${resp.fecha_anticipo ? " el " + esc(resp.fecha_anticipo) : ""} · costo total <b>${clp(resp.costo_total)}</b>${resp.segundo_abono ? ` · segundo abono <b>${clp(resp.segundo_abono)}</b>${resp.fecha_segundo ? " el " + esc(resp.fecha_segundo) : ""}` : ""}. La cesión y los depósitos se registran cuando ocurran (Facturas y reparto → ＋ Abono).</div>` : "");
+    const msg = R.faMsg?.cod === cod ? R.faMsg.txt : mensajeFactoring(t, fsel, fa, guias);
+    const faltan = [!facts.length ? "factura emitida" : null, fa && !guias.length ? "guía referenciada por la factura N° " + fa.folio : null, !F.length ? "contacto de factoring de la empresa" : null].filter(Boolean);
+    const archivo = (d, nombre) => d.archivo ? `<a class="btn small" href="/bot/archivo?codigo=${encodeURIComponent(cod)}&id=${encodeURIComponent(d.archivo)}" target="_blank" rel="noopener">📄 ${nombre}</a>` : `<span class="rb-oc-tag mal">${nombre} sin PDF (vincúlalo en Guía y factura)</span>`;
+    return cab + `<div class="rb-card" style="padding:10px 12px;margin:6px 0;border-color:#8a63d2">
+      <div class="rb-sec" style="margin-top:0">Destinatario: ejecutivo de factoring</div>
+      ${F.length ? `<select class="rb-in" data-rb-sel="fa-f" data-c="${esc(cod)}">${F.map((x, i) => `<option value="${i}" ${i === fi.f ? "selected" : ""}>${esc(x.nombre)} · ${esc(x.ejecutivo || "")} · ${esc(x.telefono || "sin teléfono")}</option>`).join("")}</select>
+        <div class="muted" style="font-size:.72rem">Se abrirá WhatsApp a <b>${esc(fsel?.ejecutivo || fsel?.nombre || "")}</b> · <b>${esc(fsel?.telefono || "sin teléfono")}</b>${fsel?.email ? " · " + esc(fsel.email) : ""}</div>` : `<div class="muted" style="font-size:.72rem">Sin contactos de factoring para esta empresa.</div>`}
+      <details class="rb-det"><summary>⚙ Contactos de factoring de la empresa (${F.length})</summary><div class="muted" style="font-size:.68rem">Uno por línea: <b>Factoring | ejecutivo | teléfono | correo</b> (ej: BL Capital | María Paz | +56 9 1234 5678 | mpaz@blcapital.cl)</div><textarea class="rb-in" id="rbFactCont" rows="3">${esc(F.map((x) => [x.nombre, x.ejecutivo, x.telefono, x.email].map((v) => v || "").join(" | ")).join("\n"))}</textarea><button class="btn small" type="button" data-rb="fa-guardar-cont" data-c="${esc(cod)}">Guardar</button></details>
+      <div class="rb-sec">Documentos de esta OC</div>
+      ${facts.length ? `<select class="rb-in" data-rb-sel="fa-fac" data-c="${esc(cod)}">${facts.map((d) => `<option value="${esc(d.id)}" ${d.id === fa?.id ? "selected" : ""}>Factura N° ${esc(String(d.folio))} · ${clp(d.total)} · ${esc(d.fecha || "")}</option>`).join("")}</select>` : ""}
+      <div class="rb-row" style="margin-top:4px">${fa ? archivo(fa, "Factura N° " + fa.folio) : ""}${guias.map((g) => archivo(g, "Guía N° " + g.folio)).join("")}${respaldos.map((d) => `<label style="font-size:.72rem"><input type="checkbox" class="fa-resp" value="${esc(d.id)}" checked> 📸 ${esc(String(d.nombre).slice(0, 24))} (firmada/recepción)</label>`).join("")}</div>
+      ${faltan.length ? `<div class="rb-sug" style="border-color:#f5cf6b;font-size:.72rem">Falta: ${faltan.map(esc).join(" · ")}. <button class="btn small" type="button" data-rb="docs" data-c="${esc(cod)}">🧾 Ir a Guía y factura</button></div>` : ""}
+      <div class="rb-sec">Mensaje (editable)</div><textarea class="rb-in" id="rbFaMsg" rows="12" data-c="${esc(cod)}" style="width:100%;font-size:.78rem">${esc(msg)}</textarea>
+      <div class="rb-row" style="margin-top:6px"><button class="btn rb-oro" type="button" data-rb="fa-wa" data-c="${esc(cod)}" ${fsel?.telefono ? "" : "disabled"}>💬 Abrir WhatsApp con el mensaje</button><button class="btn small" type="button" data-rb="fa-compartir" data-c="${esc(cod)}">📎 Compartir PDFs</button><button class="btn small" type="button" data-rb="fa-enviada" data-c="${esc(cod)}">✔ Marcar enviada</button></div>
+      <div class="muted" style="font-size:.66rem;margin-top:3px">Si el teléfono no comparte texto y archivos juntos: primero se abre el mensaje; después «Compartir PDFs» deja la factura y la guía listas para adjuntar desde aquí.</div>
+      <details class="rb-det" style="margin-top:6px" ${R.faResp === cod ? "open" : ""}><summary>📥 Registrar respuesta del factoring</summary><div class="rb-fr-form" id="faResp">
+        <input class="rb-in fr-ant" placeholder="Anticipo líquido $" inputmode="numeric" value="${resp?.anticipo_liquido ? Number(resp.anticipo_liquido).toLocaleString("es-CL") : ""}"><input class="rb-in fr-f1" type="date" value="${esc(resp?.fecha_anticipo || "")}">
+        <input class="rb-in fr-costo" placeholder="Costo total $" inputmode="numeric" value="${resp?.costo_total ? Number(resp.costo_total).toLocaleString("es-CL") : ""}">
+        <input class="rb-in fr-seg" placeholder="Segundo abono $ (si hay)" inputmode="numeric" value="${resp?.segundo_abono ? Number(resp.segundo_abono).toLocaleString("es-CL") : ""}"><input class="rb-in fr-f2" type="date" value="${esc(resp?.fecha_segundo || "")}">
+        <div class="rb-row"><button class="btn small rb-oro" type="button" data-rb="fa-resp-ok" data-c="${esc(cod)}">Guardar simulación</button></div></div></details></div>`;
+  }
   // 🏟️ ESTADÍSTICAS tipo marcador: hoy / semana / mes · metidas (firmadas en MP), salieron (OC), dieron / no dieron,
   //    vendido, utilidad y a dónde se fue la plata. Por empresa y por cotizador. Fuente: todos los trabajos de la nube.
   const ST_PER = [["hoy", "Hoy"], ["ayer", "Ayer"], ["sem", "Esta semana"], ["semant", "Semana pasada"], ["mes", "Este mes"], ["mesant", "Mes pasado"], ["todo", "Todo"]];
@@ -5712,6 +5774,18 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       if (v && !isNaN(n)) acuerdo = /%/.test(v) ? { tipo: /capital/i.test(v) ? "pct_capital" : "pct", v: n / 100 } : { tipo: "monto", v: Math.round(n) };
       if (!v && !confirm("¿Quitar el acuerdo registrado?")) return;
       try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos: { inv_acuerdo: acuerdo }, dispositivo: dispositivo(false) }) }); toast(acuerdo ? "🤝 Acuerdo guardado" : "Acuerdo quitado"); await refrescar(); R.ejecT = 0; cargarEjecuta(); } catch (e) { toast(e.message); } return pintarHoja(true); }
+    if (a === "fa-abrir") { R.faAb = R.faAb === cod ? null : cod; cargarFactorings(); return pintarHoja(true); }
+    if (a === "fa-guardar-cont") { const L = ($("#rbFactCont")?.value || "").split(/\n+/).map((l) => l.split("|").map((x) => x.trim())).filter((x) => x[0]).map(([nombre, ejecutivo, telefono, email]) => ({ nombre, ejecutivo, telefono, email })); try { R.factorings = (await api("factorings", { method: "POST", body: JSON.stringify({ empresa: leer().empresa || "principal", factorings: L }) })).factorings; R.factoringsT = Date.now(); toast("Contactos guardados"); } catch (e) { toast(e.message); } return pintarHoja(true); }
+    if (a === "fa-wa" || a === "fa-enviada" || a === "fa-compartir") { const t = tEj(); if (!t) return; const F = (R.factorings || [])[R.faSel?.cod === cod ? R.faSel.f : 0] || null; const txt = ($("#rbFaMsg")?.value || "").trim(); const D = t.op?.documentos || []; const facts = D.filter((d) => d.tipo === "factura" && d.estado !== "borrador"); const fa = facts.find((d) => d.id === (R.faSel?.fac)) || facts[facts.length - 1] || null; const guias = fa ? D.filter((d) => d.tipo === "guia" && (fa.referencias || []).some((r) => r.tipo === "GD" && String(r.folio) === String(d.folio))) : [];
+      const sol = { factoring: F?.nombre || "", ejecutivo: F?.ejecutivo || "", telefono: F?.telefono || "", factura_folio: fa?.folio || "", guias: guias.map((g) => g.folio), contacto: [t.op?.cliente_nombre, t.op?.cliente_tel, t.op?.cliente_mail].filter(Boolean).join(" · "), estado: a === "fa-enviada" ? "enviada" : "preparada" };
+      if (a === "fa-compartir") { const files = []; for (const d of [fa, ...guias].filter((x) => x?.archivo)) { try { const r = await fetch(`/bot/archivo?codigo=${encodeURIComponent(cod)}&id=${encodeURIComponent(d.archivo)}`, { headers: { "x-robot-token": R.token } }); const bl = await r.blob(); files.push(new File([bl], `${d.tipo === "guia" ? "Guia" : "Factura"}_${d.folio}_${cod}.pdf`, { type: bl.type || "application/pdf" })); } catch {} }
+        if (!files.length) { toast("No hay PDFs vinculados: vincúlalos en Guía y factura"); return; }
+        if (navigator.canShare && navigator.canShare({ files })) { try { await navigator.share({ files, title: "Simulación factoring OC " + (t.op?.oc_codigo || "") }); } catch {} } else { toast("Este teléfono no comparte archivos desde la app: abre cada PDF (📄) y compártelo a WhatsApp"); } return; }
+      try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos: { factoring_sol: sol }, dispositivo: dispositivo(false) }) }); R.ejecT = 0; cargarEjecuta(); } catch (e) { toast(e.message); }
+      if (a === "fa-wa") { if (!waNum(F?.telefono)) { toast("El contacto de factoring no tiene teléfono"); return; } toast("📝 Solicitud preparada · abriendo WhatsApp a " + (F.ejecutivo || F.nombre)); window.open("https://wa.me/" + waNum(F.telefono) + "?text=" + encodeURIComponent(txt), "_blank", "noopener"); }
+      else toast("✔ Marcada como enviada"); return pintarHoja(true); }
+    if (a === "fa-resp-ok") { const fm = $("#faResp"); if (!fm) return; const v = (k) => (fm.querySelector(k)?.value || "").trim(), n = (k) => +v(k).replace(/\D/g, "") || 0;
+      try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos: { factoring_resp: { anticipo_liquido: n(".fr-ant"), costo_total: n(".fr-costo"), segundo_abono: n(".fr-seg"), fecha_anticipo: v(".fr-f1") || null, fecha_segundo: v(".fr-f2") || null } }, pedir_informe: true, dispositivo: dispositivo(false) }) }); toast("📊 Simulación del factoring guardada: alimenta Factoring y reparto"); R.faAb = null; R.ejecT = 0; await cargarEjecuta(); } catch (e) { toast(e.message); } return pintarHoja(true); }
     if (a === "docs") { R.docsVolver = { pantalla: R.pantalla, ejAbierto: R.ejAbierto, ejModo: R.ejModo }; R.pantalla = "docs"; R.docsCod = cod; R.docTipo = null; R.docImp = null; try { localStorage.setItem("sdc:docs_oc", cod); } catch {} sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "docs-cerrar") { const v = R.docsVolver; R.pantalla = v?.pantalla && v.pantalla !== "docs" ? v.pantalla : null; if (v) { R.ejAbierto = v.ejAbierto; R.ejModo = v.ejModo; } R.docsVolver = null; try { localStorage.removeItem("sdc:docs_oc"); } catch {} return pintarHoja(true); }
     if (a === "doc-tipo") { R.docTipo = b.dataset.t; R.docImp = null; return pintarHoja(true); }
@@ -6219,6 +6293,8 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     else if (el.classList.contains("rb-neg-in")) { const txt = !["precio_acordado", "costo_transporte", "km", "cobrado"].includes(el.dataset.campo);
       const v = txt ? el.value : +(el.value || "").replace(/\D/g, "") || null; datos = { [el.dataset.campo]: v }; informe = !txt; }
     if (el.type === "date") el.blur();
+    if (el.dataset.rbSel === "fa-f" || el.dataset.rbSel === "fa-fac") { R.faSel = { cod, f: el.dataset.rbSel === "fa-f" ? +el.value : (R.faSel?.cod === cod ? R.faSel.f : 0), fac: el.dataset.rbSel === "fa-fac" ? el.value : (R.faSel?.cod === cod ? R.faSel.fac : null) }; R.faMsg = null; pintarHoja(true); return; }
+    if (el.id === "rbFaMsg") { R.faMsg = { cod, txt: el.value }; return; }
     if (el.dataset.rbChk) datos = { [el.dataset.rbChk]: el.checked };
     if (el.dataset.rbCom === "aplica") { datos = { aplica_comision: el.checked }; informe = true; }
     if (el.dataset.rbCom === "pct") { datos = { comision: +el.value, aplica_comision: true }; informe = true; }

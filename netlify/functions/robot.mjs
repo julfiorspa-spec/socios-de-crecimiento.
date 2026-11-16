@@ -1794,6 +1794,8 @@ async function atender(req) {
     return json({ pendientes: lista });
   }
 
+  if (ruta === "factorings" && req.method === "GET") { const emp = texto(url.searchParams.get("empresa"), 40) || "principal"; return json({ factorings: (await store.get("factorings/" + emp, { type: "json" })) || [] }); }
+  if (ruta === "factorings" && req.method === "POST") { const b = await cuerpo(req); const emp = texto(b.empresa, 40) || "principal"; const L = (Array.isArray(b.factorings) ? b.factorings : []).slice(0, 12).map((f) => ({ nombre: texto(f.nombre, 60), ejecutivo: texto(f.ejecutivo, 60), telefono: texto(f.telefono, 30), email: texto(f.email, 120) })).filter((f) => f.nombre); await store.setJSON("factorings/" + emp, L); return json({ ok: true, factorings: L }); }
   if (ruta === "doc-borrador" && req.method === "POST") {   // 🧾 borrador de guía/factura con todo lo que ya sabe la OC
     const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return json({ error: "No existe." }, 404);
     const L = (await store.get("empresas/lista", { type: "json" })) || {}; const emp = L[t.empresa || "principal"] || L.principal || null;
@@ -2194,7 +2196,7 @@ async function atender(req) {
     const d = b.datos && typeof b.datos === "object" ? b.datos : {};
     for (const k of ["proveedor", "contacto", "telefono", "email", "transporte", "notas", "medio_pago", "guia", "factura", "motivo_no", "folio_guia", "folio_factura",
       "ejecutor", "ejecutor_nombre", "plazo_proveedor", "fecha_entrega", "banco_proveedor", "negociacion", "plazo_fecha", "plazo_nota", "incidencia",
-      "transportista", "transportista_tel", "origen_flete", "patente", "recibio_nombre", "recibio_rut", "fecha_cobro", "inversionista_nombre", "inversionista_tel", "despacho_modo", "proveedor_k", "proveedor_email", "proveedor_tel", "entrega_contacto", "entrega_tel", "vehiculo", "factoring", "nota_cierre", "twitch_canal", "video_prueba", "inversionista_banco", "ejecutor_banco", "jugador_banco"]) if (d[k] !== undefined) op[k] = texto(d[k], 400);
+      "transportista", "transportista_tel", "origen_flete", "patente", "recibio_nombre", "recibio_rut", "fecha_cobro", "inversionista_nombre", "inversionista_tel", "despacho_modo", "proveedor_k", "proveedor_email", "proveedor_tel", "entrega_contacto", "entrega_tel", "vehiculo", "factoring", "cliente_nombre", "cliente_tel", "cliente_mail", "nota_cierre", "twitch_canal", "video_prueba", "inversionista_banco", "ejecutor_banco", "jugador_banco"]) if (d[k] !== undefined) op[k] = texto(d[k], 400);
     for (const k of ["precio_acordado", "costo_transporte", "opcion", "km", "cobrado"]) if (d[k] !== undefined) op[k] = d[k] === null ? null : Math.max(0, Math.round(Number(d[k]) || 0));
     // 🧾 caja real: facturas, abonos, aportes y devoluciones (listas de movimientos en pesos enteros) · acuerdo del inversionista
     const mov = (xs, extra) => (Array.isArray(xs) ? xs : []).slice(0, 40).map((x) => ({ monto: Math.max(0, Math.round(Number(x?.monto) || 0)), fecha: texto(x?.fecha, 10) || null, t: texto(x?.t, 30) || ahora(), ...extra(x || {}) })).filter((x) => x.monto > 0);
@@ -2216,6 +2218,18 @@ async function atender(req) {
       const items = t.items || []; const CC = op.costos_confirmados; const todas = items.length && items.every((it, k) => CC[it.lid || "L" + (k + 1)]);
       if (todas) { op.precio_acordado = Math.round(items.reduce((s2, it, k) => s2 + (CC[it.lid || "L" + (k + 1)].neto_unit || 0) * (it.q || 1), 0) * 1.19); const fl = items.reduce((s2, it, k) => s2 + (CC[it.lid || "L" + (k + 1)].flete || 0), 0); if (fl) op.costo_transporte = fl; op.pedido_informe = { t: ahora() }; }
     }
+    if (d.factoring_sol !== undefined) {   // 💬 solicitud de simulación al factoring: preparada → enviada (seguimiento en la OC)
+      const x = d.factoring_sol || {}; op.factoring_sol = { ...(op.factoring_sol || {}), factoring: texto(x.factoring, 80), ejecutivo: texto(x.ejecutivo, 80), telefono: texto(x.telefono, 30), factura_folio: texto(x.factura_folio, 20), guias: (Array.isArray(x.guias) ? x.guias : []).slice(0, 10).map((g) => texto(g, 20)), contacto: texto(x.contacto, 200),
+        estado: x.estado === "enviada" ? "enviada" : (op.factoring_sol?.estado === "enviada" && x.estado !== "preparada" ? "enviada" : "preparada"), t_preparada: op.factoring_sol?.t_preparada || ahora(), t_enviada: x.estado === "enviada" ? ahora() : op.factoring_sol?.t_enviada || null, por: texto(b.dispositivo, 60) }; }
+    if (d.factoring_resp !== undefined) {  // respuesta del factoring (simulación): anticipo líquido, costo total, segundo abono y fechas → alimenta Factoring y reparto como simulación
+      const x = d.factoring_resp || {}; const n = (v) => Math.max(0, Math.round(Number(v) || 0)); op.factoring_resp = { anticipo_liquido: n(x.anticipo_liquido), costo_total: n(x.costo_total), segundo_abono: n(x.segundo_abono), fecha_anticipo: texto(x.fecha_anticipo, 10), fecha_segundo: texto(x.fecha_segundo, 10), nota: texto(x.nota, 200), t: ahora() };
+      const tot = Number(t.oc_compra?.total || t.total) || 0; if (op.factoring_resp.costo_total && tot) op.param = { ...(op.param || {}), factoring: Math.round(op.factoring_resp.costo_total / tot * 10000) / 10000 };
+      if (op.factoring_sol) op.factoring_sol.estado = "respondida";
+      // abonos previstos (no confirmados) para la caja: se confirman cuando se depositen
+      const prev = (op.abonos || []).filter((a) => a.origen !== "factoring_sim"); const nuevos = [];
+      if (op.factoring_resp.anticipo_liquido) nuevos.push({ monto: op.factoring_resp.anticipo_liquido, fecha: op.factoring_resp.fecha_anticipo || null, origen: "factoring", confirmado: false, sim: true, t: ahora() });
+      if (op.factoring_resp.segundo_abono) nuevos.push({ monto: op.factoring_resp.segundo_abono, fecha: op.factoring_resp.fecha_segundo || null, origen: "factoring", confirmado: false, sim: true, t: ahora() });
+      op.abonos = [...prev.filter((a) => !a.sim), ...nuevos]; }
     if (d.inv_acuerdo !== undefined) op.inv_acuerdo = d.inv_acuerdo && ["pct", "pct_capital", "monto"].includes(d.inv_acuerdo.tipo) && Number(d.inv_acuerdo.v) > 0 ? { tipo: d.inv_acuerdo.tipo, v: Number(d.inv_acuerdo.v) } : null;
     if (Array.isArray(d.pagos)) {                                    // 💸 a quién le compré: nombre + monto neto + factura (varias personas)
       op.pagos = d.pagos.slice(0, 12).map((x) => ({ nombre: texto(x?.nombre, 60) || "", monto: Math.max(0, Math.round(Number(x?.monto) || 0)), factura: x?.factura !== false, ...(Array.isArray(x?.unit) ? { unit: x.unit.slice(0, 8).map((u) => Math.max(0, Math.round(Number(u) || 0))) } : {}), ...(x?.tipo === "neto" || x?.tipo === "bruto" ? { tipo: x.tipo } : {}) })).filter((x) => x.nombre || x.monto);
