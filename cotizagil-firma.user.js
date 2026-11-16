@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      3.5.2
+// @version      3.6.0
 // @description  Te lleva a tu Compra Ágil (una navegación, por tu toque) y rellena precios/despacho/detalle al pulsar Rellenar, con confirmación. No envía, no declara, no firma, no navega solo, no oculta la automatización: el envío y la firma los haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -437,6 +437,41 @@
   };
 
   // ---- Botón RELLENAR: precios/despacho/detalle + IVA, con confirmación. Nunca la declaración ni el envío. ----
+  // 🧊 CAPTURA DEL ENVÍO: lo que quedó en pantalla (precios por ítem, despacho, total) se guarda mientras editas y al tocar Enviar;
+  //    cuando Mercado Público confirma «Cotización enviada correctamente», esa captura viaja a la nube con el intento y queda congelada.
+  const claseCampo = (el) => {
+    for (let x = el, k = 0; k < 9 && x; k++, x = x.parentElement) {
+      const s = x.innerText || '';
+      const vu = /(valor|precio|monto)\s*unitario/i.test(s);
+      const de = /despacho|flete|transporte/i.test(s);
+      if (vu && !de) return 'i';
+      if (de && !vu) return 'd';
+      if (vu && de) return '';
+    }
+    return '';
+  };
+  const numDe = (v) => { const d = String(v ?? '').replace(/[^\d]/g, ''); return d ? Number(d) : null; };
+  let capT = null;
+  const capturar = async (porEnviar) => {
+    const cod = getPathCode(); if (!cod) return null;
+    try {
+      const inputs = allFields().filter(el => el.tagName === 'INPUT');
+      const precios = inputs.filter(el => claseCampo(el) === 'i').map(el => numDe(el.value));
+      if (!precios.length) return null;
+      const desp = inputs.filter(el => claseCampo(el) === 'd').map(el => numDe(el.value)).find(v => v != null) || 0;
+      let total = null; try { total = montoEnPantalla('monto\\s*total'); } catch (_) {}
+      const prev = JSON.parse((await gmGet('captura:' + cod)) || 'null') || {};
+      const cap = { precios, despacho: desp, total, t: Date.now(), intento: porEnviar ? 'e' + Date.now().toString(36) : (prev.intento || null) };
+      await gmSet('captura:' + cod, JSON.stringify(cap));
+      if (porEnviar) debug('captura_enviar', cod + ' ' + precios.join(','));
+      return cap;
+    } catch (_) { return null; }
+  };
+  const capturaProgramada = () => { clearTimeout(capT); capT = setTimeout(() => capturar(false), 600); };
+  document.addEventListener('input', (ev) => { if (ev.target && !panel.contains(ev.target)) capturaProgramada(); }, true);
+  document.addEventListener('change', (ev) => { if (ev.target && !panel.contains(ev.target)) capturaProgramada(); }, true);
+  document.addEventListener('click', (ev) => { const b = ev.target.closest('button,input[type=submit],input[type=button],a'); if (!b || panel.contains(b)) return;
+    const txt = (b.innerText || b.value || '').trim(); if (/^(enviar|aceptar y enviar|enviar cotizaci[oó]n|confirmar)\b/i.test(txt)) capturar(true); }, true);
   //      solo = 'precio' | 'despacho' | 'detalle' | null (todo)
   const previewAndFill = async (offer, code, solo) => {
     if (hayBloqueoMP()) { mostrarBloqueo(); return; }
@@ -445,17 +480,7 @@
     const inputs = fields.filter(el => el.tagName === 'INPUT');
     // clasifica cada input por el texto de sus ancestros: en el formulario de MP la etiqueta
     // «Valor unitario»/«Despacho» está en un bloque superior, NO envolviendo al campo.
-    const clase = (el) => {
-      for (let x = el, k = 0; k < 9 && x; k++, x = x.parentElement) {
-        const s = x.innerText || '';
-        const vu = /(valor|precio|monto)\s*unitario/i.test(s);
-        const de = /despacho|flete|transporte/i.test(s);
-        if (vu && !de) return 'i';
-        if (de && !vu) return 'd';
-        if (vu && de) return '';   // ambos en este nivel: subimos demasiado, ambiguo
-      }
-      return '';
-    };
+    const clase = claseCampo;
     const amounts = (Array.isArray(offer.precios) ? offer.precios : []).map(textValue);
     const problems = [], assigned = new Set(), tasks = [];
     if (!amounts.length) problems.push('La oferta no contiene precios por ítem.');
@@ -630,7 +655,7 @@
         await gmSet('firmada', JSON.stringify({ cod: confirmed, t: Date.now() }));
         await gmSet('pendiente', 'null');
         debug('confirmacion_auto', confirmed);
-        if (token) { try { const ua = navigator.userAgent; const disp = (await gmGet('dispositivo')) || (/iphone/i.test(ua) ? 'iPhone' : /android/i.test(ua) ? 'Android' : 'Celular'); await getJson('pedir', token, { codigo: confirmed, accion: 'verificar', vista: true, dispositivo: disp, enviado_por: disp }); } catch (_) {} }
+        if (token) { try { const ua = navigator.userAgent; const disp = (await gmGet('dispositivo')) || (/iphone/i.test(ua) ? 'iPhone' : /android/i.test(ua) ? 'Android' : 'Celular'); let cap = null; try { cap = JSON.parse((await gmGet('captura:' + confirmed)) || 'null'); } catch (_) {} const edad = cap ? Date.now() - (cap.t || 0) : 1e12; const capOK = cap && edad < 6 * 3600 * 1000 ? cap : null; debug(capOK ? 'envio_capturado' : 'envio_sin_captura', confirmed); await getJson('pedir', token, { codigo: confirmed, accion: 'verificar', vista: true, dispositivo: disp, enviado_por: disp, intento: capOK?.intento || ('c' + Date.now().toString(36)), captura: capOK ? { precios: capOK.precios, despacho: capOK.despacho, total: capOK.total } : null }); } catch (_) {} }
       }
       // ⚡ vuelve solo a CotizÁgil en 2 s (la app te lleva a la siguiente); «Quedarme» lo cancela.
       let quedarse = false; let seg = 2;

@@ -514,7 +514,7 @@
   .rb-ej-card{padding:10px 12px;margin:12px 0;border:1px dashed rgba(245,207,107,.5)}.rb-ej-tag{font-size:.62rem;letter-spacing:.08em;color:#f5cf6b;margin-bottom:4px}
   .rb-mp-est{display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12)}.rb-mp-est>div{flex:1;min-width:0}.rb-mp-est small{display:block;font-size:.68rem;opacity:.75}
   .rb-mp-est i{width:12px;height:12px;border-radius:50%;background:#ff6b6b;flex:none}.rb-mp-est.ok i{background:#5ef0b0;box-shadow:0 0 8px #5ef0b0}.rb-mp-est.aten i{background:#f5cf6b}.rb-link-b{background:none;border:0;color:#f5cf6b;font:inherit;font-size:inherit;padding:0;cursor:pointer;text-decoration:underline}
-  .rb-fr.ab{border-color:rgba(245,207,107,.45)}.rb-fr-flujo{margin-top:8px;border-top:1px dashed rgba(255,255,255,.14);padding-top:6px}.rb-fr-sec{margin:8px 0 4px;padding-left:8px;border-left:2px solid rgba(255,255,255,.14)}
+  .rb-fr.ab,.rb-oc-item.ab{border-color:rgba(245,207,107,.45)}.rb-oc-item.ok{border-color:rgba(94,240,176,.35)}.rb-fr-flujo{margin-top:8px;border-top:1px dashed rgba(255,255,255,.14);padding-top:6px}.rb-fr-sec{margin:8px 0 4px;padding-left:8px;border-left:2px solid rgba(255,255,255,.14)}
   .rb-fr-flujo .rb-rep>span{display:none}.rb-fr-flujo .rb-rep{padding:6px 8px}.rb-fr-flujo .rb-rep.pagado{opacity:.75}.rb-fr-flujo .rb-rep.oro b{color:#f5cf6b}.rb-fr-form{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0;padding:8px;border:1px solid rgba(245,207,107,.4);border-radius:10px}.rb-fr-form .rb-in{flex:1;min-width:110px}.rb-oc-tag.ok{border-color:rgba(79,209,139,.5);color:#8ff0b8}.rb-oc-tag.mal{border-color:rgba(255,120,120,.5);color:#ff9a9a}
   .rb-llamar{border-radius:16px;padding:10px;background:linear-gradient(160deg,rgba(255,226,140,.12),rgba(255,255,255,.03));border:1px solid rgba(245,207,107,.35)}
   .btn.rb-mic.on{background:#e8313f!important;border-color:#e8313f!important;animation:pulse 1.2s ease-in-out infinite}
@@ -3952,6 +3952,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   }
   const urlOC = (cod) => "https://www.mercadopublico.cl/PurchaseOrder/Modules/PO/DetailsPurchaseOrder.aspx?codigoOC=" + encodeURIComponent(cod || "");
   function pantallaOC() {
+    if (R.ocVer) return pantallaOCVer(R.ocVer);
     const todas = esDueno() && R.ocTodas !== false;
     const base = (R.todos || R.data?.trabajos || []).filter((t) => todas || deMiEmpresa(t));   // las OC son de la empresa, no de un juego
     const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
@@ -4010,6 +4011,116 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       ${sel === "F" ? facturasHTML(base) : vivas.length || grupos.O.length ? bloques : `<div class="empty">Todavía no hay órdenes de compra${todas ? "" : " de tu empresa"}. Cuando te adjudiquen, aparecen aquí solas.</div>`}</div>`;
   }
 
+
+  // 🔎 VER ESTUDIO de una OC, dentro de Caja OC (mantiene el contexto): vínculo con la oferta enviada, Proveedores por ítem
+  //    (costo usado al ofertar · alternativas actuales · costo confirmado), Próxima acción y margen vigente con calcNeg.
+  const METODO_TXT = { proveedor_seleccionado: "proveedor seleccionado", estimacion_multiple: "estimación a partir de varias fuentes", estimacion_sin_fuente: "estimación sin fuente identificada" };
+  const lidDe = (it, k) => it?.lid || "L" + (k + 1);
+  async function cargarOCFull(cod) {
+    R.ocFull = R.ocFull || {}; if (R.ocFull[cod]?.t && Date.now() - R.ocFull[cod].t < 20000) return; R.ocFull[cod] = { ...(R.ocFull[cod] || {}), cargando: true };
+    try { const r = await api("trabajo?codigo=" + encodeURIComponent(cod)); R.ocFull[cod] = { t: Date.now(), tr: r.trabajo }; } catch (e) { R.ocFull[cod] = { t: Date.now(), err: e.message }; }
+    cargarMercado(); pintarHoja(true);
+  }
+  function lineasOC(t) {
+    const op = t.op || {}, vers = t.versiones || [], env = t.envio || null;
+    const vEnv = env?.version_id ? vers.find((v) => v.id === env.version_id) : null, vAct = vers.find((v) => v.id === t.version_actual) || vers[vers.length - 1] || null;
+    const base = (vEnv?.items?.length ? vEnv.items : t.items?.length ? t.items : (t.oc_compra?.items || []).map((i) => ({ d: i.especificacion || i.nombre, q: i.cantidad, p: i.precio })));
+    const preciosEnv = env?.captura?.precios || vEnv?.precios || null;
+    const mk = (R.mercado || {})[t.codigo], conc = op.concrecion, CC = op.costos_confirmados || {};
+    return base.map((it, k) => { const lid = lidDe(it, k), oc = (t.oc_compra?.items || [])[k] || {}, ci = (conc?.items || []).find((x) => Number(x.i) === k) || null, cb = it.costo_base || null;
+      const fuente = cb && cb.fuente_idx != null ? (it.fuentes || [])[cb.fuente_idx] : (it.fuentes || [])[0] || null;
+      const mkU = mk?.items?.[k]?.u || null;
+      const conf = CC[lid] || null;
+      const ventaU = Number(preciosEnv?.[k]) || Number(oc.precio) || Number(it.p) || 0, q = Number(oc.cantidad) || Number(it.q) || 1;
+      const costoBase = cb?.neto_unit || mkU || null;
+      const altU = ci?.costo_unit_neto || (ci?.elegido?.precio_unit_iva ? Math.round(ci.elegido.precio_unit_iva / 1.19) : null);
+      const vigente = conf?.neto_unit || costoBase || altU || null;
+      return { k, lid, d: it.d || oc.nombre || "", espec: oc.especificacion || "", q, ventaU, cb, fuente, fuentes: it.fuentes || [], mkU, ci, conf, costoBase, vigente, sinFuente: !cb && !(it.fuentes || []).length }; });
+  }
+  function margenOC(t, L) {
+    const op = t.op || {}; const X0 = calcNeg(t);
+    const costoBase = L.every((l) => l.costoBase != null) ? L.reduce((s2, l) => s2 + l.costoBase * l.q, 0) : null;
+    const costoVig = L.every((l) => l.vigente != null) ? L.reduce((s2, l) => s2 + l.vigente * l.q, 0) : null;
+    const con = (neto) => neto == null ? null : calcNeg({ ...t, op: { ...op, precio_acordado: Math.round(neto * 1.19), costo_transporte: (op.costo_transporte || 0) + L.reduce((s2, l) => s2 + (l.conf?.flete || 0), 0) } });
+    return { X0, Xb: con(costoBase), Xv: con(costoVig), costoBase, costoVig, nConf: L.filter((l) => l.conf).length };
+  }
+  function proximaAccionOC(t, L) {
+    const op = t.op || {}; const pend = L.find((l) => !l.conf);
+    if (pend) { const el = pend.ci?.elegido, f = pend.fuente, prov = el?.proveedor || el?.titulo || f?.proveedor || null, tel = el?.telefono || null, url = el?.url || f?.url || null;
+      return { lid: pend.lid, titulo: prov ? `Llama a ${prov} y confirma precio neto, stock y entrega para ${pend.q} ${pend.q === 1 ? "unidad" : "unidades"} de «${String(pend.d).slice(0, 50)}»` : `Busca proveedor para ${pend.q} × «${String(pend.d).slice(0, 50)}» y confirma precio neto, stock y entrega`,
+        detalle: pend.vigente ? `Referencia: ${clp(pend.vigente)} neto c/u (${pend.conf ? "confirmado" : pend.cb ? METODO_TXT[pend.cb.metodo] : pend.mkU ? "estimación previa de Mercado" : pend.ci ? "alternativa actual" : "sin referencia"}) · vendes ${clp(pend.ventaU)} neto c/u` : `Sin precio de referencia: vendes ${clp(pend.ventaU)} neto c/u`, tel, url, boton: "Abrir ítem y registrar el precio" }; }
+    if (!op.proveedor_pagado) return { lid: null, titulo: "Todos los costos confirmados: registrar la compra y pagar al proveedor", detalle: `Compra ${clp(op.precio_acordado || 0)} con IVA`, boton: "Ir a Pago", tab: "pago" };
+    if (!["despacho", "entrega", "cerrado"].includes(op.etapa)) return { lid: null, titulo: "Coordinar el despacho (o retiro) y la fecha de entrega", detalle: op.plazo_fecha ? "Entrega comprometida " + op.plazo_fecha : "Falta la fecha comprometida", boton: "Ir a Despacho", tab: "transporte" };
+    return { lid: null, titulo: "Subir recepción conforme y emitir factura", detalle: "Con eso la OC pasa a Concretadas y se puede ceder al factoring", boton: "Ir a Recepción", tab: "entrega" };
+  }
+  function pantallaOCVer(cod) {
+    const F = (R.ocFull || {})[cod]; if (!F || F.cargando) { if (!F) cargarOCFull(cod); return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">🔎 Estudio de la OC</h2><button class="btn small" type="button" data-rb="oc-ver-cerrar">← Caja OC</button></div><div class="empty"><span class="spinner"></span> Cargando la oferta completa…</div></div>`; }
+    if (F.err) return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">🔎 Estudio</h2><button class="btn small" type="button" data-rb="oc-ver-cerrar">← Caja OC</button></div><div class="empty">${esc(F.err)}</div></div>`;
+    const t = F.tr, op = t.op || {}, L = lineasOC(t), M = margenOC(t, L), pa = proximaAccionOC(t, L), vers = t.versiones || [], env = t.envio || null, match = op.oc_match || null;
+    const abierta = R.ocFila || pa.lid, pre = R.ocPre?.cod === cod ? R.ocPre : null, cargando = (R._concretando || {})[cod];
+    const f = (v) => (v == null ? "—" : clp(Math.round(v)));
+    const dest = t.oc_compra?.direccion || op.informe?.direccion || "";
+    // vínculo oferta ↔ OC
+    const vinc = (() => {
+      const estado = match?.estado || (env ? (env.montos_verificados ? "coincide_envio" : "envio_por_verificar") : "por_vincular");
+      const txt = estado === "coincide_envio" ? "✅ " + (match?.texto || "Montos coinciden con el envío") : estado === "coincide_borrador" ? "✅ Montos coinciden con la OC (borrador guardado)" : estado === "envio_por_verificar" ? "📨 Envío confirmado · montos por verificar" : "🔗 Oferta original por vincular";
+      const cls = estado.startsWith("coincide") ? "ok" : "";
+      const precios = env?.captura?.precios || (vers.find((v) => v.id === env?.version_id) || vers[vers.length - 1] || {}).precios || t.precios || [];
+      const tabla = R.ocMatch === cod ? `<table class="rb-copias" style="margin-top:6px;font-size:.74rem"><tr><th style="text-align:left">Ítem</th><th>OC</th><th>Oferta ${env ? (env.montos_verificados ? "enviada (capturada)" : "preparada") : "preparada"}</th></tr>
+          ${(t.oc_compra?.items || L).map((x, k) => { const po = Number(x.precio ?? L[k]?.ventaU) || 0, pp = Number(precios[k]) || 0; return `<tr><td>${k + 1}. ${esc(String(x.nombre || x.d || L[k]?.d || "").slice(0, 40))}</td><td class="n">${f(po)}</td><td class="n" style="color:${Math.abs(po - pp) <= 1 ? "#5ef0b0" : "#ff9a9a"}">${f(pp)}</td></tr>`; }).join("")}
+          <tr><td>Total</td><td class="n">${f(t.oc_compra?.total || t.total)}</td><td class="n">${f(env?.captura?.total || t.total)}</td></tr></table>
+          ${vers.length ? `<div class="muted" style="font-size:.68rem;margin-top:4px">Versiones: ${vers.map((v) => `${v.id === env?.version_id ? "📨 " : ""}${esc(v.origen)} ${esc(hace(v.t))}${v.enviada ? " (enviada)" : ""}`).join(" · ")}</div>` : `<div class="muted" style="font-size:.68rem;margin-top:4px">Oferta preparada antes del registro de versiones: una sola copia (sin historial de envío).</div>`}
+          ${match?.dif?.length ? `<div class="muted" style="font-size:.68rem">Diferencias: ${match.dif.map(esc).join(" · ")}</div>` : ""}` : "";
+      return `<div class="rb-card" style="padding:10px 12px;margin:8px 0"><div class="rb-env"><b>Oferta presentada</b><span class="rb-oc-tag ${cls}">${txt}</span></div>
+        <div class="muted" style="font-size:.72rem">${esc(t.codigo)} · ${t.fecha_envio || t.op?.ganada_t ? "enviada " + esc(String(t.fecha_envio || "").slice(0, 16)) : ""}${env ? ` · intento ${esc(env.intento || "")} · ${esc(hace(env.t))}` : ""} · total ${f(t.total)}</div>
+        <div class="rb-row" style="margin-top:6px">${t.pdf ? `<button class="btn small" type="button" data-rb="pdf" data-c="${esc(cod)}">📄 Abrir oferta original (PDF)</button>` : ""}<button class="btn small" type="button" data-rb="oc-match" data-c="${esc(cod)}">${R.ocMatch === cod ? "Ocultar" : "Revisar coincidencias"}</button>${t.op?.oc_codigo ? `<a class="btn small" href="${urlOC(t.op.oc_codigo)}" target="_blank" rel="noopener">OC en MP ↗</a>` : ""}</div>${tabla}</div>`; })();
+    // fila por ítem
+    const fila = (l) => { const ab = abierta === l.lid; const alts = [...(l.ci?.elegido ? [{ ...l.ci.elegido, _el: true }] : []), ...((l.ci?.alternativas || []).filter((a) => a.url && a.url !== l.ci?.elegido?.url))].slice(0, 4);
+      const propios = l.ci?.propios || [];
+      const usado = l.cb ? `<b>${f(l.cb.neto_unit)}</b> neto c/u · ${METODO_TXT[l.cb.metodo] || l.cb.metodo}${l.fuente ? ` · <a href="${esc(l.fuente.url || "#")}" target="_blank" rel="noopener">${esc(l.fuente.proveedor || "fuente")}</a>${l.fuente.precio ? " " + f(l.fuente.precio) + (l.fuente.precio_es_neto ? " neto" : " c/IVA") : ""} · ${esc(String(l.fuente.t || "").slice(0, 10))}` : ""}`
+        : `<span class="rb-oc-tag mal">Fuente original sin registrar</span>${l.mkU ? ` · Estimación previa de Mercado <b>${f(l.mkU)}</b> neto c/u` : ""}`;
+      const pv = pre?.lid === l.lid ? pre : null;
+      const gan = (u) => u == null ? null : (l.ventaU - u) * l.q;
+      return `<div class="rb-card rb-oc-item ${ab ? "ab" : ""} ${l.conf ? "ok" : ""}" style="padding:10px 12px;margin:6px 0" id="ocfila-${esc(l.lid)}">
+        <div data-rb="oc-fila" data-c="${esc(cod)}" data-lid="${esc(l.lid)}" style="cursor:pointer">
+          <div class="rb-env"><b style="font-size:.86rem">${l.k + 1}. ${esc(String(l.d).slice(0, 80))}</b><span class="rb-oc-tag ${l.conf ? "ok" : l.ci ? "" : "mal"}">${l.conf ? "✓ confirmado" : l.ci?.elegido ? "alternativa actual" : "por resolver"}</span></div>
+          ${l.espec ? `<div class="muted" style="font-size:.7rem">${esc(String(l.espec).slice(0, 160))}</div>` : ""}
+          <div class="rb-kv" style="font-size:.74rem;margin-top:3px"><span>${l.q} un. · vendes <b>${f(l.ventaU)}</b> neto c/u</span><span>costo usado al ofertar: ${l.cb ? f(l.cb.neto_unit) : l.mkU ? f(l.mkU) + " (Mercado)" : "sin registrar"}</span><span>vigente: <b>${f(l.vigente)}</b>${l.vigente != null ? ` → ${gan(l.vigente) >= 0 ? "ganas" : "pierdes"} <b class="${gan(l.vigente) >= 0 ? "rb-vivo-t" : "rb-neg-t"}">${f(Math.abs(gan(l.vigente)))}</b>` : ""}</span></div>
+        </div>
+        ${ab ? `<div class="rb-fr-flujo">
+          <div class="rb-fr-sec"><div class="rb-sec">🧾 Costo usado al ofertar</div><div style="font-size:.76rem">${usado}</div>
+            ${l.fuentes.length > 1 ? `<div class="muted" style="font-size:.68rem;margin-top:3px">Otras fuentes miradas: ${l.fuentes.map((x, i) => i === (l.cb?.fuente_idx ?? -1) ? "" : `<a href="${esc(x.url || "#")}" target="_blank" rel="noopener">${esc(x.proveedor || "fuente")}</a>${x.precio ? " " + f(x.precio) : ""}`).filter(Boolean).join(" · ")}</div>` : ""}</div>
+          <div class="rb-fr-sec"><div class="rb-sec">🛒 Alternativas actuales ${l.ci ? `<span class="muted" style="font-weight:400;font-size:.66rem">buscadas ${esc(hace(op.concrecion?.t))}</span>` : ""}</div>
+            ${alts.length ? alts.map((a) => `<div class="rb-rep" style="padding:6px 8px"><span></span><div><b>${esc(String(a.titulo || a.proveedor || a.url).slice(0, 60))}</b><small>${a._el ? "recomendada · " : ""}${esc(a.fuente || String(a.url || "").replace(/^https?:\/\/(www\.)?/, "").split("/")[0])}${a.telefono ? " · 📞 " + esc(a.telefono) : ""}${a.precio_unit_iva || a.precio_iva ? ` · ${f(a.precio_unit_iva || a.precio_iva)} c/IVA = ${f((a.precio_unit_iva || a.precio_iva) / 1.19)} neto` : " · sin precio en la página"}${a.sin_stock ? " · ⚠ sin stock" : ""}</small></div>
+                <div style="text-align:right;display:flex;gap:4px;flex-direction:column"><a class="btn small" href="${esc(a.url)}" target="_blank" rel="noopener">Abrir ↗</a><button class="btn small rb-oro" type="button" data-rb="oc-usar" data-c="${esc(cod)}" data-lid="${esc(l.lid)}" data-prov="${esc(a.proveedor || a.titulo || "")}" data-url="${esc(a.url || "")}" data-tel="${esc(a.telefono || "")}" data-neto="${a.precio_unit_iva || a.precio_iva ? Math.round((a.precio_unit_iva || a.precio_iva) / 1.19) : ""}">Usar</button></div></div>`).join("")
+              : `<div class="muted" style="font-size:.72rem">Sin alternativas guardadas. ${cargando ? '<span class="spinner"></span> buscando…' : `<button class="btn small" type="button" data-rb="oc-concretar" data-c="${esc(cod)}">🎯 Buscar proveedores ahora</button>`}</div>`}
+            ${propios.length ? `<div class="muted" style="font-size:.68rem;margin-top:4px">🧾 Historial propio (SII): ${propios.map((p) => `${esc(p.proveedor)}${p.telefono ? " 📞 " + esc(p.telefono) : ""} · ${(p.compras || []).map((c) => `${esc(String(c.producto).slice(0, 30))} ${f(c.precio_unit_neto)} neto`).join(", ")}`).join(" · ")}</div>` : ""}
+            ${l.ci?.negociacion?.objetivo_iva ? `<div class="muted" style="font-size:.68rem">🎯 Objetivo ${f(l.ci.negociacion.objetivo_iva)} c/u con IVA · tope ${f(l.ci.negociacion.maximo_iva)}</div>` : ""}</div>
+          <div class="rb-fr-sec"><div class="rb-sec">✅ Costo confirmado</div>
+            ${l.conf ? `<div style="font-size:.76rem"><b>${f(l.conf.neto_unit)}</b> neto c/u · ${esc(l.conf.proveedor || "")}${l.conf.url ? ` · <a href="${esc(l.conf.url)}" target="_blank" rel="noopener">enlace</a>` : ""}${l.conf.telefono ? " · 📞 " + esc(l.conf.telefono) : ""}<br><span class="muted">stock ${esc(l.conf.stock || "—")} · plazo ${esc(l.conf.plazo || "—")} · ${l.conf.modo === "retiro" ? "retiro" : "despacho"} ${l.conf.flete ? f(l.conf.flete) : "sin costo"} · ${esc(String(l.conf.t || "").slice(0, 16).replace("T", " "))} · ${esc(l.conf.por || "")}</span></div>
+              <div class="rb-row" style="margin-top:4px"><button class="btn small" type="button" data-rb="oc-conf-quitar" data-c="${esc(cod)}" data-lid="${esc(l.lid)}">Corregir</button></div>` : ""}
+            ${!l.conf || pv ? `<div class="rb-fr-form rb-conf-form" data-c="${esc(cod)}" data-lid="${esc(l.lid)}">
+              <input class="rb-in cf-prov" placeholder="Proveedor" value="${esc(pv?.prov || l.ci?.elegido?.proveedor || l.ci?.elegido?.titulo || l.fuente?.proveedor || "")}">
+              <input class="rb-in cf-tel" placeholder="Teléfono" inputmode="tel" value="${esc(pv?.tel || l.ci?.elegido?.telefono || "")}">
+              <input class="rb-in cf-url" placeholder="Enlace" value="${esc(pv?.url || l.ci?.elegido?.url || l.fuente?.url || "")}" style="flex:2;min-width:160px">
+              <input class="rb-in cf-neto" placeholder="Precio neto c/u $" inputmode="numeric" value="${pv?.neto ? Number(pv.neto).toLocaleString("es-CL") : ""}">
+              <input class="rb-in cf-stock" placeholder="Stock (ej: 4 disponibles)" value="">
+              <input class="rb-in cf-plazo" placeholder="Plazo (ej: 3 días)" value="">
+              <select class="rb-in cf-modo"><option value="despacho">Despacho a destino</option><option value="retiro">Retiro en proveedor</option></select>
+              <input class="rb-in cf-flete" placeholder="Flete $ (0 si incluido)" inputmode="numeric" value="">
+              <div class="rb-row"><button class="btn small rb-oro" type="button" data-rb="oc-conf-guardar" data-c="${esc(cod)}" data-lid="${esc(l.lid)}">✅ Confirmar proveedor y precio</button></div></div>` : ""}
+            <div class="muted" style="font-size:.66rem;margin-top:4px">📍 Destino: ${esc(dest || "sin dirección en la OC")} · Origen: ${esc(l.conf?.proveedor || l.ci?.elegido?.proveedor || "falta elegir proveedor")}${l.conf ? (l.conf.modo === "retiro" ? (op.km ? ` · retiro ≈ ${f(op.km * TARIFA_KM_STGO)} (${op.km} km × ${f(TARIFA_KM_STGO)})` : " · retiro: falta km del viaje para comparar") : ` · despacho ${l.conf.flete ? f(l.conf.flete) : "incluido"} · costo puesto en destino ${f(l.conf.neto_unit * l.q + (l.conf.flete || 0))}`) : " · para comparar retiro vs despacho falta: proveedor confirmado y flete o km"}</div></div>
+        </div>` : ""}</div>`; };
+    const delta = M.Xb && M.Xv ? M.Xv.final - M.Xb.final : null;
+    return `<div class="rb-paso"><div class="rb-env"><div style="min-width:0"><button class="btn small rb-link" type="button" data-rb="oc-ver-cerrar" style="padding-left:0">← Caja OC</button><h2 class="rb-h" style="margin:2px 0 0">🔎 ${esc((t.nombre || cod).slice(0, 60))}</h2><div class="muted" style="font-size:.72rem">OC ${esc(op.oc_codigo || op.oc || "")} · ${esc(t.oc_compra?.organismo || t.organismo || "")} · ${f(t.oc_compra?.total || t.total)} con IVA</div></div></div>
+      <div class="rb-sug" style="border-color:#f5cf6b"><div style="font-size:.7rem;letter-spacing:.06em;color:#f5cf6b">PRÓXIMA ACCIÓN</div><b>${esc(pa.titulo)}</b><div class="muted" style="font-size:.72rem">${esc(pa.detalle || "")}</div>
+        <div class="rb-row" style="margin-top:6px">${pa.lid ? `<button class="btn small rb-oro" type="button" data-rb="oc-fila" data-c="${esc(cod)}" data-lid="${esc(pa.lid)}" data-ir="1">${esc(pa.boton)}</button>` : `<button class="btn small rb-oro" type="button" data-rb="oc-ir" data-e="${esc(pa.tab)}" data-c="${esc(cod)}">${esc(pa.boton)}</button>`}${pa.tel ? `<a class="btn small" href="tel:${esc(telNum(pa.tel))}">📞 ${esc(pa.tel)}</a>` : ""}${pa.url ? `<a class="btn small" href="${esc(pa.url)}" target="_blank" rel="noopener">Enlace ↗</a>` : ""}</div></div>
+      <div class="rb-marcador" style="margin:8px 0"><div class="rb-m"><span>Utilidad al ofertar</span><b>${M.Xb ? f(M.Xb.final) : "—"}</b><small>${M.costoBase != null ? "costo base " + f(M.costoBase) : "falta costo base de " + L.filter((l) => l.costoBase == null).length + " ítem(s)"}</small></div><div class="rb-m ${delta != null ? (delta >= 0 ? "verde" : "") : ""}"><span>Utilidad vigente</span><b>${M.Xv ? f(M.Xv.final) : "—"}</b><small>${M.nConf}/${L.length} confirmados${delta != null ? ` · margen ${delta >= 0 ? "+" : ""}${f(delta)}` : ""}</small></div><div class="rb-m oro"><span>Excel en vivo</span><b>${f(M.X0.final)}</b><small>${op.precio_acordado ? "con precio acordado " + f(op.precio_acordado) : "estimado"}</small></div></div>
+      ${vinc}
+      <div class="rb-sec">🏭 Proveedores · ${L.length} ítem(s)</div>
+      ${L.map(fila).join("")}
+      <div class="rb-row" style="margin-top:8px"><button class="btn small" type="button" data-rb="oc-concretar" data-c="${esc(cod)}" ${cargando ? "disabled" : ""}>${cargando ? '<span class="spinner"></span> buscando…' : "🔄 Buscar alternativas de nuevo"}</button><button class="btn small" type="button" data-rb="oc-ir" data-e="operacion" data-c="${esc(cod)}">🛠 Abrir en Ejecuta</button></div></div>`;
+  }
   // 🧾 FACTURAS Y REPARTO: cuánto cobramos, a quién hay que pagar y cuánto queda para la empresa (por período, empresa y estado de cobro)
   const FR_EST = [["", "Todas"], ["sin facturar", "Sin facturar"], ["factura emitida", "Factura emitida"], ["cobro parcial", "Cobro parcial"], ["factura cobrada", "Factura cobrada"]];
   const fechaCorta = (f) => (f ? String(f).slice(0, 10).split("-").reverse().slice(0, 2).join("/") : "s/f");
@@ -5321,7 +5432,20 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "plan-activar") { try { await api("plan", { method: "POST", body: JSON.stringify({ jugador: b.dataset.j, plan: b.dataset.v, activar: true }) }); toast("👑 Plan activado"); R.planT = 0; await cargarPlan(); } catch (e) { toast(e.message); } return; }
     if (a === "global") { R.pantalla = "global"; sheet.scrollTop = 0; cargarGlobal(); if (!R.ejecutores) cargarEjecuta(); return pintarHoja(true); }
     if (a === "global-cerrar") { R.pantalla = null; return pintarHoja(true); }
-    if (a === "oc-estudiar") { R.pantalla = null; R.ejAbierto = cod; R.ejTab = "operacion"; cargarEjecuta(); pintarHoja(true); const t = (R.todos || R.data?.trabajos || []).find((x) => x.codigo === cod); if (t && !t.op?.concrecion) concretarPedir(cod, false, false); return; }
+    if (a === "oc-estudiar") { R.pantalla = "oc"; R.ocVer = cod; R.ocFila = null; R.ocPre = null; sheet.scrollTop = 0; cargarOCFull(cod); return pintarHoja(true); }
+    if (a === "oc-ver-cerrar") { R.ocVer = null; R.ocFila = null; return pintarHoja(true); }
+    if (a === "oc-fila") { R.ocFila = R.ocFila === b.dataset.lid && !b.dataset.ir ? null : b.dataset.lid; pintarHoja(true); if (b.dataset.ir) setTimeout(() => document.getElementById("ocfila-" + b.dataset.lid)?.scrollIntoView({ block: "start", behavior: "smooth" }), 60); return; }
+    if (a === "oc-match") { R.ocMatch = R.ocMatch === cod ? null : cod; return pintarHoja(true); }
+    if (a === "oc-usar") { R.ocFila = b.dataset.lid; R.ocPre = { cod, lid: b.dataset.lid, prov: b.dataset.prov, url: b.dataset.url, tel: b.dataset.tel, neto: b.dataset.neto }; pintarHoja(true); setTimeout(() => document.querySelector(`.rb-conf-form[data-lid="${CSS.escape(b.dataset.lid)}"] .cf-neto`)?.focus(), 80); return; }
+    if (a === "oc-concretar") { if (R.ocFull?.[cod]) R.ocFull[cod].t = 0; await concretarPedir(cod, true, false); R.ocFull[cod] = null; await cargarOCFull(cod); return; }
+    if (a === "oc-conf-guardar") { const fm = document.querySelector(`.rb-conf-form[data-c="${CSS.escape(cod)}"][data-lid="${CSS.escape(b.dataset.lid)}"]`); if (!fm) return;
+      const v = (k) => (fm.querySelector(k)?.value || "").trim(); const neto = +v(".cf-neto").replace(/\D/g, "") || 0; if (!neto) { toast("Escribe el precio neto confirmado"); return; }
+      const datos = { costo_confirmado: { lid: b.dataset.lid, neto_unit: neto, proveedor: v(".cf-prov"), telefono: v(".cf-tel"), url: v(".cf-url"), stock: v(".cf-stock"), plazo: v(".cf-plazo"), modo: v(".cf-modo"), flete: +v(".cf-flete").replace(/\D/g, "") || 0, origen: R.ocPre?.lid === b.dataset.lid ? "alternativa actual" : "ingreso manual" } };
+      const antes = (() => { try { const t = R.ocFull[cod].tr; return margenOC(t, lineasOC(t)).Xv?.final ?? null; } catch { return null; } })();
+      try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos, dispositivo: dispositivo(false) }) }); R.ocPre = null; R.ocFull[cod] = null; await cargarOCFull(cod);
+        const desp = (() => { try { const t = R.ocFull[cod].tr; return margenOC(t, lineasOC(t)).Xv?.final ?? null; } catch { return null; } })();
+        toast(antes != null && desp != null ? `✅ Confirmado · margen ${desp - antes >= 0 ? "+" : ""}${clp(desp - antes)} (utilidad vigente ${clp(desp)})` : "✅ Proveedor y precio confirmados"); R.ejecT = 0; cargarEjecuta(); } catch (e) { toast(e.message); } return; }
+    if (a === "oc-conf-quitar") { try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos: { costo_confirmado: { lid: b.dataset.lid, quitar: true } }, dispositivo: dispositivo(false) }) }); R.ocFull[cod] = null; R.ocFila = b.dataset.lid; await cargarOCFull(cod); } catch (e) { toast(e.message); } return; }
     if (a === "oc-ejecutar") { R.pantalla = null; R.ejAbierto = cod; R.ejTab = "operacion"; cargarEjecuta(); return pintarHoja(true); }
     if (a === "fr-f") { R["fr" + { per: "Per", emp: "Emp", est: "Est" }[b.dataset.k]] = b.dataset.v; return pintarHoja(true); }
     if (a === "fr-abrir") { R.frAb = R.frAb === cod ? null : cod; R.frForm = null; return pintarHoja(true); }
@@ -5361,7 +5485,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "st-emp") { R.stEmp = b.dataset.v; return pintarHoja(true); }
     if (a === "st-jug") { R.stJug = b.dataset.v || ""; return pintarHoja(true); }
     if (a === "oc") { R.pantalla = "oc"; sheet.scrollTop = 0; return pintarHoja(true); }
-    if (a === "oc-cerrar") { R.pantalla = null; return pintarHoja(true); }
+    if (a === "oc-cerrar") { R.pantalla = null; R.ocVer = null; return pintarHoja(true); }
     if (a === "oc-bloque") { R.ocB = R.ocB === b.dataset.b ? "" : b.dataset.b; return pintarHoja(true); }
     if (a === "oc-todas") { R.ocTodas = !R.ocTodas; return pintarHoja(true); }
     if (a === "global-j") { R.globalJ = b.dataset.v || ""; return pintarHoja(true); }

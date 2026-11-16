@@ -551,6 +551,45 @@ async function revisarOCs(store, forzar) {
   await store.setJSON("oc/lista", reg);
   return { ocs: Object.values(reg).filter((x) => x && x.codigo).sort((a, b) => String(b.enviada).localeCompare(String(a.enviada))) };
 }
+// 🧾 VERSIONES DE OFERTA: cada preparación crea un borrador con id propio (ventas, costo base y fuentes por ítem, con id de línea);
+//    al enviar se congela lo que Mercado Público mostró (captura) y la OC se enlaza a esa versión, nunca al borrador que vino después.
+const lineaId = (i, it) => texto(it?.lid || it?.id, 24) || ("L" + (i + 1));
+function normFuentes(xs) {
+  return (Array.isArray(xs) ? xs : []).slice(0, 8).map((f) => ({ proveedor: texto(f?.proveedor, 80), url: texto(f?.url, 300), producto: texto(f?.producto || f?.titulo, 160), sku: texto(f?.sku, 40),
+    precio: Math.round(Number(f?.precio) || 0) || null, precio_es_neto: f?.precio_es_neto === true, t: texto(f?.t || f?.fecha, 30) || ahora() })).filter((f) => f.url || f.proveedor);
+}
+function normCostoBase(c) {
+  if (!c || typeof c !== "object") return null;
+  const metodo = ["proveedor_seleccionado", "estimacion_multiple", "estimacion_sin_fuente"].includes(c.metodo) ? c.metodo : (c.fuente_idx != null ? "proveedor_seleccionado" : "estimacion_sin_fuente");
+  return { neto_unit: Math.round(Number(c.neto_unit) || 0) || null, metodo, fuente_idx: c.fuente_idx == null ? null : Number(c.fuente_idx), nota: texto(c.nota, 160) };
+}
+function nuevaVersion(t, origen, items, firma, extra = {}) {
+  const v = { id: "v" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), t: ahora(), origen,
+    items: (items || []).map((it, i) => ({ lid: lineaId(i, it), d: it.d, q: it.q, p: it.p, costo_base: it.costo_base || null, fuentes: it.fuentes || [] })),
+    precios: firma?.precios || (items || []).map((it) => it.p), despacho: firma?.despacho || 0, total: firma?.total || t.total || null, ...extra };
+  t.versiones = [...(t.versiones || []), v].slice(-10); t.version_actual = v.id;
+  return v;
+}
+// comparar lo que quedó en Mercado Público (o un borrador) con los ítems de la OC: cantidades, precios netos unitarios, despacho y total
+function cotejarOC(t) {
+  const oc = t.oc_compra; if (!oc || !(oc.items || []).length) return null;
+  const vers = t.versiones || [], env = t.envio;
+  const prueba = (precios, items, despacho, total, nombre, vid) => {
+    const oi = oc.items || []; const dif = [];
+    oi.forEach((x, i) => { const p = Number(precios?.[i]), pq = Number(items?.[i]?.q); if (!(Math.abs((Number(x.precio) || 0) - (p || 0)) <= 1)) dif.push(`ítem ${i + 1}: OC ${x.precio} vs oferta ${p || "—"}`); if (pq && Number(x.cantidad) && pq !== Number(x.cantidad)) dif.push(`ítem ${i + 1}: cantidad OC ${x.cantidad} vs ${pq}`); });
+    if (precios && precios.length !== oi.length) dif.push(`la OC tiene ${oi.length} ítems y la oferta ${precios.length}`);
+    const totOK = total && oc.total ? Math.abs(Number(oc.total) - Number(total)) <= 2 : null;
+    return { nombre, vid, ok: !dif.length && totOK !== false, dif: dif.slice(0, 6), total_ok: totOK };
+  };
+  const intentos = [];
+  if (env?.captura?.precios?.length) intentos.push(prueba(env.captura.precios, (vers.find((v) => v.id === env.version_id) || {}).items, env.captura.despacho, env.captura.total, "envío capturado", env.version_id));
+  for (const v of [...vers].reverse()) intentos.push(prueba(v.precios, v.items, v.despacho, v.total, v.id === env?.version_id ? "versión enviada" : "borrador " + v.id, v.id));
+  if (!intentos.length && t.firma?.precios) intentos.push(prueba(t.firma.precios, t.items, t.firma.despacho, t.total, "oferta preparada (sin versión)", null));
+  const gana = intentos.find((x) => x.ok);
+  return gana ? { estado: gana.nombre === "envío capturado" || gana.nombre === "versión enviada" ? "coincide_envio" : "coincide_borrador", version_id: gana.vid, texto: gana.nombre === "envío capturado" ? "Montos coinciden con el envío capturado en Mercado Público" : "Montos coinciden con la OC", t: ahora() }
+    : { estado: "por_vincular", version_id: env?.version_id || t.version_actual || null, texto: "Oferta original por vincular", dif: intentos[0]?.dif || [], t: ahora() };
+}
+
 async function enlazarOC(store, o) {
   const cod = o.cot || o.codigo;
   const t = (await leer(store, cod)) || null;
@@ -568,6 +607,7 @@ async function enlazarOC(store, o) {
   if (!op.pedido_informe && !op.informe) op.pedido_informe = { t: ahora() };
   if (!op.concrecion) op.concretar_pendiente = true;   // 🎯 al llegar la OC: plan de concreción (links, teléfonos, precios, guion) para el ejecutador
   x.op = op;
+  try { const m = cotejarOC(x); if (m) op.oc_match = m; } catch {}
   await escribir(store, x);
   if (llego) await avisarTexto(store, "📦 ¡Orden de compra! " + o.codigo,
     `${(o.organismo || "").slice(0, 50)} · $${Math.round(o.total || 0).toLocaleString("es-CL")} · ${(o.nombre || "").slice(0, 60)}. Abre Negocios: el robot ya busca proveedores y calcula la utilidad.`,
@@ -1736,6 +1776,15 @@ async function atender(req) {
     if (d.abonos !== undefined) op.abonos = mov(d.abonos, (x) => ({ origen: x.origen === "cliente" ? "cliente" : "factoring", confirmado: x.confirmado !== false }));
     if (d.aportes !== undefined) op.aportes = mov(d.aportes, (x) => ({ quien: texto(x.quien, 60) }));
     if (d.devoluciones !== undefined) op.devoluciones = mov(d.devoluciones, () => ({}));
+    if (d.costo_confirmado && typeof d.costo_confirmado === "object" && d.costo_confirmado.lid) {   // ✅ proveedor y precio neto confirmados para una línea (historial: el original se conserva en versiones/fuentes)
+      const c = d.costo_confirmado; op.costos_confirmados = op.costos_confirmados || {};
+      if (c.quitar) delete op.costos_confirmados[texto(c.lid, 24)];
+      else op.costos_confirmados[texto(c.lid, 24)] = { neto_unit: Math.max(0, Math.round(Number(c.neto_unit) || 0)), proveedor: texto(c.proveedor, 80), url: texto(c.url, 300), telefono: texto(c.telefono, 30), stock: texto(c.stock, 60), plazo: texto(c.plazo, 60),
+        flete: Math.max(0, Math.round(Number(c.flete) || 0)), modo: ["despacho", "retiro"].includes(c.modo) ? c.modo : null, origen: texto(c.origen, 120), t: ahora(), por: texto(b.dispositivo, 60) };
+      // costo vigente = líneas confirmadas; cuando están todas, pasa a ser el precio de compra acordado (con IVA) y el flete confirmado
+      const items = t.items || []; const CC = op.costos_confirmados; const todas = items.length && items.every((it, k) => CC[it.lid || "L" + (k + 1)]);
+      if (todas) { op.precio_acordado = Math.round(items.reduce((s2, it, k) => s2 + (CC[it.lid || "L" + (k + 1)].neto_unit || 0) * (it.q || 1), 0) * 1.19); const fl = items.reduce((s2, it, k) => s2 + (CC[it.lid || "L" + (k + 1)].flete || 0), 0); if (fl) op.costo_transporte = fl; op.pedido_informe = { t: ahora() }; }
+    }
     if (d.inv_acuerdo !== undefined) op.inv_acuerdo = d.inv_acuerdo && ["pct", "pct_capital", "monto"].includes(d.inv_acuerdo.tipo) && Number(d.inv_acuerdo.v) > 0 ? { tipo: d.inv_acuerdo.tipo, v: Number(d.inv_acuerdo.v) } : null;
     if (Array.isArray(d.pagos)) {                                    // 💸 a quién le compré: nombre + monto neto + factura (varias personas)
       op.pagos = d.pagos.slice(0, 12).map((x) => ({ nombre: texto(x?.nombre, 60) || "", monto: Math.max(0, Math.round(Number(x?.monto) || 0)), factura: x?.factura !== false, ...(Array.isArray(x?.unit) ? { unit: x.unit.slice(0, 8).map((u) => Math.max(0, Math.round(Number(u) || 0))) } : {}), ...(x?.tipo === "neto" || x?.tipo === "bruto" ? { tipo: x.tipo } : {}) })).filter((x) => x.nombre || x.monto);
@@ -1991,6 +2040,15 @@ async function atender(req) {
       if (!b.vista) return json({ trabajo: previo, aviso: "Sin confirmación de Mercado Público: sigue en Firmar." });   // el robot ya no entra al portal a mirar; sin «enviada correctamente» no se marca
       previo.accion = "verificar";
       if (b.vista) previo.enviada_vista = ahora();     // Mercado Público mostró «Cotización enviada correctamente»: sale de Firmar en todos los celulares
+      // 🧊 congelar el envío: lo que el portal mostró al pulsar Enviar (captura), asociado al intento y a la versión preparada que lo originó
+      if (b.vista) { const cap = b.captura && typeof b.captura === "object" ? b.captura : null; const intento = texto(b.intento, 40) || null;
+        if (!(previo.envio && intento && previo.envio.intento === intento)) {   // la misma confirmación dos veces = un solo envío
+          const capN = cap && Array.isArray(cap.precios) && cap.precios.length ? { precios: cap.precios.slice(0, 60).map((v) => Math.max(0, Math.round(Number(v) || 0))), cantidades: (cap.cantidades || []).slice(0, 60).map((v) => Number(v) || null),
+            despacho: Math.max(0, Math.round(Number(cap.despacho) || 0)), total: Math.round(Number(cap.total) || 0) || null, neto: Math.round(Number(cap.neto) || 0) || null, t: ahora() } : null;
+          previo.envio = { t: ahora(), intento, version_id: previo.version_actual || null, captura: capN, montos_verificados: !!capN, dispositivo: texto(b.dispositivo, 60) || null };
+          if (capN && previo.versiones?.length) { const v = previo.versiones.find((x) => x.id === previo.version_actual); if (v) v.enviada = true; }
+          previo.envios_hist = [...(previo.envios_hist || []), { t: previo.envio.t, intento, version_id: previo.envio.version_id, verificado: !!capN }].slice(-10);
+        } }
       previo.dispositivo = texto(b.dispositivo, 60) || previo.dispositivo || null;   // qué celular la envió (registro «Enviados» del PC)
       anotar(previo, "en_cola", "El robot revisará en Mercado Público si ya quedó enviada.");
       return json({ trabajo: await escribir(store, previo) });
@@ -2027,6 +2085,7 @@ async function atender(req) {
       const precios = fa.precios.slice(0, 60).map((v) => Math.max(0, Math.round(Number(v) || 0)));
       t.items = Array.isArray(fa.items) ? fa.items.slice(0, 60).map((i) => ({ d: texto(i?.d, 200) || "", q: Number(i?.q) || 1, p: Math.max(0, Math.round(Number(i?.p) || 0)) })) : previo?.items || null;
       t.firma = { precios, despacho: Math.max(0, Math.round(Number(fa.despacho) || 0)), detalle: texto(fa.detalle, 900) || "", origen: "app", persona: t.persona };
+      t.items = (t.items || []).map((it, k) => ({ ...it, lid: lineaId(k, it) })); nuevaVersion(t, "app", t.items, t.firma);
       t.neto = Math.round((t.items || []).reduce((s2, it, i) => s2 + (precios[i] || 0) * (it.q || 1), 0) + t.firma.despacho); t.total = Math.round(t.neto * 1.19);
       t.accion = "pdf"; t.pdf = previo?.pdf || false;
       anotar(t, "firmar", robotOn ? "Lista para firmar con tus precios (el robot agrega el PDF)." : "Lista para firmar con tus precios · el robot está apagado: va sin PDF, tú la ingresas en MP.");
@@ -2107,7 +2166,7 @@ async function atender(req) {
     const t = await leer(store, limpiaCodigo(url.searchParams.get("codigo")));
     if (!t) return json({ error: "No existe." }, 404);
     const { firma, historial, ...r } = t;
-    return json({ trabajo: r });
+    return json({ trabajo: { ...r, precios: firma?.precios || null, despacho_firma: firma?.despacho || 0, historial: (historial || []).slice(-10) } });
   }
   // ---------- 🛠 Ejecuta: socios ejecutadores (compran, negocian, entregan y cierran con guía y factura firmadas) ----------
   // ☁️ robot en la nube: el PC sube su paquete (código + configuración) UNA vez; el servidor lo baja y se borra
@@ -2395,6 +2454,16 @@ async function atender(req) {
   }
 
   // ---------- 💹 costo de mercado real (el PC lo busca con IA en tiendas chilenas para cada seleccionada) ----------
+  // 🧾 fuentes por ítem que usó el robot al preparar (proveedor, URL, precio observado, fecha) y el costo base que explica el precio
+  if (ruta === "fuentes" && req.method === "POST") {
+    const b = await cuerpo(req), codigo = limpiaCodigo(b.codigo); if (!codigo) return json({ error: "Falta el código" }, 400);
+    const t = await leer(store, codigo); if (!t) return json({ error: "No existe." }, 404);
+    const map = {}; (Array.isArray(b.items) ? b.items : []).slice(0, 40).forEach((i, k) => { map[lineaId(k, i)] = { fuentes: normFuentes(i.fuentes), costo_base: normCostoBase(i.costo_base) }; });
+    if (Array.isArray(t.items) && t.items.length) { t.items = t.items.map((it, k) => { const f = map[it.lid || "L" + (k + 1)]; return f ? { ...it, lid: it.lid || "L" + (k + 1), fuentes: f.fuentes, costo_base: f.costo_base } : it; });
+      const v = (t.versiones || []).find((x) => x.id === t.version_actual); if (v) v.items = v.items.map((it, k) => ({ ...it, ...(map[it.lid || "L" + (k + 1)] || {}) })); }
+    else t._fuentes_pend = map;
+    await escribir(store, t); return json({ ok: true, n: Object.keys(map).length });
+  }
   if (ruta === "mercado" && req.method === "GET") return json({ mercado: (await store.get("mercado/lista", { type: "json" })) || {} });
   if (ruta === "mercado" && req.method === "POST") {
     const b = await cuerpo(req), codigo = limpiaCodigo(b.codigo), m = b.mercado || {};
@@ -2728,11 +2797,15 @@ async function atender(req) {
     for (const k of ["total", "neto", "iva"]) if (b[k] != null) t[k] = Number(b[k]) || null;
     for (const k of ["plazo", "nombre", "organismo"]) if (b[k] != null) t[k] = texto(b[k], 200);
     if (b.detalle != null) t.detalle = texto(b.detalle, 1500);
-    if (Array.isArray(b.items)) t.items = b.items.slice(0, 40).map((i) => ({
-      d: texto(i.d, 200), q: Number(i.q) || 0, p: Number(i.p) || 0,
+    if (Array.isArray(b.items)) t.items = b.items.slice(0, 40).map((i, k) => ({
+      d: texto(i.d, 200), q: Number(i.q) || 0, p: Number(i.p) || 0, lid: lineaId(k, i),
+      costo_base: normCostoBase(i.costo_base || (i.costo_neto_unit != null ? { neto_unit: i.costo_neto_unit, metodo: i.metodo, fuente_idx: i.fuente_idx } : null)), fuentes: normFuentes(i.fuentes),
     }));
+    // fuentes subidas antes por el robot (/bot/fuentes) se incorporan si los ítems no las traen
+    if (t._fuentes_pend && Array.isArray(t.items)) { t.items.forEach((it, k) => { const f = t._fuentes_pend[it.lid] || t._fuentes_pend["L" + (k + 1)]; if (f && !it.fuentes?.length) { it.fuentes = f.fuentes || []; it.costo_base = it.costo_base || f.costo_base || null; } }); delete t._fuentes_pend; }
     if (b.fecha_envio) t.fecha_envio = texto(b.fecha_envio, 40);
     if (b.firma && Array.isArray(b.firma.precios)) {   // datos para el botón Rellenar
+      t._nuevaVersion = true;
       t.firma = {
         precios: b.firma.precios.slice(0, 60).map((x) => Math.max(0, Math.round(Number(x) || 0))),
         despacho: Math.max(0, Math.round(Number(b.firma.despacho) || 0)),
@@ -2766,6 +2839,7 @@ async function atender(req) {
         lugar_entrega: texto(L.lugar_entrega, 240), plazo_entrega: texto(L.plazo_entrega, 200),
       };
     }
+    if (t._nuevaVersion) { delete t._nuevaVersion; nuevaVersion(t, "robot", t.items, t.firma); if (t.oc_compra) { try { const m = cotejarOC(t); if (m) { t.op = t.op || {}; t.op.oc_match = m; } } catch {} } }
     if (b.captcha_b64 != null) {                    // código de imagen que el robot necesita que escribas
       t.captcha = String(b.captcha_b64).slice(0, 90000) || null;
       t.captcha_resp = null;
