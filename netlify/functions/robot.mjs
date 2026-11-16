@@ -1032,6 +1032,40 @@ ${txt}`;
 }
 
 const clpS = (v) => "$" + Math.round(Number(v) || 0).toLocaleString("es-CL");
+// 📦 OC DEL PORTAL: la lista oficial «Buscar Órdenes de Compra por proveedor» de Mercado Público (estado real: Enviada a
+//    proveedor / Aceptada / No Aceptada / Cancelada). Se guarda por empresa y se refleja en cada trabajo (op.oc_estado…).
+async function sincronizarOCPortal(store, rutEmp, lista) {
+  const rut = String(rutEmp || "").replace(/\./g, "").toUpperCase();
+  const L = (Array.isArray(lista) ? lista : []).slice(0, 400).map((x) => ({ oc: limpiaCodigo(x.oc), nombre: texto(x.nombre, 200), comprador: texto(x.comprador, 120), fecha: texto(x.fecha, 30), estado: texto(x.estado, 40) })).filter((x) => x.oc);
+  const T = await todos(store); const reg = (await store.get("oc/lista", { type: "json" }).catch(() => null)) || {};
+  const porOC = new Map(); for (const t of T) { const c = t.op?.oc_codigo || t.op?.oc; if (c) porOC.set(limpiaCodigo(c), t); }
+  const porCod = new Map(T.map((t) => [t.codigo, t]));
+  let enlazadas = 0, cambiadas = 0; const sueltas = [];
+  for (const o of L) {
+    let t = porOC.get(o.oc) || null;
+    if (!t) { const m = o.nombre.match(/\b(\d{3,8}-\d{1,6}-(?:COT|SE|LE|LP|LQ|LR|L1|CM)\d\d)\b/i); if (m) t = porCod.get(limpiaCodigo(m[1])) || null; }
+    if (!t && reg[o.oc]?.cot) t = porCod.get(limpiaCodigo(reg[o.oc].cot)) || null;
+    if (!t) { // mismo organismo (prefijo) y nombre parecido
+      const pref = o.oc.split("-")[0]; const cand = T.filter((x) => String(x.codigo).startsWith(pref + "-") && !x.op?.oc_codigo && /enviad|confirmada|firmar/.test(x.estado));
+      const kw = (s2) => String(s2 || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z0-9]+/).filter((w) => w.length > 4);
+      const ko = kw(o.nombre); const best = cand.map((x) => ({ x, n: kw(x.nombre).filter((w) => ko.includes(w)).length })).filter((y) => y.n >= 2).sort((a, b2) => b2.n - a.n)[0];
+      if (best) t = best.x;
+    }
+    if (!t) { sueltas.push(o); continue; }
+    enlazadas++;
+    const op = t.op || { etapa: "ganada", historial: [] }; const antes = JSON.stringify([op.oc_codigo, op.oc_estado, op.etapa, op.oc_aceptada]);
+    op.oc = op.oc || o.oc; op.oc_codigo = o.oc; op.oc_estado = o.estado; op.oc_portal_t = ahora(); op.oc_fecha_portal = o.fecha;
+    if (/^aceptada/i.test(o.estado)) { op.oc_aceptada = true; if (op.etapa === "rechazada" || op.etapa === "previa") op.etapa = "ganada"; }
+    else if (/no aceptada|cancelad|anulad/i.test(o.estado)) { op.oc_aceptada = false; if (!["cerrado", "entrega"].includes(op.etapa)) { op.etapa = "rechazada"; op.motivo = op.motivo || ("OC " + o.estado + " en Mercado Público"); } }
+    else if (op.etapa === "previa" || !op.etapa) { op.etapa = "ganada"; op.historial = [...(op.historial || []), { t: ahora(), etapa: "ganada" }]; if (!op.concrecion) op.concretar_pendiente = true; }
+    t.op = op;
+    if (JSON.stringify([op.oc_codigo, op.oc_estado, op.etapa, op.oc_aceptada]) !== antes) { cambiadas++; t.actualizado = ahora(); await store.setJSON("trabajo/" + t.codigo, t); }
+  }
+  const resumen = { t: ahora(), rut, n: L.length, estados: L.reduce((a, x) => { a[x.estado] = (a[x.estado] || 0) + 1; return a; }, {}), enlazadas, cambiadas, sueltas: sueltas.length, lista: L, sin_oferta: sueltas };
+  await store.setJSON("oc_portal/" + rut, resumen);
+  return resumen;
+}
+
 async function siiIngesta(req) {
   if (req.method === "OPTIONS") return new Response("", { status: 204, headers: corsH });
   const b = req.method === "GET" ? Object.fromEntries(new URL(req.url).searchParams.entries()) : await cuerpo(req);
@@ -1064,6 +1098,8 @@ async function siiIngesta(req) {
   if (b.accion === "prov_base") return new Response(JSON.stringify({ ok: true, ...(await baseProveedores(store, !!b.forzar)) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   if (b.accion === "prov_clasificar") return new Response(JSON.stringify(await clasificarProveedores(store)), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   if (b.accion === "concretar") { const t = await leer(store, String(b.codigo || "")); if (!t) return new Response(JSON.stringify({ error: "no existe" }), { status: 404, headers: corsH }); const r = await concretar(store, t, { fase: b.fase ? String(b.fase) : "ambas" }); if (r.ok && r.fase !== 1 && r.fase !== 2) { t.op = t.op || { etapa: "ganada", historial: [] }; t.op.concrecion = r; await store.setJSON("trabajo/" + t.codigo, t); } return new Response(JSON.stringify(r), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); }
+  if (b.accion === "oc_portal") { const r = await sincronizarOCPortal(store, b.rut_empresa, b.lista); return new Response(JSON.stringify({ ok: true, ...r, lista: undefined, sin_oferta: (r.sin_oferta || []).slice(0, 60) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); }
+  if (b.accion === "oc_portal_ver") { const r = await store.get("oc_portal/" + String(b.rut || "78493114-5").replace(/\./g, ""), { type: "json" }).catch(() => null); return new Response(JSON.stringify({ ok: true, r }), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); }
   if (b.accion === "anexo") { const r = await analizarAnexo(store, b); return new Response(JSON.stringify(r), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); }
   if (b.accion === "hoy") {   // diagnóstico: trabajos tocados desde una fecha, con empresa (para ver qué metió cada una y que no se crucen)
     const desde = String(b.desde || new Date(Date.now() - 24 * 3600e3).toISOString()); const L = await todos(store);   // TODOS los trabajos (caché), no solo los últimos por código
@@ -1220,6 +1256,8 @@ async function atender(req) {
   if (ruta === "ml-auth" && req.method === "GET") { const app = await mlConfig(store); if (!app.client_id) return json({ error: "Primero guarda client_id/secret con ml-config." }, 400);
     return Response.redirect("https://auth.mercadolibre.cl/authorization?" + new URLSearchParams({ response_type: "code", client_id: app.client_id, redirect_uri: "https://cotizagil.netlify.app/bot/ml-callback" }), 302); }
   if (ruta === "ml-estado" && req.method === "GET") { const app = await mlConfig(store); const tk = await store.get("ml/token", { type: "json" }).catch(() => null); const tok = await mlToken(store).catch(() => null); return json({ app: !!app.client_id, autorizado: !!tk?.refresh_token, token_ok: !!tok, user_id: tk?.user_id || null, error: tk?.error || null }); }
+  if (ruta === "oc-portal" && req.method === "POST") { const b = await cuerpo(req); const r = await sincronizarOCPortal(store, b.rut_empresa, b.lista); return json({ ok: true, n: r.n, estados: r.estados, enlazadas: r.enlazadas, cambiadas: r.cambiadas, sueltas: r.sueltas }); }
+  if (ruta === "oc-portal" && req.method === "GET") { const rut = String(url.searchParams.get("rut") || "").replace(/\./g, "").toUpperCase(); const r = await store.get("oc_portal/" + rut, { type: "json" }).catch(() => null); return json({ ok: true, portal: r }); }
   if (ruta === "anexo" && req.method === "POST") { const b = await cuerpo(req); const r = await analizarAnexo(store, b); return json(r, r.error ? 400 : 200); }   // 📎 anexos → lo que se entrega
   if (ruta === "ml-pendientes" && req.method === "GET") { try { await store.setJSON("ml/puente_visto", { t: ahora() }); } catch {} const { blobs } = await store.list({ prefix: "ml/cola/" }); const L = []; for (const b2 of blobs.slice(0, 10)) { const x = await store.get(b2.key, { type: "json" }).catch(() => null); if (x) L.push(x); } return json({ ok: true, pendientes: L }); }
   if (ruta === "ml-resultado" && req.method === "POST") { const b = await cuerpo(req); const k = texto(b.k, 20); if (!k) return json({ error: "falta k" }, 400);
