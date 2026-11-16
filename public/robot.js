@@ -2048,7 +2048,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       ${bloqueVivo(t)}
       <button class="btn rb-oro rb-big-btn" type="button" data-rb="ej-etapa" data-e="entrega" data-c="${esc(cod)}">📦 Llegó al cliente → Recepción</button>`;
     } else if (E === "entrega") { const docs = op.docs || [], hay = (tp) => docs.some((d) => d.tipo === tp);
-      cuerpoS = `<div class="rb-sec">📦 Recepción conforme</div>
+      cuerpoS = `${(() => { const D = op.documentos || [], g = D.filter((d) => d.tipo === "guia" && d.estado !== "borrador"), fa = D.filter((d) => d.tipo === "factura" && d.estado !== "borrador"); return `<button class="btn rb-oro rb-big-btn" type="button" data-rb="docs" data-c="${esc(cod)}">🧾 ${fa.length ? "Documentos emitidos · guía " + esc(String(g[0]?.folio || "")) + " · factura " + esc(String(fa[0]?.folio || "")) : g.length ? "Facturar guía N° " + esc(String(g[g.length - 1].folio || "")) : "Emitir documentos (guía → factura)"}</button>${D.length ? `<div class="muted" style="font-size:.7rem;margin:2px 0 6px">${D.filter((d) => d.estado !== "borrador").map((d) => (d.tipo === "guia" ? "🚚 " : "🧾 ") + "N° " + esc(String(d.folio)) + " · " + (DOC_EST[d.estado] || d.estado)).join(" · ")}</div>` : ""}`; })()}<div class="rb-sec">📦 Recepción conforme</div>
       <div class="muted" style="font-size:.72rem">Pide la foto de la guía firmada (nombre, RUT, fecha). Con eso cobras y cierras.</div>
       <div class="rb-row"><div style="flex:1">${campo("recibio_nombre", "Recibió", op.recibio_nombre, "Nombre")}</div><div style="flex:1">${campo("recibio_rut", "RUT", op.recibio_rut, "12.345.678-9")}</div></div>
       <div class="rb-row"><button class="btn small ${hay("guia") ? "rb-oro" : ""}" type="button" data-rb="neg-subir" data-tipo="guia" data-c="${esc(cod)}">${hay("guia") ? "✓" : "📸"} Guía firmada</button>
@@ -4266,6 +4266,45 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       <div class="rb-kv" style="font-size:.76rem"><span>facturado <b>${clp(cj.facturado)}</b></span><span>cobrado <b>${clp(cj.cobrado)}</b></span><span>pendiente <b>${clp(cj.pendCobro)}</b></span><span class="rb-oc-tag ${cj.flags.cobrada ? "ok" : ""}">${cj.estado}</span></div>
       ${R.ocSec === "cobro" || R.ocCobroAb ? `<div class="rb-card" style="padding:8px 12px;margin:6px 0">${flujoHTML(t, cj)}</div>` : `<div class="rb-row" style="margin-top:4px"><button class="btn small" type="button" data-rb="oc-cobro-ab" data-c="${esc(cod)}">Ver flujo OC → factura → abonos → reparto</button></div>`}</div>`;
   }
+
+  // 🧾 EMITIR DOCUMENTOS (ERP): guía primero, factura desde la guía; todo precargado desde la OC; vuelta del SII a la misma OC; importar XML/PDF emitido
+  const DOC_EST = { borrador: "Borrador", emitido: "Emitido", firmada_receptor: "Guía firmada por quien recibe", recepcion_conforme: "Recepción conforme", cobrada: "Factura cobrada" };
+  const SII_URL = { guia: "https://www.sii.cl/servicios_online/1040-1183.html", factura: "https://www.sii.cl/servicios_online/1040-1182.html" };
+  function pantallaDocs(cod) {
+    const t = trabajoG(cod) || (R.ejec || []).find((x) => x.codigo === cod); if (!t) return `<div class="rb-paso"><button class="btn small" type="button" data-rb="docs-cerrar">← Volver</button><div class="empty">No encuentro la OC.</div></div>`;
+    const op = t.op || {}, D = op.documentos || [], f = (v) => clp(Math.round(v || 0));
+    const guias = D.filter((d) => d.tipo === "guia"), facts = D.filter((d) => d.tipo === "factura"), gEmit = guias.filter((d) => d.estado !== "borrador"), fEmit = facts.filter((d) => d.estado !== "borrador");
+    const tipo = R.docTipo || (gEmit.length && !fEmit.length ? "factura" : "guia");
+    const borr = D.find((d) => d.tipo === tipo && d.estado === "borrador") || null;
+    if (!borr && !(R._docPidiendo || {})[cod + tipo]) { R._docPidiendo = { ...(R._docPidiendo || {}), [cod + tipo]: 1 }; setTimeout(async () => { try { await api("doc-borrador", { method: "POST", body: JSON.stringify({ codigo: cod, tipo }) }); R.ejecT = 0; await cargarEjecuta(); await refrescar(); } catch (e) { toast(e.message); } delete R._docPidiendo[cod + tipo]; pintarHoja(true); }, 0); }
+    const principal = tipo === "guia" ? (gEmit.length && guias.every((d) => d.lineas.every((l) => l.saldo === 0 || l.q >= (l.saldo || 0))) && !borr?.lineas?.some((l) => l.saldo > 0) ? null : "guia") : "factura";
+    const campo = (k, v) => `<div class="rb-kv" style="font-size:.74rem"><span class="muted" style="min-width:90px">${k}</span><span style="flex:1">${v ? esc(String(v)) : '<span style="color:#f5cf6b">falta</span>'}</span><button class="btn small rb-link" type="button" data-rb="cp" data-v="${esc(String(v || ""))}">📋</button></div>`;
+    const docCard = (d) => `<div class="rb-card" style="padding:8px 12px;margin:6px 0"><div class="rb-env"><b>${d.tipo === "guia" ? "🚚 Guía" : "🧾 Factura"} ${d.folio ? "N° " + esc(String(d.folio)) : "(borrador)"}</b><span class="rb-oc-tag ${["recepcion_conforme", "cobrada", "firmada_receptor"].includes(d.estado) ? "ok" : ""}">${DOC_EST[d.estado] || d.estado}</span></div>
+      <div class="muted" style="font-size:.72rem">${esc(d.fecha || "")} · neto ${f(d.neto)} · IVA ${f(d.iva)} · total <b>${f(d.total)}</b>${(d.referencias || []).length ? " · ref. " + d.referencias.map((r) => esc(r.tipo + " " + (r.folio || ""))).join(", ") : ""}${d.origen === "importado" ? " · importado" : ""}</div>
+      ${d.estado !== "borrador" ? `<div class="rb-row" style="margin-top:4px">${d.tipo === "guia" && d.estado === "emitido" ? `<button class="btn small" type="button" data-rb="doc-est" data-id="${esc(d.id)}" data-e="firmada_receptor" data-c="${esc(cod)}">✍ Guía firmada por quien recibe</button>` : ""}${d.tipo === "guia" && ["emitido", "firmada_receptor"].includes(d.estado) ? `<button class="btn small rb-oro" type="button" data-rb="doc-est" data-id="${esc(d.id)}" data-e="recepcion_conforme" data-c="${esc(cod)}">✅ Recepción conforme</button>` : ""}${d.tipo === "factura" && d.estado === "emitido" ? `<button class="btn small rb-oro" type="button" data-rb="doc-est" data-id="${esc(d.id)}" data-e="cobrada" data-c="${esc(cod)}">💰 Factura cobrada</button>` : ""}${d.archivo ? `<a class="btn small" href="/bot/archivo?codigo=${encodeURIComponent(cod)}&id=${encodeURIComponent(d.archivo)}" target="_blank" rel="noopener">📄 Ver</a>` : ""}</div>` : ""}</div>`;
+    const prev = borr ? `<div class="rb-card" style="padding:10px 12px;margin:6px 0"><div class="rb-sec" style="margin-top:0">Vista previa · ${tipo === "guia" ? "Guía de despacho electrónica" : "Factura electrónica"}</div>
+      ${borr.faltan?.length ? `<div class="rb-sug" style="border-color:#f5cf6b;font-size:.74rem">⚠ Revisar antes de emitir: ${borr.faltan.map(esc).join(" · ")}</div>` : `<div class="rb-sug" style="border-color:#5ef0b0;font-size:.74rem">✅ Datos completos desde la OC</div>`}
+      <div class="rb-sec">Emisor</div>${campo("Razón social", borr.emisor?.razon_social)}${campo("RUT", borr.emisor?.rut)}${campo("Giro", borr.emisor?.giro)}${campo("Dirección", [borr.emisor?.direccion, borr.emisor?.comuna].filter(Boolean).join(", "))}
+      <div class="rb-sec">Receptor</div>${campo("Razón social", borr.receptor?.razon_social)}${campo("RUT", borr.receptor?.rut)}${campo("Giro", borr.receptor?.giro)}${campo("Dirección", borr.receptor?.direccion)}${borr.receptor?.contacto ? campo("Contacto", [borr.receptor.contacto, borr.receptor.fono, borr.receptor.mail].filter(Boolean).join(" · ")) : ""}
+      <div class="rb-sec">Referencias</div>${(borr.referencias || []).map((r) => campo(r.tipo === "OC" ? "Orden de compra (801)" : r.tipo === "GD" ? "Guía (52)" : r.tipo, (r.folio || "") + (r.fecha ? " · " + r.fecha : ""))).join("")}
+      ${tipo === "guia" ? `<div class="rb-sec">Traslado</div>${campo("Motivo", borr.motivo_traslado)}${campo("Transporte", [borr.despacho?.transportista, borr.despacho?.patente, borr.despacho?.vehiculo].filter(Boolean).join(" · ") || null)}${campo("Destino", borr.despacho?.destino)}` : `<div class="rb-sec">Pago</div><div class="rb-kv" style="font-size:.74rem"><span class="muted" style="min-width:90px">Forma de pago</span><select class="rb-in" id="rbDocPago"><option ${borr.forma_pago === "contado" ? "selected" : ""} value="contado">Contado</option><option ${/30/.test(borr.forma_pago || "") ? "selected" : ""} value="crédito 30 días">Crédito 30 días</option><option ${/60/.test(borr.forma_pago || "") ? "selected" : ""} value="crédito 60 días">Crédito 60 días</option></select></div>`}
+      <div class="rb-sec">Ítems ${tipo === "guia" ? "· cantidades que salen en esta guía" : ""}</div>
+      <table class="rb-copias" style="font-size:.74rem"><tr><th style="text-align:left">Detalle</th><th>Cant.</th><th>Unit. neto</th><th>Total</th></tr>
+      ${(borr.lineas || []).map((l) => `<tr><td>${esc(String(l.d).slice(0, 48))}${tipo === "guia" && l.q_documentada ? `<br><span class="muted">OC ${l.q_oc} · ya en guías ${l.q_documentada} · saldo ${l.saldo}</span>` : ""}</td><td class="n">${tipo === "guia" ? `<input class="rb-in doc-q" data-lid="${esc(l.lid)}" inputmode="numeric" value="${l.q}" style="width:58px;text-align:right">` : l.q}</td><td class="n">${f(l.precio_unit)}</td><td class="n">${f(l.total)}</td></tr>`).join("")}
+      <tr><td colspan="3">Neto</td><td class="n">${f(borr.neto)}</td></tr><tr><td colspan="3">IVA 19%</td><td class="n">${f(borr.iva)}</td></tr><tr><td colspan="3"><b>Total</b></td><td class="n"><b>${f(borr.total)}</b></td></tr></table>
+      ${tipo === "guia" ? `<div class="rb-row" style="margin-top:4px"><button class="btn small" type="button" data-rb="doc-recalcular" data-c="${esc(cod)}">↻ Recalcular con estas cantidades (entrega parcial)</button></div>` : ""}</div>` : `<div class="empty"><span class="spinner"></span> Armando el borrador desde la OC…</div>`;
+    const imp = R.docImp === cod ? `<div class="rb-card" style="padding:10px 12px;margin:6px 0"><div class="rb-sec" style="margin-top:0">Vincular documento emitido</div>
+      <textarea class="rb-in" id="rbDocXml" rows="4" placeholder="Pega aquí el XML del DTE emitido (o sube el archivo)"></textarea>
+      <div class="rb-row" style="margin-top:4px"><input type="file" id="rbDocFile" accept=".xml,text/xml,application/xml,application/pdf" style="font-size:.74rem"><button class="btn small rb-oro" type="button" data-rb="doc-importar" data-c="${esc(cod)}" data-tipo="${tipo}">📥 Importar</button></div>
+      <div class="muted" style="font-size:.68rem;margin-top:4px">Si solo tienes el PDF: folio <input class="rb-in" id="rbDocFolio" inputmode="numeric" style="width:70px" placeholder="N°"> fecha <input class="rb-in" id="rbDocFecha" type="date" style="width:140px"> · se guarda como ${tipo} emitida y el PDF queda adjunto.</div></div>` : "";
+    return `<div class="rb-paso"><div class="rb-env"><div style="min-width:0"><button class="btn small rb-link" type="button" data-rb="docs-cerrar" style="padding-left:0">← OC</button><h2 class="rb-h" style="margin:2px 0 0">🧾 Documentos · OC ${esc(op.oc_codigo || op.oc || "")}</h2><div class="muted" style="font-size:.72rem">${esc(t.oc_compra?.organismo || t.organismo || "")} · ${esc((t.nombre || "").slice(0, 50))}</div></div></div>
+      <div class="rb-rchips" style="margin:6px 0"><button type="button" class="rb-rchip ${tipo === "guia" ? "on" : ""}" data-rb="doc-tipo" data-t="guia">🚚 Guía<i>${gEmit.length}</i></button><button type="button" class="rb-rchip ${tipo === "factura" ? "on" : ""}" data-rb="doc-tipo" data-t="factura">🧾 Factura<i>${fEmit.length}</i></button></div>
+      ${D.filter((d) => d.estado !== "borrador").map(docCard).join("")}
+      ${prev}
+      <div class="rb-row" style="margin-top:6px">${principal === "guia" ? `<a class="btn rb-oro" href="${SII_URL.guia}" target="_blank" rel="noopener" data-rb="doc-sii" data-c="${esc(cod)}">✍ Emitir guía en el SII</a>` : principal === "factura" ? `<a class="btn rb-oro" href="${SII_URL.factura}" target="_blank" rel="noopener" data-rb="doc-sii" data-c="${esc(cod)}">✍ Facturar guía en el SII</a>` : ""}<button class="btn small" type="button" data-rb="doc-imp" data-c="${esc(cod)}">📥 Vincular emitido (XML/PDF)</button>${tipo === "guia" && gEmit.length ? `<button class="btn small" type="button" data-rb="doc-tipo" data-t="factura">➡ Facturar guía</button>` : ""}</div>
+      <div class="muted" style="font-size:.68rem;margin-top:4px">El SII no permite precargar el formulario desde afuera: los campos quedan aquí para copiar (📋) y, al volver, esta misma OC te espera para vincular lo emitido. La guía firmada por quien recibe (foto) es un respaldo aparte de la guía electrónica.</div>
+      ${imp}</div>`;
+  }
   // 🧾 FACTURAS Y REPARTO: cuánto cobramos, a quién hay que pagar y cuánto queda para la empresa (por período, empresa y estado de cobro)
   const FR_EST = [["", "Todas"], ["sin facturar", "Sin facturar"], ["factura emitida", "Factura emitida"], ["cobro parcial", "Cobro parcial"], ["factura cobrada", "Factura cobrada"]];
   const fechaCorta = (f) => (f ? String(f).slice(0, 10).split("-").reverse().slice(0, 2).join("/") : "s/f");
@@ -5064,6 +5103,7 @@ ${empNom}`;
       else if (R.pantalla === "global") cuerpo = pantallaGlobal();
       else if (R.pantalla === "stats") cuerpo = pantallaStats();
       else if (R.pantalla === "oc") cuerpo = pantallaOC();
+      else if (R.pantalla === "docs") cuerpo = pantallaDocs(R.docsCod);
       else if (R.pantalla === "planes") cuerpo = pantallaPlanes();
       else if (R.pantalla === "mplogin") cuerpo = pantallaLoginMP();
       else if (execOn() && !R.exFicha) { if (!esDueno() && (!R.planT || Date.now() - R.planT > 300000)) setTimeout(cargarPlan, 0); cuerpo = pantallaExec(); }
@@ -5087,7 +5127,7 @@ ${empNom}`;
         <div class="rb-row" style="margin-top:8px"><button class="btn small" type="button" data-rb="copiar-marcador">Copiar marcador «Rellenar» (sin extensión)</button>
           ${R.push ? `<button class="btn small" type="button" data-rb="push-probar">Probar aviso</button>` : ""}<button class="btn small" type="button" data-rb="desenlazar">Desenlazar</button></div>
       </details>`;
-      return cab2 + cuerpo + (R.pantalla === "llamada" || R.pantalla === "claude" || R.pantalla === "oc" || R.pantalla === "analizador" || R.pantalla === "stats" || R.empresaEditar || R.rubroEditar || R.personaEditar ? "" : mas) + (execOn() ? navExec() : "");
+      return cab2 + cuerpo + (R.pantalla === "llamada" || R.pantalla === "claude" || R.pantalla === "oc" || R.pantalla === "docs" || R.pantalla === "analizador" || R.pantalla === "stats" || R.empresaEditar || R.rubroEditar || R.personaEditar ? "" : mas) + (execOn() ? navExec() : "");
     }
     return `
       <div class="rb-sheet-head"><h2 style="margin:0">Robot de ofertas</h2><button class="rb-x" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>
@@ -5672,6 +5712,20 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       if (v && !isNaN(n)) acuerdo = /%/.test(v) ? { tipo: /capital/i.test(v) ? "pct_capital" : "pct", v: n / 100 } : { tipo: "monto", v: Math.round(n) };
       if (!v && !confirm("¿Quitar el acuerdo registrado?")) return;
       try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos: { inv_acuerdo: acuerdo }, dispositivo: dispositivo(false) }) }); toast(acuerdo ? "🤝 Acuerdo guardado" : "Acuerdo quitado"); await refrescar(); R.ejecT = 0; cargarEjecuta(); } catch (e) { toast(e.message); } return pintarHoja(true); }
+    if (a === "docs") { R.docsVolver = { pantalla: R.pantalla, ejAbierto: R.ejAbierto, ejModo: R.ejModo }; R.pantalla = "docs"; R.docsCod = cod; R.docTipo = null; R.docImp = null; try { localStorage.setItem("sdc:docs_oc", cod); } catch {} sheet.scrollTop = 0; return pintarHoja(true); }
+    if (a === "docs-cerrar") { const v = R.docsVolver; R.pantalla = v?.pantalla && v.pantalla !== "docs" ? v.pantalla : null; if (v) { R.ejAbierto = v.ejAbierto; R.ejModo = v.ejModo; } R.docsVolver = null; try { localStorage.removeItem("sdc:docs_oc"); } catch {} return pintarHoja(true); }
+    if (a === "doc-tipo") { R.docTipo = b.dataset.t; R.docImp = null; return pintarHoja(true); }
+    if (a === "doc-imp") { R.docImp = R.docImp === cod ? null : cod; return pintarHoja(true); }
+    if (a === "doc-sii") { try { localStorage.setItem("sdc:docs_oc", cod); } catch {} return; }   // el enlace abre el SII; al volver, la app reabre esta OC
+    if (a === "doc-recalcular") { const cant = {}; document.querySelectorAll(".doc-q").forEach((i) => { cant[i.dataset.lid] = +i.value.replace(/\D/g, "") || 0; }); try { await api("doc-borrador", { method: "POST", body: JSON.stringify({ codigo: cod, tipo: "guia", cantidades: cant }) }); R.ejecT = 0; await cargarEjecuta(); await refrescar(); } catch (e) { toast(e.message); } return pintarHoja(true); }
+    if (a === "doc-importar") { const fileEl = $("#rbDocFile"); const fl = fileEl?.files?.[0]; let xml = ($("#rbDocXml")?.value || "").trim();
+      try { if (fl && /xml/i.test(fl.type + fl.name)) xml = await fl.text();
+        if (xml && /<DTE|<Documento/i.test(xml)) { const r = await api("doc-importar", { method: "POST", body: JSON.stringify({ codigo: cod, xml }) }); toast(r.repetido ? `Ese folio ya estaba vinculado (N° ${r.doc.folio}): no se duplicó` : `✅ ${r.doc.tipo === "guia" ? "Guía" : "Factura"} N° ${r.doc.folio} vinculada a la OC`); }
+        else { const folio = ($("#rbDocFolio")?.value || "").trim(); if (!folio) { toast("Pega el XML o escribe el folio del PDF"); return; } let archivo = null;
+          if (fl) { const b64 = await achicar(fl); const up = await api("subir", { method: "POST", body: JSON.stringify({ codigo: cod, tipo: b.dataset.tipo, nombre: fl.name, mime: b64.mime, b64: b64.data, dispositivo: dispositivo(false) }) }); archivo = (up?.trabajo?.op?.docs || []).slice(-1)[0]?.id || null; }
+          const r = await api("doc-importar", { method: "POST", body: JSON.stringify({ codigo: cod, tipo: b.dataset.tipo, folio, fecha: $("#rbDocFecha")?.value || null, archivo }) }); toast(r.repetido ? `El folio ${folio} ya estaba vinculado: no se duplicó` : `✅ ${b.dataset.tipo === "guia" ? "Guía" : "Factura"} N° ${folio} vinculada`); }
+        R.docImp = null; R.ejecT = 0; await cargarEjecuta(); await refrescar(); } catch (e) { toast(e.message); } return pintarHoja(true); }
+    if (a === "doc-est") { try { await api("doc-estado", { method: "POST", body: JSON.stringify({ codigo: cod, id: b.dataset.id, estado: b.dataset.e }) }); toast("✓ " + DOC_EST[b.dataset.e]); R.ejecT = 0; await cargarEjecuta(); await refrescar(); } catch (e) { toast(e.message); } return pintarHoja(true); }
     if (a === "oc-ir") { R.ejVolver = { ejTab: R.ejTab, scroll: sheet.scrollTop || 0 }; R.pantalla = null; guardar({ portal: "ejecuta" }); R.ejAbierto = cod; R.ejModo = "real"; R.ejEtapas = ["pago", "transporte", "despacho", "entrega", "cerrado"].includes(b.dataset.e); cargarEjecuta(); sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "oc-factoring") { R.pantalla = null; guardar({ portal: "ejecuta" }); R.ejAbierto = cod; R.ejTab = "cerrado"; await cargarEjecuta(); const F = factorings();
       if (!F.length) { R.libroEj = true; toast("Agrega los factorings en 📒 Libro y caja para pedir la simulación"); return pintarHoja(true); }
@@ -6366,7 +6420,8 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
   pintar();
   refrescar();
   desdeHash();
-  setTimeout(revisarWebpay, 500);               // 💳 si volvemos de WebPay, cobra el abono y lo suma al saldo
+  setTimeout(revisarWebpay, 500);
+  setTimeout(() => { try { const c = localStorage.getItem("sdc:docs_oc"); if (c && !R.pantalla) { R.pantalla = "docs"; R.docsCod = c; R.docsVolver = { pantalla: null, ejAbierto: c, ejModo: "real" }; guardar({ portal: "ejecuta" }); R.ejAbierto = c; toast("🧾 Volviste del SII: vincula aquí lo emitido para la OC " + c); pintarHoja(true); } } catch {} }, 900);   // 🧾 al volver del SII, la misma OC               // 💳 si volvemos de WebPay, cobra el abono y lo suma al saldo
   // app del inicio (iPhone/Android): abre directo en el robot, que es donde se trabaja
   if (instalada() && !location.hash.includes("robot")) setTimeout(() => { if (!sheet.classList.contains("on")) abrir(); }, 250);
   // si ya dio permiso antes, renueva la suscripción en silencio (por si el teléfono la cambió)

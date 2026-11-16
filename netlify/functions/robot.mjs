@@ -655,6 +655,60 @@ function aplicarAsignacion(op, A, dispositivo) {
   return { ok: true };
 }
 
+// ---------- 🧾 DOCUMENTOS (ERP): guía y factura armadas desde la OC, emitidas en el SII por la persona autorizada y devueltas a la OC ----------
+//  op.documentos[] {id, tipo: guia|factura, estado: borrador|emitido|firmada_receptor|recepcion_conforme|cobrada, folio, fecha, emisor, receptor,
+//   lineas[{lid,d,q,unidad,precio_unit,total}], neto, iva, total, referencias[{tipo:OC|GD|FA, folio, fecha}], motivo_traslado, despacho, forma_pago, origen: erp|importado, archivo}
+//  Un mismo folio (tipo + folio + RUT emisor) se guarda una sola vez. La guía firmada por quien recibe (foto) es un respaldo aparte de la guía electrónica.
+const rutLimpio = (r) => String(r || "").replace(/[^0-9kK]/g, "").toUpperCase().replace(/^(\d+)(\w)$/, "$1-$2");
+function docBorrador(t, emp, b) {
+  const op = t.op || {}, oc = t.oc_compra || {}, tipo = b.tipo === "factura" ? "factura" : "guia";
+  const lineasOC = (oc.items || []).map((i, k) => ({ lid: (t.items?.[k]?.lid) || "L" + (k + 1), d: i.nombre + (i.especificacion ? " · " + String(i.especificacion).slice(0, 80) : ""), q: Number(i.cantidad) || 1, unidad: i.unidad || "un", precio_unit: Math.round(Number(i.precio) || 0) }));
+  const base = lineasOC.length ? lineasOC : itemsOferta(t).map((i) => ({ lid: i.lid || "L1", d: i.d, q: i.q, unidad: "un", precio_unit: i.p }));
+  // ya documentado en guías emitidas → saldo por documentar; entrega parcial: cantidades elegidas
+  const emitidas = (op.documentos || []).filter((d) => d.tipo === "guia" && d.estado !== "borrador");
+  const docQ = (lid) => emitidas.reduce((s2, d) => s2 + ((d.lineas || []).find((l) => l.lid === lid)?.q || 0), 0);
+  const sel = b.cantidades && typeof b.cantidades === "object" ? b.cantidades : null;
+  const lineas = base.map((l) => { const saldo = Math.max(0, l.q - (tipo === "guia" ? docQ(l.lid) : 0)); const q = sel ? Math.min(saldo, Math.max(0, Number(sel[l.lid]) || 0)) : saldo; return { ...l, q_oc: l.q, q_documentada: docQ(l.lid), saldo, q, total: Math.round(q * l.precio_unit) }; }).filter((l) => l.q > 0 || !sel);
+  const neto = lineas.reduce((s2, l) => s2 + l.total, 0), iva = Math.round(neto * 0.19), total = neto + iva;
+  const guiaRef = tipo === "factura" ? (op.documentos || []).filter((d) => d.tipo === "guia" && d.estado !== "borrador").slice(-1)[0] : null;
+  const referencias = [{ tipo: "OC", folio: op.oc_codigo || op.oc || "", fecha: (oc.enviada || oc.aceptada || "").slice(0, 10) || null }];
+  if (guiaRef) referencias.push({ tipo: "GD", folio: guiaRef.folio, fecha: guiaRef.fecha });
+  const emisor = { razon_social: emp?.razon_social || null, rut: emp?.rut || null, giro: emp?.giro || null, direccion: emp?.direccion || null, comuna: emp?.comuna || null, ciudad: emp?.ciudad || null, email: emp?.email || null };
+  const receptor = { razon_social: oc.organismo || t.organismo || null, rut: oc.rut_organismo || null, giro: "Administración pública", direccion: oc.direccion || null, comuna: oc.comuna || null, contacto: oc.contacto || null, fono: oc.fono || null, mail: oc.mail || null, unidad: oc.unidad || null };
+  const faltan = [];
+  for (const [k, v] of Object.entries({ "RUT emisor": emisor.rut, "giro emisor": emisor.giro, "dirección emisor": emisor.direccion, "comuna emisor": emisor.comuna, "RUT receptor": receptor.rut, "dirección receptor": receptor.direccion, "N° OC": referencias[0].folio })) if (!v) faltan.push(k);
+  if (tipo === "guia" && !op.despacho_modo && !op.transportista) faltan.push("datos del despacho (quién transporta, patente)");
+  if (tipo === "factura" && !guiaRef) faltan.push("guía emitida (se factura desde la guía)");
+  if (receptor.direccion && !/,/.test(receptor.direccion)) faltan.push("comuna receptor (revisar)");
+  return { id: "d" + Date.now().toString(36), tipo, estado: "borrador", folio: null, fecha: ahora().slice(0, 10), emisor, receptor, lineas, neto, iva, total, referencias,
+    motivo_traslado: tipo === "guia" ? (texto(b.motivo, 60) || "Venta") : null, despacho: tipo === "guia" ? { modo: op.despacho_modo || null, transportista: op.transportista || null, patente: op.patente || null, vehiculo: op.vehiculo || null, destino: oc.direccion || null } : null,
+    forma_pago: tipo === "factura" ? (texto(b.forma_pago, 30) || "crédito 30 días") : null, origen: "erp", faltan, t: ahora() };
+}
+// importar XML del DTE emitido (SII): folio, fecha, RUT emisor/receptor, totales y referencias (801 = OC, 52 = guía)
+function parseDTE(xml) {
+  const g = (tag, from = xml) => { const m = from.match(new RegExp("<" + tag + ">([^<]*)</" + tag + ">")); return m ? m[1].trim() : null; };
+  const tipoDTE = g("TipoDTE"), tipo = tipoDTE === "52" ? "guia" : ["33", "34"].includes(tipoDTE) ? "factura" : null; if (!tipo) return null;
+  const refs = [...xml.matchAll(/<Referencia>([\s\S]*?)<\/Referencia>/g)].map((m) => { const r = m[1]; const tp = g("TpoDocRef", r); return { tipo: tp === "801" ? "OC" : tp === "52" ? "GD" : tp === "33" ? "FA" : tp, folio: g("FolioRef", r), fecha: g("FchRef", r) }; });
+  const det = [...xml.matchAll(/<Detalle>([\s\S]*?)<\/Detalle>/g)].map((m) => { const r = m[1]; return { d: g("NmbItem", r), q: Number(g("QtyItem", r)) || 1, unidad: g("UnmdItem", r) || "un", precio_unit: Math.round(Number(g("PrcItem", r)) || 0), total: Math.round(Number(g("MontoItem", r)) || 0) }; });
+  return { tipo, tipoDTE, folio: g("Folio"), fecha: g("FchEmis"), emisor: { rut: rutLimpio(g("RUTEmisor")), razon_social: g("RznSoc") }, receptor: { rut: rutLimpio(g("RUTRecep")), razon_social: g("RznSocRecep"), direccion: g("DirRecep"), comuna: g("CmnaRecep"), giro: g("GiroRecep") },
+    neto: Math.round(Number(g("MntNeto")) || 0), iva: Math.round(Number(g("IVA")) || 0), total: Math.round(Number(g("MntTotal")) || 0), referencias: refs, lineas: det, forma_pago: g("FmaPago"), motivo_traslado: g("IndTraslado") };
+}
+function docAgregar(op, doc) {   // un folio una sola vez (tipo + folio + RUT emisor); si existe, se actualiza sin duplicar
+  op.documentos = op.documentos || [];
+  const ya = doc.folio ? op.documentos.find((d) => d.tipo === doc.tipo && String(d.folio) === String(doc.folio) && (!d.emisor?.rut || !doc.emisor?.rut || rutLimpio(d.emisor.rut) === rutLimpio(doc.emisor.rut))) : null;
+  if (ya) { Object.assign(ya, { ...doc, id: ya.id, estado: ["firmada_receptor", "recepcion_conforme", "cobrada"].includes(ya.estado) ? ya.estado : doc.estado, archivo: doc.archivo || ya.archivo }); return { doc: ya, repetido: true }; }
+  // un borrador del mismo tipo sin folio se reemplaza por el emitido
+  op.documentos = op.documentos.filter((d) => !(d.tipo === doc.tipo && d.estado === "borrador" && doc.estado !== "borrador"));
+  op.documentos.push(doc); return { doc, repetido: false };
+}
+function docSincronizar(t) {   // refleja los documentos en los campos que ya usan Facturas y reparto / Caja OC
+  const op = t.op || {}; const D = op.documentos || [];
+  const g = D.filter((d) => d.tipo === "guia" && d.estado !== "borrador").slice(-1)[0], f = D.filter((d) => d.tipo === "factura" && d.estado !== "borrador");
+  if (g) { op.folio_guia = String(g.folio || ""); op.guia_hecha = true; }
+  if (f.length) { op.folio_factura = String(f[f.length - 1].folio || ""); op.factura_hecha = true;
+    op.facturas = f.map((d) => { const prev = (op.facturas || []).find((x) => String(x.folio) === String(d.folio)); return { folio: String(d.folio), monto: d.total, fecha: d.fecha, t: prev?.t || d.t || ahora(), doc_id: d.id }; }); }
+}
+
 // 🧾 VERSIONES DE OFERTA: cada preparación crea un borrador con id propio (ventas, costo base y fuentes por ítem, con id de línea);
 //    al enviar se congela lo que Mercado Público mostró (captura) y la OC se enlaza a esa versión, nunca al borrador que vino después.
 const lineaId = (i, it) => texto(it?.lid || it?.id, 24) || ("L" + (i + 1));
@@ -1738,6 +1792,35 @@ async function atender(req) {
   if (ruta === "anexos-pendientes" && req.method === "GET") {   // el robot del PC consulta qué compras necesitan que suba sus adjuntos (anexos_pedido)
     const lista = (await todos(store)).filter((t) => t.anexos_pedido && !t.anexos_subido).slice(0, 20).map((t) => ({ codigo: t.codigo, oc: t.op?.oc_codigo || null, motivo: t.anexos_pedido.motivo, t: t.anexos_pedido.t }));
     return json({ pendientes: lista });
+  }
+
+  if (ruta === "doc-borrador" && req.method === "POST") {   // 🧾 borrador de guía/factura con todo lo que ya sabe la OC
+    const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return json({ error: "No existe." }, 404);
+    const L = (await store.get("empresas/lista", { type: "json" })) || {}; const emp = L[t.empresa || "principal"] || L.principal || null;
+    const doc = docBorrador(t, emp, b); t.op = t.op || { etapa: "ganada", historial: [] }; t.op.documentos = (t.op.documentos || []).filter((d) => !(d.tipo === doc.tipo && d.estado === "borrador")); t.op.documentos.push(doc); await escribir(store, t);
+    return json({ ok: true, doc });
+  }
+  if (ruta === "doc-importar" && req.method === "POST") {   // XML emitido por el SII (o folio a mano con PDF subido): queda vinculado a la OC una sola vez
+    const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return json({ error: "No existe." }, 404); t.op = t.op || { etapa: "ganada", historial: [] };
+    let doc = null;
+    if (b.xml) { const d = parseDTE(String(b.xml).slice(0, 400000)); if (!d) return json({ error: "El XML no es una guía (52) ni una factura (33/34)." }, 400);
+      const borr = (t.op.documentos || []).find((x) => x.tipo === d.tipo && x.estado === "borrador");
+      doc = { id: "d" + Date.now().toString(36), ...d, estado: "emitido", origen: "importado", lineas: d.lineas.length ? d.lineas.map((l, k) => ({ ...l, lid: borr?.lineas?.[k]?.lid || "L" + (k + 1) })) : borr?.lineas || [], despacho: borr?.despacho || null, t: ahora() }; }
+    else { const tipo = b.tipo === "factura" ? "factura" : "guia"; const folio = texto(b.folio, 20); if (!folio) return json({ error: "Falta el folio." }, 400);
+      const borr = (t.op.documentos || []).find((x) => x.tipo === tipo && x.estado === "borrador");
+      doc = { ...(borr || docBorrador(t, null, { tipo })), id: "d" + Date.now().toString(36), folio, fecha: texto(b.fecha, 10) || ahora().slice(0, 10), estado: "emitido", origen: "importado", archivo: texto(b.archivo, 40) || null, neto: Math.round(Number(b.neto) || borr?.neto || 0), iva: Math.round(Number(b.iva) || borr?.iva || 0), total: Math.round(Number(b.total) || borr?.total || 0), t: ahora() }; }
+    // la factura emitida desde la guía lleva ambas referencias
+    if (doc.tipo === "factura" && !(doc.referencias || []).some((r) => r.tipo === "GD")) { const g = (t.op.documentos || []).filter((x) => x.tipo === "guia" && x.estado !== "borrador").slice(-1)[0]; if (g) doc.referencias = [...(doc.referencias || []), { tipo: "GD", folio: g.folio, fecha: g.fecha }]; }
+    if (!(doc.referencias || []).some((r) => r.tipo === "OC") && (t.op.oc_codigo || t.op.oc)) doc.referencias = [...(doc.referencias || []), { tipo: "OC", folio: t.op.oc_codigo || t.op.oc, fecha: (t.oc_compra?.enviada || "").slice(0, 10) || null }];
+    const r = docAgregar(t.op, doc); docSincronizar(t); await escribir(store, t);
+    return json({ ok: true, repetido: r.repetido, doc: r.doc, documentos: t.op.documentos });
+  }
+  if (ruta === "doc-estado" && req.method === "POST") {   // Guía firmada por quien recibe · Recepción conforme · Factura cobrada
+    const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t?.op) return json({ error: "No existe." }, 404);
+    const d = (t.op.documentos || []).find((x) => x.id === b.id); if (!d) return json({ error: "Documento no encontrado." }, 404);
+    if (["firmada_receptor", "recepcion_conforme", "cobrada", "emitido"].includes(b.estado)) d.estado = b.estado; if (b.archivo) d.archivo = texto(b.archivo, 40);
+    if (b.estado === "recepcion_conforme") { t.op.guia_firmada = true; t.op.despacho_ok = true; } if (b.estado === "cobrada") t.op.factura_firmada = true;
+    docSincronizar(t); await escribir(store, t); return json({ ok: true, doc: d });
   }
   // ---------- celular ----------
   if (ruta === "estado" && req.method === "GET") {
