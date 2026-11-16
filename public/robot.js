@@ -4924,7 +4924,7 @@ ${empNom}`;
     }
     if (a === "neg-subir") {
       const inp = document.createElement("input"); inp.type = "file"; inp.accept = b.dataset.tipo === "foto" ? "image/*" : "image/*,application/pdf";
-      if (b.dataset.tipo === "foto") inp.setAttribute("capture", "environment");
+      // sin "capture": el teléfono ofrece la galería de fotos además de la cámara
       inp.onchange = async () => {
         const f = inp.files[0]; if (!f) return;
         toast("Subiendo…");
@@ -5071,6 +5071,9 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     }
     if (a === "ej-transferir" || a === "ej-etapa") {
       const datos = a === "ej-transferir" ? { pedido_transferencia: true } : b.dataset.d ? { [b.dataset.d]: true } : {};
+      // 📝 lo que está escrito en la etapa viaja junto con el avance (flete, transportista, patente…): no depende de que el campo haya "cambiado" antes del toque
+      for (const el of document.querySelectorAll(`.rb-neg-in[data-c="${CSS.escape(cod)}"]`)) { const k = el.dataset.campo; if (!k || k === "precio_neto" || k === "cobrado") continue;
+        const num = ["precio_acordado", "costo_transporte", "km"].includes(k); const v = num ? +(el.value || "").replace(/\D/g, "") || 0 : el.value.trim(); if (v !== "" && v !== null && (num ? true : v)) datos[k] = v; }
       if (a === "ej-transferir") { const t = (R.ejec || []).find((x) => x.codigo === cod); if (!t?.op?.precio_acordado) { toast("Primero escribe el precio de compra"); return; } }
       try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, etapa: a === "ej-transferir" ? "pago" : b.dataset.e, datos, dispositivo: dispositivo(false) }) });
         R.ejTab = a === "ej-transferir" ? "pago" : b.dataset.e; toast(a === "ej-transferir" ? "💸 Pedido al inversionista" : "✓ Avanzó"); R.ejecT = 0; cargarEjecuta(); } catch (e) { toast(e.message); }
