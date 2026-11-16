@@ -551,6 +551,110 @@ async function revisarOCs(store, forzar) {
   await store.setJSON("oc/lista", reg);
   return { ocs: Object.values(reg).filter((x) => x && x.codigo).sort((a, b) => String(b.enviada).localeCompare(String(a.enviada))) };
 }
+// ---------- 🔵 EJECUCIÓN SIMULADA: el robot lee qué pidió el comprador, arma partidas y devuelve un costo en pesos con su explicación ----------
+//  Fases (cada una cabe en el tiempo de la nube): req (Leyendo requerimiento) → partidas (Armando partidas) → costeo (Costeando, una partida por llamada) → listo.
+//  Resultado en op.simulacion {t, version_req, requerimiento, partidas[], faltan[], totales, explicacion}. Alimenta Excel en vivo / factoring / reparto simulados.
+const TARIFAS_SIM = { hora_taller: 28000, hora_tecnico: 22000, viaje_local: 45000, km: 900, diagnostico: 35000 };   // tarifas estimadas (neto) cuando no hay referencia: se marcan como «tarifa estimada»
+const hashTxt = (s2) => { let x = 0; for (const ch of String(s2 || "")) x = (x * 31 + ch.charCodeAt(0)) >>> 0; return x.toString(36); };
+async function claudeJSON(prompt, maxTok, ms) {
+  const key = process.env.ANTHROPIC_API_KEY || ""; if (!key) throw new Error("Falta ANTHROPIC_API_KEY");
+  const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5", max_tokens: maxTok, messages: [{ role: "user", content: prompt }] }), signal: AbortSignal.timeout(ms) });
+  const j = await r.json(); const txt = (j.content || []).map((c) => c.text || "").join(""); const m = txt.match(/\{[\s\S]*/); if (!m) throw new Error("sin JSON: " + txt.slice(0, 80));
+  const raw = m[0]; try { return JSON.parse(raw); } catch {}
+  for (const corte of [raw, raw.slice(0, raw.lastIndexOf("}") + 1), raw.slice(0, raw.lastIndexOf('",') + 1), raw.slice(0, raw.lastIndexOf('"') + 1)]) { if (!corte) continue; for (const cierre of ["", "}", "]}", '"]}', '"}]}', '"}}', "}]}", '"]}]}']) { try { return JSON.parse(corte.replace(/,\s*$/, "") + cierre); } catch {} } }
+  throw new Error("JSON cortado: " + txt.slice(-60));
+}
+async function simRequerimiento(store, t, b) {
+  const cod = t.codigo, fuentes = [], partes = [];
+  // 1) anexos leídos por el robot (caché anexo/<cod>/*), el más reciente
+  const { blobs } = await store.list({ prefix: "anexo/" + cod + "/" }).catch(() => ({ blobs: [] }));
+  let an = null; for (const bl of blobs) { const x = await store.get(bl.key, { type: "json" }).catch(() => null); if (x?.analisis && (!an || (x.t || "") > (an.t || ""))) an = x; }
+  if (an) { fuentes.push({ tipo: "anexo", doc: an.doc || "adjuntos del comprador (leídos por el robot)", t: an.t, seccion: an.item || null }); partes.push("ANÁLISIS DE LOS ANEXOS: " + JSON.stringify({ productos: an.analisis.productos, especificaciones: an.analisis.especificaciones, requisitos: (an.analisis.requisitos || []).slice(0, 20), resumen: an.analisis.resumen })); }
+  // 2) texto de requerimiento adjuntado a mano en la OC (Adjuntar requerimiento)
+  if (t.op?.req_adjunto?.texto) { fuentes.push({ tipo: "adjunto_manual", doc: t.op.req_adjunto.nombre || "requerimiento pegado", t: t.op.req_adjunto.t }); partes.push("REQUERIMIENTO ADJUNTADO: " + String(t.op.req_adjunto.texto).slice(0, 20000)); }
+  // 3) ficha de la compra (portal) + ítems de la OC y de la oferta
+  let ficha = null; try { if (/^\d{1,8}-\d{1,8}-COT\d{2}$/.test(cod)) { const r = await fetch(RADAR_CA + "/" + encodeURIComponent(cod), { headers: { "user-agent": "CotizAgil/1.0", accept: "application/json" }, signal: AbortSignal.timeout(7000) }); if (r.ok) { const p = (await r.json()).payload || {}; ficha = { nombre: p.nombre, descripcion: texto(p.descripcion, 2000), productos: (p.productos_solicitados || []).slice(0, 30).map((x) => ({ nombre: texto(x.nombre, 200), detalle: texto(x.descripcion, 300), cantidad: x.cantidad, unidad: texto(x.unidad_medida, 20) })), entrega: p.entrega || null, adjuntos: (p.adjuntos || p.archivos || p.anexos || []).slice(0, 10).map((a) => texto(a?.nombre || a?.name || a, 120)) }; } } } catch {}
+  if (ficha) { fuentes.push({ tipo: "ficha", doc: "ficha de la compra en Mercado Público", t: ahora() }); partes.push("FICHA DE LA COMPRA: " + JSON.stringify({ nombre: ficha.nombre, descripcion: ficha.descripcion, productos: ficha.productos, plazo_dias: ficha.entrega?.plazo_entrega_dias, direccion: ficha.entrega?.direccion_entrega })); }
+  if (t.oc_compra) { fuentes.push({ tipo: "oc", doc: "orden de compra " + (t.op?.oc_codigo || ""), t: t.oc_compra.fecha || null }); partes.push("ORDEN DE COMPRA: " + JSON.stringify({ items: (t.oc_compra.items || []).map((i) => ({ nombre: i.nombre, especificacion: i.especificacion, cantidad: i.cantidad, precio: i.precio })), total: t.oc_compra.total, direccion: t.oc_compra.direccion, organismo: t.oc_compra.organismo })); }
+  if (t.items?.length) partes.push("OFERTA PRESENTADA: " + JSON.stringify(itemsOferta(t).map((i) => ({ d: i.d, q: i.q, p: i.p }))) + (t.detalle ? " · " + t.detalle.slice(0, 400) : ""));
+  const menciona = /adjunt|anexo|seg[uú]n detalle/i.test(JSON.stringify([t.items, t.oc_compra?.items, t.nombre]));
+  const falta = menciona && !an && !t.op?.req_adjunto?.texto;
+  const nombres = ficha?.adjuntos?.length ? ficha.adjuntos : [];
+  const req = { t: ahora(), texto: partes.join("\n\n").slice(0, 60000), fuentes, falta_adjunto: falta, adjuntos_nombres: nombres, motivo: falta ? (nombres.length ? "el robot no leyó " + nombres.join(", ") : "la compra pide «según detalle adjunto» y no hay anexos leídos ni adjuntados") : null };
+  req.version = hashTxt(req.texto);
+  if (falta) { t.anexos_pedido = { t: ahora(), motivo: "simulacion", oc: t.op?.oc_codigo || null }; }   // señal para el robot del PC: subir los adjuntos de salida/<cod>/adjuntos_comprador
+  return req;
+}
+async function simPartidas(t, req) {
+  const prompt = `Eres el jefe técnico de un proveedor del Estado de Chile. Debes planificar la ejecución de la orden de compra ${t.op?.oc_codigo || ""} (compra ${t.codigo}: «${t.nombre || ""}», ${t.oc_compra?.organismo || t.organismo || ""}, entrega en ${t.oc_compra?.direccion || ""}).
+Con el requerimiento de abajo, DESCOMPÓN el proyecto en partidas ANTES de buscar precios. Extrae: vehículos/equipos/componentes/repuestos con cantidades, lugar, plazo y condiciones. Arma partidas para lo que corresponda: diagnostico, desmontaje, retiro, repuesto, instalacion, pruebas, traslado, mano_obra, producto, otro.
+Líneas de la OC (para linea_oc, 1..n): ${JSON.stringify((t.oc_compra?.items || itemsOferta(t)).map((i, k) => (k + 1) + ": " + String(i.nombre || i.d || "").slice(0, 60) + " × " + (i.cantidad ?? i.q ?? 1)))}. Si la OC vende 1 servicio, todas las partidas cuelgan de esa línea.
+Marca cuáles exige el comprador (exigida=true, con el documento y la sección/página que la respalda) y cuáles son supuestos tuyos (exigida=false, supuesto="…", p. ej. horas de taller estimadas). Si el requerimiento describe una cotización integral (un precio por todo), indica integral.existe=true y qué incluye, para no sumar repuestos o mano de obra dos veces.
+No inventes repuestos ni cantidades que no estén en el requerimiento; si falta un dato crítico, ponlo en faltan.
+Responde SOLO JSON compacto: {"resumen":"","alcance":{"vehiculos":[""],"componentes":[""],"lugar":"","plazo":"","condiciones":[""]},"partidas":[{"id":"P1","tipo":"repuesto","nombre":"","cantidad":1,"unidad":"un|hora|viaje|km|servicio","linea_oc":1,"exigida":true,"respaldo":{"doc":"","seccion":""},"supuesto":null,"busqueda":"<qué buscar en tiendas, si es repuesto/producto>"}],"integral":{"existe":false,"incluye":[""]},"faltan":[""]}
+
+REQUERIMIENTO:
+${req.texto.slice(0, 28000)}`;
+  const j = await claudeJSON(prompt, 3500, 24000);
+  j.partidas = (j.partidas || []).slice(0, 25).map((p2, i) => ({ id: texto(p2.id, 8) || "P" + (i + 1), tipo: texto(p2.tipo, 20) || "otro", nombre: texto(p2.nombre, 160) || "", cantidad: Number(p2.cantidad) || 1, unidad: texto(p2.unidad, 12) || "un", linea_oc: Number(p2.linea_oc) || 1, exigida: p2.exigida !== false, respaldo: p2.respaldo && typeof p2.respaldo === "object" ? { doc: texto(p2.respaldo.doc, 80), seccion: texto(p2.respaldo.seccion, 80) } : null, supuesto: texto(p2.supuesto, 160), busqueda: texto(p2.busqueda, 100), refs: [], costo_unit_neto: null, fuente: null }));
+  return j;
+}
+async function simCostearPartida(store, t, pa) {
+  const refs = []; const q = (pa.busqueda || pa.nombre || "").replace(/\s+/g, " ").trim().slice(0, 80);
+  const tipoRep = ["repuesto", "producto", "material", "insumo"].includes(pa.tipo);
+  // a) cotización recibida (anotada en Ejecuta para esta OC)
+  for (const [k, c] of Object.entries(t.op?.cotizaciones || {})) if (c?.v) refs.push({ fuente_tipo: "cotizacion", proveedor: c.nombre || k, precio_unit_neto: Math.round(c.v / 1.19), cubre: "según cotización", t: c.t || ahora(), url: null });
+  // b) precio publicado (tiendas chilenas) para repuestos/productos
+  if (tipoRep && q) { try { const w = (await webBuscar(q + " precio chile", 6)).map((x) => x.url).filter((u) => /^https?:\/\//.test(u) && !/duckduckgo|wikipedia|youtube|facebook|instagram|\.ar\/|\.pe\/|\.mx\//i.test(u)).slice(0, 3);
+      const pags = await Promise.all(w.map((u) => precioPagina(u).catch(() => ({ productos: [] }))));
+      for (const pg of pags) for (const pr of (pg.productos || []).filter((x) => x.precio_iva).slice(0, 2)) refs.push({ fuente_tipo: "publicado", proveedor: pr.fuente || String(pr.url || "").replace(/^https?:\/\/(www\.)?/, "").split("/")[0], producto: texto(pr.titulo, 120), url: pr.url, precio_unit_neto: Math.round(pr.precio_iva / 1.19), cubre: "1 un.", condiciones: pr.disponible === false ? "sin stock" : "stock y despacho por verificar", t: ahora() }); } catch {} }
+  // c) compra histórica comparable (facturas SII de las empresas del grupo)
+  try { const base = await baseProveedores(store); const kw = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").split(/[^a-z0-9]+/).filter((w) => w.length > 3); const ks = kw(pa.nombre);
+    for (const c of base.lista || []) for (const pr of c.productos || []) { if (kw(pr.producto).filter((w) => ks.includes(w)).length >= 2 && pr.precio_unit_neto) { refs.push({ fuente_tipo: "historico", proveedor: c.nombre, producto: texto(pr.producto, 120), precio_unit_neto: Math.round(pr.precio_unit_neto), cubre: "compra anterior", t: pr.fecha || c.ultima || null, url: c.web || null, telefono: c.telefono || null }); if (refs.filter((r) => r.fuente_tipo === "historico").length >= 3) break; } } } catch {}
+  // d) tarifa estimada para mano de obra / traslado / diagnóstico
+  if (!tipoRep || !refs.length) { const u = pa.unidad; const tarifa = u === "hora" ? (/t[eé]cnico/i.test(pa.nombre) ? TARIFAS_SIM.hora_tecnico : TARIFAS_SIM.hora_taller) : u === "km" ? TARIFAS_SIM.km : u === "viaje" ? TARIFAS_SIM.viaje_local : pa.tipo === "diagnostico" ? TARIFAS_SIM.diagnostico : null;
+    if (tarifa) refs.push({ fuente_tipo: "tarifa", proveedor: "tarifa estimada " + (u === "hora" ? "hora de taller RM" : u === "km" ? "flete por km RM" : u === "viaje" ? "viaje local RM" : "diagnóstico"), precio_unit_neto: tarifa, cubre: "por " + u, condiciones: "estimación: confirmar con taller/transportista", t: ahora() }); }
+  const con = refs.filter((r) => r.precio_unit_neto).sort((a, b2) => a.precio_unit_neto - b2.precio_unit_neto);
+  const prio = { cotizacion: 0, historico: 1, publicado: 2, tarifa: 3 }; const mejor = con.sort((a, b2) => prio[a.fuente_tipo] - prio[b2.fuente_tipo] || a.precio_unit_neto - b2.precio_unit_neto)[0] || null;
+  pa.refs = refs.slice(0, 8); pa.costo_unit_neto = mejor ? mejor.precio_unit_neto : null; pa.fuente = mejor ? mejor.fuente_tipo : null; pa.ref_idx = mejor ? refs.indexOf(mejor) : null; pa.costeada = true;
+  return pa;
+}
+function simTotales(t, S) {
+  const P = S.partidas || [], integral = S.integral?.existe;
+  const neto = (pa) => (pa.costo_unit_neto != null ? Math.round(pa.costo_unit_neto * (pa.cantidad || 1)) : null);
+  const costeadas = P.filter((pa) => neto(pa) != null), sinCosto = P.filter((pa) => neto(pa) == null);
+  const sub = costeadas.reduce((s2, pa) => s2 + neto(pa), 0), flete = costeadas.filter((pa) => pa.tipo === "traslado").reduce((s2, pa) => s2 + neto(pa), 0);
+  const criticas = sinCosto.filter((pa) => pa.exigida);
+  const estado = !P.length ? "sin_partidas" : criticas.length ? "parcial" : "completo";
+  const venta = Number(t.oc_compra?.total || t.total) || 0; const iva = Math.round(sub * 0.19);
+  return { subtotal_neto: sub, iva, total_con_iva: sub + iva, flete, partidas_costeadas: costeadas.length, partidas: P.length, sin_costo: sinCosto.map((pa) => pa.nombre), criticas: criticas.map((pa) => pa.nombre), estado, venta, rango: estado === "completo" ? { min: Math.round(sub * 0.9), max: Math.round(sub * 1.15) } : null, integral: !!integral };
+}
+
+// 🟢 compra real: varias asignaciones por línea (un proveedor para todo, varios, o línea dividida); cada costo y flete cuenta una vez.
+//    Devuelve {error} si falta algo. precio_acordado / flete / proveedor = suma de lo CONFIRMADO.
+function aplicarAsignacion(op, A, dispositivo) {
+  const b = { dispositivo }; op.asignaciones = op.asignaciones || [];
+
+      if (A.op === "quitar") op.asignaciones = op.asignaciones.filter((x) => x.id !== A.id);
+      else { const lineas = Array.isArray(A.lineas) ? A.lineas.slice(0, 40).map((l) => ({ lid: texto(l.lid, 24), cantidad: Math.max(0, Number(l.cantidad) || 0), unidad: texto(l.unidad, 12) })).filter((l) => l.lid && l.cantidad > 0) : [];
+        const prev = A.id ? op.asignaciones.find((x) => x.id === A.id) : null;
+        const reg = { id: prev?.id || ("a" + Date.now().toString(36) + randomBytes(2).toString("base64url")), proveedor: texto(A.proveedor, 80) || prev?.proveedor || "", url: texto(A.url, 300) || prev?.url || null, telefono: texto(A.telefono, 30) || prev?.telefono || null,
+          lineas: lineas.length ? lineas : prev?.lineas || [], modo_precio: A.modo_precio === "total" ? "total" : "unitario", precio_unit_neto: A.precio_unit_neto != null ? Math.max(0, Math.round(Number(A.precio_unit_neto) || 0)) : prev?.precio_unit_neto ?? null,
+          total_neto: A.total_neto != null ? Math.max(0, Math.round(Number(A.total_neto) || 0)) : prev?.total_neto ?? null, flete: A.flete != null ? Math.max(0, Math.round(Number(A.flete) || 0)) : prev?.flete || 0, fecha: texto(A.fecha, 10) || prev?.fecha || null,
+          estado: A.op === "confirmar" ? "confirmada" : prev?.estado === "confirmada" && A.op !== "add" ? "confirmada" : "por_confirmar", origen: A.origen && typeof A.origen === "object" ? { tipo: texto(A.origen.tipo, 20), partida: texto(A.origen.partida, 10), ref_url: texto(A.origen.ref_url, 300), precio_ref_neto: Math.round(Number(A.origen.precio_ref_neto) || 0) || null } : prev?.origen || null, integral: !!(A.integral ?? prev?.integral), t: ahora(), por: texto(b.dispositivo, 60) };
+        if (reg.modo_precio === "unitario" && reg.precio_unit_neto != null) reg.total_neto = Math.round(reg.lineas.reduce((s2, l) => s2 + l.cantidad, 0) * reg.precio_unit_neto);
+        if (A.op === "confirmar") { reg.t_confirmada = ahora(); if (!reg.total_neto && !reg.precio_unit_neto) return { error: "Falta el precio neto (unitario o total)." }; if (!reg.lineas.length) return { error: "Elige al menos una línea y su cantidad." }; }
+        if (prev) Object.assign(prev, reg); else op.asignaciones.push(reg); }
+      // precio acordado y flete = suma de lo CONFIRMADO (cada costo una vez); mientras falten líneas queda como costo confirmado hasta ahora
+      const conf = op.asignaciones.filter((x) => x.estado === "confirmada"); const netoC = conf.reduce((s2, x) => s2 + (x.total_neto || 0), 0), fleteC = conf.reduce((s2, x) => s2 + (x.flete || 0), 0);
+      if (conf.length) { op.precio_acordado = Math.round(netoC * 1.19); op.costo_transporte = fleteC; op.proveedor = [...new Set(conf.map((x) => x.proveedor).filter(Boolean))].join(" + ").slice(0, 120); op.pedido_informe = { t: ahora() }; }
+      else if (op.asignaciones.length === 0 && !Object.keys(op.costos_confirmados || {}).length) { /* nada confirmado: no tocar */ }
+      op.compra_confirmada_neto = netoC;
+    
+  return { ok: true };
+}
+
 // 🧾 VERSIONES DE OFERTA: cada preparación crea un borrador con id propio (ventas, costo base y fuentes por ítem, con id de línea);
 //    al enviar se congela lo que Mercado Público mostró (captura) y la OC se enlaza a esa versión, nunca al borrador que vino después.
 const lineaId = (i, it) => texto(it?.lid || it?.id, 24) || ("L" + (i + 1));
@@ -1208,7 +1312,7 @@ ${txt}`;
   const j = await r.json(); const out = (j.content || []).map((x) => x.text || "").join(""); const m = out.match(/\{[\s\S]*\}/);
   let an = null; try { an = m ? JSON.parse(m[0]) : null; } catch { try { const k2 = m[0].lastIndexOf("}"); an = JSON.parse(m[0].slice(0, k2 + 1).replace(/,\s*$/, "") + "}"); } catch {} }
   if (!an) return { error: "Claude no devolvió un análisis legible: " + out.slice(0, 150) };
-  await store.setJSON(ck, { t: ahora(), codigo: texto(b.codigo, 40), item: texto(it.nombre, 160), analisis: an });
+  await store.setJSON(ck, { t: ahora(), codigo: texto(b.codigo, 40), item: texto(it.nombre, 160), doc: texto(Array.isArray(b.archivos) ? b.archivos.map((a) => String(a).split(/[\\/]/).pop()).join(", ") : b.archivo, 300) || null, analisis: an });
   return { analisis: an };
 }
 
@@ -1444,7 +1548,7 @@ async function atender(req) {
   if (ruta === "ml-estado" && req.method === "GET") { const app = await mlConfig(store); const tk = await store.get("ml/token", { type: "json" }).catch(() => null); const tok = await mlToken(store).catch(() => null); return json({ app: !!app.client_id, autorizado: !!tk?.refresh_token, token_ok: !!tok, user_id: tk?.user_id || null, error: tk?.error || null }); }
   if (ruta === "oc-portal" && req.method === "POST") { const b = await cuerpo(req); const r = await sincronizarOCPortal(store, b.rut_empresa, b.lista); return json({ ok: true, n: r.n, estados: r.estados, enlazadas: r.enlazadas, cambiadas: r.cambiadas, sueltas: r.sueltas }); }
   if (ruta === "oc-portal" && req.method === "GET") { const rut = String(url.searchParams.get("rut") || "").replace(/\./g, "").toUpperCase(); const r = await store.get("oc_portal/" + rut, { type: "json" }).catch(() => null); return json({ ok: true, portal: r }); }
-  if (ruta === "anexo" && req.method === "POST") { const b = await cuerpo(req); const r = await analizarAnexo(store, b); return json(r, r.error ? 400 : 200); }   // 📎 anexos → lo que se entrega
+  if (ruta === "anexo" && req.method === "POST") { const b = await cuerpo(req); const r = await analizarAnexo(store, b); if (!r.error && b.codigo) { try { const t = await leer(store, limpiaCodigo(b.codigo)); if (t?.anexos_pedido) { t.anexos_subido = ahora(); await escribir(store, t); } } catch {} } return json(r, r.error ? 400 : 200); }   // 📎 anexos → lo que se entrega
   if (ruta === "ml-pendientes" && req.method === "GET") { try { await store.setJSON("ml/puente_visto", { t: ahora() }); } catch {} const { blobs } = await store.list({ prefix: "ml/cola/" }); const L = []; for (const b2 of blobs.slice(0, 10)) { const x = await store.get(b2.key, { type: "json" }).catch(() => null); if (x) L.push(x); } return json({ ok: true, pendientes: L }); }
   if (ruta === "ml-resultado" && req.method === "POST") { const b = await cuerpo(req); const k = texto(b.k, 20); if (!k) return json({ error: "falta k" }, 400);
     const fotos = (Array.isArray(b.fotos) ? b.fotos : []).slice(0, 15).map((x) => ({ titulo: texto(x.titulo, 160), url: texto(x.url, 400), foto: texto(x.foto, 400) || null, precio_iva: Math.round(Number(x.precio_iva) || 0) || null, fuente: "mercadolibre.cl", disponible: x.disponible !== false, vendedor: texto(x.vendedor, 60) || null, envio_gratis: !!x.envio_gratis, local: x.local !== false, motor: "ml-pc" }));
@@ -1606,6 +1710,30 @@ async function atender(req) {
     const t = m.oc ? await leer(store, m.oc).catch(() => null) : null;
     if (t?.op) { const d = (t.op.devoluciones || []).find((x) => x.mov_id === movId); if (d) { d.confirmado = true; d.t_confirmado = ahora(); await escribir(store, t); } }
     return json({ ok: true, repetido: r.repetido, mov: r.mov, resumen: resumenLibro(r.libro.movs) });
+  }
+
+  if (ruta === "simular" && req.method === "POST") {   // 🔵 trabajo de simulación por fases para una OC
+    const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return json({ error: "No existe." }, 404);
+    t.op = t.op || { etapa: "ganada", historial: [] }; const op = t.op; const fase = String(b.fase || "req");
+    if (b.req_texto) { op.req_adjunto = { texto: String(b.req_texto).slice(0, 40000), nombre: texto(b.req_nombre, 120) || "requerimiento adjuntado", t: ahora() }; op.simulacion_tmp = null; }
+    try {
+      if (fase === "req" || !op.simulacion_tmp || b.forzar) { const r = await simRequerimiento(store, t, b); op.simulacion_tmp = { t: ahora(), req: r, partidas: null, i: 0 }; await escribir(store, t);
+        return json({ ok: true, fase: "req", siguiente: r.falta_adjunto && !b.continuar_sin_adjunto ? "falta_adjunto" : "partidas", req: { fuentes: r.fuentes, falta_adjunto: r.falta_adjunto, adjuntos_nombres: r.adjuntos_nombres, motivo: r.motivo, version: r.version, largo: r.texto.length } }); }
+      const T = op.simulacion_tmp;
+      if (fase === "partidas") { const j = await simPartidas(t, T.req); T.plan = j; T.partidas = j.partidas; T.i = 0; await escribir(store, t); return json({ ok: true, fase: "partidas", n: j.partidas.length, siguiente: j.partidas.length ? "costeo" : "listo", resumen: j.resumen, alcance: j.alcance, integral: j.integral, faltan: j.faltan }); }
+      if (fase === "costeo") { const P = T.partidas || []; const pend = P.findIndex((pa) => !pa.costeada); if (pend >= 0) { await simCostearPartida(store, t, P[pend]); T.i = pend + 1; await escribir(store, t); return json({ ok: true, fase: "costeo", hecha: P[pend].nombre, faltan: P.filter((pa) => !pa.costeada).length, siguiente: P.some((pa) => !pa.costeada) ? "costeo" : "listo" }); } }
+      // listo: guardar el resultado con fecha, fuentes y versión del requerimiento; alimentar Excel en vivo (informe.compras) si estaba vacío
+      const tot = simTotales(t, T); const plan = T.plan || {};
+      op.simulacion = { t: ahora(), version_req: T.req.version, requerimiento: { fuentes: T.req.fuentes, falta_adjunto: T.req.falta_adjunto, adjuntos_nombres: T.req.adjuntos_nombres, motivo: T.req.motivo }, resumen: plan.resumen || "", alcance: plan.alcance || null, integral: plan.integral || null, faltan: [...(plan.faltan || []), ...tot.criticas.map((n) => "costear: " + n)], partidas: T.partidas || [], totales: tot,
+        explicacion: tot.estado === "completo" ? `Subtotal neto ${tot.subtotal_neto.toLocaleString("es-CL")} = suma de ${tot.partidas_costeadas} partidas (cantidad u horas × tarifa o precio de referencia); IVA ${tot.iva.toLocaleString("es-CL")}; flete incluido ${tot.flete.toLocaleString("es-CL")}.` : tot.estado === "parcial" ? `Subtotal sustentado ${tot.subtotal_neto.toLocaleString("es-CL")} neto con ${tot.partidas_costeadas}/${tot.partidas} partidas; falta costear partida(s) crítica(s): ${tot.criticas.join(", ")}.` : "Sin partidas: falta el requerimiento." };
+      op.simulacion_tmp = null;
+      if (tot.estado === "completo") { op.informe = op.informe || {}; if (!op.precio_acordado && !(Number(op.informe.compras) > 0 && op.informe.compras_fuente !== "simulacion")) { op.informe.compras = tot.total_con_iva; op.informe.compras_fuente = "simulacion"; op.informe.t_sim = ahora(); } }
+      await escribir(store, t); return json({ ok: true, fase: "listo", simulacion: op.simulacion });
+    } catch (e) { return json({ error: "Simulación interrumpida en «" + fase + "»: " + String(e.message || e).slice(0, 140), fase }, 502); }
+  }
+  if (ruta === "anexos-pendientes" && req.method === "GET") {   // el robot del PC consulta qué compras necesitan que suba sus adjuntos (anexos_pedido)
+    const lista = (await todos(store)).filter((t) => t.anexos_pedido && !t.anexos_subido).slice(0, 20).map((t) => ({ codigo: t.codigo, oc: t.op?.oc_codigo || null, motivo: t.anexos_pedido.motivo, t: t.anexos_pedido.t }));
+    return json({ pendientes: lista });
   }
   // ---------- celular ----------
   if (ruta === "estado" && req.method === "GET") {
@@ -1991,6 +2119,7 @@ async function atender(req) {
       if (invId_) for (const dv of op.devoluciones) { if (dv.mov_id || antes.some((a) => a.t === dv.t && a.monto === dv.monto && a.mov_id)) continue;
         const r = await movAgregar(store, invId_, { tipo: "devolucion", monto: dv.monto, estado: "pendiente", ref: "dev_" + t.codigo + "_" + dv.t, oc: t.codigo, empresa: t.empresa || "principal", nota: "Devolución registrada por la empresa" });
         if (!r.error) { dv.mov_id = r.mov.id; dv.inv_id = invId_; } } }
+    if (d.asignacion && typeof d.asignacion === "object") { const ra = aplicarAsignacion(op, d.asignacion, b.dispositivo); if (ra.error) return json({ error: ra.error }, 400); }
     if (d.costo_confirmado && typeof d.costo_confirmado === "object" && d.costo_confirmado.lid) {   // ✅ proveedor y precio neto confirmados para una línea (historial: el original se conserva en versiones/fuentes)
       const c = d.costo_confirmado; op.costos_confirmados = op.costos_confirmados || {};
       if (c.quitar) delete op.costos_confirmados[texto(c.lid, 24)];
