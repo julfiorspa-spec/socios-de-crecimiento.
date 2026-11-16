@@ -593,17 +593,17 @@ async function simRequerimiento(store, t, b) {
   if (falta) { t.anexos_pedido = { t: ahora(), motivo: "simulacion", oc: t.op?.oc_codigo || null }; }   // señal para el robot del PC: subir los adjuntos de salida/<cod>/adjuntos_comprador
   return req;
 }
-async function simPartidas(t, req) {
+async function simPartidas(t, req, opts = {}) {
   const prompt = `Eres el jefe técnico de un proveedor del Estado de Chile. Debes planificar la ejecución de la orden de compra ${t.op?.oc_codigo || ""} (compra ${t.codigo}: «${t.nombre || ""}», ${t.oc_compra?.organismo || t.organismo || ""}, entrega en ${t.oc_compra?.direccion || ""}).
 Con el requerimiento de abajo, DESCOMPÓN el proyecto en partidas ANTES de buscar precios. Extrae: vehículos/equipos/componentes/repuestos con cantidades, lugar, plazo y condiciones. Arma partidas para lo que corresponda: diagnostico, desmontaje, retiro, repuesto, instalacion, pruebas, traslado, mano_obra, producto, otro.
 Líneas de la OC (para linea_oc, 1..n): ${JSON.stringify((t.oc_compra?.items || itemsOferta(t)).map((i, k) => (k + 1) + ": " + String(i.nombre || i.d || "").slice(0, 60) + " × " + (i.cantidad ?? i.q ?? 1)))}. Si la OC vende 1 servicio, todas las partidas cuelgan de esa línea.
-Marca cuáles exige el comprador (exigida=true, con el documento y la sección/página que la respalda en respaldo) y cuáles son supuestos tuyos (exigida=false, supuesto="…"). Para mano de obra (desmontaje, instalación, pruebas, diagnóstico) usa unidad "hora" con las horas de taller estimadas como cantidad (y dilo en supuesto); para traslados usa "viaje" o "km". Si el requerimiento describe una cotización integral (un precio por todo), indica integral.existe=true y qué incluye, para no sumar repuestos o mano de obra dos veces. Máximo 20 partidas; strings cortas.
+Marca cuáles exige el comprador (exigida=true, con el documento y la sección/página que la respalda en respaldo) y cuáles son supuestos tuyos (exigida=false, supuesto="…"). Para mano de obra (desmontaje, instalación, pruebas, diagnóstico) usa unidad "hora" con las horas de taller estimadas como cantidad (y dilo en supuesto); para traslados usa "viaje" o "km". Si el requerimiento describe una cotización integral (un precio por todo), indica integral.existe=true y qué incluye, para no sumar repuestos o mano de obra dos veces. ${opts.corto ? "Máximo 12 partidas agrupando por vehículo (repuestos + mano de obra por vehículo); nombres de hasta 50 caracteres; respaldo y supuesto de hasta 40 caracteres." : "Máximo 18 partidas; nombres de hasta 60 caracteres; respaldo y supuesto breves (hasta 60 caracteres)."}
 No inventes repuestos ni cantidades que no estén en el requerimiento; si falta un dato crítico, ponlo en faltan.
 Responde SOLO JSON compacto: {"resumen":"","alcance":{"vehiculos":[""],"componentes":[""],"lugar":"","plazo":"","condiciones":[""]},"partidas":[{"id":"P1","tipo":"repuesto","nombre":"","cantidad":1,"unidad":"un|hora|viaje|km|servicio","linea_oc":1,"exigida":true,"respaldo":{"doc":"","seccion":""},"supuesto":null,"busqueda":"<qué buscar en tiendas, si es repuesto/producto>"}],"integral":{"existe":false,"incluye":[""]},"faltan":[""]}
 
 REQUERIMIENTO:
 ${req.texto.slice(0, 28000)}`;
-  const j = await claudeJSON(prompt, 7000, 25000);
+  const j = await claudeJSON(prompt, opts.corto ? 3000 : 4500, opts.corto ? 24000 : 25500);
   j.partidas = (j.partidas || []).slice(0, 25).map((p2, i) => ({ id: texto(p2.id, 8) || "P" + (i + 1), tipo: texto(p2.tipo, 20) || "otro", nombre: texto(p2.nombre, 160) || "", cantidad: Number(p2.cantidad) || 1, unidad: texto(p2.unidad, 12) || "un", linea_oc: Number(p2.linea_oc) || 1, exigida: p2.exigida !== false, respaldo: p2.respaldo && typeof p2.respaldo === "object" ? { doc: texto(p2.respaldo.doc, 80), seccion: texto(p2.respaldo.seccion, 80) } : null, supuesto: texto(p2.supuesto, 160), busqueda: texto(p2.busqueda, 100), refs: [], costo_unit_neto: null, fuente: null }));
   return j;
 }
@@ -1885,7 +1885,7 @@ async function atender(req) {
       if (fase === "req" || !op.simulacion_tmp || b.forzar) { const r = await simRequerimiento(store, t, b); op.simulacion_tmp = { t: ahora(), req: r, partidas: null, i: 0 }; await escribir(store, t);
         return json({ ok: true, fase: "req", siguiente: r.falta_adjunto && !b.continuar_sin_adjunto ? "falta_adjunto" : "partidas", req: { fuentes: r.fuentes, falta_adjunto: r.falta_adjunto, adjuntos_nombres: r.adjuntos_nombres, motivo: r.motivo, version: r.version, largo: r.texto.length } }); }
       const T = op.simulacion_tmp;
-      if (fase === "partidas") { const j = await simPartidas(t, T.req); T.plan = j; T.partidas = j.partidas; T.i = 0; await escribir(store, t); return json({ ok: true, fase: "partidas", n: j.partidas.length, siguiente: j.partidas.length ? "costeo" : "listo", resumen: j.resumen, alcance: j.alcance, integral: j.integral, faltan: j.faltan }); }
+      if (fase === "partidas") { let j; try { j = await simPartidas(t, T.req); } catch (e) { if (!/abort|timeout|cortado/i.test(String(e.message || e))) throw e; j = await simPartidas(t, T.req, { corto: true }); } T.plan = j; T.partidas = j.partidas; T.i = 0; await escribir(store, t); return json({ ok: true, fase: "partidas", n: j.partidas.length, siguiente: j.partidas.length ? "costeo" : "listo", resumen: j.resumen, alcance: j.alcance, integral: j.integral, faltan: j.faltan }); }
       if (fase === "costeo") { const P = T.partidas || []; const pend = P.findIndex((pa) => !pa.costeada); if (pend >= 0) { await simCostearPartida(store, t, P[pend]); T.i = pend + 1; await escribir(store, t); return json({ ok: true, fase: "costeo", hecha: P[pend].nombre, faltan: P.filter((pa) => !pa.costeada).length, siguiente: P.some((pa) => !pa.costeada) ? "costeo" : "listo" }); } }
       // listo: guardar el resultado con fecha, fuentes y versión del requerimiento; alimentar Excel en vivo (informe.compras) si estaba vacío
       const tot = simTotales(t, T); const plan = T.plan || {};
