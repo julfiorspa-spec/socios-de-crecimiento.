@@ -567,6 +567,12 @@ async function claudeJSON(prompt, maxTok, ms) {
 }
 async function simRequerimiento(store, t, b) {
   const cod = t.codigo, fuentes = [], partes = [];
+  // 0) requerimiento del comprador capturado por el robot (ficha + adjuntos con texto por página + análisis con fuente)
+  const RQ = await store.get("req/" + cod, { type: "json" }).catch(() => null);
+  if (RQ) { for (const a of RQ.adjuntos || []) fuentes.push({ tipo: a.partes?.length ? "adjunto" : "adjunto_no_leido", doc: a.nombre, t: a.capturado, error: a.error || null, archivo_id: a.archivo_id || null });
+    if (RQ.analisis) partes.push("ANÁLISIS DEL REQUERIMIENTO (versión " + RQ.version + "): " + JSON.stringify({ alcance: RQ.analisis.alcance, unidad_comercial: RQ.analisis.unidad_comercial, exigencias: (RQ.analisis.exigencias || []).slice(0, 30), partidas: RQ.analisis.partidas, plazo: RQ.analisis.plazo, garantia: RQ.analisis.garantia, documentos: RQ.analisis.documentos_exigidos }));
+    for (const a of RQ.adjuntos || []) for (const p2 of (a.partes || []).slice(0, 20)) if (p2.texto) partes.push(`ADJUNTO ${a.nombre} · ${p2.tipo} ${p2.n}: ${String(p2.texto).slice(0, 4000)}`);
+    if (RQ.ficha?.texto) partes.push("FICHA: " + RQ.ficha.texto.slice(0, 3000)); }
   // 1) anexos leídos por el robot (caché anexo/<cod>/*), el más reciente
   const { blobs } = await store.list({ prefix: "anexo/" + cod + "/" }).catch(() => ({ blobs: [] }));
   let an = null; for (const bl of blobs) { const x = await store.get(bl.key, { type: "json" }).catch(() => null); if (x?.analisis && (!an || (x.t || "") > (an.t || ""))) an = x; }
@@ -579,9 +585,10 @@ async function simRequerimiento(store, t, b) {
   if (t.oc_compra) { fuentes.push({ tipo: "oc", doc: "orden de compra " + (t.op?.oc_codigo || ""), t: t.oc_compra.fecha || null }); partes.push("ORDEN DE COMPRA: " + JSON.stringify({ items: (t.oc_compra.items || []).map((i) => ({ nombre: i.nombre, especificacion: i.especificacion, cantidad: i.cantidad, precio: i.precio })), total: t.oc_compra.total, direccion: t.oc_compra.direccion, organismo: t.oc_compra.organismo })); }
   if (t.items?.length) partes.push("OFERTA PRESENTADA: " + JSON.stringify(itemsOferta(t).map((i) => ({ d: i.d, q: i.q, p: i.p }))) + (t.detalle ? " · " + t.detalle.slice(0, 400) : ""));
   const menciona = /adjunt|anexo|seg[uú]n detalle/i.test(JSON.stringify([t.items, t.oc_compra?.items, t.nombre]));
-  const falta = menciona && !an && !t.op?.req_adjunto?.texto;
-  const nombres = ficha?.adjuntos?.length ? ficha.adjuntos : [];
-  const req = { t: ahora(), texto: partes.join("\n\n").slice(0, 60000), fuentes, falta_adjunto: falta, adjuntos_nombres: nombres, motivo: falta ? (nombres.length ? "el robot no leyó " + nombres.join(", ") : "la compra pide «según detalle adjunto» y no hay anexos leídos ni adjuntados") : null };
+  const leidos = (RQ?.adjuntos || []).filter((a) => a.partes?.length).length, noLeidos = (RQ?.adjuntos || []).filter((a) => !a.partes?.length);
+  const falta = menciona && !an && !t.op?.req_adjunto?.texto && !leidos;
+  const nombres = noLeidos.length ? noLeidos.map((a) => a.nombre) : ficha?.adjuntos?.length ? ficha.adjuntos : [];
+  const req = { t: ahora(), texto: partes.join("\n\n").slice(0, 60000), fuentes, falta_adjunto: falta, adjuntos_nombres: nombres, req_version: RQ?.version || null, motivo: falta ? (noLeidos.length ? "adjunto(s) no leído(s): " + noLeidos.map((a) => a.nombre + (a.error ? " (" + a.error + ")" : "")).join(", ") : nombres.length ? "el robot no leyó " + nombres.join(", ") : "la compra pide «según detalle adjunto» y no hay anexos leídos ni adjuntados") : null };
   req.version = hashTxt(req.texto);
   if (falta) { t.anexos_pedido = { t: ahora(), motivo: "simulacion", oc: t.op?.oc_codigo || null }; }   // señal para el robot del PC: subir los adjuntos de salida/<cod>/adjuntos_comprador
   return req;
@@ -762,6 +769,37 @@ async function terrenoAccion(store, t, b) {
   await escribir(store, t); return { ok: true, terreno: T };
 }
 
+// ---------- 📋 REQUERIMIENTO DEL COMPRADOR: ficha + adjuntos (originales, texto por página) → exigencias con fuente, versiones ----------
+//  Blob req/<codigo> = {version, capturado, ficha, adjuntos[{nombre, origen, capturado, archivo_id, partes[{n,tipo,nombre,texto}], revisar[], error}], analisis, versiones[{version,t,cambios}]}
+//  Cada oferta (versiones[].req_version) y cada simulación guardan la versión del requerimiento con que se trabajó.
+async function analizarRequerimiento(t, Rq) {
+  const docs = (Rq.adjuntos || []).filter((a) => (a.partes || []).length);
+  const textos = docs.map((a) => `=== ARCHIVO: ${a.nombre} ===\n` + a.partes.map((p2) => `--- ${p2.tipo} ${p2.n}${p2.nombre && p2.nombre !== p2.tipo + " " + p2.n ? " (" + p2.nombre + ")" : ""} ---\n${(p2.texto || "").slice(0, 6000)}`).join("\n")).join("\n\n").slice(0, 60000);
+  const ficha = `FICHA (portal): ${Rq.ficha?.nombre || t.nombre || ""} · ${Rq.ficha?.organismo || t.organismo || ""} · presupuesto ${Rq.ficha?.presupuesto || ""} · plazo ${Rq.ficha?.plazo || ""} · lugar ${Rq.ficha?.lugar || ""}\nTEXTO: ${(Rq.ficha?.texto || "").slice(0, 3000)}\nÍTEMS: ${JSON.stringify((Rq.ficha?.items || []).slice(0, 20))}`;
+  const prompt = `Eres el jefe técnico de un proveedor del Estado de Chile. Analiza QUÉ PIDE EL COMPRADOR en la compra ágil ${t.codigo} antes de cotizar. Usa la ficha y los adjuntos; NO inventes: si algo no está, omítelo.
+Cada exigencia debe apuntar a su fuente exacta: archivo y página/hoja/sección (o "ficha" si viene del portal). Si una línea del portal dice «1 servicio según detalle adjunto», conserva esa unidad comercial (unidad_comercial) y desglosa el servicio en partidas según el anexo.
+Responde SOLO JSON compacto: {"alcance":"","unidad_comercial":{"linea":"","cantidad":1,"unidad":"servicio|un"},"exigencias":[{"id":"E1","texto":"","tipo":"especificacion|entregable|plazo|garantia|documento|cantidad|lugar|otro","critica":true,"fuente":{"archivo":"","donde":"página 2|hoja Detalle|sección 3|ficha"}}],"partidas":[{"id":"P1","nombre":"","cantidad":1,"unidad":"un|hora|servicio","tipo":"repuesto|mano_obra|traslado|producto|otro","fuente":{"archivo":"","donde":""}}],"entregables":[""],"plazo":"","garantia":"","documentos_exigidos":[""],"resumen":""}
+
+${ficha}
+
+ADJUNTOS:
+${textos || "(sin adjuntos legibles)"}`;
+  const j = await claudeJSON(prompt, 4500, 60000);
+  j.exigencias = (j.exigencias || []).slice(0, 40).map((e, i) => ({ id: texto(e.id, 8) || "E" + (i + 1), texto: texto(e.texto, 300), tipo: texto(e.tipo, 20) || "otro", critica: e.critica !== false, fuente: e.fuente && typeof e.fuente === "object" ? { archivo: texto(e.fuente.archivo, 120), donde: texto(e.fuente.donde, 80) } : null }));
+  j.partidas = (j.partidas || []).slice(0, 30).map((p2, i) => ({ id: texto(p2.id, 8) || "P" + (i + 1), nombre: texto(p2.nombre, 160), cantidad: Number(p2.cantidad) || 1, unidad: texto(p2.unidad, 12) || "un", tipo: texto(p2.tipo, 20) || "otro", fuente: p2.fuente && typeof p2.fuente === "object" ? { archivo: texto(p2.fuente.archivo, 120), donde: texto(p2.fuente.donde, 80) } : null }));
+  return j;
+}
+function reqDiferencias(prev, nuevo) {   // qué cambió entre versiones: adjuntos nuevos/quitados/modificados, ítems
+  if (!prev) return ["primera versión"];
+  const n = (x) => (x.adjuntos || []).map((a) => a.nombre + ":" + hashTxt((a.partes || []).map((p2) => p2.texto).join("")));
+  const A = new Set(n(prev)), B = new Set(n(nuevo)); const out = [];
+  for (const k of B) if (!A.has(k)) out.push("adjunto nuevo o modificado: " + k.split(":")[0]);
+  for (const k of A) if (!B.has(k)) out.push("adjunto quitado: " + k.split(":")[0]);
+  if (JSON.stringify(prev.ficha?.items || []) !== JSON.stringify(nuevo.ficha?.items || [])) out.push("ítems de la ficha cambiaron");
+  if ((prev.ficha?.texto || "") !== (nuevo.ficha?.texto || "")) out.push("texto del requerimiento cambió");
+  return out.length ? out : ["sin cambios en el contenido"];
+}
+
 // 🧾 VERSIONES DE OFERTA: cada preparación crea un borrador con id propio (ventas, costo base y fuentes por ítem, con id de línea);
 //    al enviar se congela lo que Mercado Público mostró (captura) y la OC se enlaza a esa versión, nunca al borrador que vino después.
 const lineaId = (i, it) => texto(it?.lid || it?.id, 24) || ("L" + (i + 1));
@@ -775,7 +813,7 @@ function normCostoBase(c) {
   return { neto_unit: Math.round(Number(c.neto_unit) || 0) || null, metodo, fuente_idx: c.fuente_idx == null ? null : Number(c.fuente_idx), nota: texto(c.nota, 160) };
 }
 function nuevaVersion(t, origen, items, firma, extra = {}) {
-  const v = { id: "v" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), t: ahora(), origen,
+  const v = { id: "v" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), t: ahora(), origen, req_version: t.req_version || null,
     items: (items || []).map((it, i) => ({ lid: lineaId(i, it), d: it.d, q: it.q, p: it.p, costo_base: it.costo_base || null, fuentes: it.fuentes || [] })),
     precios: firma?.precios || (items || []).map((it) => it.p), despacho: firma?.despacho || 0, total: firma?.total || t.total || null, ...extra };
   t.versiones = [...(t.versiones || []), v].slice(-10); t.version_actual = v.id;
@@ -1835,7 +1873,7 @@ async function atender(req) {
       if (fase === "costeo") { const P = T.partidas || []; const pend = P.findIndex((pa) => !pa.costeada); if (pend >= 0) { await simCostearPartida(store, t, P[pend]); T.i = pend + 1; await escribir(store, t); return json({ ok: true, fase: "costeo", hecha: P[pend].nombre, faltan: P.filter((pa) => !pa.costeada).length, siguiente: P.some((pa) => !pa.costeada) ? "costeo" : "listo" }); } }
       // listo: guardar el resultado con fecha, fuentes y versión del requerimiento; alimentar Excel en vivo (informe.compras) si estaba vacío
       const tot = simTotales(t, T); const plan = T.plan || {};
-      op.simulacion = { t: ahora(), version_req: T.req.version, requerimiento: { fuentes: T.req.fuentes, falta_adjunto: T.req.falta_adjunto, adjuntos_nombres: T.req.adjuntos_nombres, motivo: T.req.motivo }, resumen: plan.resumen || "", alcance: plan.alcance || null, integral: plan.integral || null, faltan: [...(plan.faltan || []), ...tot.criticas.map((n) => "costear: " + n)], partidas: T.partidas || [], totales: tot,
+      op.simulacion = { t: ahora(), version_req: T.req.req_version || T.req.version, requerimiento: { fuentes: T.req.fuentes, falta_adjunto: T.req.falta_adjunto, adjuntos_nombres: T.req.adjuntos_nombres, motivo: T.req.motivo }, resumen: plan.resumen || "", alcance: plan.alcance || null, integral: plan.integral || null, faltan: [...(plan.faltan || []), ...tot.criticas.map((n) => "costear: " + n)], partidas: T.partidas || [], totales: tot,
         explicacion: tot.estado === "completo" ? `Subtotal neto ${tot.subtotal_neto.toLocaleString("es-CL")} = suma de ${tot.partidas_costeadas} partidas (cantidad u horas × tarifa o precio de referencia); IVA ${tot.iva.toLocaleString("es-CL")}; flete incluido ${tot.flete.toLocaleString("es-CL")}.` : tot.estado === "parcial" ? `Subtotal sustentado ${tot.subtotal_neto.toLocaleString("es-CL")} neto con ${tot.partidas_costeadas}/${tot.partidas} partidas; falta costear partida(s) crítica(s): ${tot.criticas.join(", ")}.` : "Sin partidas: falta el requerimiento." };
       op.simulacion_tmp = null;
       if (tot.estado === "completo") { op.informe = op.informe || {}; if (!op.precio_acordado && !(Number(op.informe.compras) > 0 && op.informe.compras_fuente !== "simulacion")) { op.informe.compras = tot.total_con_iva; op.informe.compras_fuente = "simulacion"; op.informe.t_sim = ahora(); } }
@@ -1847,6 +1885,45 @@ async function atender(req) {
     return json({ pendientes: lista });
   }
 
+
+  if (ruta === "requerimiento" && req.method === "POST") {   // 📋 el robot sube ficha + adjuntos (texto por página); la nube analiza y versiona
+    const b = await cuerpo(req); const codigo = limpiaCodigo(b.codigo); if (!codigo) return json({ error: "Falta el código" }, 400);
+    const t = (await leer(store, codigo)) || { codigo, estado: "externa", externa: true, creado: ahora(), nombre: texto(b.nombre, 200), organismo: texto(b.organismo, 200) };
+    const prev = await store.get("req/" + codigo, { type: "json" }).catch(() => null);
+    const nuevo = { codigo, capturado: texto(b.capturado, 30) || ahora(), ficha: { nombre: texto(b.nombre, 200), organismo: texto(b.organismo, 200), presupuesto: Number(b.presupuesto) || null, texto: texto(b.texto, 20000), items: (Array.isArray(b.items) ? b.items : []).slice(0, 40).map((i) => ({ descripcion: texto(i.descripcion || i.nombre, 300), cantidad: Number(i.cantidad) || 1, unidad: texto(i.unidad, 20), categoria: texto(i.categoria, 80) })), plazo: texto(b.plazo, 80), lugar: texto(b.lugar, 200), cierre: texto(b.cierre, 40), llamado: texto(b.llamado, 40) },
+      adjuntos: (Array.isArray(b.adjuntos) ? b.adjuntos : []).slice(0, 15).map((a) => ({ nombre: texto(a.nombre, 160), origen: texto(a.origen, 300), capturado: texto(a.capturado, 30), archivo_id: texto(a.archivo_id, 40), subido: !!a.subido, bytes: Number(a.bytes) || null, error: texto(a.error, 200), nota: texto(a.nota, 160), revisar: (a.revisar || []).slice(0, 30).map((x) => texto(x, 40)), partes: (Array.isArray(a.partes) ? a.partes : []).slice(0, 60).map((p2) => ({ n: Number(p2.n) || 1, tipo: texto(p2.tipo, 12), nombre: texto(p2.nombre, 60), texto: texto(p2.texto, 12000) })) })) };
+    nuevo.version = hashTxt(JSON.stringify({ f: nuevo.ficha, a: nuevo.adjuntos.map((a) => [a.nombre, a.error, a.partes.map((p2) => p2.texto)]) }));
+    if (prev && prev.version === nuevo.version && prev.analisis && !b.forzar) { t.anexos_subido = ahora(); await escribir(store, t); return json({ ok: true, version: prev.version, sin_cambios: true, n_exigencias: (prev.analisis.exigencias || []).length }); }
+    let analisis = null, error = null; try { analisis = await analizarRequerimiento(t, nuevo); } catch (e) { error = String(e.message || e).slice(0, 160); }
+    const reg = { ...nuevo, analisis, analisis_error: error, t: ahora(), versiones: [...((prev?.versiones) || []), { version: nuevo.version, t: ahora(), cambios: reqDiferencias(prev, nuevo), n_adjuntos: nuevo.adjuntos.length, n_leidos: nuevo.adjuntos.filter((a) => a.partes.length).length }].slice(-10) };
+    if (prev && prev.version !== nuevo.version) await store.setJSON("req/" + codigo + "/v/" + prev.version, { ...prev, versiones: undefined }).catch(() => {});
+    await store.setJSON("req/" + codigo, reg);
+    t.req_version = nuevo.version; t.anexos_subido = ahora(); await escribir(store, t);
+    return json({ ok: true, version: nuevo.version, n_exigencias: (analisis?.exigencias || []).length, n_partidas: (analisis?.partidas || []).length, error, cambios: reg.versiones[reg.versiones.length - 1].cambios });
+  }
+  if (ruta === "requerimiento" && req.method === "GET") {   // la app: requerimiento vigente (o una versión) con análisis, adjuntos y qué cambió
+    const codigo = limpiaCodigo(url.searchParams.get("codigo")); const v = url.searchParams.get("version");
+    const R2 = v ? await store.get("req/" + codigo + "/v/" + v, { type: "json" }).catch(() => null) : await store.get("req/" + codigo, { type: "json" }).catch(() => null);
+    if (!R2) return json({ requerimiento: null });
+    return json({ requerimiento: { ...R2, adjuntos: (R2.adjuntos || []).map((a) => ({ ...a, partes: (a.partes || []).map((p2) => ({ ...p2, texto: String(p2.texto || "").slice(0, 1500) })) })) } });
+  }
+  if (ruta === "req-reintentar" && req.method === "POST") { const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return json({ error: "No existe." }, 404); t.anexos_pedido = { t: ahora(), motivo: "reintento", oc: t.op?.oc_codigo || null }; t.anexos_subido = null; await escribir(store, t); return json({ ok: true }); }
+  if (ruta === "req-check" && req.method === "POST") {   // el cotizador marca qué exigencia ya acredita el producto propuesto (antes de firmar)
+    const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return json({ error: "No existe." }, 404);
+    t.req_check = { ...(t.req_check || {}), [texto(b.id, 10)]: b.ok ? { t: ahora(), nota: texto(b.nota, 120) } : null }; await escribir(store, t); return json({ ok: true, req_check: t.req_check });
+  }
+  if (ruta === "req-adjuntar" && req.method === "POST") {   // texto de un adjunto pegado/subido desde la app (adjunto inaccesible para el robot)
+    const b = await cuerpo(req); const codigo = limpiaCodigo(b.codigo); const prev = (await store.get("req/" + codigo, { type: "json" }).catch(() => null)) || { codigo, ficha: {}, adjuntos: [], versiones: [] };
+    const t = (await leer(store, codigo)) || { codigo, externa: true, estado: "externa", creado: ahora() };
+    const nombre = texto(b.nombre, 160) || "adjunto manual"; const partes = [{ n: 1, tipo: "archivo", nombre, texto: texto(b.texto, 12000) }];
+    const adjuntos = [...prev.adjuntos.filter((a) => a.nombre !== nombre), { nombre, origen: "adjuntado desde la app", capturado: ahora(), archivo_id: texto(b.archivo_id, 40), subido: !!b.archivo_id, partes, revisar: [], error: null }];
+    const nuevo = { ...prev, adjuntos, capturado: ahora() }; nuevo.version = hashTxt(JSON.stringify({ f: nuevo.ficha, a: adjuntos.map((a) => [a.nombre, a.error, (a.partes || []).map((p2) => p2.texto)]) }));
+    let analisis = null, error = null; try { analisis = await analizarRequerimiento(t, nuevo); } catch (e) { error = String(e.message || e).slice(0, 160); }
+    const reg = { ...nuevo, analisis: analisis || prev.analisis, analisis_error: error, t: ahora(), versiones: [...(prev.versiones || []), { version: nuevo.version, t: ahora(), cambios: reqDiferencias(prev.version ? prev : null, nuevo), n_adjuntos: adjuntos.length, n_leidos: adjuntos.filter((a) => a.partes.length).length }].slice(-10) };
+    if (prev.version && prev.version !== nuevo.version) await store.setJSON("req/" + codigo + "/v/" + prev.version, { ...prev, versiones: undefined }).catch(() => {});
+    await store.setJSON("req/" + codigo, reg); t.req_version = nuevo.version; t.anexos_subido = ahora(); await escribir(store, t);
+    return json({ ok: true, version: nuevo.version, n_exigencias: (reg.analisis?.exigencias || []).length, error });
+  }
   if (ruta === "terreno" && req.method === "POST") { const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return json({ error: "No existe." }, 404); const r = await terrenoAccion(store, t, b); return json(r, r.error ? (r.ya_tomado ? 409 : 400) : 200); }
   if (ruta === "viajes" && req.method === "GET") { const { blobs } = await store.list({ prefix: "viajes/" }); const L = []; for (const bl of blobs) { if (/\/tomado$/.test(bl.key)) continue; const v = await store.get(bl.key, { type: "json" }).catch(() => null); if (v) { const tom = await store.get(bl.key + "/tomado", { type: "json" }).catch(() => null); L.push({ ...v, tomado: tom ? tom.por?.nombre : null }); } } return json({ viajes: L.filter((v) => !v.tomado) }); }
   if (ruta === "factorings" && req.method === "GET") { const emp = texto(url.searchParams.get("empresa"), 40) || "principal"; return json({ factorings: (await store.get("factorings/" + emp, { type: "json" })) || [] }); }
