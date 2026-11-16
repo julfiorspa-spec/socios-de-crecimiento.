@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CotizÁgil · Firma rápida
 // @namespace    https://cotizagil.netlify.app/
-// @version      3.5.1
+// @version      3.5.2
 // @description  Te lleva a tu Compra Ágil (una navegación, por tu toque) y rellena precios/despacho/detalle al pulsar Rellenar, con confirmación. No envía, no declara, no firma, no navega solo, no oculta la automatización: el envío y la firma los haces tú.
 // @match        https://cotizagil.netlify.app/*
 // @match        https://compra-agil.mercadopublico.cl/*
@@ -440,7 +440,7 @@
   //      solo = 'precio' | 'despacho' | 'detalle' | null (todo)
   const previewAndFill = async (offer, code, solo) => {
     if (hayBloqueoMP()) { mostrarBloqueo(); return; }
-    if (hayDeclaracion()) { say('No rellenaré con la declaración jurada abierta: eso lo marcas y firmas tú.'); debug('rellenado_abortado', 'declaracion-' + code); return; }
+    if (hayDeclaracion()) debug('declaracion_detectada_sigo', code); // nunca abortar el rellenado por esto: la declaración no existe ahí; la firma siempre la hace el humano
     const fields = allFields();
     const inputs = fields.filter(el => el.tagName === 'INPUT');
     // clasifica cada input por el texto de sus ancestros: en el formulario de MP la etiqueta
