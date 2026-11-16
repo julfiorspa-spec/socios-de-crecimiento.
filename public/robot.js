@@ -2707,28 +2707,42 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         ${mismos.length > 1 ? `<span><button class="btn small" type="button" data-rb="ej-ver" data-c="${esc(ant.codigo)}">◀</button> <button class="btn small" type="button" data-rb="ej-ver" data-c="${esc(sig.codigo)}">▶</button></span>` : "<span></span>"}</div>`
         + tarjetaEj(abierto);
     }
-    return `<div class="rb-tira"><span>🛠 <b>${esc(yo.nombre)}</b></span><span>💰 <b class="${ahorro >= 0 ? "rb-vivo-t" : "rb-neg-t"}">${cortoG(ahorro)}</b> ahorro</span><span>🥇 <b>${cerr}</b>${cerr ? ` · ${cumplidos} a tiempo` : ""}</span><span>${atrasados ? `🔴 <b>${atrasados}</b> atrasado${atrasados > 1 ? "s" : ""}` : `⏳ <b>${L.length - cerr}</b>`}</span></div>
-      ${libroERP(L)}
-      <div class="rb-etapas">${ETAPAS_EJ.map(([k, n]) => `<button type="button" class="${tab === k ? "on" : ""}" data-rb="ej-tab" data-e="${k}">${n} ${L.filter((t) => et(t) === k).length}</button>`).join("")}<button type="button" class="${tab === "provbase" ? "on" : ""}" data-rb="ej-tab" data-e="provbase">🏭 Proveedores del grupo${R.provBase ? " " + R.provBase.n : ""}</button></div>
-      ${tab === "provbase" ? provBaseHTML() : ""}
-      ${tab === "cerrado" ? barraConsolidado(L) : ""}
-      ${!R.ejec ? `<div class="empty"><span class="spinner"></span></div>` : (() => {
-        const luego = leerLuego(), resp = (t) => (t.op?.respuestas || []).filter((r) => !r.visto).length;
-        const enTab = L.filter((t) => et(t) === tab).sort((a, b) => resp(b) - resp(a) || diasPlazo(a.op?.plazo_fecha) - diasPlazo(b.op?.plazo_fecha));
-        if (!enTab.length) return `<div class="empty">${L.length ? "Nada en esta etapa." : "Aún no hay órdenes de compra. Cuando llegue una (o vayas 1°), queda anclada aquí sola."}</div>`;
-        if (tab === "operacion") {   // 💼 Oportunidades de negocio: separadas en Con orden de compra vs Te pueden llamar
-          const conOC = enTab.filter((t) => t.op?.oc_codigo || t.op?.oc);
-          const llamar = enTab.filter((t) => !(t.op?.oc_codigo || t.op?.oc));
-          const grupo = (titulo, arr) => arr.length ? `<div class="rb-sec">${titulo} · ${arr.length}</div>${arr.map(portadaEj).join("")}` : "";
-          return grupo("📋 Con orden de compra", conOC) + grupo("📞 Te pueden llamar", llamar);
-        }
-        const ahora_ = enTab.filter((t) => !luego[t.codigo]), despues = enTab.filter((t) => luego[t.codigo]);
-        const top = ahora_[0];
-        return (top ? `<div class="muted" style="font-size:.72rem;text-align:center;margin:6px 0">Negocio <b>1 de ${ahora_.length}</b> · 👉 derecha = <b>ver ahora</b> · 👈 izquierda = <b>en otro momento</b></div>` + portadaEj(top)
-            + (ahora_.length > 1 ? `<div class="rb-cola">${ahora_.slice(1).map((t) => `<button type="button" class="rb-cola-i" data-rb="ej-ver" data-c="${esc(t.codigo)}">${resp(t) ? '<i class="rb-luz"></i>' : ""}${esc((t.nombre || t.codigo).slice(0, 34))}</button>`).join("")}</div>` : "")
-          : `<div class="empty">✅ Viste todos los de esta etapa.</div>`)
-          + (despues.length ? `<details class="rb-det"><summary>⏰ Para después (${despues.length})</summary>${despues.map(portadaEj).join("")}</details>` : "");
-      })()}`;
+    return bandejaOC(L, yo, { ahorro, cerr, cumplidos, atrasados });
+  }
+  // 📦 BANDEJA DE ÓRDENES: la primera pantalla de Ejecuta. Misma clasificación que Caja OC (clasificarOC + subOC); cada contador
+  //    sale de la misma lista que muestra. Orden: atrasadas → vencen antes → sin fecha. Un solo botón principal según lo que falta.
+  const EJ_FILTROS = [["enejec", "En ejecución"], ["poraceptar", "Por aceptar"], ["cerradas", "Cerradas"]];
+  const ACCION_OC = { T: ["🏭 Confirmar proveedor y precio", "negocio", null], G: ["💸 Revisar pago al proveedor", "oc-ir", "pago"], D: ["📍 Seguir despacho", "oc-ir", "transporte"], R: ["📦 Registrar recepción conforme", "oc-ir", "entrega"], C: ["🧾 Ver factura y cobro", "negocio", "cobro"] };
+  function bandejaOC(Lej, yo, K) {
+    const todas = esDueno() && R.ocTodas !== false;
+    const base0 = (R.todos || R.data?.trabajos || []).filter((t) => todas || deMiEmpresa(t));
+    const porCod = new Map(Lej.map((t) => [t.codigo, t]));
+    const base = base0.map((t) => porCod.get(t.codigo) || t);                                   // misma base que Caja OC; detalle de Ejecuta cuando existe
+    const G = { enejec: [], poraceptar: [], cerradas: [], opciones: 0, noacept: 0 };
+    for (const t of base) { const k = clasificarOC(t); if (k === "A") { if (subOC(t) === "C") G.cerradas.push(t); else G.enejec.push(t); } else if (k === "P") G.poraceptar.push(t); else if (k === "O") G.opciones++; else if (k === "N") G.noacept++; }
+    const tab = EJ_FILTROS.some(([k]) => k === R.ejTab) ? R.ejTab : "enejec"; R.ejTab = tab;
+    const dias = (t) => (t.op?.plazo_fecha ? diasPlazo(t.op.plazo_fecha) : null);
+    const orden = (xs) => [...xs].sort((a, b2) => { const da = dias(a), db = dias(b2); if (da == null && db == null) return 0; if (da == null) return 1; if (db == null) return -1; return da - db; });
+    const emp = empresaActual();
+    const tarjeta = (t) => { const op = t.op || {}, sb = clasificarOC(t) === "P" ? "P" : subOC(t), d = dias(t), q = queComprar(t)[0], dir = lugarDe(t);
+      const acc = sb === "P" ? ["🔎 Estudiar y aceptar", "oc-estudiar", null] : ACCION_OC[sb] || ACCION_OC.T;
+      const margen = op.precio_acordado ? "con compra acordada" : op.concrecion?.total?.ganancia != null ? "estimado con alternativas" : op.informe?.compras ? "estimado por el PC" : "pendiente";
+      const estadoTxt = sb === "P" ? "Por aceptar en MP" : (OC_SUB[sb] || OC_SUB.T)[0].replace(/^\S+\s/, "");
+      return `<div class="rb-ejcard ${sb === "D" ? "trayecto" : ""}" data-c="${esc(t.codigo)}" style="padding:10px 12px;margin:6px 0">
+        <div class="rb-env"><b style="font-size:.9rem">OC ${esc(op.oc_codigo || op.oc || "—")}</b><span class="rb-oc-tag ${sb === "C" ? "ok" : ""}">${esc(estadoTxt)}</span></div>
+        <div class="rb-fnom" style="margin:2px 0">${esc(t.nombre || "")}</div>
+        ${q ? `<div class="rb-qc mini"><span class="n">${esc(q.cantidad ?? "")}<small>${esc(q.unidad || "")}</small></span><div><b>${esc(q.que.slice(0, 90))}</b>${queComprar(t).length > 1 ? ` <span class="muted">+${queComprar(t).length - 1} más</span>` : ""}</div></div>` : ""}
+        <div class="muted" style="font-size:.72rem">📍 ${esc((dir || t.oc_compra?.organismo || t.organismo || "destino sin registrar").slice(0, 60))} · ${d == null ? "Fecha de entrega sin registrar" : esc(textoPlazo(op.plazo_fecha))}</div>
+        <div class="rb-kv" style="font-size:.72rem;margin-top:3px"><span>venta <b>${clp(t.oc_compra?.total || t.total)}</b></span><span>margen ${margen}</span><span class="muted">oferta ${esc(t.codigo)}</span></div>
+        <div class="rb-row" style="margin-top:6px"><button class="btn rb-oro" type="button" style="flex:1" data-rb="${acc[1]}" ${acc[2] ? (acc[1] === "negocio" ? `data-sec="${acc[2]}"` : `data-e="${acc[2]}"`) : ""} data-c="${esc(t.codigo)}">${acc[0]}</button><button class="btn small" type="button" data-rb="ej-luego" data-c="${esc(t.codigo)}" title="Después">⏰</button></div></div>`; };
+    const lista = orden(G[tab]);
+    return `<div class="rb-env" style="align-items:baseline"><h2 class="rb-h" style="margin:0">📦 Órdenes de compra</h2><span class="muted" style="font-size:.74rem">🏢 ${esc(corta(emp?.razon_social) || "Mi empresa")}${todas ? " · todas" : ""} · 🛠 ${esc(yo.nombre)}</span></div>
+      <div class="rb-rchips" style="margin:6px 0">${EJ_FILTROS.map(([k, n]) => `<button type="button" class="rb-rchip ${tab === k ? "on" : ""}" data-rb="ej-tab" data-e="${k}">${n}<i>${G[k].length}</i></button>`).join("")}</div>
+      ${!R.ejec ? `<div class="empty"><span class="spinner"></span></div>` : lista.length ? lista.map(tarjeta).join("") : `<div class="empty">${tab === "enejec" ? "Ninguna OC aceptada con trabajo pendiente." : tab === "poraceptar" ? "No hay OC esperando aceptación." : "Aún no hay OC cerradas."}</div>`}
+      <div class="muted" style="font-size:.68rem;margin-top:8px">${G.opciones ? `🔭 ${G.opciones} compra(s) donde vamos primeros sin OC: en Cotiza → En opciones. ` : ""}${G.noacept ? `🚫 ${G.noacept} no aceptadas (solo estadística). ` : ""}${K.atrasados ? `🔴 ${K.atrasados} atrasada(s). ` : ""}</div>
+      <details class="rb-det" style="margin-top:8px"><summary>Más · Libro y caja · Proveedores (SII) · Marcador</summary>
+        <div class="rb-row" style="margin:6px 0"><button class="btn small" type="button" data-rb="ej-tab" data-e="provbase">🏭 Proveedores del grupo${R.provBase ? " " + R.provBase.n : ""}</button><button class="btn small" type="button" data-rb="oc">📦 Caja OC</button><button class="btn small" type="button" data-rb="stats">🏟️ Marcador</button></div>
+        ${libroERP(Lej)}${R.ejProv ? provBaseHTML() : ""}</details>`;
   }
   function vistaOport() {
     if (!R.oport) { cargarOport(); return `<div class="empty"><span class="spinner"></span> Cargando oportunidades…</div>`; }
@@ -4081,14 +4095,14 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   // 🗂 FICHA ÚNICA del negocio: desde Enviadas, Correos, Negocios o Caja OC se llega a la misma ficha, en la sección que corresponde,
   //    y al volver se recupera la pantalla y la lista que se estaba mirando.
   function abrirNegocio(cod, sec) {
-    R.ocVolver = { pantalla: R.pantalla, oportTab: R.oportTab, ejTab: R.ejTab, ejAbierto: R.ejAbierto, ocVer: R.ocVer && R.ocVer !== cod ? R.ocVer : null };
+    R.ocVolver = { pantalla: R.pantalla, oportTab: R.oportTab, ejTab: R.ejTab, ejAbierto: R.ejAbierto, ocVer: R.ocVer && R.ocVer !== cod ? R.ocVer : null, scroll: sheet.scrollTop || 0 };
     R.pantalla = "oc"; R.ocVer = cod; R.ocSec = sec || null; R.ocFila = null; R.ocPre = null; sheet.scrollTop = 0; cargarOCFull(cod); pintarHoja(true);
     if (sec) setTimeout(() => document.getElementById("ocsec-" + sec)?.scrollIntoView({ block: "start", behavior: "smooth" }), 400);
   }
   function volverDeNegocio() {
     const v = R.ocVolver; R.ocVolver = null; R.ocVer = null; R.ocFila = null; R.ocSec = null;
     if (v) { R.pantalla = v.pantalla === "oc" ? "oc" : v.pantalla || null; R.oportTab = v.oportTab; R.ejTab = v.ejTab; R.ejAbierto = v.ejAbierto; if (v.ocVer) R.ocVer = v.ocVer; }
-    pintarHoja(true);
+    pintarHoja(true); if (v?.scroll) setTimeout(() => { sheet.scrollTop = v.scroll; }, 30);
   }
   function pantallaOCVer(cod) {
     const F = (R.ocFull || {})[cod]; if (!F || F.cargando) { if (!F) cargarOCFull(cod); return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">🔎 Estudio de la OC</h2><button class="btn small" type="button" data-rb="oc-ver-cerrar">← Caja OC</button></div><div class="empty"><span class="spinner"></span> Cargando la oferta completa…</div></div>`; }
@@ -4959,7 +4973,7 @@ ${empNom}`;
         <button type="button" class="rb-pcs" data-rb="ver-roles" title="¿Qué quieres hacer? · ${conectado ? "Robot conectado" : "Robot apagado"}"><i class="${conectado ? "on" : ""}"></i>${/nube/i.test(r?.equipo || "") ? "☁️" : "Robot"}</button><button type="button" class="rb-pcs" data-rb="conectar-mp" title="${mp?.conectado ? "Mercado Público conectado" : "Entrar a Mercado Público desde la app"}"><i class="${mp?.conectado ? "on" : ""}"></i>MP${mp?.conectado ? "" : " ▸"}</button>
         ${iconos}
         <button class="rb-ico" type="button" data-rb="cerrar" aria-label="Cerrar">✕</button></div>`;
-      const cab2 = cab + `${execOn() ? "" : barraPortales()}${esDueno() ? (setTimeout(() => { if (!R.nubeT || Date.now() - R.nubeT > 60000) cargarNube(); inicioLoginMP(); }, 0), execOn() ? "" : barraMando(r, mp, conectado)) : ""}`;
+      const cab2 = cab + `${execOn() ? "" : barraPortales()}${esDueno() ? (setTimeout(() => { if (!R.nubeT || Date.now() - R.nubeT > 60000) cargarNube(); inicioLoginMP(); }, 0), execOn() ? "" : (portalActivo() === "ejecuta" && !R.verRoles ? `<details class="rb-det rb-ajrobot"><summary>⚙ Ajustes del Robot <span class="muted" style="font-size:.68rem">PC · Nube · Auto · Mercado Público · Apurar</span></summary>${barraMando(r, mp, conectado)}</details>` : barraMando(r, mp, conectado))) : ""}`;
       // 🏆 portada: cada vez que abres la app (y siempre que no haya empresa). Sin formularios: RUT → jugar.
       if (R.verRoles) return selectorRol();
       if (!miEmp() || !portadaVista()) { if (!R.oport) cargarOport(); return pantallaPortada(); }
@@ -5262,7 +5276,7 @@ ${empNom}`;
       return;
     }
     if (a === "portal") { guardar({ portal: b.dataset.v }); R.pantalla = null; sheet.scrollTop = 0; return pintarHoja(true); }
-    if (a === "ej-tab") { R.ejTab = b.dataset.e; if (b.dataset.e === "provbase" && !R.provBase) cargarProvBase(false); return pintarHoja(true); }
+    if (a === "ej-tab") { if (b.dataset.e === "provbase") { R.ejProv = !R.ejProv; if (!R.provBase) cargarProvBase(false); } else R.ejTab = b.dataset.e; return pintarHoja(true); }
     if (a === "consolidar") { R.consCerr = !R.consCerr; return pintarHoja(true); }
     if (a === "cons-dias") { R.consDias = +b.dataset.d || 5; R.consCerr = true; return pintarHoja(true); }
     if (a === "cons-csv") {
@@ -5302,7 +5316,7 @@ ${empNom}`;
       const oc = b.dataset.oc, url = oc ? `https://www.mercadopublico.cl/PurchaseOrder/Modules/PO/DetailsPurchaseOrder.aspx?codigoOC=${encodeURIComponent(oc)}` : portalDe(cod);
       try { window.open(url, "_blank", "noopener"); } catch { location.href = url; }
       toast("🧑 Abriendo Mercado Público: rechaza la OC ahí mismo (es tu decisión)"); return; }
-    if (a === "ej-cerrar-card") { R.ejAbierto = null; return pintarHoja(true); }
+    if (a === "ej-cerrar-card") { R.ejAbierto = null; const v = R.ejVolver; R.ejVolver = null; if (v?.ejTab) R.ejTab = v.ejTab; pintarHoja(true); if (v?.scroll) setTimeout(() => { sheet.scrollTop = v.scroll; }, 30); return; }
     if (a === "ej-modo") { R.ejModo = b.dataset.m || null; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "ej-concretar") { R.ejAbierto = cod; return concretarPedir(cod, b.dataset.forzar === "1"); }
     if (a === "ej-concrete" || a === "ej-desconcretar") { const t = tEj(); if (!t) return; const op = t.op || {}, c = op.concrecion || {}, conc = { ...(op.concretados || {}) };
@@ -5547,7 +5561,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       if (v && !isNaN(n)) acuerdo = /%/.test(v) ? { tipo: /capital/i.test(v) ? "pct_capital" : "pct", v: n / 100 } : { tipo: "monto", v: Math.round(n) };
       if (!v && !confirm("¿Quitar el acuerdo registrado?")) return;
       try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos: { inv_acuerdo: acuerdo }, dispositivo: dispositivo(false) }) }); toast(acuerdo ? "🤝 Acuerdo guardado" : "Acuerdo quitado"); await refrescar(); R.ejecT = 0; cargarEjecuta(); } catch (e) { toast(e.message); } return pintarHoja(true); }
-    if (a === "oc-ir") { R.pantalla = null; guardar({ portal: "ejecuta" }); R.ejAbierto = cod; R.ejTab = b.dataset.e || "operacion"; cargarEjecuta(); return pintarHoja(true); }
+    if (a === "oc-ir") { R.ejVolver = { ejTab: R.ejTab, scroll: sheet.scrollTop || 0 }; R.pantalla = null; guardar({ portal: "ejecuta" }); R.ejAbierto = cod; R.ejTabEtapa = b.dataset.e || "operacion"; cargarEjecuta(); sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "oc-factoring") { R.pantalla = null; guardar({ portal: "ejecuta" }); R.ejAbierto = cod; R.ejTab = "cerrado"; await cargarEjecuta(); const F = factorings();
       if (!F.length) { R.libroEj = true; toast("Agrega los factorings en 📒 Libro y caja para pedir la simulación"); return pintarHoja(true); }
       const falta = respaldosOC((R.ejec || []).find((x) => x.codigo === cod) || { op: {} }).filter((r) => !r[2]); if (falta.length) toast("Antes de ceder falta: " + falta.map((r) => r[0]).join(", "));
