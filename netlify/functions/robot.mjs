@@ -576,8 +576,12 @@ const normTxt = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[
 function cotejarOC(t) {
   const oc = t.oc_compra; if (!oc || !(oc.items || []).length) return { estado: "sin_datos", texto: "Oferta original por vincular", motivos: [], faltan: ["ítems de la OC (aún no llegan del portal)"], t: ahora() };
   const vers = t.versiones || [], env = t.envio;
-  const esDesp = (x) => /despacho|flete|transporte/i.test(String(x.nombre || x.especificacion || ""));
+  // una línea de la OC se trata como cargo de despacho SOLO si parece despacho/flete/transporte Y la oferta no vendió una línea con ese nombre
+  const nombresOf = new Set([...(t.items || []), ...(t.versiones || []).flatMap((v) => v.items || [])].map((i) => normTxt(i.d)).filter(Boolean));
+  const vendida = (x) => { const n = normTxt(x.nombre || x.especificacion); return !!n && [...nombresOf].some((d) => d === n || d.includes(n.slice(0, 25)) || n.includes(d.slice(0, 25))); };
+  const esDesp = (x) => /despacho|flete|transporte/i.test(String(x.nombre || x.especificacion || "")) && !vendida(x);
   const oi = (oc.items || []).filter((x) => !esDesp(x)), ocDesp = (oc.items || []).filter(esDesp).reduce((s2, x) => s2 + (Number(x.total) || Number(x.precio) || 0), 0);
+  const dudosas = (oc.items || []).filter((x) => /despacho|flete|transporte/i.test(String(x.nombre || x.especificacion || "")) && vendida(x)).map((x) => `«${String(x.nombre || "").slice(0, 50)}» se contó como ítem vendido (la oferta tiene esa línea), no como cargo de despacho`);
   const prueba = (precios, items, despacho, total, nombre, vid) => {
     const motivos = [], faltan = []; const pr = Array.isArray(precios) && precios.length ? precios : null;
     if (!pr) faltan.push("precios por ítem de la oferta (" + nombre + ")");
@@ -606,10 +610,10 @@ function cotejarOC(t) {
   for (const v of [...vers].reverse()) intentos.push(prueba(v.precios, v.items, v.despacho, v.total, v.id === env?.version_id ? "versión enviada" : "borrador " + v.id, v.id));
   if (!intentos.length) intentos.push(prueba(t.firma?.precios || (t.items || []).map((i) => i.p), t.items, t.firma?.despacho || 0, t.total, "oferta preparada (sin versión)", null));
   const gana = intentos.find((x) => x.ok), base = intentos[0];
-  if (gana) return { estado: gana.nombre === "envío capturado" || gana.nombre === "versión enviada" ? "coincide_envio" : "coincide_borrador", version_id: gana.vid, texto: gana.nombre === "envío capturado" ? "Montos coinciden con el envío capturado en Mercado Público" : "Montos coinciden con la OC" + (gana.nombre.startsWith("borrador") ? " (borrador guardado)" : gana.nombre.startsWith("oferta") ? " (oferta preparada)" : ""), comparado: gana.nombre, motivos: [], faltan: [], t: ahora() };
+  if (gana) return { estado: gana.nombre === "envío capturado" || gana.nombre === "versión enviada" ? "coincide_envio" : "coincide_borrador", version_id: gana.vid, texto: gana.nombre === "envío capturado" ? "Montos coinciden con el envío capturado en Mercado Público" : "Montos coinciden con la OC" + (gana.nombre.startsWith("borrador") ? " (borrador guardado)" : gana.nombre.startsWith("oferta") ? " (oferta preparada)" : ""), comparado: gana.nombre, motivos: [], faltan: [], notas: dudosas, t: ahora() };
   // sin calce total: ¿coinciden los precios aunque falte algo? → «montos por verificar» en vez de «por vincular»
   const soloFalta = base && !base.motivos.length && base.faltan.length;
-  return { estado: soloFalta ? "montos_por_verificar" : "por_vincular", version_id: env?.version_id || t.version_actual || null, texto: soloFalta ? "Montos coinciden · falta " + base.faltan.join(", ") : "Oferta original por vincular", comparado: base?.nombre || null, motivos: base?.motivos || [], faltan: base?.faltan || [], t: ahora() };
+  return { estado: soloFalta ? "montos_por_verificar" : "por_vincular", version_id: env?.version_id || t.version_actual || null, texto: soloFalta ? "Montos coinciden · falta " + base.faltan.join(", ") : "Oferta original por vincular", comparado: base?.nombre || null, motivos: base?.motivos || [], faltan: base?.faltan || [], notas: dudosas, t: ahora() };
 }
 
 // 🧊 congela el envío confirmado por Mercado Público: captura (precios/despacho/total en pantalla) + intento + versión preparada.
