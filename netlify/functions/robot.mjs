@@ -1200,6 +1200,11 @@ async function siiIngesta(req) {
   }
   if (b.accion === "fotos_ultimo") return new Response(JSON.stringify({ ok: true, u: await store.get("robot/fotos_ultimo", { type: "json" }) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   if (b.accion === "foto") return new Response(JSON.stringify({ ok: true, ...(await buscarFotos(b.q)) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
+  if (b.accion === "cotejo") {   // diagnóstico temporal: recalcula y guarda el cotejo OC↔oferta de un trabajo (misma regla que el estudio)
+    const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return new Response(JSON.stringify({ error: "no existe" }), { status: 404, headers: { ...corsH, "content-type": "application/json" } });
+    const m = cotejarOC(t); if (m && t.op) { t.op.oc_match = m; await escribir(store, t); }
+    return new Response(JSON.stringify({ ok: true, codigo: t.codigo, externa: !!t.externa, oc_match: m }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
+  }
   if (b.accion === "buscar_trabajo") {   // diagnóstico temporal: busca un texto en los trabajos (ítems, precios, nombre)
     const q = String(b.q || "").toLowerCase(); const { blobs } = await store.list({ prefix: String(b.prefijo || "trabajo/").slice(0, 40) }); const out = [];
     if (b.solo_claves) return new Response(JSON.stringify({ ok: true, n: blobs.length, claves: blobs.slice(-300).map((x) => x.key) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
