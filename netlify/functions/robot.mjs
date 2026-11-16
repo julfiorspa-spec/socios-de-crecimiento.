@@ -590,6 +590,19 @@ function cotejarOC(t) {
     : { estado: "por_vincular", version_id: env?.version_id || t.version_actual || null, texto: "Oferta original por vincular", dif: intentos[0]?.dif || [], t: ahora() };
 }
 
+// 🧊 congela el envío confirmado por Mercado Público: captura (precios/despacho/total en pantalla) + intento + versión preparada.
+//    La misma confirmación dos veces (mismo intento) = un solo envío. Sin captura → «Envío confirmado · montos por verificar».
+function congelarEnvio(previo, b) {
+  const cap = b.captura && typeof b.captura === "object" ? b.captura : null; const intento = texto(b.intento, 40) || null;
+  if (previo.envio && intento && previo.envio.intento === intento) return previo.envio;
+  const capN = cap && Array.isArray(cap.precios) && cap.precios.length ? { precios: cap.precios.slice(0, 60).map((v) => Math.max(0, Math.round(Number(v) || 0))), cantidades: (cap.cantidades || []).slice(0, 60).map((v) => Number(v) || null),
+    despacho: Math.max(0, Math.round(Number(cap.despacho) || 0)), total: Math.round(Number(cap.total) || 0) || null, neto: Math.round(Number(cap.neto) || 0) || null, t: ahora() } : null;
+  previo.envio = { t: ahora(), intento, version_id: previo.version_actual || null, captura: capN, montos_verificados: !!capN, dispositivo: texto(b.dispositivo, 60) || null };
+  if (previo.versiones?.length) { const v = previo.versiones.find((x) => x.id === previo.version_actual); if (v) { v.enviada = true; if (capN) v.precios_enviados = capN.precios; } }
+  previo.envios_hist = [...(previo.envios_hist || []), { t: previo.envio.t, intento, version_id: previo.envio.version_id, verificado: !!capN }].slice(-10);
+  return previo.envio;
+}
+
 async function enlazarOC(store, o) {
   const cod = o.cot || o.codigo;
   const t = (await leer(store, cod)) || null;
@@ -2040,15 +2053,7 @@ async function atender(req) {
       if (!b.vista) return json({ trabajo: previo, aviso: "Sin confirmación de Mercado Público: sigue en Firmar." });   // el robot ya no entra al portal a mirar; sin «enviada correctamente» no se marca
       previo.accion = "verificar";
       if (b.vista) previo.enviada_vista = ahora();     // Mercado Público mostró «Cotización enviada correctamente»: sale de Firmar en todos los celulares
-      // 🧊 congelar el envío: lo que el portal mostró al pulsar Enviar (captura), asociado al intento y a la versión preparada que lo originó
-      if (b.vista) { const cap = b.captura && typeof b.captura === "object" ? b.captura : null; const intento = texto(b.intento, 40) || null;
-        if (!(previo.envio && intento && previo.envio.intento === intento)) {   // la misma confirmación dos veces = un solo envío
-          const capN = cap && Array.isArray(cap.precios) && cap.precios.length ? { precios: cap.precios.slice(0, 60).map((v) => Math.max(0, Math.round(Number(v) || 0))), cantidades: (cap.cantidades || []).slice(0, 60).map((v) => Number(v) || null),
-            despacho: Math.max(0, Math.round(Number(cap.despacho) || 0)), total: Math.round(Number(cap.total) || 0) || null, neto: Math.round(Number(cap.neto) || 0) || null, t: ahora() } : null;
-          previo.envio = { t: ahora(), intento, version_id: previo.version_actual || null, captura: capN, montos_verificados: !!capN, dispositivo: texto(b.dispositivo, 60) || null };
-          if (capN && previo.versiones?.length) { const v = previo.versiones.find((x) => x.id === previo.version_actual); if (v) v.enviada = true; }
-          previo.envios_hist = [...(previo.envios_hist || []), { t: previo.envio.t, intento, version_id: previo.envio.version_id, verificado: !!capN }].slice(-10);
-        } }
+      if (b.vista) congelarEnvio(previo, b);          // 🧊 lo que el portal mostró al pulsar Enviar queda congelado con el intento y la versión que lo originó
       previo.dispositivo = texto(b.dispositivo, 60) || previo.dispositivo || null;   // qué celular la envió (registro «Enviados» del PC)
       anotar(previo, "en_cola", "El robot revisará en Mercado Público si ya quedó enviada.");
       return json({ trabajo: await escribir(store, previo) });
