@@ -570,24 +570,46 @@ function nuevaVersion(t, origen, items, firma, extra = {}) {
   t.versiones = [...(t.versiones || []), v].slice(-10); t.version_actual = v.id;
   return v;
 }
-// comparar lo que quedó en Mercado Público (o un borrador) con los ítems de la OC: cantidades, precios netos unitarios, despacho y total
+// comparar lo que quedó en Mercado Público (o un borrador) con los ítems de la OC: línea por línea (cantidad, precio neto), despacho y total.
+//    Devuelve el motivo exacto de cada diferencia y qué dato falta cuando no se puede comparar.
+const normTxt = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 function cotejarOC(t) {
-  const oc = t.oc_compra; if (!oc || !(oc.items || []).length) return null;
+  const oc = t.oc_compra; if (!oc || !(oc.items || []).length) return { estado: "sin_datos", texto: "Oferta original por vincular", motivos: [], faltan: ["ítems de la OC (aún no llegan del portal)"], t: ahora() };
   const vers = t.versiones || [], env = t.envio;
+  const esDesp = (x) => /despacho|flete|transporte/i.test(String(x.nombre || x.especificacion || ""));
+  const oi = (oc.items || []).filter((x) => !esDesp(x)), ocDesp = (oc.items || []).filter(esDesp).reduce((s2, x) => s2 + (Number(x.total) || Number(x.precio) || 0), 0);
   const prueba = (precios, items, despacho, total, nombre, vid) => {
-    const oi = oc.items || []; const dif = [];
-    oi.forEach((x, i) => { const p = Number(precios?.[i]), pq = Number(items?.[i]?.q); if (!(Math.abs((Number(x.precio) || 0) - (p || 0)) <= 1)) dif.push(`ítem ${i + 1}: OC ${x.precio} vs oferta ${p || "—"}`); if (pq && Number(x.cantidad) && pq !== Number(x.cantidad)) dif.push(`ítem ${i + 1}: cantidad OC ${x.cantidad} vs ${pq}`); });
-    if (precios && precios.length !== oi.length) dif.push(`la OC tiene ${oi.length} ítems y la oferta ${precios.length}`);
-    const totOK = total && oc.total ? Math.abs(Number(oc.total) - Number(total)) <= 2 : null;
-    return { nombre, vid, ok: !dif.length && totOK !== false, dif: dif.slice(0, 6), total_ok: totOK };
+    const motivos = [], faltan = []; const pr = Array.isArray(precios) && precios.length ? precios : null;
+    if (!pr) faltan.push("precios por ítem de la oferta (" + nombre + ")");
+    if (!oc.total) faltan.push("total de la OC");
+    if (pr) {
+      // emparejar por posición; si el largo difiere, por nombre
+      const usados = new Set();
+      oi.forEach((x, i) => {
+        let j = pr.length === oi.length ? i : -1;
+        if (j < 0) { const n = normTxt(x.nombre || x.especificacion); j = (items || []).findIndex((it, k) => !usados.has(k) && n && (normTxt(it.d) === n || normTxt(it.d).includes(n.slice(0, 25)) || n.includes(normTxt(it.d).slice(0, 25)))); }
+        if (j < 0 || pr[j] == null) { motivos.push(`línea ${i + 1} «${String(x.nombre || "").slice(0, 30)}»: sin identificar en la oferta`); return; }
+        usados.add(j);
+        const p = Number(pr[j]) || 0, po = Number(x.precio) || 0, q = Number(items?.[j]?.q), qo = Number(x.cantidad);
+        if (Math.abs(po - p) > 1) motivos.push(`línea ${i + 1}: precio OC $${po.toLocaleString("es-CL")} vs oferta $${p.toLocaleString("es-CL")}`);
+        if (q && qo && q !== qo) motivos.push(`línea ${i + 1}: cantidad OC ${qo} vs oferta ${q}`);
+      });
+      if (pr.length > oi.length) motivos.push(`la oferta tiene ${pr.length - oi.length} línea(s) que la OC no trae`);
+    }
+    const dOf = Number(despacho) || 0; if (dOf || ocDesp) { if (Math.abs(dOf - ocDesp) > 1) motivos.push(`despacho OC $${ocDesp.toLocaleString("es-CL")} vs oferta $${dOf.toLocaleString("es-CL")}`); }
+    if (oc.total && total) { const d = Math.abs(Number(oc.total) - Number(total)); if (d > 2) motivos.push(`total OC $${Number(oc.total).toLocaleString("es-CL")} vs oferta $${Number(total).toLocaleString("es-CL")} (dif. $${d.toLocaleString("es-CL")})`); }
+    else if (oc.total && !total) faltan.push("total de la oferta (" + nombre + ")");
+    return { nombre, vid, ok: !!pr && !motivos.length && !faltan.length, motivos: motivos.slice(0, 8), faltan };
   };
   const intentos = [];
-  if (env?.captura?.precios?.length) intentos.push(prueba(env.captura.precios, (vers.find((v) => v.id === env.version_id) || {}).items, env.captura.despacho, env.captura.total, "envío capturado", env.version_id));
+  if (env?.captura?.precios?.length) intentos.push(prueba(env.captura.precios, (vers.find((v) => v.id === env.version_id) || {}).items || t.items, env.captura.despacho, env.captura.total, "envío capturado", env.version_id));
   for (const v of [...vers].reverse()) intentos.push(prueba(v.precios, v.items, v.despacho, v.total, v.id === env?.version_id ? "versión enviada" : "borrador " + v.id, v.id));
-  if (!intentos.length && t.firma?.precios) intentos.push(prueba(t.firma.precios, t.items, t.firma.despacho, t.total, "oferta preparada (sin versión)", null));
-  const gana = intentos.find((x) => x.ok);
-  return gana ? { estado: gana.nombre === "envío capturado" || gana.nombre === "versión enviada" ? "coincide_envio" : "coincide_borrador", version_id: gana.vid, texto: gana.nombre === "envío capturado" ? "Montos coinciden con el envío capturado en Mercado Público" : "Montos coinciden con la OC", t: ahora() }
-    : { estado: "por_vincular", version_id: env?.version_id || t.version_actual || null, texto: "Oferta original por vincular", dif: intentos[0]?.dif || [], t: ahora() };
+  if (!intentos.length) intentos.push(prueba(t.firma?.precios || (t.items || []).map((i) => i.p), t.items, t.firma?.despacho || 0, t.total, "oferta preparada (sin versión)", null));
+  const gana = intentos.find((x) => x.ok), base = intentos[0];
+  if (gana) return { estado: gana.nombre === "envío capturado" || gana.nombre === "versión enviada" ? "coincide_envio" : "coincide_borrador", version_id: gana.vid, texto: gana.nombre === "envío capturado" ? "Montos coinciden con el envío capturado en Mercado Público" : "Montos coinciden con la OC" + (gana.nombre.startsWith("borrador") ? " (borrador guardado)" : gana.nombre.startsWith("oferta") ? " (oferta preparada)" : ""), comparado: gana.nombre, motivos: [], faltan: [], t: ahora() };
+  // sin calce total: ¿coinciden los precios aunque falte algo? → «montos por verificar» en vez de «por vincular»
+  const soloFalta = base && !base.motivos.length && base.faltan.length;
+  return { estado: soloFalta ? "montos_por_verificar" : "por_vincular", version_id: env?.version_id || t.version_actual || null, texto: soloFalta ? "Montos coinciden · falta " + base.faltan.join(", ") : "Oferta original por vincular", comparado: base?.nombre || null, motivos: base?.motivos || [], faltan: base?.faltan || [], t: ahora() };
 }
 
 // 🧊 congela el envío confirmado por Mercado Público: captura (precios/despacho/total en pantalla) + intento + versión preparada.
@@ -2171,7 +2193,8 @@ async function atender(req) {
     const t = await leer(store, limpiaCodigo(url.searchParams.get("codigo")));
     if (!t) return json({ error: "No existe." }, 404);
     const { firma, historial, ...r } = t;
-    return json({ trabajo: { ...r, precios: firma?.precios || null, despacho_firma: firma?.despacho || 0, historial: (historial || []).slice(-10) } });
+    let match = r.op?.oc_match || null; if (r.oc_compra && (!match || !Array.isArray(match.motivos))) { try { match = cotejarOC(t); } catch {} }
+    return json({ trabajo: { ...r, op: r.op ? { ...r.op, oc_match: match } : r.op, precios: firma?.precios || null, despacho_firma: firma?.despacho || 0, historial: (historial || []).slice(-10) } });
   }
   // ---------- 🛠 Ejecuta: socios ejecutadores (compran, negocian, entregan y cierran con guía y factura firmadas) ----------
   // ☁️ robot en la nube: el PC sube su paquete (código + configuración) UNA vez; el servidor lo baja y se borra
