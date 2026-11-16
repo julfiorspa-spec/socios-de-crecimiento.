@@ -1393,6 +1393,10 @@ async function siiIngesta(req) {
   }
   if (b.accion === "fotos_ultimo") return new Response(JSON.stringify({ ok: true, u: await store.get("robot/fotos_ultimo", { type: "json" }) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   if (b.accion === "foto") return new Response(JSON.stringify({ ok: true, ...(await buscarFotos(b.q)) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
+  if (b.accion === "simular") {   // diagnóstico temporal: corre la simulación de una OC (misma lógica que /bot/simular)
+    const r2 = await atender(new Request(new URL(req.url).origin + "/bot/simular", { method: "POST", headers: { "x-robot-token": process.env.ROBOT_TOKEN || "", "content-type": "application/json" }, body: JSON.stringify({ codigo: b.codigo, fase: b.fase || "req", forzar: !!b.forzar, continuar_sin_adjunto: !!b.continuar_sin_adjunto, req_texto: b.req_texto || null, req_nombre: b.req_nombre || null }) }));
+    const j2 = await r2.json().catch(() => ({})); return new Response(JSON.stringify(j2), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
+  }
   if (b.accion === "cotejo") {   // diagnóstico temporal: recalcula y guarda el cotejo OC↔oferta de un trabajo (misma regla que el estudio)
     const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return new Response(JSON.stringify({ error: "no existe" }), { status: 404, headers: { ...corsH, "content-type": "application/json" } });
     const m = cotejarOC(t); if (m && t.op) { t.op.oc_match = m; await escribir(store, t); }
