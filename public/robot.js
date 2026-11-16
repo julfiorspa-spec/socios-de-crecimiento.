@@ -2915,8 +2915,8 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       return { d, por: por + (h ? ` · ${histTxt(h)}` : ic.n >= 3 && mr != null ? ` · 🧠 los que ganan cotizan ~${Math.round((1 - mr) * 100)}% bajo el presupuesto (${ic.n} casos)` : "") };
     };
     // ---- marcador: lo que motiva (ganado, utilidad, tasa de éxito, en juego)
-    const decididas = enviadosAll.filter((t) => { const g = segDe(t.codigo); return g && (g.ganada || g.estado === "proveedor_seleccionado"); });
     const ganadasR = ganadasT.filter((t) => t.op?.etapa !== "previa");          // ya adjudicadas (sin las «vas 1°»)
+    const decididas = (() => { const m = new Map(); for (const t of enviadosAll) { const g = segDe(t.codigo); if (g && (g.ganada || g.estado === "proveedor_seleccionado")) m.set(t.codigo, t); } for (const t of ganadasR) m.set(t.codigo, t); return [...m.values()]; })();   // resueltas = con resultado conocido (incluye las que ya tienen OC)
     const ganadoMonto = ganadasR.reduce((s, t) => s + (Number(t.total) || 0), 0);
     const utilOk = (t) => t.op?.informe && !t.op.informe.incompleto && t.op.informe.final != null;
     const utilidadG = ganadasR.reduce((s, t) => s + (utilOk(t) ? Number(t.op.informe.final) : Math.round((Number(t.total) || 0) * 0.13)), 0);
@@ -3497,7 +3497,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     return `<div class="rb-portada">
       <div class="rb-p-brillo"></div>
       <div class="rb-p-top"><span class="rb-p-logo">◆ Socios de Crecimiento · CotizÁgil</span>${R.verRoles ? `<button type="button" class="rb-p-cambiar" data-rb="roles-cerrar">✕ cerrar</button>` : ""}</div>
-      <h1 class="rb-p-h" style="font-size:1.45rem">Encuentra Compras Ágiles, prepara tu oferta y sigue tus órdenes hasta el cobro.</h1>
+      <h1 class="rb-p-h" style="font-size:1.45rem">Encuentra Compras Ágiles, prepara tu oferta y lleva cada orden hasta el cobro.</h1>
       <div class="rb-p-sub">El robot busca las compras del Estado que calzan con tu empresa, arma la oferta con precio y ficha técnica, tú la revisas y firmas, y después sigues la orden de compra: proveedor, despacho, factura y reparto.</div>
       <button class="btn rb-oro rb-p-jugar" type="button" data-rb="rol-elegir" data-v="juego" style="margin-top:12px">🎯 Ver oportunidades</button>
       <div class="rb-puertas" style="margin-top:10px">
@@ -3985,7 +3985,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
           <div style="font-size:.78rem;margin-top:4px;color:${b === "D" ? "#ff9a9a" : "var(--oro, #f5cf6b)"}">→ ${esc(pasoOC(t, b))}</div>${acciones}
         </div></div>`; };
     const sel = R.ocB || "";
-    const chips = ["A", "P"].map((k) => `<button type="button" class="rb-rchip ${sel === k ? "on" : ""}" data-rb="oc-bloque" data-b="${k}">${OC_BLOQUES[k][0].replace(/^\S+\s/, "")}<i>${k === "P" ? grupos.P.length + grupos.O.length : grupos[k].length}</i></button>`).join("")
+    const chips = ["A", "P"].map((k) => `<button type="button" class="rb-rchip ${sel === k ? "on" : ""}" data-rb="oc-bloque" data-b="${k}">${OC_BLOQUES[k][0].replace(/^\S+\s/, "")}<i>${grupos[k].length}${k === "P" && grupos.O.length ? " +" + grupos.O.length + " en opciones" : ""}</i></button>`).join("")
       + `<button type="button" class="rb-rchip ${sel === "F" ? "on" : ""}" data-rb="oc-bloque" data-b="F">🧾 Facturas y reparto<i>${grupos.A.length}</i></button>`;
     const caja = (k, inner) => `<div class="rb-caja-oc ${k}" style="margin-top:14px"><div style="display:flex;justify-content:space-between;align-items:baseline"><b>${OC_BLOQUES[k][0]} · ${grupos[k].length}</b><span class="muted" style="font-size:.78rem">${clp(suma(grupos[k]))}</span></div><div class="muted" style="font-size:.72rem;margin-bottom:4px">${OC_BLOQUES[k][1]}</div>${inner}</div>`;
 
@@ -4066,6 +4066,18 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     if (!["despacho", "entrega", "cerrado"].includes(op.etapa)) return { lid: null, plazo, titulo: "Coordinar el despacho (o retiro) y la fecha de entrega", detalle: op.plazo_fecha ? "Entrega comprometida " + op.plazo_fecha : "Falta la fecha comprometida", boton: "Ir a Despacho", tab: "transporte", dest };
     return { lid: null, plazo, titulo: "Subir recepción conforme y emitir factura", detalle: "Con eso la OC pasa a Concretadas y se puede ceder al factoring", boton: "Ir a Recepción", tab: "entrega", dest };
   }
+  // 🗂 FICHA ÚNICA del negocio: desde Enviadas, Correos, Negocios o Caja OC se llega a la misma ficha, en la sección que corresponde,
+  //    y al volver se recupera la pantalla y la lista que se estaba mirando.
+  function abrirNegocio(cod, sec) {
+    R.ocVolver = { pantalla: R.pantalla, oportTab: R.oportTab, ejTab: R.ejTab, ejAbierto: R.ejAbierto, ocVer: R.ocVer && R.ocVer !== cod ? R.ocVer : null };
+    R.pantalla = "oc"; R.ocVer = cod; R.ocSec = sec || null; R.ocFila = null; R.ocPre = null; sheet.scrollTop = 0; cargarOCFull(cod); pintarHoja(true);
+    if (sec) setTimeout(() => document.getElementById("ocsec-" + sec)?.scrollIntoView({ block: "start", behavior: "smooth" }), 400);
+  }
+  function volverDeNegocio() {
+    const v = R.ocVolver; R.ocVolver = null; R.ocVer = null; R.ocFila = null; R.ocSec = null;
+    if (v) { R.pantalla = v.pantalla === "oc" ? "oc" : v.pantalla || null; R.oportTab = v.oportTab; R.ejTab = v.ejTab; R.ejAbierto = v.ejAbierto; if (v.ocVer) R.ocVer = v.ocVer; }
+    pintarHoja(true);
+  }
   function pantallaOCVer(cod) {
     const F = (R.ocFull || {})[cod]; if (!F || F.cargando) { if (!F) cargarOCFull(cod); return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">🔎 Estudio de la OC</h2><button class="btn small" type="button" data-rb="oc-ver-cerrar">← Caja OC</button></div><div class="empty"><span class="spinner"></span> Cargando la oferta completa…</div></div>`; }
     if (F.err) return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">🔎 Estudio</h2><button class="btn small" type="button" data-rb="oc-ver-cerrar">← Caja OC</button></div><div class="empty">${esc(F.err)}</div></div>`;
@@ -4131,7 +4143,10 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
             <div class="muted" style="font-size:.66rem;margin-top:4px">📍 Destino: ${esc(dest || "sin dirección en la OC")} · Origen: ${esc(l.conf?.proveedor || l.ci?.elegido?.proveedor || "falta elegir proveedor")}${l.conf ? (l.conf.modo === "retiro" ? (op.km ? ` · retiro ≈ ${f(op.km * TARIFA_KM_STGO)} (${op.km} km × ${f(TARIFA_KM_STGO)})` : " · retiro: falta km del viaje para comparar") : ` · despacho ${l.conf.flete ? f(l.conf.flete) : "incluido"} · costo puesto en destino ${f(l.conf.neto_unit * l.q + (l.conf.flete || 0))}`) : " · para comparar retiro vs despacho falta: proveedor confirmado y flete o km"}</div></div>
         </div>` : ""}</div>`; };
     const delta = M.Xb && M.Xv ? M.Xv.final - M.Xb.final : null;
-    return `<div class="rb-paso"><div class="rb-env"><div style="min-width:0"><button class="btn small rb-link" type="button" data-rb="oc-ver-cerrar" style="padding-left:0">← Caja OC</button><h2 class="rb-h" style="margin:2px 0 0">🔎 ${esc((t.nombre || cod).slice(0, 60))}</h2><div class="muted" style="font-size:.72rem">OC ${esc(op.oc_codigo || op.oc || "")} · ${esc(t.oc_compra?.organismo || t.organismo || "")} · ${f(t.oc_compra?.total || t.total)} con IVA</div></div></div>
+    const origen = R.ocVolver ? (R.ocVolver.pantalla === "correos" ? "← Correos" : R.ocVolver.pantalla === "llamada" ? "← Me llamaron" : R.ocVolver.pantalla === "oc" ? "← Caja OC" : R.ocVolver.pantalla ? "← Volver" : R.ocVolver.oportTab === "hechas" ? "← Enviadas" : R.ocVolver.oportTab === "ganadas" ? "← Negocios" : "← Volver") : "← Caja OC";
+    const correos = (R.mailAl || []).filter((x) => x.codigo === cod);
+    const cj = cajaNeg(t);
+    return `<div class="rb-paso"><div class="rb-env"><div style="min-width:0"><button class="btn small rb-link" type="button" data-rb="oc-ver-cerrar" style="padding-left:0">${origen}</button><h2 class="rb-h" style="margin:2px 0 0">🔎 ${esc((t.nombre || cod).slice(0, 60))}</h2><div class="muted" style="font-size:.72rem">OC ${esc(op.oc_codigo || op.oc || "")} · ${esc(t.oc_compra?.organismo || t.organismo || "")} · ${f(t.oc_compra?.total || t.total)} con IVA</div></div></div>
       <div class="rb-sug" style="border-color:#f5cf6b"><div style="font-size:.7rem;letter-spacing:.06em;color:#f5cf6b">QUÉ HACER AHORA</div><b>${esc(pa.titulo)}</b><div class="muted" style="font-size:.72rem">${esc(pa.detalle || "")}</div>
         <div class="rb-kv" style="font-size:.74rem;margin-top:5px"><span>📅 <b>${pa.plazo ? esc(String(pa.plazo)) : "fecha de entrega: sin registrar (anótala en Despacho)"}</b></span>
           ${pa.tope ? `<span>💰 hasta <b>${f(pa.tope.topeU)}</b> neto c/u · ${f(pa.tope.topeLinea)} la línea${pa.tope.conFlete ? ` · flete ${f(pa.tope.flete)} ya descontado` : " · sin flete conocido"} · margen mín. ${Math.round(pa.tope.margen * 100)}%</span>` : ""}
@@ -4141,9 +4156,13 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         return `<div class="rb-marcador" style="margin:8px 0"><div class="rb-m"><span>Utilidad al ofertar</span><b>${M.Xb ? f(M.Xb.final) : "—"}</b><small>${M.costoBase != null ? "costo base " + f(M.costoBase) + " neto" : "falta costo base de " + L.filter((l) => l.costoBase == null).length + " ítem(s)"}</small></div><div class="rb-m ${delta != null ? (delta >= 0 ? "verde" : "") : ""}"><span>Utilidad vigente</span><b>${M.Xv ? f(M.Xv.final) : "—"}</b><small>${M.nConf}/${L.length} confirmados${delta != null ? ` · margen ${delta >= 0 ? "+" : ""}${f(delta)}` : ""}</small></div><div class="rb-m oro"><span>Excel en vivo</span><b>${X0.compras ? f(X0.final) : "pendiente"}</b><small>${X0.compras ? X0.fuente : "sin precio de compra: no se calcula con $0"}</small></div></div>
         <div class="muted" style="font-size:.68rem;margin:-2px 0 6px">Misma fórmula (calcNeg: ingreso − compra − flete − IVA − PPM − comisión), distinta base de costo: <b>vigente</b> = por ítem ${cv != null ? f(cv) + " neto" : "incompleto"} (${M.nConf} confirmado(s)${nBase ? ", " + nBase + " costo base" : ""}${nAlt ? ", " + nAlt + " alternativa actual" : ""}) · <b>Excel en vivo</b> = ${X0.fuente === "precio acordado" ? "precio acordado en Ejecuta " + f(X0.compras) + " con IVA (" + f(cx) + " neto)" : X0.fuente === "mejor cotización" ? "mejor cotización anotada " + f(cx) + " neto" : X0.fuente === "estimado" ? "estimación del PC (informe) " + f(cx) + " neto" : "sin precio: compra $0"}${cv != null && cx && Math.abs(cv - cx) > 1 ? ` · diferencia de costo ${f(cv - cx)}` : ""}. Al confirmar todas las líneas, el precio acordado toma el costo vigente y ambas quedan iguales.</div>`; })()}
       ${vinc}
-      <div class="rb-sec">🏭 Proveedores · ${L.length} ítem(s)</div>
+      <div class="rb-sec" id="ocsec-proveedores">🏭 Proveedores · ${L.length} ítem(s)</div>
+      ${correos.length ? `<div class="rb-card" style="padding:8px 12px;margin:6px 0"><div style="font-size:.74rem"><b>✉ Correos de este negocio · ${correos.length}</b></div>${correos.slice(0, 6).map((x) => `<div class="rb-rep" style="padding:6px 8px"><span></span><div><b>${x.quien === "proveedor" ? "📩 " : "📨 "}${esc(x.de || "")}</b><small>${esc((x.resumen || "").slice(0, 140))} · ${esc(hace(x.t))}</small></div>${x.quien === "proveedor" && x.precio ? `<div style="text-align:right"><b>${clp(x.precio)}</b><br><button class="btn small rb-oro" type="button" data-rb="oc-usar" data-c="${esc(cod)}" data-lid="${esc((L[0] || {}).lid || "L1")}" data-prov="${esc(x.de || "")}" data-url="" data-tel="" data-neto="${Math.round(Number(x.precio) / 1.19) || ""}">Usar en ítem 1</button></div>` : ""}</div>`).join("")}</div>` : ""}
       ${L.map(fila).join("")}
-      <div class="rb-row" style="margin-top:8px"><button class="btn small" type="button" data-rb="oc-concretar" data-c="${esc(cod)}" ${cargando ? "disabled" : ""}>${cargando ? '<span class="spinner"></span> buscando…' : "🔄 Buscar alternativas de nuevo"}</button><button class="btn small" type="button" data-rb="oc-ir" data-e="operacion" data-c="${esc(cod)}">🛠 Abrir en Ejecuta</button></div></div>`;
+      <div class="rb-row" style="margin-top:8px"><button class="btn small" type="button" data-rb="oc-concretar" data-c="${esc(cod)}" ${cargando ? "disabled" : ""}>${cargando ? '<span class="spinner"></span> buscando…' : "🔄 Buscar alternativas de nuevo"}</button><button class="btn small" type="button" data-rb="oc-ir" data-e="operacion" data-c="${esc(cod)}">🛠 Abrir en Ejecuta</button></div>
+      <div class="rb-sec" id="ocsec-cobro" style="margin-top:14px">💰 Cobro y reparto</div>
+      <div class="rb-kv" style="font-size:.76rem"><span>facturado <b>${clp(cj.facturado)}</b></span><span>cobrado <b>${clp(cj.cobrado)}</b></span><span>pendiente <b>${clp(cj.pendCobro)}</b></span><span class="rb-oc-tag ${cj.flags.cobrada ? "ok" : ""}">${cj.estado}</span></div>
+      ${R.ocSec === "cobro" || R.ocCobroAb ? `<div class="rb-card" style="padding:8px 12px;margin:6px 0">${flujoHTML(t, cj)}</div>` : `<div class="rb-row" style="margin-top:4px"><button class="btn small" type="button" data-rb="oc-cobro-ab" data-c="${esc(cod)}">Ver flujo OC → factura → abonos → reparto</button></div>`}</div>`;
   }
   // 🧾 FACTURAS Y REPARTO: cuánto cobramos, a quién hay que pagar y cuánto queda para la empresa (por período, empresa y estado de cobro)
   const FR_EST = [["", "Todas"], ["sin facturar", "Sin facturar"], ["factura emitida", "Factura emitida"], ["cobro parcial", "Cobro parcial"], ["factura cobrada", "Factura cobrada"]];
@@ -4163,6 +4182,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const prox = (c) => c.abonos.find((a) => a.confirmado === false && a.fecha);
     const card = ({ t, c }) => { const o = t.op || {}, ab = R.frAb === t.codigo, f1 = c.facturas[0];
       return `<div class="rb-card rb-fr ${ab ? "ab" : ""}" style="padding:10px 12px;margin:6px 0">
+        <div class="rb-row" style="justify-content:flex-end;margin-bottom:-4px"><button class="btn small rb-link" type="button" data-rb="negocio" data-sec="cobro" data-c="${esc(t.codigo)}">🔎 Ficha</button></div>
         <div data-rb="fr-abrir" data-c="${esc(t.codigo)}" style="cursor:pointer">
           <div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.nombre || t.codigo)}</b><b style="white-space:nowrap">${clp(c.facturado || c.X.total)}</b></div>
           <div class="muted" style="font-size:.72rem">OC ${esc(o.oc_codigo || o.oc || "")}${f1 ? " · Factura " + esc(String(f1.folio || "s/n")) + (c.facturas.length > 1 ? " +" + (c.facturas.length - 1) : "") : " · sin factura"} · ${esc(empNom(empDe(t)))}</div>
@@ -5330,7 +5350,8 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "env-preguntar") { R.pantalla = "llamada"; R.llamada = { texto: "" }; confirmarLlamada(cod);
       preguntarRobot("¿Qué pasa con esta cotización? ¿Vamos primeros o somos proveedor seleccionado? Si sale la orden de compra, ¿cómo actuamos antes de ejecutar?", null, cod); return; }
     if (a === "mail-ver") { R.pantalla = "correos"; api("correo-visto", { method: "POST", body: "{}" }).catch(() => {}); (R.mailAl || []).forEach((x) => (x.visto = true)); return pintarHoja(true); }
-    if (a === "mail-abrir") { R.pantalla = null; guardar({ portal: "ejecuta" }); R.ejAbierto = cod; const t = (R.ejec || []).find((x) => x.codigo === cod); if (t) R.ejTab = etEj(t); return pintarHoja(true); }
+    if (a === "mail-abrir") { const tg = trabajoG(cod); if (tg?.op?.oc_codigo || tg?.op?.oc) return abrirNegocio(cod, R.pantalla === "correos" ? "proveedores" : null);   // con OC: la ficha única del negocio
+      R.pantalla = null; guardar({ portal: "ejecuta" }); R.ejAbierto = cod; const t = (R.ejec || []).find((x) => x.codigo === cod); if (t) R.ejTab = etEj(t); return pintarHoja(true); }
     if (a === "ej-prov-extra") {
       const n = ($("#rbPxN-" + cod)?.value || "").trim(); if (!n) { toast("Escribe el nombre del proveedor"); return; }
       return ejOp({ proveedor_extra: { proveedor: n, telefono: ($("#rbPxT-" + cod)?.value || "").trim(), email: ($("#rbPxE-" + cod)?.value || "").trim() } }, null, "➕ Agregado a la misión");
@@ -5456,8 +5477,10 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "plan-activar") { try { await api("plan", { method: "POST", body: JSON.stringify({ jugador: b.dataset.j, plan: b.dataset.v, activar: true }) }); toast("👑 Plan activado"); R.planT = 0; await cargarPlan(); } catch (e) { toast(e.message); } return; }
     if (a === "global") { R.pantalla = "global"; sheet.scrollTop = 0; cargarGlobal(); if (!R.ejecutores) cargarEjecuta(); return pintarHoja(true); }
     if (a === "global-cerrar") { R.pantalla = null; return pintarHoja(true); }
-    if (a === "oc-estudiar") { R.pantalla = "oc"; R.ocVer = cod; R.ocFila = null; R.ocPre = null; sheet.scrollTop = 0; cargarOCFull(cod); return pintarHoja(true); }
-    if (a === "oc-ver-cerrar") { R.ocVer = null; R.ocFila = null; return pintarHoja(true); }
+    if (a === "oc-estudiar") return abrirNegocio(cod, null);
+    if (a === "oc-ver-cerrar") return volverDeNegocio();
+    if (a === "oc-cobro-ab") { R.ocCobroAb = !R.ocCobroAb; return pintarHoja(true); }
+    if (a === "negocio") return abrirNegocio(cod, b.dataset.sec || null);
     if (a === "oc-fila") { R.ocFila = R.ocFila === b.dataset.lid && !b.dataset.ir ? null : b.dataset.lid; pintarHoja(true); if (b.dataset.ir) setTimeout(() => document.getElementById("ocfila-" + b.dataset.lid)?.scrollIntoView({ block: "start", behavior: "smooth" }), 60); return; }
     if (a === "oc-match") { R.ocMatch = R.ocMatch === cod ? null : cod; return pintarHoja(true); }
     if (a === "oc-usar") { R.ocFila = b.dataset.lid; R.ocPre = { cod, lid: b.dataset.lid, prov: b.dataset.prov, url: b.dataset.url, tel: b.dataset.tel, neto: b.dataset.neto }; pintarHoja(true); setTimeout(() => document.querySelector(`.rb-conf-form[data-lid="${CSS.escape(b.dataset.lid)}"] .cf-neto`)?.focus(), 80); return; }
