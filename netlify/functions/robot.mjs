@@ -709,6 +709,59 @@ function docSincronizar(t) {   // refleja los documentos en los campos que ya us
     op.facturas = f.map((d) => { const prev = (op.facturas || []).find((x) => String(x.folio) === String(d.folio)); return { folio: String(d.folio), monto: d.total, fecha: d.fecha, t: prev?.t || d.t || ahora(), doc_id: d.id }; }); }
 }
 
+// ---------- 🚚 TERRENO: quién está a cargo, qué debe hacer ahora y si el trabajo ya fue aceptado ----------
+//  op.terreno {modo: ejecutor|despachador|transporte|proveedor, asignado {id,nombre,telefono,vehiculo,patente}, estado: invitado|aceptado|en_retiro|en_trayecto|entregado,
+//   viaje {retiro,destino,carga,horario,tarifa,condiciones,publicado_t,invitados[]}, vivo {estado: preparando|en_vivo|terminada, plataforma, canal, url, video, t}, historial[]}
+//  Toma única del viaje: blob viajes/<codigo>/tomado escrito con onlyIfNew → el primero gana, el servidor avisa al otro que ya se tomó.
+const TERRENO_EST = ["invitado", "aceptado", "en_retiro", "en_trayecto", "entregado"];
+function viajeDe(t) {
+  const op = t.op || {}, oc = t.oc_compra || {};
+  const carga = (oc.items || itemsOferta(t)).slice(0, 6).map((i) => `${i.cantidad ?? i.q ?? 1} × ${String(i.nombre || i.d || "").slice(0, 50)}`).join("; ");
+  return { retiro: op.origen_flete || op.proveedor || "retiro por confirmar", destino: oc.direccion || op.informe?.direccion || "destino por confirmar", carga, horario: op.plazo_fecha ? "entrega " + op.plazo_fecha : "horario por confirmar",
+    tarifa: op.costo_transporte || (op.km ? Math.round(op.km * 900) : null), condiciones: "Guía de despacho firmada por quien recibe (nombre, RUT, fecha) y foto de la entrega.", organismo: oc.organismo || t.organismo || "" };
+}
+async function notificarPersona(store, per, titulo, cuerpo, tag, url) {
+  await avisarTexto(store, titulo, cuerpo, tag, url).catch(() => {});                     // push a los celulares enlazados
+  if (per?.telefono && WA()) { try { await waEnviar(per.telefono, `${titulo}\n${cuerpo}\nVer trabajo: ${(process.env.URL || "https://cotizagil.netlify.app")}${url}`); return "whatsapp"; } catch {} }
+  return "push";
+}
+async function terrenoAccion(store, t, b) {
+  const op = t.op = t.op || { etapa: "ganada", historial: [] }; const T = op.terreno = op.terreno || { historial: [] }; const L = (await store.get("ejecutores/lista", { type: "json" })) || {};
+  const per = b.persona_id ? L[b.persona_id] : null; const datos = b.persona && typeof b.persona === "object" ? b.persona : null;
+  const quien = per ? { id: per.id, nombre: per.nombre, telefono: per.telefono || null, vehiculo: per.vehiculo?.nombre || null, patente: per.vehiculo?.patente || null, rol: per.rol || null } : datos ? { id: null, nombre: texto(datos.nombre, 60), telefono: texto(datos.telefono, 30), vehiculo: texto(datos.vehiculo, 40), patente: texto(datos.patente, 12) } : null;
+  const nota = (estado, txt) => { T.historial = [...(T.historial || []), { t: ahora(), estado, txt: texto(txt, 160), por: texto(b.dispositivo, 60) }].slice(-30); if (estado) T.estado = estado; };
+  const url = "/#terreno=" + t.codigo;
+  switch (b.accion) {
+    case "modo": T.modo = ["ejecutor", "despachador", "transporte", "proveedor"].includes(b.modo) ? b.modo : T.modo; if (T.modo === "proveedor") { T.asignado = { nombre: op.proveedor || "proveedor", telefono: op.proveedor_tel || null }; nota("aceptado", "lo hace el proveedor"); } break;
+    case "asignar": if (!quien) return { error: "Elige a quién asignar." }; T.modo = b.modo || T.modo || "ejecutor"; T.asignado = quien; T.viaje = viajeDe(t); nota("aceptado", "asignado por la empresa: " + quien.nombre); break;
+    case "invitar": { if (!quien) return { error: "Elige a quién invitar." }; T.modo = b.modo || T.modo || "despachador"; T.viaje = { ...viajeDe(t), invitados: [...new Set([...(T.viaje?.invitados || []), quien.id].filter(Boolean))] }; T.asignado = { ...quien, pendiente: true }; nota("invitado", "invitado: " + quien.nombre);
+      const v = T.viaje; const canal = await notificarPersona(store, quien, "🚚 Trabajo para ti · OC " + (op.oc_codigo || t.codigo), `${v.carga.slice(0, 80)} · retiro ${v.retiro.slice(0, 40)} → ${v.destino.slice(0, 50)} · ${v.horario}${v.tarifa ? " · tarifa $" + v.tarifa.toLocaleString("es-CL") : ""}. Entra y acepta o rechaza.`, "terreno-" + t.codigo, url); T.viaje.canal = canal; break; }
+    case "publicar": { T.modo = "transporte"; T.viaje = { ...viajeDe(t), publicado_t: ahora(), tarifa: b.tarifa != null ? Math.round(Number(b.tarifa) || 0) : viajeDe(t).tarifa, invitados: [] }; T.asignado = null; nota("invitado", "viaje publicado para transportistas");
+      await store.setJSON("viajes/" + t.codigo, { codigo: t.codigo, oc: op.oc_codigo || null, ...T.viaje, t: ahora() });
+      for (const p2 of Object.values(L).filter((x) => x.rol === "transportista" && x.disponible !== false)) await notificarPersona(store, p2, "🛻 Viaje disponible · " + (T.viaje.organismo || "").slice(0, 40), `${T.viaje.carga.slice(0, 70)} · ${T.viaje.retiro.slice(0, 35)} → ${T.viaje.destino.slice(0, 45)} · ${T.viaje.horario}${T.viaje.tarifa ? " · $" + T.viaje.tarifa.toLocaleString("es-CL") : ""}. El primero que acepta se lo lleva.`, "viaje-" + t.codigo, url);
+      break; }
+    case "tomar": { if (!quien) return { error: "Identifícate (perfil de ejecutor/transportista)." }; if (T.estado && T.estado !== "invitado") return { error: "Este trabajo ya fue tomado por " + (T.asignado?.nombre || "otra persona") + ".", ya_tomado: true, por: T.asignado?.nombre || null };
+      if (T.viaje?.invitados?.length && !T.viaje.invitados.includes(quien.id) && !T.viaje.publicado_t) return { error: "Este trabajo fue invitado a otra persona." };
+      const w = await store.setJSON("viajes/" + t.codigo + "/tomado", { por: quien, t: ahora() }, { onlyIfNew: true }).catch((e) => ({ modified: false, e }));   // toma única
+      if (w && w.modified === false) { const g = await store.get("viajes/" + t.codigo + "/tomado", { type: "json" }).catch(() => null); if (!g || g.por?.id !== quien.id) return { error: "Ya se tomó: " + (g?.por?.nombre || "otra persona") + " aceptó primero.", ya_tomado: true, por: g?.por?.nombre || null }; }
+      T.asignado = quien; nota("aceptado", "aceptó " + quien.nombre); await avisarTexto(store, "✅ " + quien.nombre + " tomó el trabajo", `OC ${op.oc_codigo || t.codigo} · ${(t.nombre || "").slice(0, 50)}`, "terreno-ok-" + t.codigo, "/#robot").catch(() => {}); break; }
+    case "rechazar": nota("invitado", "rechazó " + (quien?.nombre || "")); if (T.asignado?.id === quien?.id) T.asignado = null; break;
+    case "etapa": if (!TERRENO_EST.includes(b.estado)) return { error: "Estado inválido." }; nota(b.estado, b.txt || ""); if (b.estado === "en_trayecto" && !["despacho", "entrega", "cerrado"].includes(op.etapa)) { op.etapa = "despacho"; op.historial = [...(op.historial || []), { t: ahora(), etapa: "despacho", por: "terreno" }]; } if (b.estado === "entregado") op.despacho_ok = true; break;
+    case "liberar": T.asignado = null; T.estado = null; try { await store.delete("viajes/" + t.codigo + "/tomado"); } catch {} nota(null, "liberado"); break;
+    case "vivo-inicio": T.vivo = { estado: "preparando", plataforma: texto(b.plataforma, 20) || "twitch", canal: texto(b.canal, 60) || op.twitch_canal || null, t: ahora(), intentos: 0 }; break;
+    case "vivo-verificar": { const V = T.vivo; if (!V) return { error: "No hay transmisión preparándose." }; V.intentos = (V.intentos || 0) + 1; let viva = false, detalle = "";
+      if (V.plataforma === "twitch" && V.canal) { try { const r = await fetch("https://decapi.me/twitch/uptime/" + encodeURIComponent(V.canal), { signal: AbortSignal.timeout(6000) }); const txt = (await r.text()).trim(); detalle = txt.slice(0, 80); viva = r.ok && !/offline|not found|error/i.test(txt); } catch (e) { detalle = "sin respuesta de Twitch"; } }
+      else if (V.plataforma === "manual") { viva = !!b.confirmar; detalle = viva ? "confirmado por el ejecutor" : "sin confirmación"; }
+      if (viva) { V.estado = "en_vivo"; V.url = V.plataforma === "twitch" ? "https://www.twitch.tv/" + V.canal : texto(b.url, 300) || V.url || null; V.desde = ahora(); op.en_vivo = true; op.vivo_desde = ahora();
+        await avisarTexto(store, "🔴 EN VIVO · " + (op.oc_codigo || t.codigo), `${T.asignado?.nombre || "El ejecutor"} está transmitiendo la entrega de ${(t.nombre || "").slice(0, 40)}. Ver: ${V.url || ""}`, "vivo-" + t.codigo, "/#terreno=" + t.codigo, true).catch(() => {}); }
+      V.detalle = detalle; return { ok: true, viva, detalle, vivo: V }; }
+    case "vivo-fin": { const V = T.vivo || {}; V.estado = "terminada"; V.hasta = ahora(); if (b.video) V.video = texto(b.video, 300); op.en_vivo = false; op.vivo_hasta = ahora(); if (b.video) op.video_prueba = texto(b.video, 300); T.vivo = V; break; }
+    case "evidencia": { const V = T.vivo || { estado: "terminada" }; V.video = texto(b.video, 300) || V.video; V.evidencia_t = ahora(); T.vivo = V; if (V.video) op.video_prueba = V.video; break; }
+    default: return { error: "Acción desconocida." };
+  }
+  await escribir(store, t); return { ok: true, terreno: T };
+}
+
 // 🧾 VERSIONES DE OFERTA: cada preparación crea un borrador con id propio (ventas, costo base y fuentes por ítem, con id de línea);
 //    al enviar se congela lo que Mercado Público mostró (captura) y la OC se enlaza a esa versión, nunca al borrador que vino después.
 const lineaId = (i, it) => texto(it?.lid || it?.id, 24) || ("L" + (i + 1));
@@ -1794,6 +1847,8 @@ async function atender(req) {
     return json({ pendientes: lista });
   }
 
+  if (ruta === "terreno" && req.method === "POST") { const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return json({ error: "No existe." }, 404); const r = await terrenoAccion(store, t, b); return json(r, r.error ? (r.ya_tomado ? 409 : 400) : 200); }
+  if (ruta === "viajes" && req.method === "GET") { const { blobs } = await store.list({ prefix: "viajes/" }); const L = []; for (const bl of blobs) { if (/\/tomado$/.test(bl.key)) continue; const v = await store.get(bl.key, { type: "json" }).catch(() => null); if (v) { const tom = await store.get(bl.key + "/tomado", { type: "json" }).catch(() => null); L.push({ ...v, tomado: tom ? tom.por?.nombre : null }); } } return json({ viajes: L.filter((v) => !v.tomado) }); }
   if (ruta === "factorings" && req.method === "GET") { const emp = texto(url.searchParams.get("empresa"), 40) || "principal"; return json({ factorings: (await store.get("factorings/" + emp, { type: "json" })) || [] }); }
   if (ruta === "factorings" && req.method === "POST") { const b = await cuerpo(req); const emp = texto(b.empresa, 40) || "principal"; const L = (Array.isArray(b.factorings) ? b.factorings : []).slice(0, 12).map((f) => ({ nombre: texto(f.nombre, 60), ejecutivo: texto(f.ejecutivo, 60), telefono: texto(f.telefono, 30), email: texto(f.email, 120) })).filter((f) => f.nombre); await store.setJSON("factorings/" + emp, L); return json({ ok: true, factorings: L }); }
   if (ruta === "doc-borrador" && req.method === "POST") {   // 🧾 borrador de guía/factura con todo lo que ya sabe la OC
@@ -2781,7 +2836,9 @@ async function atender(req) {
     const id = jug(b.id); if (!id) return json({ error: "Falta id" }, 400);
     const L = (await store.get("ejecutores/lista", { type: "json" })) || {};
     if (b.borrar) delete L[id];
-    else L[id] = { ...(L[id] || {}), id, nombre: texto(b.nombre, 60) || L[id]?.nombre || "Ejecutador", telefono: texto(b.telefono, 30) ?? L[id]?.telefono ?? null, actualizado: ahora() };
+    else L[id] = { ...(L[id] || {}), id, nombre: texto(b.nombre, 60) || L[id]?.nombre || "Ejecutador", telefono: texto(b.telefono, 30) ?? L[id]?.telefono ?? null, actualizado: ahora(),
+      ...(b.rol !== undefined ? { rol: ["ejecutor", "despachador", "transportista"].includes(b.rol) ? b.rol : L[id]?.rol || null } : {}), ...(b.zona !== undefined ? { zona: texto(b.zona, 80) } : {}), ...(b.disponible !== undefined ? { disponible: !!b.disponible } : {}),
+      ...(b.vehiculo !== undefined ? { vehiculo: b.vehiculo && typeof b.vehiculo === "object" ? { nombre: texto(b.vehiculo.nombre, 40), patente: texto(b.vehiculo.patente, 12), tipo: texto(b.vehiculo.tipo, 30) } : null } : {}) };
     await store.setJSON("ejecutores/lista", L);
     return json({ ok: true, ejecutores: L });
   }
