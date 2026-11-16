@@ -603,7 +603,7 @@ Responde SOLO JSON compacto: {"resumen":"","alcance":{"vehiculos":[""],"componen
 
 REQUERIMIENTO:
 ${req.texto.slice(0, 28000)}`;
-  const j = await claudeJSON(prompt, opts.corto ? 3000 : 4500, opts.corto ? 24000 : 25500);
+  const j = await claudeJSON(prompt, opts.corto ? 2800 : 4500, opts.corto ? 23000 : 23000);
   j.partidas = (j.partidas || []).slice(0, 25).map((p2, i) => ({ id: texto(p2.id, 8) || "P" + (i + 1), tipo: texto(p2.tipo, 20) || "otro", nombre: texto(p2.nombre, 160) || "", cantidad: Number(p2.cantidad) || 1, unidad: texto(p2.unidad, 12) || "un", linea_oc: Number(p2.linea_oc) || 1, exigida: p2.exigida !== false, respaldo: p2.respaldo && typeof p2.respaldo === "object" ? { doc: texto(p2.respaldo.doc, 80), seccion: texto(p2.respaldo.seccion, 80) } : null, supuesto: texto(p2.supuesto, 160), busqueda: texto(p2.busqueda, 100), refs: [], costo_unit_neto: null, fuente: null }));
   return j;
 }
@@ -1103,6 +1103,7 @@ function ocHabilitada(t) {
 
 // 📋 Informes públicos para socias (GENSA): la página /informes/<id>.html lee y guarda respuestas Sí/No con una clave
 // derivada del código de enlace (nadie puede adivinarla; el dueño la obtiene desde la app con informe-link).
+const firmaPublica = (codigo, id) => createHmac("sha256", process.env.ROBOT_TOKEN || "sin-token").update("pub:" + codigo + ":" + id).digest("base64url").slice(0, 22);
 const informeClave = (id) => createHmac("sha256", process.env.ROBOT_TOKEN || "sin-token").update("informe:" + id).digest("base64url").slice(0, 22);
 async function informePublico(req) {
   const u = new URL(req.url), id = (u.searchParams.get("id") || "").replace(/[^\w-]/g, "").slice(0, 40), k = u.searchParams.get("k") || "";
@@ -1698,6 +1699,16 @@ async function atender(req) {
   }
   if (/^\/bot\/ml-auth\/?$/.test(new URL(req.url).pathname)) { const st = getStore({ name: STORE, consistency: "strong" }); const app = await mlConfig(st); if (!app.client_id) return json({ error: "Primero guarda client_id/secret con ml-config." }, 400);
     return Response.redirect("https://auth.mercadolibre.cl/authorization?" + new URLSearchParams({ response_type: "code", client_id: app.client_id, redirect_uri: "https://cotizagil.netlify.app/bot/ml-callback" }), 302); }
+  // 🔗 enlace público firmado a un documento de la OC (para compartir por WhatsApp sin exponer el token): /bot/publico?codigo=…&id=…&f=firma
+  if (/^\/bot\/publico\/?$/.test(new URL(req.url).pathname) && req.method === "GET") {
+    const url = new URL(req.url); const codigo = limpiaCodigo(url.searchParams.get("codigo")), id = String(url.searchParams.get("id") || "").replace(/[^a-z0-9]/gi, ""), f = String(url.searchParams.get("f") || "");
+    if (!codigo || !id || !f || f !== firmaPublica(codigo, id)) return new Response("Enlace inválido o vencido.", { status: 403, headers: { "content-type": "text/plain; charset=utf-8" } });
+    const st = getStore({ name: STORE, consistency: "strong" });
+    const data = await st.get(`doc/${codigo}/${id}`, { type: "arrayBuffer" });
+    if (!data) return new Response("No está ese archivo.", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
+    const t = await leer(st, codigo); const meta = [...(t?.op?.docs || []), ...(t?.lic_docs || [])].find((x) => x.id === id);
+    return new Response(data, { headers: { "content-type": meta?.mime || "application/octet-stream", "content-disposition": `inline; filename="${(meta?.nombre || "archivo").replace(/[^\w.\- ]/g, "_")}"`, "cache-control": "private, max-age=600" } });
+  }
   if (!autorizado(req)) return json({ error: "Código de enlace inválido o no configurado." }, 401);
   const store = getStore({ name: STORE, consistency: "strong" });
   const url = new URL(req.url);
@@ -1885,7 +1896,7 @@ async function atender(req) {
       if (fase === "req" || !op.simulacion_tmp || b.forzar) { const r = await simRequerimiento(store, t, b); op.simulacion_tmp = { t: ahora(), req: r, partidas: null, i: 0 }; await escribir(store, t);
         return json({ ok: true, fase: "req", siguiente: r.falta_adjunto && !b.continuar_sin_adjunto ? "falta_adjunto" : "partidas", req: { fuentes: r.fuentes, falta_adjunto: r.falta_adjunto, adjuntos_nombres: r.adjuntos_nombres, motivo: r.motivo, version: r.version, largo: r.texto.length } }); }
       const T = op.simulacion_tmp;
-      if (fase === "partidas") { let j; try { j = await simPartidas(t, T.req); } catch (e) { if (!/abort|timeout|cortado/i.test(String(e.message || e))) throw e; j = await simPartidas(t, T.req, { corto: true }); } T.plan = j; T.partidas = j.partidas; T.i = 0; await escribir(store, t); return json({ ok: true, fase: "partidas", n: j.partidas.length, siguiente: j.partidas.length ? "costeo" : "listo", resumen: j.resumen, alcance: j.alcance, integral: j.integral, faltan: j.faltan }); }
+      if (fase === "partidas") { let j; try { j = await simPartidas(t, T.req, { corto: !!b.corto }); } catch (e) { if (/abort|timeout|cortado/i.test(String(e.message || e)) && !b.corto) return json({ error: "La nube cortó por tiempo al armar las partidas", fase: "partidas", reintentar: "corto" }, 502); throw e; } T.plan = j; T.partidas = j.partidas; T.i = 0; await escribir(store, t); return json({ ok: true, fase: "partidas", n: j.partidas.length, siguiente: j.partidas.length ? "costeo" : "listo", resumen: j.resumen, alcance: j.alcance, integral: j.integral, faltan: j.faltan }); }
       if (fase === "costeo") { const P = T.partidas || []; const pend = P.findIndex((pa) => !pa.costeada); if (pend >= 0) { await simCostearPartida(store, t, P[pend]); T.i = pend + 1; await escribir(store, t); return json({ ok: true, fase: "costeo", hecha: P[pend].nombre, faltan: P.filter((pa) => !pa.costeada).length, siguiente: P.some((pa) => !pa.costeada) ? "costeo" : "listo" }); } }
       // listo: guardar el resultado con fecha, fuentes y versión del requerimiento; alimentar Excel en vivo (informe.compras) si estaba vacío
       const tot = simTotales(t, T); const plan = T.plan || {};
@@ -1942,6 +1953,80 @@ async function atender(req) {
   }
   if (ruta === "terreno" && req.method === "POST") { const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return json({ error: "No existe." }, 404); const r = await terrenoAccion(store, t, b); return json(r, r.error ? (r.ya_tomado ? 409 : 400) : 200); }
   if (ruta === "viajes" && req.method === "GET") { const { blobs } = await store.list({ prefix: "viajes/" }); const L = []; for (const bl of blobs) { if (/\/tomado$/.test(bl.key)) continue; const v = await store.get(bl.key, { type: "json" }).catch(() => null); if (v) { const tom = await store.get(bl.key + "/tomado", { type: "json" }).catch(() => null); L.push({ ...v, tomado: tom ? tom.por?.nombre : null }); } } return json({ viajes: L.filter((v) => !v.tomado) }); }
+  // 📞 ESTOY EN LLAMADA · lo que se habla con el comprador queda en la misma operación: quién llamó (Contacto operativo), intención, nota, próximo paso y fecha
+  if (ruta === "llamada" && req.method === "POST") {
+    const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return json({ error: "No existe." }, 404);
+    const op = t.op || { etapa: "ganada", historial: [] }; const L = b.llamada || {}; const c = L.contacto || {};
+    if (c.nombre || c.telefono || c.correo) { if (c.nombre) op.cliente_nombre = texto(c.nombre, 120); if (c.telefono) op.cliente_tel = texto(c.telefono, 40); if (c.correo) op.cliente_mail = texto(c.correo, 120); if (c.cargo) op.cliente_cargo = texto(c.cargo, 80); if (c.organismo) op.cliente_organismo = texto(c.organismo, 120); op.cliente_origen = "llamada"; }
+    const INT = { aclaracion: "Pidió aclaración", alternativa: "Solicitó alternativa", enviara_oc: "Indicó que enviará OC", sin_definicion: "Sin definición" };
+    const intencion = INT[L.intencion] ? L.intencion : "sin_definicion";
+    const reg = { id: "ll" + Date.now().toString(36), t: ahora(), por: texto(b.dispositivo, 60), contacto: { nombre: op.cliente_nombre || null, organismo: op.cliente_organismo || null, cargo: op.cliente_cargo || null, telefono: op.cliente_tel || null, correo: op.cliente_mail || null },
+      intencion, intencion_txt: INT[intencion], nota: texto(L.nota, 1500) || "", proximo_paso: texto(L.proximo_paso, 300) || "", fecha: /^\d{4}-\d{2}-\d{2}$/.test(String(L.fecha || "")) ? L.fecha : null, duracion_s: Math.max(0, Math.round(Number(L.duracion_s) || 0)) || null };
+    op.llamadas = [...(op.llamadas || []), reg].slice(-30);
+    if (reg.proximo_paso) op.proxima_accion = { titulo: reg.proximo_paso, fecha: reg.fecha, origen: "llamada", llamada_id: reg.id, t: reg.t, con: reg.contacto.nombre || null };
+    else if (intencion === "enviara_oc") op.proxima_accion = { titulo: "Esperar la OC que " + (reg.contacto.nombre || "el comprador") + " indicó que enviará" + (reg.fecha ? " (" + reg.fecha + ")" : "") + " y aceptarla en Mercado Público", fecha: reg.fecha, origen: "llamada", llamada_id: reg.id, t: reg.t, con: reg.contacto.nombre || null };
+    if (intencion === "enviara_oc") op.oc_esperada = { t: reg.t, fecha: reg.fecha, por: reg.contacto.nombre || null };
+    t.op = op; return json({ trabajo: await escribir(store, t), llamada: reg });
+  }
+  if (ruta === "proxima-accion" && req.method === "POST") {   // marcar hecha / cambiar la próxima acción acordada
+    const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t?.op) return json({ error: "No existe." }, 404);
+    if (b.hecha) { if (t.op.proxima_accion) t.op.proxima_accion = { ...t.op.proxima_accion, hecha: ahora(), por: texto(b.dispositivo, 60) }; }
+    else if (b.titulo) t.op.proxima_accion = { titulo: texto(b.titulo, 300), fecha: /^\d{4}-\d{2}-\d{2}$/.test(String(b.fecha || "")) ? b.fecha : null, origen: "manual", t: ahora() };
+    return json({ trabajo: await escribir(store, t) });
+  }
+  // 📎 compartir un documento de la OC por WhatsApp: enlace firmado (sin token) + registro de qué se compartió, a quién y cuándo
+  if (ruta === "compartir" && req.method === "POST") {
+    const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return json({ error: "No existe." }, 404);
+    const op = t.op || { etapa: "ganada", historial: [] }; const ids = (Array.isArray(b.ids) ? b.ids : []).map((x) => String(x || "").replace(/[^a-z0-9]/gi, "")).filter(Boolean).slice(0, 6);
+    const docsAll = [...(op.docs || []), ...(t.lic_docs || [])]; const base = (process.env.URL || "https://cotizagil.netlify.app").replace(/\/$/, "");
+    const enlaces = ids.map((id) => { const d = docsAll.find((x) => x.id === id); return d ? { id, nombre: d.nombre || d.tipo, tipo: d.tipo, url: `${base}/bot/publico?codigo=${encodeURIComponent(t.codigo)}&id=${id}&f=${firmaPublica(t.codigo, id)}` } : null; }).filter(Boolean);
+    if (b.registrar !== false) { op.compartidos = [...(op.compartidos || []), { id: "cp" + Date.now().toString(36), t: ahora(), canal: texto(b.canal, 20) || "whatsapp", a: texto(b.a, 120) || op.cliente_nombre || null, tel: texto(b.tel, 40) || op.cliente_tel || null, texto: texto(b.texto, 2000) || "", archivos: enlaces.map((e) => ({ id: e.id, nombre: e.nombre, tipo: e.tipo })), por: texto(b.dispositivo, 60) }].slice(-40); t.op = op; await escribir(store, t); }
+    return json({ enlaces, trabajo: t });
+  }
+  // 🧪 PREPARAR ALTERNATIVA · matriz de cumplimiento contra el requerimiento capturado (cumple / confirmar / difiere) + ficha técnica. Queda como propuesta, no se envía sola.
+  if (ruta === "alternativa" && req.method === "POST") {
+    const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return json({ error: "No existe." }, 404);
+    const op = t.op || { etapa: "ganada", historial: [] }; const prop = texto(b.propuesta, 3000) || "";
+    if (b.borrar) { op.alternativas = (op.alternativas || []).filter((a) => a.id !== b.borrar); t.op = op; return json({ trabajo: await escribir(store, t) }); }
+    if (!prop.trim()) return json({ error: "Describe la alternativa (producto, marca/modelo, qué cambia)." }, 400);
+    const RQ = await store.get("req/" + t.codigo, { type: "json" }).catch(() => null);
+    const exig = (RQ?.analisis?.exigencias || []).slice(0, 40);
+    const items = (t.items || t.oc_compra?.items || []).slice(0, 20).map((i) => ({ d: i.d || i.nombre || i.descripcion, q: i.q ?? i.cantidad, espec: i.especificacion || "" }));
+    const prompt = `Eres el cotizador de una PyME chilena que vende al Estado por Compra Ágil. El comprador pidió una ALTERNATIVA durante una llamada. Compara la alternativa propuesta con el requerimiento y devuelve SOLO JSON:
+{"resumen":"1 frase","matriz":[{"id":"E1","exigencia":"texto corto","estado":"cumple|confirmar|difiere","nota":"por qué, máx 20 palabras"}],"ficha":{"producto":"","marca_modelo":"","caracteristicas":["..."],"incluye":["..."],"no_incluye":["..."],"garantia":"","plazo_entrega":""},"preguntar_al_comprador":["..."],"riesgos":["..."]}
+Reglas: "cumple" solo si la alternativa descrita lo acredita; "confirmar" si falta un dato (medida, norma, certificación); "difiere" si la alternativa cambia algo que el requerimiento exige. No inventes marcas, precios ni tiendas. Si no hay exigencias capturadas, construye la matriz desde los ítems de la compra.
+REQUERIMIENTO: ${JSON.stringify({ nombre: t.nombre, organismo: t.organismo, items, exigencias: exig.map((e) => ({ id: e.id, texto: e.texto, tipo: e.tipo, critica: e.critica })), alcance: RQ?.analisis?.alcance || null, plazo: RQ?.analisis?.plazo || null, garantia: RQ?.analisis?.garantia || null })}
+ALTERNATIVA PROPUESTA: ${prop}`;
+    let j; try { j = await claudeJSON(prompt, 2500, 24000); } catch (e) { return json({ error: "No pude armar la matriz: " + e.message }, 502); }
+    const EST = ["cumple", "confirmar", "difiere"];
+    const alt = { id: "alt" + Date.now().toString(36), t: ahora(), por: texto(b.dispositivo, 60), propuesta: prop, req_version: RQ?.version || null, llamada_id: texto(b.llamada_id, 30) || null, estado: "propuesta",
+      resumen: texto(j.resumen, 300) || "", matriz: (Array.isArray(j.matriz) ? j.matriz : []).slice(0, 40).map((m, k) => ({ id: texto(m.id, 10) || "E" + (k + 1), exigencia: texto(m.exigencia, 200) || "", estado: EST.includes(m.estado) ? m.estado : "confirmar", nota: texto(m.nota, 200) || "" })),
+      ficha: j.ficha && typeof j.ficha === "object" ? { producto: texto(j.ficha.producto, 150) || "", marca_modelo: texto(j.ficha.marca_modelo, 100) || "", caracteristicas: (j.ficha.caracteristicas || []).slice(0, 15).map((x) => texto(x, 150)), incluye: (j.ficha.incluye || []).slice(0, 10).map((x) => texto(x, 120)), no_incluye: (j.ficha.no_incluye || []).slice(0, 10).map((x) => texto(x, 120)), garantia: texto(j.ficha.garantia, 100) || "", plazo_entrega: texto(j.ficha.plazo_entrega, 60) || "" } : null,
+      preguntar: (j.preguntar_al_comprador || []).slice(0, 6).map((x) => texto(x, 200)), riesgos: (j.riesgos || []).slice(0, 6).map((x) => texto(x, 200)) };
+    alt.totales = { cumple: alt.matriz.filter((m) => m.estado === "cumple").length, confirmar: alt.matriz.filter((m) => m.estado === "confirmar").length, difiere: alt.matriz.filter((m) => m.estado === "difiere").length };
+    op.alternativas = [...(op.alternativas || []), alt].slice(-10); t.op = op;
+    return json({ trabajo: await escribir(store, t), alternativa: alt });
+  }
+  // 🖼 MOSTRAR CÓMO QUEDARÁ · la app pide el render; el robot del PC lo genera con las fotos/medidas de los anexos y lo sube con «subir» tipo render + render-listo
+  if (ruta === "render-pedir" && req.method === "POST") {
+    const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return json({ error: "No existe." }, 404);
+    const op = t.op || { etapa: "ganada", historial: [] };
+    op.render = { ...(op.render || {}), estado: "pendiente", pedido_t: ahora(), por: texto(b.dispositivo, 60), vista: texto(b.vista, 60) || "contexto", nota: texto(b.nota, 300) || "", medidas_pendientes: (Array.isArray(b.medidas_pendientes) ? b.medidas_pendientes : []).slice(0, 10).map((x) => texto(x, 80)) };
+    t.op = op; return json({ trabajo: await escribir(store, t) });
+  }
+  if (ruta === "render-pendientes" && req.method === "GET") {   // el robot del PC consulta qué OC/COT esperan render
+    const { blobs } = await store.list({ prefix: "trabajo/" }).catch(() => ({ blobs: [] })); const out = [];
+    for (const bl of blobs.slice(0, 400)) { const x = await store.get(bl.key, { type: "json" }).catch(() => null); if (x?.op?.render?.estado === "pendiente") out.push({ codigo: x.codigo, nombre: x.nombre, pedido_t: x.op.render.pedido_t, vista: x.op.render.vista, nota: x.op.render.nota, medidas_pendientes: x.op.render.medidas_pendientes || [], anexos: [...(x.lic_docs || []), ...((x.op.docs || []).filter((d) => d.tipo !== "render"))].map((d) => ({ id: d.id, nombre: d.nombre, tipo: d.tipo })) }); }
+    return json({ pendientes: out });
+  }
+  if (ruta === "render-listo" && req.method === "POST") {   // el robot avisa: render subido (archivo_id de «subir» tipo render), medidas usadas y las que siguen pendientes
+    const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return json({ error: "No existe." }, 404);
+    const op = t.op || { etapa: "ganada", historial: [] }; const id = String(b.archivo_id || "").replace(/[^a-z0-9]/gi, "");
+    if (b.error) op.render = { ...(op.render || {}), estado: "error", error: texto(b.error, 300), t: ahora() };
+    else { if (!id || !(op.docs || []).some((d) => d.id === id)) return json({ error: "archivo_id no existe en la OC (súbelo primero con «subir» tipo render)." }, 400);
+      op.render = { ...(op.render || {}), estado: "listo", archivo_id: id, t: ahora(), fuentes: (Array.isArray(b.fuentes) ? b.fuentes : []).slice(0, 10).map((x) => texto(x, 120)), medidas_usadas: (Array.isArray(b.medidas_usadas) ? b.medidas_usadas : []).slice(0, 10).map((x) => texto(x, 80)), medidas_pendientes: (Array.isArray(b.medidas_pendientes) ? b.medidas_pendientes : []).slice(0, 10).map((x) => texto(x, 80)), nota: texto(b.nota, 300) || "" }; }
+    t.op = op; return json({ trabajo: await escribir(store, t) });
+  }
   if (ruta === "factorings" && req.method === "GET") { const emp = texto(url.searchParams.get("empresa"), 40) || "principal"; return json({ factorings: (await store.get("factorings/" + emp, { type: "json" })) || [] }); }
   if (ruta === "factorings" && req.method === "POST") { const b = await cuerpo(req); const emp = texto(b.empresa, 40) || "principal"; const L = (Array.isArray(b.factorings) ? b.factorings : []).slice(0, 12).map((f) => ({ nombre: texto(f.nombre, 60), ejecutivo: texto(f.ejecutivo, 60), telefono: texto(f.telefono, 30), email: texto(f.email, 120) })).filter((f) => f.nombre); await store.setJSON("factorings/" + emp, L); return json({ ok: true, factorings: L }); }
   if (ruta === "doc-borrador" && req.method === "POST") {   // 🧾 borrador de guía/factura con todo lo que ya sabe la OC
@@ -2344,7 +2429,7 @@ async function atender(req) {
     const d = b.datos && typeof b.datos === "object" ? b.datos : {};
     for (const k of ["proveedor", "contacto", "telefono", "email", "transporte", "notas", "medio_pago", "guia", "factura", "motivo_no", "folio_guia", "folio_factura",
       "ejecutor", "ejecutor_nombre", "plazo_proveedor", "fecha_entrega", "banco_proveedor", "negociacion", "plazo_fecha", "plazo_nota", "incidencia",
-      "transportista", "transportista_tel", "origen_flete", "patente", "recibio_nombre", "recibio_rut", "fecha_cobro", "inversionista_nombre", "inversionista_tel", "despacho_modo", "proveedor_k", "proveedor_email", "proveedor_tel", "entrega_contacto", "entrega_tel", "vehiculo", "factoring", "cliente_nombre", "cliente_tel", "cliente_mail", "nota_cierre", "twitch_canal", "video_prueba", "inversionista_banco", "ejecutor_banco", "jugador_banco"]) if (d[k] !== undefined) op[k] = texto(d[k], 400);
+      "transportista", "transportista_tel", "origen_flete", "patente", "recibio_nombre", "recibio_rut", "fecha_cobro", "inversionista_nombre", "inversionista_tel", "despacho_modo", "proveedor_k", "proveedor_email", "proveedor_tel", "entrega_contacto", "entrega_tel", "vehiculo", "factoring", "cliente_nombre", "cliente_tel", "cliente_mail", "cliente_cargo", "cliente_organismo", "nota_cierre", "twitch_canal", "video_prueba", "inversionista_banco", "ejecutor_banco", "jugador_banco"]) if (d[k] !== undefined) op[k] = texto(d[k], 400);
     for (const k of ["precio_acordado", "costo_transporte", "opcion", "km", "cobrado"]) if (d[k] !== undefined) op[k] = d[k] === null ? null : Math.max(0, Math.round(Number(d[k]) || 0));
     // 🧾 caja real: facturas, abonos, aportes y devoluciones (listas de movimientos en pesos enteros) · acuerdo del inversionista
     const mov = (xs, extra) => (Array.isArray(xs) ? xs : []).slice(0, 40).map((x) => ({ monto: Math.max(0, Math.round(Number(x?.monto) || 0)), fecha: texto(x?.fecha, 10) || null, t: texto(x?.t, 30) || ahora(), ...extra(x || {}) })).filter((x) => x.monto > 0);
@@ -2529,7 +2614,7 @@ async function atender(req) {
     const b = await cuerpo(req);
     const t = await leer(store, limpiaCodigo(b.codigo));
     if (!t) return json({ error: "No existe." }, 404);
-    const tipo = ["foto", "guia", "factura", "comprobante", "oc", "otro"].includes(b.tipo) ? b.tipo : "otro";
+    const tipo = ["foto", "guia", "factura", "comprobante", "oc", "render", "ficha", "alternativa", "otro"].includes(b.tipo) ? b.tipo : "otro";
     const bytes = Buffer.from(String(b.b64 || ""), "base64");
     if (!bytes.length || bytes.length > MAX_PDF) return json({ error: "Archivo vacío o de más de 4,5 MB." }, 400);
     const op = t.op || { etapa: "ganada", historial: [] };

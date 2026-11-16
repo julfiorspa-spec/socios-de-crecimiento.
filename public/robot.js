@@ -2109,7 +2109,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     try {
       let r = await api("simular-oc", { method: "POST", body: JSON.stringify({ codigo: cod, fase: "req", forzar: !!opts.forzar, continuar_sin_adjunto: !!opts.sinAdjunto, req_texto: opts.req_texto || null, req_nombre: opts.req_nombre || null }) });
       S.req = r.req; if (r.siguiente === "falta_adjunto") { S.fase = "falta_adjunto"; S.corriendo = false; return pintarHoja(true); }
-      S.fase = "partidas"; pintarHoja(true); r = await api("simular-oc", { method: "POST", body: JSON.stringify({ codigo: cod, fase: "partidas" }) }); S.n = r.n; S.msg = r.resumen || "";
+      S.fase = "partidas"; pintarHoja(true); try { r = await api("simular-oc", { method: "POST", body: JSON.stringify({ codigo: cod, fase: "partidas" }) }); } catch (e) { if (!/tiempo|timeout|25 s/i.test(e.message)) throw e; S.msg = "reintentando con partidas resumidas…"; pintarHoja(true); r = await api("simular-oc", { method: "POST", body: JSON.stringify({ codigo: cod, fase: "partidas", corto: true }) }); } S.n = r.n; S.msg = r.resumen || "";
       S.fase = "costeo"; for (let k = 0; k < 30; k++) { pintarHoja(true); r = await api("simular-oc", { method: "POST", body: JSON.stringify({ codigo: cod, fase: "costeo" }) }); S.msg = r.hecha ? "costeada: " + r.hecha + (r.faltan ? " · faltan " + r.faltan : "") : ""; if (r.siguiente !== "costeo") break; }
       if (r.fase !== "listo") r = await api("simular-oc", { method: "POST", body: JSON.stringify({ codigo: cod, fase: "listo" }) });
       S.fase = "listo"; S.corriendo = false; R.ejecT = 0; await cargarEjecuta(); if (R.ocFull?.[cod]) R.ocFull[cod] = null;
@@ -4156,6 +4156,8 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   }
   function proximaAccionOC(t, L) {
     const op = t.op || {}; const pend = L.find((l) => !l.conf);
+    if (op.proxima_accion?.titulo && !op.proxima_accion.hecha) {   // 📞 lo acordado en la llamada con el comprador manda sobre la acción calculada
+      const P = op.proxima_accion; return { lid: null, manual: true, plazo: op.plazo_fecha || null, titulo: P.titulo, detalle: `${P.origen === "llamada" ? "Acordado en llamada" : "Anotado"}${P.con ? " con " + P.con : ""}${P.fecha ? " · para el " + P.fecha : ""} · ${hace(P.t)}`, boton: "✓ Hecho", dest: t.oc_compra?.direccion || op.informe?.direccion || "", tel: op.cliente_tel || null }; }
     const plazo = op.plazo_fecha || (t.oc_compra?.plazo_dias ? `${t.oc_compra.plazo_dias} días desde la OC` : null) || (t.oc_compra?.fecha && t.oc_compra?.plazo_dias ? null : null);
     const dest = t.oc_compra?.direccion || op.informe?.direccion || "";
     if (pend) { const el = pend.ci?.elegido, f = pend.fuente, prov = el?.proveedor || el?.titulo || f?.proveedor || null, tel = el?.telefono || null, url = el?.url || f?.url || null;
@@ -4256,7 +4258,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         <div class="rb-kv" style="font-size:.74rem;margin-top:5px"><span>📅 <b>${pa.plazo ? esc(String(pa.plazo)) : "fecha de entrega: sin registrar (anótala en Despacho)"}</b></span>
           ${pa.tope ? `<span>💰 hasta <b>${f(pa.tope.topeU)}</b> neto c/u · ${f(pa.tope.topeLinea)} la línea${pa.tope.conFlete ? ` · flete ${f(pa.tope.flete)} ya descontado` : " · sin flete conocido"} · margen mín. ${Math.round(pa.tope.margen * 100)}%</span>` : ""}
           ${pa.utilidad ? `<span>📈 ${pa.utilidad.si != null ? `si cierras al tope, utilidad proyectada <b>${f(pa.utilidad.si)}</b>` : `utilidad pendiente de confirmar: faltan costos de ${pa.utilidad.falta} línea(s)`}</span>` : ""}</div>
-        <div class="rb-row" style="margin-top:6px">${pa.lid ? `<button class="btn small rb-oro" type="button" data-rb="oc-fila" data-c="${esc(cod)}" data-lid="${esc(pa.lid)}" data-ir="1">✅ ${esc(pa.boton)}</button>` : `<button class="btn small rb-oro" type="button" data-rb="oc-ir" data-e="${esc(pa.tab)}" data-c="${esc(cod)}">${esc(pa.boton)}</button>`}${pa.tel ? `<a class="btn small" href="tel:${esc(telNum(pa.tel))}">📞 Llamar al proveedor</a>` : ""}${pa.url ? `<a class="btn small" href="${esc(pa.url)}" target="_blank" rel="noopener">🛒 Abrir producto</a>` : ""}${pa.dest ? `<a class="btn small" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(pa.dest)}" target="_blank" rel="noopener">🗺 Ver cómo llegar</a>` : ""}</div></div>
+        <div class="rb-row" style="margin-top:6px">${pa.manual ? `<button class="btn small rb-oro" type="button" data-rb="llam-pa-hecha" data-c="${esc(cod)}">${esc(pa.boton)}</button><button class="btn small" type="button" data-rb="llam-si" data-c="${esc(cod)}">📞 Estoy en llamada</button>` : pa.lid ? `<button class="btn small rb-oro" type="button" data-rb="oc-fila" data-c="${esc(cod)}" data-lid="${esc(pa.lid)}" data-ir="1">✅ ${esc(pa.boton)}</button>` : `<button class="btn small rb-oro" type="button" data-rb="oc-ir" data-e="${esc(pa.tab)}" data-c="${esc(cod)}">${esc(pa.boton)}</button>`}${pa.tel ? `<a class="btn small" href="tel:${esc(telNum(pa.tel))}">📞 ${pa.manual ? "Llamar al comprador" : "Llamar al proveedor"}</a>` : ""}${pa.url ? `<a class="btn small" href="${esc(pa.url)}" target="_blank" rel="noopener">🛒 Abrir producto</a>` : ""}${pa.dest ? `<a class="btn small" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(pa.dest)}" target="_blank" rel="noopener">🗺 Ver cómo llegar</a>` : ""}</div></div>
       ${(() => { const X0 = M.X0, cv = M.costoVig, cx = X0.compras ? Math.round(X0.compras / 1.19) : 0; const nBase = L.filter((l) => !l.conf && l.costoBase != null).length, nAlt = L.filter((l) => !l.conf && l.costoBase == null && l.vigente != null).length;
         return `<div class="rb-marcador" style="margin:8px 0"><div class="rb-m"><span>Utilidad al ofertar</span><b>${M.Xb ? f(M.Xb.final) : "—"}</b><small>${M.costoBase != null ? "costo base " + f(M.costoBase) + " neto" : "falta costo base de " + L.filter((l) => l.costoBase == null).length + " ítem(s)"}</small></div><div class="rb-m ${delta != null ? (delta >= 0 ? "verde" : "") : ""}"><span>Utilidad vigente</span><b>${M.Xv ? f(M.Xv.final) : "—"}</b><small>${M.nConf}/${L.length} confirmados${delta != null ? ` · margen ${delta >= 0 ? "+" : ""}${f(delta)}` : ""}</small></div><div class="rb-m oro"><span>Excel en vivo</span><b>${X0.compras ? f(X0.final) : "pendiente"}</b><small>${X0.compras ? X0.fuente : "sin precio de compra: no se calcula con $0"}</small></div></div>
         <div class="muted" style="font-size:.68rem;margin:-2px 0 6px">Misma fórmula (calcNeg: ingreso − compra − flete − IVA − PPM − comisión), distinta base de costo: <b>vigente</b> = por ítem ${cv != null ? f(cv) + " neto" : "incompleto"} (${M.nConf} confirmado(s)${nBase ? ", " + nBase + " costo base" : ""}${nAlt ? ", " + nAlt + " alternativa actual" : ""}) · <b>Excel en vivo</b> = ${X0.fuente === "precio acordado" ? "precio acordado en Ejecuta " + f(X0.compras) + " con IVA (" + f(cx) + " neto)" : X0.fuente === "mejor cotización" ? "mejor cotización anotada " + f(cx) + " neto" : X0.fuente === "estimado" ? "estimación del PC (informe) " + f(cx) + " neto" : "sin precio: compra $0"}${cv != null && cx && Math.abs(cv - cx) > 1 ? ` · diferencia de costo ${f(cv - cx)}` : ""}. Al confirmar todas las líneas, el precio acordado toma el costo vigente y ambas quedan iguales.</div>`; })()}
@@ -4387,8 +4389,11 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const nombre = op.cliente_nombre || oc.contacto || op.informe?.comprador?.nombre || "", tel = op.cliente_tel || oc.fono || op.informe?.comprador?.telefono || "", mail = op.cliente_mail || oc.mail || op.informe?.comprador?.email || "";
     const campo = (k, lab, v, ph, im) => `<label class="rb-lab" style="flex:1;min-width:120px">${lab}<input class="rb-neg-in" data-campo="${k}" data-c="${esc(cod)}" value="${esc(v || "")}" placeholder="${ph}" ${im ? `inputmode="${im}"` : ""}></label>`;
     const distinto = op.cliente_nombre && oc.contacto && op.cliente_nombre !== oc.contacto;
-    return `<div class="rb-card" style="padding:10px 12px;margin:6px 0;border-color:rgba(94,240,176,.35)"><div class="rb-env"><b>👤 Contacto con cliente</b><span class="muted" style="font-size:.68rem">${distinto ? "operativo (distinto del oficial)" : op.cliente_nombre ? "operativo guardado" : "de la OC"}</span></div>
-      <div class="rb-row">${campo("cliente_nombre", "Nombre", nombre, "Con quien coordinas")}${campo("cliente_tel", "Teléfono", tel, "+56 9 …", "tel")}${campo("cliente_mail", "Correo", mail, "correo@organismo.cl", "email")}</div>
+    const ult = (op.llamadas || []).slice(-1)[0] || null, PA = op.proxima_accion && !op.proxima_accion.hecha ? op.proxima_accion : null;
+    return `<div class="rb-card" style="padding:10px 12px;margin:6px 0;border-color:rgba(94,240,176,.35)"><div class="rb-env"><b>👤 Contacto con cliente</b><span class="muted" style="font-size:.68rem">${op.cliente_origen === "llamada" ? "operativo · registrado en llamada" : distinto ? "operativo (distinto del oficial)" : op.cliente_nombre ? "operativo guardado" : "de la OC"}</span></div>
+      <div class="rb-row">${campo("cliente_nombre", "Nombre", nombre, "Con quien coordinas")}${campo("cliente_cargo", "Cargo", op.cliente_cargo || "", "si lo indicó")}${campo("cliente_tel", "Teléfono", tel, "+56 9 …", "tel")}${campo("cliente_mail", "Correo", mail, "correo@organismo.cl", "email")}</div>
+      ${ult ? `<div style="font-size:.74rem;margin-top:6px;padding:6px 8px;border-radius:8px;background:rgba(245,207,107,.08)">📞 <b>${esc(ult.intencion_txt || "Llamada")}</b> · ${esc(ult.contacto?.nombre || nombre || "sin nombre")}${ult.contacto?.cargo ? " (" + esc(ult.contacto.cargo) + ")" : ""} · ${esc(hace(ult.t))}${ult.nota ? `<div>${esc(ult.nota)}</div>` : ""}${(op.llamadas || []).length > 1 ? `<div class="muted" style="font-size:.66rem">${op.llamadas.length} llamadas registradas</div>` : ""}</div>` : ""}
+      ${PA ? `<div class="rb-sug" style="border-color:#f5cf6b;margin-top:6px"><div style="font-size:.7rem;letter-spacing:.06em;color:#f5cf6b">PRÓXIMA ACCIÓN${PA.origen === "llamada" ? " · ACORDADA EN LLAMADA" : ""}</div><b>${esc(PA.titulo)}</b><div class="muted" style="font-size:.7rem">${PA.fecha ? "para el " + esc(PA.fecha) + " · " : ""}${PA.con ? "con " + esc(PA.con) + " · " : ""}${esc(hace(PA.t))}</div><div class="rb-row" style="margin-top:4px"><button class="btn small" type="button" data-rb="llam-pa-hecha" data-c="${esc(cod)}">✓ Hecho</button><button class="btn small" type="button" data-rb="llam-si" data-c="${esc(cod)}">📞 Estoy en llamada</button></div></div>` : `<div class="rb-row" style="margin-top:4px"><button class="btn small" type="button" data-rb="llam-si" data-c="${esc(cod)}">📞 Estoy en llamada</button></div>`}
       <div class="rb-row" style="margin-top:4px">${telNum(tel) ? `<a class="btn small" href="tel:${esc(telNum(tel))}">📞 Llamar</a>` : ""}${waNum(tel) ? `<a class="btn small" href="https://wa.me/${waNum(tel)}?text=${encodeURIComponent("Hola " + (nombre || "") + ", le escribo por la orden de compra " + (op.oc_codigo || "") + ".")}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ""}${mail ? `<a class="btn small" href="mailto:${esc(mail)}?subject=${encodeURIComponent("OC " + (op.oc_codigo || ""))}">✉ Correo</a>` : ""}</div>
       <div class="muted" style="font-size:.66rem;margin-top:3px">${oc.contacto ? "Contacto oficial de la OC: " + esc(oc.contacto) + (oc.fono ? " · " + esc(oc.fono) : "") + (oc.mail ? " · " + esc(oc.mail) : "") + ". " : ""}${op.entrega_contacto ? "Recepción: " + esc(op.entrega_contacto) + "." : "La persona que recibe se anota aparte en Despacho."}</div></div>`;
   }
@@ -4674,7 +4679,7 @@ Te comparto la factura y la guía. Indícame cuánto se puede anticipar, el cost
   function pantallaLlamada() {
     const q = R.llamada || {}, r = q.respuesta;
     const verd = r ? ({ si: ["✅ SÍ DA", "si"], no: ["❌ NO DA", "no"] }[r.da] || ["🤔 DEPENDE", "dep"]) : null;
-    const cab = `<div class="rb-env"><h2 class="rb-h" style="margin:0">📞 Me llamaron</h2><button class="btn small" type="button" data-rb="llamada-cerrar">← Volver</button></div>`;
+    const cab = `<div class="rb-env"><h2 class="rb-h" style="margin:0">📞 Estoy en llamada</h2><button class="btn small" type="button" data-rb="llamada-cerrar">← Volver</button></div>`;
     const entrada = `<div class="rb-llamar"><textarea id="rbLlamada" rows="2" placeholder="Ej: me llamaron de fertilizantes de la municipalidad de Reinco">${esc(q.texto || "")}</textarea>
         <div class="rb-row"><button class="btn rb-mic ${R.dictando || R.grabando ? "on" : ""}" type="button" data-rb="llamada-mic">${R.dictando || R.grabando ? "⏹ Listo" : "🎤 Dictar"}</button>
           <button class="btn rb-oro" type="button" data-rb="llamada-buscar" style="flex:1">🔎 Buscar la compra</button></div></div>`;
@@ -4683,7 +4688,7 @@ Te comparto la factura y la guía. Indícame cuánto se puede anticipar, el cost
       const C = q.cands || null, k = q.idx || 0, cod = C && C[k], t = cod && trabajoG(cod), g = cod ? segDe(cod) || {} : {};
       const recientes = (R.data?.trabajos || []).filter((x) => HECHA.includes(x.estado)).slice(0, 8);
       return `<div class="rb-paso">${cab}
-        <div class="muted rb-sub">Escribe o dicta quién te llamó y de qué. Busco en tus <b>ofertas enviadas</b> y te pregunto si es esa.</div>${entrada}
+        <div class="muted rb-sub">Escribe o dicta el código COT, el organismo o una frase de la compra. Busco en las <b>ofertas enviadas</b> de la empresa activa y te muestro una lista corta.</div>${entrada}
         ${C && t ? `<div class="rb-sec">¿Es esta compra? · ${k + 1} de ${C.length}</div>
           <div class="rb-card rb-swipe rb-cand" data-modo="llam" data-c="${esc(cod)}"><span class="rb-sello si">SÍ ES</span><span class="rb-sello no">OTRA</span>
             <div class="rb-env"><b style="font-size:.78rem">${esc(cod)}</b><span class="rb-pill">${g.ganada ? "🏆 ganada" : esc(g.glosa || est(t.estado).txt)}</span></div>
@@ -4696,92 +4701,118 @@ Te comparto la factura y la guía. Indícame cuánto se puede anticipar, el cost
         ${leerHist().length && !C ? `<div class="rb-sec">Últimas consultas</div>${leerHist().slice(0, 5).map((h) => `<button class="rb-hist" type="button" data-rb="llamada-ver" data-id="${esc(h.id)}"><b>${esc((h.titular || h.texto || "").slice(0, 70))}</b><span>${esc(hace(h.t))}</span></button>`).join("")}` : ""}
       </div>`;
     }
-    // 2) compra confirmada: si da o no, a quién comprarle y el correo listo para 3–4 proveedores
-    const cod = q.confirmado, t = trabajoG(cod) || { codigo: cod }, inf = t.op?.informe || {}, g = segDe(cod) || {};
+    // 2) ESTOY EN LLAMADA · la compra ya está identificada: arriba lo que necesitas mientras hablas; abajo lo que queda registrado en la misma operación
+    const cod = q.confirmado, t0 = trabajoG(cod) || { codigo: cod }, T = (R.ocFull || {})[cod]?.tr || t0, t = T, op = T.op || {}, inf = op.informe || {}, g = segDe(cod) || {};
+    if (!(R.ocFull || {})[cod]) setTimeout(() => cargarOCFull(cod), 0);
     const F = (R.fichas || {})[cod], W = (R.full || {})[cod];
     if (!F && !(R._pidiendo || {})[cod]) setTimeout(() => cargarDocs(cod), 0);
-    const selc = (leerSel()[cod] || {}).costo;
-    const finalLocal = inf.final != null && !inf.incompleto ? inf.final : selc && t.total ? Math.round(t.total / 1.19 - selc) : null;
-    const provs = [...(inf.opciones || []).map((o) => ({ nombre: o.proveedor, email: o.email, telefono: o.telefono, web: o.web, precio_aprox: o.total_con_iva, nota: o.cubre })), ...((r || {}).proveedores || [])]
-      .filter((o, i, a) => o.nombre && a.findIndex((x) => norm(x.nombre) === norm(o.nombre)) === i).slice(0, 6);
-    const elegidos = q.provSel || Object.fromEntries(provs.slice(0, 4).map((o, i) => [i, !!o.email]));
-    const correo = correoProveedores(t, F, W);
-    const asunto = q.asunto ?? correo.asunto, cuerpo = q.cuerpo ?? correo.cuerpo;
-    const bcc = provs.filter((o, i) => elegidos[i] && o.email).map((o) => o.email).join(",");
-    const gmail = `googlegmail://co?bcc=${encodeURIComponent(bcc)}&subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
-    const mailto = `mailto:?bcc=${encodeURIComponent(bcc)}&subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
-    const wa = r?.whatsapp ? `https://wa.me/?text=${encodeURIComponent(r.whatsapp)}` : "";
+    const L = lineasOC(T), M = L.length ? margenOC(T, L) : null, f = (v) => (v == null ? "—" : clp(Math.round(v)));
+    const neto = L.length ? L.reduce((s2, l) => s2 + l.ventaU * l.q, 0) : (T.total ? Math.round(T.total / 1.19) : null), total = T.total || (neto ? Math.round(neto * 1.19) : null);
+    const plazo = op.plazo_fecha ? "entrega comprometida " + op.plazo_fecha : T.oc_compra?.plazo_dias ? T.oc_compra.plazo_dias + " días desde la OC" : (F?.plazo_dias || T.plazo_dias) ? (F?.plazo_dias || T.plazo_dias) + " días (según la compra)" : null;
+    const dest = T.oc_compra?.direccion || inf.direccion || F?.direccion || "";
+    const docsAll = [...(op.docs || []), ...(T.lic_docs || [])];
+    const fichas = docsAll.filter((d) => d.tipo === "ficha" || /ficha|t[ée]cnic|cat[aá]logo|hoja de datos/i.test(d.nombre || ""));
+    const reqOk = T.req_check ? Object.values(T.req_check).filter(Boolean).length : 0;
+    const ocHay = op.oc_codigo || g.oc || T.oc_compra?.oc_codigo;
+    // margen actualizado y su fuente por línea
+    const fuenteL = (l) => l.conf ? `confirmado con ${l.conf.proveedor || "proveedor"} ${hace(l.conf.t)}` : l.cb ? (METODO_TXT[l.cb.metodo] || "costo al ofertar") + (l.fuente?.proveedor ? " · " + l.fuente.proveedor : "") + (l.cb.t ? " · " + hace(l.cb.t) : "") : l.mkU ? "estimación de Mercado (no confirmada)" : l.ci ? "alternativa actual (no confirmada)" : "sin costo";
+    const X = M?.Xv || M?.Xb || (inf.final != null && !inf.incompleto ? { final: inf.final } : null);
+    const reconf = L.filter((l) => !l.conf);
+    const flete = op.costo_transporte || 0, ventaNeta = neto || 0;
+    const preguntas = (() => { const P = [];
+      if (!ocHay) P.push("¿La orden de compra saldrá por el total ofertado (" + f(total) + ") o parcial?");
+      if (!dest) P.push("¿Dónde exactamente se entrega y quién recibe?"); else if (!op.entrega_contacto) P.push("¿Quién recibe en " + dest.slice(0, 40) + " y en qué horario?");
+      if (!plazo) P.push("¿Para qué fecha necesitan la entrega?");
+      if (reconf.length) P.push("¿Aceptan marca equivalente en «" + String(reconf[0].d).slice(0, 40) + "» si confirmamos stock y ficha?");
+      return P.slice(0, 3); })();
+    const ll = q.ll || {}, ult = (op.llamadas || []).slice(-1)[0] || null, PA = op.proxima_accion && !op.proxima_accion.hecha ? op.proxima_accion : null;
+    const cNom = ll.nombre ?? op.cliente_nombre ?? T.oc_compra?.contacto ?? "", cOrg = ll.organismo ?? op.cliente_organismo ?? T.organismo ?? "", cCargo = ll.cargo ?? op.cliente_cargo ?? "", cTel = ll.telefono ?? op.cliente_tel ?? T.oc_compra?.fono ?? "", cMail = ll.correo ?? op.cliente_mail ?? T.oc_compra?.mail ?? "";
+    const INT = [["aclaracion", "Pidió aclaración"], ["alternativa", "Solicitó alternativa"], ["enviara_oc", "Indicó que enviará OC"], ["sin_definicion", "Sin definición"]];
+    const alt = (op.alternativas || []).slice(-1)[0] || null, RD = op.render || null;
+    if (RD?.estado === "listo" && RD.archivo_id && !(R.licImgs || {})[RD.archivo_id]) { R.licImgs = R.licImgs || {}; R.licImgs[RD.archivo_id] = "…"; api(`archivo?codigo=${encodeURIComponent(cod)}&tipo=doc&id=${encodeURIComponent(RD.archivo_id)}`).then(async (r) => { R.licImgs[RD.archivo_id] = URL.createObjectURL(await r.blob()); pintarHojaSiAbierta(); }).catch(() => { delete R.licImgs[RD.archivo_id]; }); }
+    const emp = empresaActual() || {};
+    const waTxt = q.waTxt ?? `Hola${cNom ? " " + cNom : ""}, le escribo de ${emp.razon_social || "nuestra empresa"} por la Compra Ágil ${cod} «${(T.nombre || "").slice(0, 70)}»${cOrg ? " (" + cOrg + ")" : ""}.\nOfertamos ${L.length ? L.slice(0, 4).map((l) => `${l.q} × ${String(l.d).slice(0, 40)}`).join(", ") : "lo solicitado"} por ${f(total)} con IVA${plazo ? " · " + plazo : ""}.${alt ? "\nAlternativa propuesta: " + alt.propuesta.slice(0, 160) : ""}\nLe adjunto lo conversado. Quedo atento/a.`;
+    const compartibles = [...docsAll.filter((d) => ["ficha", "render", "alternativa", "oc", "otro"].includes(d.tipo) || /ficha|t[ée]cnic|cat[aá]logo|render|propuesta/i.test(d.nombre || "")).slice(-6)];
+    const waSel = q.waSel || Object.fromEntries(compartibles.filter((d) => ["ficha", "render", "alternativa"].includes(d.tipo) || /ficha|t[ée]cnic/i.test(d.nombre || "")).map((d) => [d.id, true]));
+    const comp = (op.compartidos || []).slice(-3).reverse();
+    const estMat = { cumple: ["✅", "#5ef0b0"], confirmar: ["🟡", "#f5cf6b"], difiere: ["❌", "#ff9a9a"] };
     return `<div class="rb-paso">${cab}
-      <div class="rb-card" style="border-color:rgba(245,207,107,.6)"><div class="rb-env"><b style="font-size:.78rem">${esc(cod)}</b><button class="btn small" type="button" data-rb="llam-cambiar">Cambiar</button></div>
-        <div class="rb-fnom">${esc(t.nombre || F?.nombre || "")}</div><div class="muted" style="font-size:.74rem">${esc(t.organismo || F?.organismo || "")}</div>
-        <div class="rb-kv"><span>Ofertamos <b>${clp(t.total)}</b></span>${g.ganada ? `<span>🏆 ganada${g.oc ? " · OC " + esc(g.oc) : ""}</span>` : g.glosa ? `<span>${esc(g.glosa)}</span>` : ""}${g.mi_lugar ? `<span>${g.mi_lugar}° de ${g.competidores}</span>` : ""}</div>
-        ${t.comprobante ? `<div class="rb-row"><button class="btn small" type="button" data-rb="comprobante" data-c="${esc(cod)}">🧾 Comprobante</button></div>` : ""}
-        ${barraAcciones(t)}</div>
+      <div class="rb-card" style="border-color:rgba(245,207,107,.6)"><div class="rb-env"><b style="font-size:.78rem">${esc(cod)}${ocHay ? ` · 🏆 OC ${esc(op.oc_codigo || g.oc || "")}` : op.oc_esperada ? " · 📨 OC anunciada" : ""}</b><button class="btn small" type="button" data-rb="llam-cambiar">Cambiar</button></div>
+        <div class="rb-fnom">${esc(T.nombre || F?.nombre || "")}</div><div class="muted" style="font-size:.74rem">${esc(T.organismo || F?.organismo || "")}${T.fecha_envio ? " · enviada " + esc(String(T.fecha_envio).slice(0, 10)) : ""}</div>
+        <div class="rb-kv" style="margin-top:4px"><span>Neto <b>${f(neto)}</b></span><span>Total <b>${f(total)}</b></span><span>${plazo ? "⏱ " + esc(plazo) : '<span style="color:#f5cf6b">⏱ plazo sin registrar</span>'}</span></div>
+        ${L.length ? `<div style="font-size:.78rem;margin-top:6px"><b>Qué ofertamos</b><ol style="margin:3px 0 0;padding-left:18px">${L.slice(0, 8).map((l) => `<li>${esc(String(l.d).slice(0, 70))} · <b>${l.q}</b> × ${f(l.ventaU)} neto</li>`).join("")}${L.length > 8 ? `<li>… ${L.length - 8} más</li>` : ""}</ol></div>` : `<div class="muted" style="font-size:.74rem;margin-top:6px">${(R.ocFull || {})[cod]?.cargando || !(R.ocFull || {})[cod] ? '<span class="spinner"></span> Cargando líneas…' : "Sin líneas registradas de la oferta."}</div>`}
+        <div class="rb-kv" style="margin-top:6px"><span>📋 Ficha técnica: ${fichas.length ? `<b>enviada</b> (${fichas.map((d) => esc(String(d.nombre || d.tipo).slice(0, 24))).join(", ")})` : reqOk ? `<b>${reqOk} exigencia(s) acreditadas</b> en Firmar · sin archivo de ficha adjunto` : T.pdf ? "<b>no consta</b> · solo la oferta en PDF" : "<b>no consta</b>"}</span></div>
+        <div class="rb-row" style="margin-top:4px">${T.pdf ? `<button class="btn small" type="button" data-rb="pdf" data-c="${esc(cod)}">📑 Oferta enviada</button>` : ""}${fichas.slice(0, 2).map((d) => `<button class="btn small" type="button" data-rb="neg-doc" data-c="${esc(cod)}" data-id="${esc(d.id)}">📋 ${esc(String(d.nombre || "ficha").slice(0, 18))}</button>`).join("")}${ocHay ? `<button class="btn small rb-oro" type="button" data-rb="oc-ir" data-e="operacion" data-c="${esc(cod)}">Abrir OC en Ejecuta ›</button>` : ""}</div></div>
+      <div class="rb-card" style="border-color:rgba(120,180,255,.45)"><div class="rb-env"><b>📈 Margen actualizado</b><span class="muted" style="font-size:.7rem">${M ? (M.nConf === L.length ? "todos los costos confirmados" : `${M.nConf} de ${L.length} confirmados`) : "sin costos"}</span></div>
+        ${X ? `<div class="rb-verd" style="font-size:1.3rem">${X.final > 0 ? "✅" : "❌"} utilidad <span class="${X.final > 0 ? "rb-vivo-t" : "rb-neg-t"}">${f(X.final)}</span>${ventaNeta ? ` <span class="muted" style="font-size:.75rem">(${Math.round(X.final / ventaNeta * 100)}% de la venta neta)</span>` : ""}</div>` : `<div class="muted" style="font-size:.76rem">Sin costo registrado: no hay margen que mostrar hasta confirmar un proveedor.</div>`}
+        ${L.length ? `<ul class="rb-ul" style="font-size:.72rem;margin:4px 0">${L.slice(0, 8).map((l) => `<li>${esc(String(l.d).slice(0, 36))}: ${l.vigente ? f(l.vigente) + " neto c/u" : "sin costo"} · <span class="muted">${esc(fuenteL(l))}</span></li>`).join("")}</ul>` : ""}
+        ${reconf.length ? `<div style="font-size:.72rem;color:#f5cf6b">Qué reconfirmar: ${reconf.slice(0, 4).map((l) => `precio y stock de «${esc(String(l.d).slice(0, 28))}»${l.fuente?.proveedor || l.ci?.elegido?.proveedor ? " con " + esc(l.fuente?.proveedor || l.ci?.elegido?.proveedor) : ""}`).join(" · ")}</div>` : ""}
+        <div class="muted" style="font-size:.7rem;margin-top:4px">🚚 Despacho hoy ${flete ? f(flete) : "sin costo registrado"} · cada peso adicional de flete descuenta 1:1 de la utilidad${L.length ? ` · si cambias de proveedor, tope neto por unidad para mantener ${Math.round(MARGEN_TOPE * 100)}%: ${L.slice(0, 3).map((l) => `${esc(String(l.d).slice(0, 18))} ${f(topeLinea(l).topeU)}`).join(", ")}` : ""}</div>
+        ${preguntas.length ? `<div class="rb-sec" style="margin-top:6px">❓ Para preguntar ahora</div><ol style="margin:0;padding-left:18px;font-size:.78rem">${preguntas.map((p) => `<li>${esc(p)}</li>`).join("")}</ol>` : ""}</div>
+      <div class="rb-card" style="border-color:rgba(94,240,176,.4)"><div class="rb-env"><b>👤 Quién llama</b><span class="muted" style="font-size:.68rem">${op.cliente_origen === "llamada" ? "contacto operativo guardado" : op.cliente_nombre ? "contacto operativo" : T.oc_compra?.contacto ? "precargado de la OC" : "nuevo"}</span></div>
+        <div class="rb-row"><input class="rb-in rb-ll" data-k="nombre" placeholder="Nombre" value="${esc(cNom)}" style="flex:2;min-width:120px"><input class="rb-in rb-ll" data-k="cargo" placeholder="Cargo (si lo indica)" value="${esc(cCargo)}" style="flex:1;min-width:110px"></div>
+        <div class="rb-row" style="margin-top:4px"><input class="rb-in rb-ll" data-k="organismo" placeholder="Organismo" value="${esc(cOrg)}" style="flex:2;min-width:120px"><input class="rb-in rb-ll" data-k="telefono" inputmode="tel" placeholder="Teléfono" value="${esc(cTel)}" style="flex:1;min-width:110px"><input class="rb-in rb-ll" data-k="correo" inputmode="email" placeholder="Correo" value="${esc(cMail)}" style="flex:1;min-width:140px"></div>
+        <div class="rb-sec" style="margin-top:8px">Qué pasó en la llamada</div>
+        <div class="rb-row" style="flex-wrap:wrap;gap:4px">${INT.map(([k, n]) => `<button class="btn small ${ll.intencion === k ? "rb-oro" : ""}" type="button" data-rb="llam-int" data-v="${k}">${n}</button>`).join("")}</div>
+        <textarea id="rbLlNota" rows="2" placeholder="Nota breve: qué preguntó, qué respondiste, qué quedó pendiente" style="margin-top:6px">${esc(ll.nota || "")}</textarea>
+        <div class="rb-row" style="margin-top:4px"><input class="rb-in" id="rbLlPaso" placeholder="Próximo paso (ej: enviar ficha técnica hoy)" value="${esc(ll.proximo_paso || "")}" style="flex:2;min-width:150px"><input class="rb-in" id="rbLlFecha" type="date" value="${esc(ll.fecha || "")}" style="flex:1;min-width:120px"></div>
+        <div class="rb-row" style="margin-top:6px"><button class="btn rb-oro" type="button" style="flex:1" data-rb="llam-guardar" data-c="${esc(cod)}">${ll.guardando ? '<span class="spinner"></span> Guardando…' : "💾 Guardar llamada y contacto"}</button>${telNum(cTel) ? `<a class="btn small" href="tel:${esc(telNum(cTel))}">📞</a>` : ""}</div>
+        ${PA ? `<div class="rb-sug" style="border-color:#f5cf6b;margin-top:6px"><div style="font-size:.7rem;letter-spacing:.06em;color:#f5cf6b">PRÓXIMA ACCIÓN</div><b>${esc(PA.titulo)}</b><div class="muted" style="font-size:.7rem">${PA.fecha ? "para el " + esc(PA.fecha) + " · " : ""}${PA.con ? "acordado con " + esc(PA.con) + " · " : ""}${esc(hace(PA.t))}</div><div class="rb-row" style="margin-top:4px"><button class="btn small" type="button" data-rb="llam-pa-hecha" data-c="${esc(cod)}">✓ Hecho</button></div></div>` : ""}
+        ${(op.llamadas || []).length ? `<details class="rb-det" style="margin-top:6px"><summary>📒 ${op.llamadas.length} llamada${op.llamadas.length > 1 ? "s" : ""} registrada${op.llamadas.length > 1 ? "s" : ""} · última ${esc(hace(ult.t))}</summary>${op.llamadas.slice().reverse().slice(0, 8).map((x) => `<div style="font-size:.74rem;margin:4px 0;padding:6px;border-radius:8px;background:rgba(255,255,255,.04)"><b>${esc(x.intencion_txt)}</b> · ${esc(x.contacto?.nombre || "sin nombre")}${x.contacto?.cargo ? " (" + esc(x.contacto.cargo) + ")" : ""} · ${esc(hace(x.t))}${x.nota ? `<div>${esc(x.nota)}</div>` : ""}${x.proximo_paso ? `<div class="muted">→ ${esc(x.proximo_paso)}${x.fecha ? " · " + esc(x.fecha) : ""}</div>` : ""}</div>`).join("")}</details>` : ""}</div>
+      <div class="rb-card"><div class="rb-env"><b>🖼 Mostrar cómo quedará</b><span class="muted" style="font-size:.68rem">${RD?.estado === "listo" ? "render listo " + esc(hace(RD.t)) : RD?.estado === "pendiente" ? "pedido al PC " + esc(hace(RD.pedido_t)) : RD?.estado === "error" ? "falló" : "con fotos y medidas de los anexos"}</span></div>
+        ${RD?.estado === "listo" && RD.archivo_id ? `<figure style="margin:6px 0">${(R.licImgs || {})[RD.archivo_id] && R.licImgs[RD.archivo_id] !== "…" ? `<img src="${R.licImgs[RD.archivo_id]}" alt="render" style="max-width:100%;border-radius:10px" data-rb="neg-doc" data-c="${esc(cod)}" data-id="${esc(RD.archivo_id)}">` : `<div class="rb-vision-ph"><span class="spinner"></span></div>`}<figcaption class="muted" style="font-size:.68rem">Hecho con: ${(RD.fuentes || []).map(esc).join(", ") || "anexos del comprador"}${(RD.medidas_usadas || []).length ? " · medidas: " + RD.medidas_usadas.map(esc).join(", ") : ""}</figcaption></figure>
+          ${(RD.medidas_pendientes || []).length ? `<div style="font-size:.72rem;color:#f5cf6b">📏 Medida pendiente (visible en la imagen): ${RD.medidas_pendientes.map(esc).join(" · ")}</div>` : ""}` : RD?.estado === "pendiente" ? `<div class="muted" style="font-size:.74rem"><span class="spinner"></span> El robot del PC lo genera a partir de las fotos del anexo y las medidas indicadas; lo que no tenga medida queda marcado como pendiente en la imagen. Nada se inventa: ni tiendas, ni teléfonos, ni precios.</div>` : RD?.estado === "error" ? `<div style="font-size:.74rem;color:#ff9a9a">${esc(RD.error || "no se pudo generar")}</div>` : `<div class="muted" style="font-size:.74rem">Pide una vista del producto en el lugar del comprador usando sus fotos y medidas de los anexos. Si falta una medida, aparece marcada como pendiente.</div>`}
+        <div class="rb-row" style="margin-top:6px"><input class="rb-in" id="rbLlRenderNota" placeholder="Qué vista o medida pedir (opcional)" value="${esc(RD?.nota || "")}" style="flex:2;min-width:150px"><button class="btn small ${RD?.estado === "pendiente" ? "" : "rb-oro"}" type="button" data-rb="llam-render" data-c="${esc(cod)}">${RD?.estado === "listo" ? "🔄 Pedir otra vista" : RD?.estado === "pendiente" ? "Pedido · reintentar" : "🖼 Pedir render"}</button></div></div>
+      <div class="rb-card"><div class="rb-env"><b>🧪 Preparar alternativa</b><span class="muted" style="font-size:.68rem">${alt ? "propuesta guardada " + esc(hace(alt.t)) + " · no enviada" : "queda como propuesta"}</span></div>
+        <textarea id="rbLlAlt" rows="2" placeholder="Qué alternativa propones: producto, marca/modelo, qué cambia respecto a lo ofertado">${esc(q.altTxt ?? alt?.propuesta ?? "")}</textarea>
+        <div class="rb-row" style="margin-top:4px"><button class="btn rb-oro" type="button" style="flex:1" data-rb="llam-alt" data-c="${esc(cod)}">${q.altCargando ? '<span class="spinner"></span> Comparando con el requerimiento…' : "Comparar con el requerimiento"}</button>${alt ? `<button class="btn small" type="button" data-rb="cp" data-v="${esc(textoAlternativa(alt))}">Copiar</button>` : ""}</div>
+        ${q.altError ? `<div style="font-size:.74rem;color:#ff9a9a;margin-top:4px">${esc(q.altError)}</div>` : ""}
+        ${alt ? `<div style="font-size:.78rem;margin-top:6px">${esc(alt.resumen || "")}</div>
+          <div class="rb-kv"><span>✅ cumple <b>${alt.totales?.cumple ?? 0}</b></span><span>🟡 confirmar <b>${alt.totales?.confirmar ?? 0}</b></span><span>❌ difiere <b>${alt.totales?.difiere ?? 0}</b></span>${alt.req_version ? `<span class="muted">req. v${esc(alt.req_version)}</span>` : '<span class="muted">sin requerimiento capturado: comparado con los ítems</span>'}</div>
+          <table class="rb-copias" style="margin-top:4px;font-size:.72rem"><tr><th style="text-align:left">Exigencia</th><th>Estado</th><th style="text-align:left">Nota</th></tr>${alt.matriz.slice(0, 20).map((m) => `<tr><td>${esc(m.exigencia)}</td><td style="color:${estMat[m.estado][1]};white-space:nowrap">${estMat[m.estado][0]} ${m.estado}</td><td>${esc(m.nota)}</td></tr>`).join("")}</table>
+          ${alt.ficha ? `<details class="rb-det" style="margin-top:4px"><summary>📋 Ficha técnica de la alternativa</summary><div style="font-size:.74rem"><b>${esc(alt.ficha.producto)}</b>${alt.ficha.marca_modelo ? " · " + esc(alt.ficha.marca_modelo) : ""}<ul class="rb-ul">${alt.ficha.caracteristicas.map((c) => `<li>${esc(c)}</li>`).join("")}</ul>${alt.ficha.incluye.length ? "Incluye: " + alt.ficha.incluye.map(esc).join(", ") + "<br>" : ""}${alt.ficha.no_incluye.length ? "No incluye: " + alt.ficha.no_incluye.map(esc).join(", ") + "<br>" : ""}${alt.ficha.garantia ? "Garantía: " + esc(alt.ficha.garantia) + " · " : ""}${alt.ficha.plazo_entrega ? "Plazo: " + esc(alt.ficha.plazo_entrega) : ""}</div></details>` : ""}
+          ${alt.preguntar.length ? `<div class="muted" style="font-size:.72rem;margin-top:4px">Confirmar con el comprador: ${alt.preguntar.map(esc).join(" · ")}</div>` : ""}` : ""}</div>
+      <div class="rb-card" style="border-color:rgba(30,215,96,.45)"><div class="rb-env"><b>💬 Compartir por WhatsApp</b><span class="muted" style="font-size:.68rem">${waNum(cTel) ? "a " + esc(cTel) : "sin teléfono: se abre WhatsApp para elegir"}</span></div>
+        <textarea id="rbLlWa" rows="5" style="margin-top:4px">${esc(waTxt)}</textarea>
+        ${compartibles.length ? `<div class="rb-row" style="flex-wrap:wrap;gap:4px;margin-top:4px">${compartibles.map((d) => `<label class="rb-op ${waSel[d.id] ? "on" : ""}" style="font-size:.72rem"><input type="checkbox" data-wa-doc="${esc(d.id)}" ${waSel[d.id] ? "checked" : ""}> ${d.tipo === "render" ? "🖼" : d.tipo === "ficha" ? "📋" : "📎"} ${esc(String(d.nombre || d.tipo).slice(0, 22))}</label>`).join("")}</div>` : `<div class="muted" style="font-size:.7rem;margin-top:4px">Sin archivos para adjuntar todavía (ficha, render o propuesta). ${alt ? "La alternativa va como texto." : ""}</div>`}
+        ${alt ? `<label class="rb-op" style="font-size:.72rem;margin-top:4px"><input type="checkbox" id="rbLlWaAlt" ${q.waAlt ? "checked" : ""}> Incluir matriz de la alternativa en el mensaje</label>` : ""}
+        <div class="rb-row" style="margin-top:6px"><button class="btn rb-oro" type="button" style="flex:1" data-rb="llam-wa" data-c="${esc(cod)}">${q.waCargando ? '<span class="spinner"></span> Preparando enlaces…' : "💬 Abrir WhatsApp con esto"}</button><button class="btn small" type="button" data-rb="cp" data-v="${esc(waTxt)}">Copiar</button></div>
+        <div class="muted" style="font-size:.68rem;margin-top:3px">Los archivos van como enlace firmado (sin exponer la app). Tú revisas y presionas Enviar en WhatsApp; aquí queda registrado qué se compartió.</div>
+        ${comp.length ? `<div style="font-size:.72rem;margin-top:4px">${comp.map((c) => `<div>📤 ${esc(hace(c.t))} a ${esc(c.a || c.tel || "WhatsApp")}: ${c.archivos.length ? c.archivos.map((x) => esc(x.nombre)).join(", ") : "solo texto"}</div>`).join("")}</div>` : ""}</div>
+      <details class="rb-det" style="margin-top:8px"><summary>🧭 Después de la llamada: brief, proveedores y correo de cotización</summary>
       ${briefHTML(cod, t)}
       ${(() => { const its = (Array.isArray(t.items) && t.items.length ? t.items : (F?.items || [])); if (!its.length) return "";
         const desc = (it) => it.d || it.descripcion || it.nombre || "", can = (it) => it.q || it.cantidad || "", uni = (it) => it.unidad || "", pre = (it) => it.p || it.precio || 0;
-        return `<details class="rb-det" open><summary>📋 Requerimientos — ${its.length} ítem${its.length > 1 ? "s" : ""} (enumerados y detallados)</summary>
+        return `<details class="rb-det"><summary>📋 Requerimientos — ${its.length} ítem${its.length > 1 ? "s" : ""}</summary>
           <ol style="margin:6px 0 0;padding-left:20px;font-size:.82rem">${its.slice(0, 60).map((it) => `<li>${esc(desc(it))}${can(it) ? ` · <b>${esc(can(it))}</b>${uni(it) ? " " + esc(uni(it)) : ""}` : ""}${pre(it) ? ` · ${clp(pre(it))} c/u` : ""}</li>`).join("")}</ol>
           <button class="btn small" type="button" data-rb="cp" data-v="${esc(its.map((it, i) => `${i + 1}. ${desc(it)}${can(it) ? " — " + can(it) + (uni(it) ? " " + uni(it) : "") : ""}`).join("\n"))}" style="margin-top:6px">📋 Copiar lista para el cliente</button>
         </details>`; })()}
-      <div class="rb-resp ${verd ? verd[1] : finalLocal == null ? "dep" : finalLocal > 0 ? "si" : "no"}">
-        <div class="rb-verd">${verd ? verd[0] : finalLocal == null ? (R.data?.robot?.conectado ? "🤔 Calculando…" : "⏸️ Robot apagado") : finalLocal > 0 ? "✅ SÍ DA" : "❌ NO DA"}</div>
-        ${finalLocal != null ? `<div class="rb-tit">Utilidad ${inf.final != null ? "según informe" : "con tu costo"}: <span class="${finalLocal < 0 ? "rb-neg-t" : "rb-vivo-t"}">${clp(finalLocal)}</span></div>` : ""}
-        ${r?.por_que ? `<p>${esc(r.por_que)}</p>` : q.id && !r && !q.error && R.data?.robot?.conectado ? `<p class="muted"><span class="spinner"></span> El robot está revisando proveedores y precios…</p>` : finalLocal == null && !R.data?.robot?.conectado ? `<p class="muted" style="font-size:.74rem">⚠️ El robot está apagado — por eso no sale el veredicto automático. Usa el <b>🔬 Análisis del negocio</b> de aquí abajo: pones tu costo y te dice al tiro si DA y cuánto ganas (funciona sin robot).</p>` : ""}
-        ${q.error ? `<p style="color:#ffb3b9">${esc(q.error)}</p>` : ""}
-        ${r?.aviso ? `<div class="muted" style="font-size:.7rem">${esc(r.aviso)}</div>` : ""}
-        ${r?.decirle_al_cliente ? `<div class="rb-sec">Dile al cliente</div><p>${esc(r.decirle_al_cliente)}</p>` : ""}
-        ${r?.whatsapp ? `<div class="rb-row"><button class="btn small" type="button" data-rb="cp" data-v="${esc(r.whatsapp)}">Copiar WhatsApp</button><a class="btn small" href="${wa}" target="_blank" rel="noopener">💬 Enviar al cliente</a></div>` : ""}
-      </div>
       ${(() => {
-        const vta = Number(t.total) || 0, compra = Number(q.compraAnalisis) || 0;
-        const syn = { total: vta, op: { precio_acordado: compra, informe: {} } };
-        const X = (vta && compra) ? calcNeg(syn) : null, rt = X ? ratingNeg(X.final) : null;
-        const ocHay = !!(g.oc || t.op?.oc_codigo || t.oc_compra?.oc_codigo);
-        const resHTML = X ? `<div class="rb-verd" style="font-size:1.4rem">${rt.emoji} ${X.final > 0 ? "SÍ DA" : "NO DA"} · <span class="${X.final > 0 ? "rb-vivo-t" : "rb-neg-t"}">${clp(Math.round(X.final))}</span></div><div class="muted" style="font-size:.72rem">${esc(rt.txt)} · ganas ${clp(Math.round(X.final))} en este negocio</div>${excelVivo(syn, X)}` : `<div class="muted" style="font-size:.76rem">Pon tu costo y te digo al tiro si DA y cuánto ganas (Excel en vivo).</div>`;
-        return `<div class="rb-sec">🔬 Análisis del negocio — ¿me interesa?</div>
-      <div class="rb-card" style="border-color:rgba(120,180,255,.45)">
-        <div style="font-size:.82rem"><b>📦 ${esc(t.nombre || F?.nombre || "este proyecto")}</b></div>
-        <div class="rb-row" style="gap:6px;margin:6px 0;flex-wrap:wrap">
-          <span class="rb-pill ${ocHay ? "verde" : ""}">${ocHay ? "✅ Con Orden de Compra" : "⚠️ Aún sin OC emitida"}</span>
-          <span class="rb-pill">📋 ¿Piden ficha técnica? El robot lo confirma al leer las bases</span></div>
-        <div class="rb-kv"><span>🏷️ Te pagan (venta) <b>${clp(vta)}</b> c/IVA</span></div>
-        <label class="rb-lab">💸 ¿Cuánto te cuesta a ti? (con IVA — lo del proveedor)<input class="rb-in" id="rbCll" inputmode="numeric" value="${compra ? compra.toLocaleString("es-CL") : ""}" placeholder="Ej: 4.800.000"></label>
-        <div id="cllResult" style="margin-top:8px">${resHTML}</div></div>`;
-      })()}
+        const provs = [...(inf.opciones || []).map((o) => ({ nombre: o.proveedor, email: o.email, telefono: o.telefono, web: o.web, precio_aprox: o.total_con_iva, nota: o.cubre })), ...((r || {}).proveedores || [])]
+          .filter((o, i, a) => o.nombre && a.findIndex((x) => norm(x.nombre) === norm(o.nombre)) === i).slice(0, 6);
+        const elegidos = q.provSel || Object.fromEntries(provs.slice(0, 4).map((o, i) => [i, !!o.email]));
+        const correo = correoProveedores(t, F, W); const asunto = q.asunto ?? correo.asunto, cuerpo = q.cuerpo ?? correo.cuerpo;
+        const bcc = provs.filter((o, i) => elegidos[i] && o.email).map((o) => o.email).join(",");
+        const gmail = `googlegmail://co?bcc=${encodeURIComponent(bcc)}&subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`, mailto = `mailto:?bcc=${encodeURIComponent(bcc)}&subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+        return `${r?.por_que ? `<div class="rb-resp ${verd ? verd[1] : "dep"}"><div class="rb-verd">${verd ? verd[0] : ""}</div><p>${esc(r.por_que)}</p>${r.decirle_al_cliente ? `<div class="rb-sec">Dile al cliente</div><p>${esc(r.decirle_al_cliente)}</p>` : ""}</div>` : q.error ? `<p style="color:#ffb3b9;font-size:.74rem">${esc(q.error)}</p>` : ""}
       <div class="rb-sec">🏪 A quién comprarle</div>
       ${provs.length ? provs.map((o, i) => `<label class="rb-op ${elegidos[i] ? "on" : ""}" style="display:block"><div class="rb-env"><span><input type="checkbox" data-prov="${i}" ${elegidos[i] ? "checked" : ""} ${o.email ? "" : "disabled"}> <b>${esc(o.nombre)}</b></span>${o.precio_aprox ? `<b>${clp(o.precio_aprox)}</b>` : ""}</div>
           <div class="muted" style="font-size:.7rem">${o.email ? "✉ " + esc(o.email) : "sin correo"}${o.telefono ? " · 📞 " + esc(o.telefono) : ""}${o.nota ? " · " + esc(String(o.nota).slice(0, 80)) : ""}</div></label>`).join("")
-        : `<div class="muted" style="font-size:.76rem">${q.id && !r ? "Buscando proveedores…" : "Sin proveedores todavía. El robot los busca con la IA (necesita saldo en OpenAI o una clave de Claude en el PC)."}</div>`}
-      <div class="rb-sec">✉ Correo para pedir cotización (${provs.filter((o, i) => elegidos[i] && o.email).length} proveedores en copia oculta)</div>
+        : `<div class="muted" style="font-size:.76rem">${q.id && !r ? "Buscando proveedores…" : "Sin proveedores todavía (el robot los busca con la IA)."}</div>`}
+      <div class="rb-sec">✉ Correo para pedir cotización (${provs.filter((o, i) => elegidos[i] && o.email).length} en copia oculta)</div>
       <input class="rb-in" id="rbAsunto" value="${esc(asunto)}">
-      <textarea id="rbCuerpo" rows="9" style="margin-top:6px">${esc(cuerpo)}</textarea>
+      <textarea id="rbCuerpo" rows="7" style="margin-top:6px">${esc(cuerpo)}</textarea>
       <div class="rb-row"><a class="btn rb-oro" style="flex:1" href="${gmail}" data-rb="llam-gmail" data-bcc="${esc(bcc)}">✉ Abrir en Gmail</a><a class="btn small" href="${mailto}" data-rb="llam-mail" data-bcc="${esc(bcc)}">Otro correo</a>
         <button class="btn small" type="button" data-rb="cp" data-v="${esc(asunto + "\n\n" + cuerpo)}">Copiar</button></div>
-      <div class="muted" style="font-size:.7rem;margin-top:4px">Se abre tu Gmail con el correo listo y los proveedores en copia oculta: tú revisas y presionas Enviar.</div>
-      ${(() => {
-        const empNom = empresaActual()?.razon_social || "nuestra empresa";
-        const noDa = finalLocal != null && finalLocal <= 0;
-        const prop = q.propCuerpo ?? `Estimado/a,
-
-De parte de ${empNom}, agradecemos su contacto por "${t.nombre || F?.nombre || cod}" (${cod}).
-
-${noDa ? "Lamentamos que el presupuesto no alcanzara para lo solicitado tal cual. Le proponemos una alternativa que sí se ajusta y mantiene la calidad:" : "Le hacemos llegar nuestra propuesta:"}${t.total ? "\n\nValor total: " + clp(t.total) + " (con IVA)." : ""}
-
-Quedamos atentos para avanzar.
-
-Saludos cordiales,
-${empNom}`;
-        return `<div class="rb-sec">📝 Armar propuesta para el cliente</div>
-      <div class="muted" style="font-size:.72rem;margin-bottom:4px">Mándasela al tiro por WhatsApp o correo. Ideal cuando el presupuesto no alcanza: le propones una alternativa y el cliente queda con buena experiencia.</div>
-      <div class="rb-row"><input class="rb-in" id="rbPropTel" inputmode="tel" placeholder="📞 WhatsApp del cliente" value="${esc(q.cliTel || "")}"><input class="rb-in" id="rbPropMail" inputmode="email" placeholder="✉ Correo del cliente" value="${esc(q.cliMail || "")}"></div>
-      <textarea id="rbProp" rows="8" style="margin-top:6px">${esc(prop)}</textarea>
-      <div class="rb-row"><button class="btn rb-oro" style="flex:1" type="button" data-rb="prop-wa">💬 Enviar por WhatsApp</button><button class="btn small" type="button" data-rb="prop-mail">✉ Correo</button><button class="btn small" type="button" data-rb="prop-cp">📋 Copiar</button></div>
-      <div class="muted" style="font-size:.68rem;margin-top:4px">Se abre WhatsApp/correo con la propuesta lista: tú revisas y presionas Enviar.</div>`; })()}
       <div class="rb-sec">⏰ Recuérdamelo</div>
-      <div class="rb-row"><button class="btn small" type="button" data-rb="recordar" data-min="120" data-t="${esc("Revisar respuestas de proveedores · " + cod)}" data-c="${esc(cod)}">Respuestas de proveedores en 2 h</button>
-        <button class="btn small" type="button" data-rb="recordar" data-min="manana" data-t="${esc("Responder al cliente · " + (t.nombre || cod)).slice(0, 120)}" data-c="${esc(cod)}">Responder al cliente mañana 9:00</button></div>
+      <div class="rb-row"><button class="btn small" type="button" data-rb="recordar" data-min="120" data-t="${esc("Revisar respuestas de proveedores · " + cod)}" data-c="${esc(cod)}">Proveedores en 2 h</button>
+        <button class="btn small" type="button" data-rb="recordar" data-min="manana" data-t="${esc("Responder al cliente · " + (t.nombre || cod)).slice(0, 120)}" data-c="${esc(cod)}">Responder al cliente mañana 9:00</button></div>`; })()}
+      </details>
     </div>`;
+  }
+  function textoAlternativa(alt) {
+    const E = { cumple: "✅ cumple", confirmar: "🟡 por confirmar", difiere: "❌ difiere" };
+    return `Alternativa propuesta: ${alt.propuesta}\n${alt.resumen || ""}\n${alt.matriz.map((m) => `- ${m.exigencia}: ${E[m.estado]}${m.nota ? " (" + m.nota + ")" : ""}`).join("\n")}${alt.ficha ? `\nFicha técnica: ${alt.ficha.producto}${alt.ficha.marca_modelo ? " · " + alt.ficha.marca_modelo : ""}\n${alt.ficha.caracteristicas.map((c) => "· " + c).join("\n")}` : ""}`;
   }
   async function preguntarRobot(texto, audio, codigo) {
     if (!texto && !audio && !codigo) { toast("Escribe o dicta qué te dijeron"); return; }
@@ -4868,8 +4899,8 @@ ${empNom}`;
   }
   function confirmarLlamada(cod) {
     const texto = R.llamada?.texto || "";
-    R.llamada = { texto, confirmado: cod }; briefLlamada(cod);
-    cargarDocs(cod);
+    R.llamada = { texto, confirmado: cod, inicio: Date.now(), ll: {} }; briefLlamada(cod);
+    cargarDocs(cod); R.ocFull = R.ocFull || {}; delete R.ocFull[cod]; cargarOCFull(cod);
     preguntarRobot(texto || "Me llamaron por esta compra", null, cod);
   }
   async function grabar() {
@@ -5947,6 +5978,40 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "llam-si") { if (R.pantalla !== "llamada") { R.pantalla = "llamada"; R.llamada = { texto: "" }; sheet.scrollTop = 0; } return confirmarLlamada(cod); }
     if (a === "llam-no") { R.llamada.idx = (R.llamada.idx || 0) + 1; if (R.llamada.idx >= (R.llamada.cands || []).length) R.llamada.cands = []; return pintarHoja(true); }
     if (a === "llam-cambiar") { R.llamada = { texto: R.llamada?.texto, cands: candidatasLlamada(R.llamada?.texto || ""), idx: 0 }; return pintarHoja(true); }
+    if (a === "llam-int") { R.llamada.ll = { ...(R.llamada.ll || {}), intencion: R.llamada.ll?.intencion === b.dataset.v ? null : b.dataset.v }; return pintarHoja(true); }
+    if (a === "llam-guardar") {       // 💾 contacto operativo + intención + nota + próximo paso → misma operación (se ve en Ejecuta)
+      const q = R.llamada; const ll = q.ll || {}; const lee = (k) => (sheet.querySelector(`.rb-ll[data-k="${k}"]`)?.value || ll[k] || "").trim();
+      const contacto = { nombre: lee("nombre"), organismo: lee("organismo"), cargo: lee("cargo"), telefono: lee("telefono"), correo: lee("correo") };
+      const nota = ($("#rbLlNota")?.value || "").trim(), proximo_paso = ($("#rbLlPaso")?.value || "").trim(), fecha = $("#rbLlFecha")?.value || "";
+      if (!ll.intencion && !nota && !proximo_paso && !contacto.nombre) { toast("Marca qué pasó en la llamada o anota algo"); return; }
+      q.ll = { ...ll, ...contacto, nota, proximo_paso, fecha, guardando: true }; pintarHoja(true);
+      try { const r = await api("llamada", { method: "POST", body: JSON.stringify({ codigo: cod, llamada: { contacto, intencion: ll.intencion || "sin_definicion", nota, proximo_paso, fecha, duracion_s: q.inicio ? Math.round((Date.now() - q.inicio) / 1000) : null }, dispositivo: dispositivo(false) }) });
+        R.ocFull = R.ocFull || {}; R.ocFull[cod] = { t: Date.now(), tr: r.trabajo }; q.ll = { intencion: null }; q.inicio = Date.now(); R.ejecT = 0; toast("💾 Llamada registrada · contacto operativo guardado"); cargarEjecuta?.(); }
+      catch (e) { q.ll.guardando = false; toast(e.message); }
+      return pintarHoja(true);
+    }
+    if (a === "llam-pa-hecha") { try { const r = await api("proxima-accion", { method: "POST", body: JSON.stringify({ codigo: cod, hecha: true, dispositivo: dispositivo(false) }) }); R.ocFull = R.ocFull || {}; R.ocFull[cod] = { t: Date.now(), tr: r.trabajo }; R.ejecT = 0; toast("✓ Próxima acción hecha"); } catch (e) { toast(e.message); } return pintarHoja(true); }
+    if (a === "llam-render") { try { const r = await api("render-pedir", { method: "POST", body: JSON.stringify({ codigo: cod, nota: ($("#rbLlRenderNota")?.value || "").trim(), dispositivo: dispositivo(false) }) }); R.ocFull = R.ocFull || {}; R.ocFull[cod] = { t: Date.now(), tr: r.trabajo }; toast("🖼 Pedido al PC: lo arma con las fotos y medidas de los anexos"); } catch (e) { toast(e.message); } return pintarHoja(true); }
+    if (a === "llam-alt") {           // 🧪 matriz de cumplimiento (cumple / confirmar / difiere) + ficha técnica; queda como propuesta
+      const q = R.llamada; const propuesta = ($("#rbLlAlt")?.value || "").trim(); if (!propuesta) { toast("Describe la alternativa"); return; }
+      q.altTxt = propuesta; q.altCargando = true; q.altError = null; pintarHoja(true);
+      try { const r = await api("alternativa", { method: "POST", body: JSON.stringify({ codigo: cod, propuesta, llamada_id: (R.ocFull?.[cod]?.tr?.op?.llamadas || []).slice(-1)[0]?.id || null, dispositivo: dispositivo(false) }) }); R.ocFull = R.ocFull || {}; R.ocFull[cod] = { t: Date.now(), tr: r.trabajo }; toast(`🧪 Alternativa guardada como propuesta · ${r.alternativa.totales.cumple} cumple · ${r.alternativa.totales.confirmar} por confirmar · ${r.alternativa.totales.difiere} difiere`); }
+      catch (e) { q.altError = e.message; }
+      q.altCargando = false; return pintarHoja(true);
+    }
+    if (a === "llam-wa") {            // 💬 enlaces firmados + registro de lo compartido; tú presionas Enviar en WhatsApp
+      const q = R.llamada; let txt = ($("#rbLlWa")?.value || "").trim(); if (!txt) { toast("Escribe el mensaje"); return; }
+      const tr = R.ocFull?.[cod]?.tr || {}; const op = tr.op || {}; const ids = $$("[data-wa-doc]", sheet).filter((x) => x.checked).map((x) => x.dataset.waDoc);
+      const alt = (op.alternativas || []).slice(-1)[0]; if ($("#rbLlWaAlt")?.checked && alt) txt += "\n\n" + textoAlternativa(alt);
+      const tel = (sheet.querySelector('.rb-ll[data-k="telefono"]')?.value || op.cliente_tel || "").trim(), nom = (sheet.querySelector('.rb-ll[data-k="nombre"]')?.value || op.cliente_nombre || "").trim();
+      q.waCargando = true; pintarHoja(true);
+      try { const r = await api("compartir", { method: "POST", body: JSON.stringify({ codigo: cod, ids, texto: txt, a: nom, tel, canal: "whatsapp", dispositivo: dispositivo(false) }) });
+        if (r.enlaces.length) txt += "\n\n" + r.enlaces.map((e) => `${e.nombre}: ${e.url}`).join("\n");
+        R.ocFull = R.ocFull || {}; R.ocFull[cod] = { t: Date.now(), tr: r.trabajo }; q.waTxt = null;
+        window.open(`https://wa.me/${waNum(tel) || ""}?text=${encodeURIComponent(txt)}`, "_blank", "noopener"); toast("📤 WhatsApp abierto · quedó registrado qué compartiste"); }
+      catch (e) { toast(e.message); }
+      q.waCargando = false; return pintarHoja(true);
+    }
     if (a === "llam-gmail" || a === "llam-mail") {          // abre el correo con lo que escribiste (tú presionas Enviar)
       ev.preventDefault(); const q = R.llamada || {}; q.asunto = $("#rbAsunto")?.value || ""; q.cuerpo = $("#rbCuerpo")?.value || "";
       const qs = `bcc=${encodeURIComponent(b.dataset.bcc || "")}&subject=${encodeURIComponent(q.asunto)}&body=${encodeURIComponent(q.cuerpo)}`;
@@ -6442,6 +6507,16 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
   sheet.addEventListener("input", (ev) => {
     const id = ev.target.id, q = R.llamada; if (!q) return;
     if (id === "rbAsunto") q.asunto = ev.target.value; else if (id === "rbCuerpo") q.cuerpo = ev.target.value; else if (id === "rbLlamada") q.texto = ev.target.value;
+    // 📞 Estoy en llamada: lo que escribes se conserva aunque la pantalla se repinte
+    const el = ev.target; q.ll = q.ll || {};
+    if (el.classList?.contains("rb-ll")) q.ll[el.dataset.k] = el.value;
+    else if (id === "rbLlNota") q.ll.nota = el.value; else if (id === "rbLlPaso") q.ll.proximo_paso = el.value; else if (id === "rbLlFecha") q.ll.fecha = el.value;
+    else if (id === "rbLlAlt") q.altTxt = el.value; else if (id === "rbLlWa") q.waTxt = el.value;
+  });
+  sheet.addEventListener("change", (ev) => {
+    const el = ev.target, q = R.llamada; if (!q || R.pantalla !== "llamada") return;
+    if (el.dataset?.waDoc) { q.waSel = { ...(q.waSel || Object.fromEntries($$("[data-wa-doc]", sheet).map((x) => [x.dataset.waDoc, x.checked]))), [el.dataset.waDoc]: el.checked }; el.closest("label")?.classList.toggle("on", el.checked); }
+    if (el.id === "rbLlWaAlt") q.waAlt = el.checked;
   });
   sheet.addEventListener("change", (ev) => {
     if (ev.target.dataset?.prov == null || !R.llamada) return;
