@@ -1538,6 +1538,10 @@ async function siiIngesta(req) {
   }
   if (b.accion === "fotos_ultimo") return new Response(JSON.stringify({ ok: true, u: await store.get("robot/fotos_ultimo", { type: "json" }) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   if (b.accion === "foto") return new Response(JSON.stringify({ ok: true, ...(await buscarFotos(b.q)) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
+  if (b.accion === "pasar" && /^[a-z-]+$/.test(String(b.ruta || ""))) {   // diagnóstico temporal: llama una ruta autorizada de la app (se elimina con SII_INGESTA_K)
+    const r2 = await atender(new Request(new URL(req.url).origin + "/bot/" + b.ruta + (b.query ? "?" + String(b.query).replace(/[^\w=&%.-]/g, "") : ""), { method: b.metodo === "GET" ? "GET" : "POST", headers: { "x-robot-token": process.env.ROBOT_TOKEN || "", "content-type": "application/json" }, body: b.metodo === "GET" ? undefined : JSON.stringify(b.body || {}) }));
+    const j2 = await r2.json().catch(() => ({})); return new Response(JSON.stringify(j2), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
+  }
   if (b.accion === "simular_oc") {   // diagnóstico temporal: corre la simulación de una OC (misma lógica que /bot/simular)
     const r2 = await atender(new Request(new URL(req.url).origin + "/bot/simular-oc", { method: "POST", headers: { "x-robot-token": process.env.ROBOT_TOKEN || "", "content-type": "application/json" }, body: JSON.stringify({ codigo: b.codigo, fase: b.fase || "req", forzar: !!b.forzar, continuar_sin_adjunto: !!b.continuar_sin_adjunto, req_texto: b.req_texto || null, req_nombre: b.req_nombre || null }) }));
     const j2 = await r2.json().catch(() => ({})); return new Response(JSON.stringify(j2), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
