@@ -510,7 +510,9 @@
   .rb-oc-d b{font-size:1.05rem}.rb-oc-d small{font-size:.58rem;opacity:.7;margin-top:2px}
   .rb-oc-d.tarde{background:rgba(201,75,75,.25);color:#ff9a9a}.rb-oc-d.pronto{background:rgba(245,207,107,.22)}
   .rb-oc-tag{display:inline-block;padding:1px 7px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);font-size:.68rem}
-  .rb-oc-resp{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}.rb-oc-tag.ok{border-color:rgba(79,209,139,.5);color:#8ff0b8}.rb-oc-tag.mal{border-color:rgba(255,120,120,.5);color:#ff9a9a}
+  .rb-oc-resp{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+  .rb-fr.ab{border-color:rgba(245,207,107,.45)}.rb-fr-flujo{margin-top:8px;border-top:1px dashed rgba(255,255,255,.14);padding-top:6px}.rb-fr-sec{margin:8px 0 4px;padding-left:8px;border-left:2px solid rgba(255,255,255,.14)}
+  .rb-fr-flujo .rb-rep>span{display:none}.rb-fr-flujo .rb-rep{padding:6px 8px}.rb-fr-flujo .rb-rep.pagado{opacity:.75}.rb-fr-flujo .rb-rep.oro b{color:#f5cf6b}.rb-fr-form{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0;padding:8px;border:1px solid rgba(245,207,107,.4);border-radius:10px}.rb-fr-form .rb-in{flex:1;min-width:110px}.rb-oc-tag.ok{border-color:rgba(79,209,139,.5);color:#8ff0b8}.rb-oc-tag.mal{border-color:rgba(255,120,120,.5);color:#ff9a9a}
   .rb-llamar{border-radius:16px;padding:10px;background:linear-gradient(160deg,rgba(255,226,140,.12),rgba(255,255,255,.03));border:1px solid rgba(245,207,107,.35)}
   .btn.rb-mic.on{background:#e8313f!important;border-color:#e8313f!important;animation:pulse 1.2s ease-in-out infinite}
   .rb-resp{margin-top:12px;border-radius:18px;padding:14px;border:1px solid rgba(255,255,255,.16);background:linear-gradient(160deg,rgba(255,255,255,.10),rgba(255,255,255,.03))}
@@ -2140,15 +2142,52 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const compras = Number(op.precio_acordado) || cot || Number(inf.compras) || 0;
     const fuente = op.precio_acordado ? "precio acordado" : cot ? "mejor cotización" : inf.compras ? "estimado" : "sin precio";
     const transporte = Number(op.costo_transporte) || p.transporte || 0;
-    const neto = Math.round(total / 1.19), iva = total - neto, factoring = total * p.factoring, ingreso = total - factoring;
+    // 🪙 regla común de redondeo: cada línea en pesos enteros y los totales se arman por diferencia, así reparto y exportación cuadran al peso
+    const R0 = (x) => Math.round(Number(x) || 0);
+    const neto = R0(total / 1.19), iva = total - neto, factoring = R0(total * p.factoring), ingreso = total - factoring;
     const conFactura = !op.sin_factura;                               // 🧾 sin factura = NO hay IVA crédito (no baja el IVA a pagar)
-    const iva_compra = Array.isArray(op.pagos) && op.pagos.length ? op.pagos.reduce((s, x) => s + (x.factura ? (Number(x.monto) || 0) * 0.19 : 0), 0) : conFactura ? compras - compras / 1.19 : 0, iva_pagar = Math.max(0, iva - iva_compra), recargo = 0;
-    const impuesto = Math.max(0, neto) * p.impuesto;                  // 🏛 PPM: % sobre la venta neta (no sobre la utilidad)
+    const iva_compra = R0(Array.isArray(op.pagos) && op.pagos.length ? op.pagos.reduce((s, x) => s + (x.factura ? (Number(x.monto) || 0) * 0.19 : 0), 0) : conFactura ? compras - compras / 1.19 : 0), iva_pagar = Math.max(0, iva - iva_compra), recargo = 0;
+    const impuesto = R0(Math.max(0, neto) * p.impuesto);              // 🏛 PPM: % sobre la venta neta (no sobre la utilidad)
     const utilidad = ingreso - compras - iva_pagar - recargo - transporte, repartir = utilidad - impuesto;
-    const comision = p.aplica_comision ? Math.max(0, repartir) * p.comision : 0, final = repartir - comision;
-    const capital = compras * p.anticipo, invGan = final * p.inversionista, ejec = Math.max(0, final) * p.ejecutador, empresa = final - invGan - ejec;
+    const comision = p.aplica_comision ? R0(Math.max(0, repartir) * p.comision) : 0, final = repartir - comision;
+    const capital = R0(compras * p.anticipo), invGan = R0(final * p.inversionista), ejec = R0(Math.max(0, final) * p.ejecutador), empresa = final - invGan - ejec;
     return { p, total, neto, iva, factoring, ingreso, compras, fuente, conFactura, transporte, iva_compra, iva_pagar, recargo, utilidad, impuesto, repartir, comision, final,
       capital, invGan, invRecibe: capital + invGan, invPct: capital ? invGan / capital : 0, ejec, empresa, jugador: comision };
+  }
+  // 💰 CAJA real del negocio: facturas emitidas, abonos recibidos (líquidos), aportes del inversionista, egresos hechos y reservas.
+  //    Mismo motor (calcNeg) para el reparto; aquí solo se cruza con lo que de verdad entró y salió. Todo en pesos enteros.
+  const sumaM = (xs, f) => (Array.isArray(xs) ? xs : []).reduce((s, x) => s + (f ? (f(x) ? Math.round(Number(x.monto) || 0) : 0) : Math.round(Number(x.monto) || 0)), 0);
+  function cajaNeg(t) {
+    const op = t.op || {}, X = calcNeg(t), src = {};
+    const facturas = Array.isArray(op.facturas) && op.facturas.length ? op.facturas : op.folio_factura ? [{ folio: op.folio_factura, monto: X.total, fecha: op.factura_t || null, implicita: true }] : [];
+    const abonos = Array.isArray(op.abonos) && op.abonos.length ? op.abonos : op.cobrado ? [{ monto: Number(op.cobrado), fecha: op.fecha_cobro || null, origen: op.factoring ? "factoring" : "cliente", confirmado: true, implicito: true }] : [];
+    const aportes = Array.isArray(op.aportes) ? op.aportes : [], devol = Array.isArray(op.devoluciones) ? op.devoluciones : [];
+    const facturado = sumaM(facturas); src.facturado = facturas.length ? facturas.map((f) => "factura " + (f.folio || "s/n") + " " + clp(f.monto)).join(" + ") : "sin factura registrada";
+    const cobrado = sumaM(abonos, (a) => a.confirmado !== false); src.cobrado = abonos.filter((a) => a.confirmado !== false).map((a) => (a.origen === "factoring" ? "factoring" : "cliente") + " " + (a.fecha || "").slice(0, 10) + " " + clp(a.monto)).join(" + ") || "sin abonos";
+    const previsto = sumaM(abonos, (a) => a.confirmado === false);
+    const pendCobro = Math.max(0, facturado - cobrado), estado = !facturado ? (op.oc_codigo || op.oc ? "sin facturar" : "sin OC") : cobrado <= 0 ? "factura emitida" : cobrado < facturado ? "cobro parcial" : "factura cobrada";
+    // 💼 inversionista: capital = lo que de verdad aportó − devoluciones ya hechas; ganancia según acuerdo del negocio
+    const aportado = sumaM(aportes), devuelto = sumaM(devol), hayAporte = aportes.length > 0;
+    const capital = hayAporte ? aportado - devuelto : op.transferido ? X.capital - devuelto : 0;
+    src.capital = hayAporte ? `aportes ${clp(aportado)} − devuelto ${clp(devuelto)}` : op.transferido ? `estimado = compra ${clp(X.capital)} (aporte sin registrar)` : "Sin registrar";
+    const acuerdo = op.inv_acuerdo || null;   // {tipo:"pct", v:0.156} | {tipo:"monto", v:808859} | {tipo:"pct_capital", v:0.135}
+    const invGan = acuerdo?.tipo === "monto" ? Math.round(Number(acuerdo.v) || 0) : acuerdo?.tipo === "pct_capital" ? Math.round(capital * (Number(acuerdo.v) || 0)) : acuerdo?.tipo === "pct" ? Math.round(X.final * (Number(acuerdo.v) || 0)) : X.invGan;
+    src.invGan = acuerdo ? (acuerdo.tipo === "monto" ? "monto acordado" : acuerdo.tipo === "pct_capital" ? `${(acuerdo.v * 100).toFixed(1)}% del capital aportado` : `${(acuerdo.v * 100).toFixed(1)}% de la utilidad final`) : `${(X.p.inversionista * 100).toFixed(1)}% de la utilidad final (por confirmar)`;
+    const porConfirmar = !hayAporte || !acuerdo;
+    const ejec = X.ejec, comision = X.comision, empresa = X.final - invGan - ejec;   // la compra ya está como costo: del inversionista solo se descuenta su ganancia
+    // 🏦 caja: entra lo cobrado líquido (si el factoring depositó líquido, su comisión ya está descontada) + aportes; salen egresos hechos; se reservan los costos por cubrir
+    const provPag = op.proveedor_pagado ? X.compras : 0, fletePag = op.flete_pagado || (op.proveedor_pagado && !X.transporte) ? X.transporte : 0;
+    const repPag = (op.rp_inversionista ? capital + invGan : 0) + (op.rp_ejecutador ? ejec : 0) + (op.rp_jugador ? comision : 0) + (op.rp_sii ? X.iva_pagar + X.impuesto : 0);
+    const egresos = provPag + fletePag + devuelto + repPag;
+    const reservas = (op.proveedor_pagado ? 0 : X.compras) + (fletePag ? 0 : X.transporte) + (op.rp_sii ? 0 : X.iva_pagar + X.impuesto);
+    const entradas = cobrado + aportado;
+    const disponible = entradas - egresos - reservas;          // lo que hay para repartir hoy (antes de pagar a los socios)
+    const pendInv = (op.rp_inversionista ? 0 : capital + invGan), pendEjec = op.rp_ejecutador ? 0 : ejec, pendCom = op.rp_jugador ? 0 : comision;
+    const quedaEmpresa = disponible - pendInv - pendEjec - pendCom;
+    src.disponible = `cobrado ${clp(cobrado)} + aportes ${clp(aportado)} − egresos hechos ${clp(egresos)} − reservas ${clp(reservas)}`;
+    return { X, facturas, abonos, aportes, devol, facturado, cobrado, previsto, pendCobro, estado, aportado, devuelto, capital, invGan, porConfirmar, acuerdo, ejec, comision, empresa,
+      provPag, fletePag, repPag, egresos, reservas, entradas, disponible, pendInv, pendEjec, pendCom, quedaEmpresa, src,
+      flags: { provPagado: !!op.proveedor_pagado, facturaEmitida: facturado > 0, cobroParcial: estado === "cobro parcial", cobrada: estado === "factura cobrada" } };
   }
   // 🔥 ¿qué tan bueno es el negocio? (para saber si vale traer inversores)
   function ratingNeg(v) {
@@ -3906,7 +3945,8 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
           <div style="font-size:.78rem;margin-top:4px;color:${b === "D" ? "#ff9a9a" : "var(--oro, #f5cf6b)"}">→ ${esc(pasoOC(t, b))}</div>${acciones}
         </div></div>`; };
     const sel = R.ocB || "";
-    const chips = ["A", "P"].map((k) => `<button type="button" class="rb-rchip ${sel === k ? "on" : ""}" data-rb="oc-bloque" data-b="${k}">${OC_BLOQUES[k][0].replace(/^\S+\s/, "")}<i>${k === "P" ? grupos.P.length + grupos.O.length : grupos[k].length}</i></button>`).join("");
+    const chips = ["A", "P"].map((k) => `<button type="button" class="rb-rchip ${sel === k ? "on" : ""}" data-rb="oc-bloque" data-b="${k}">${OC_BLOQUES[k][0].replace(/^\S+\s/, "")}<i>${k === "P" ? grupos.P.length + grupos.O.length : grupos[k].length}</i></button>`).join("")
+      + `<button type="button" class="rb-rchip ${sel === "F" ? "on" : ""}" data-rb="oc-bloque" data-b="F">🧾 Facturas y reparto<i>${grupos.A.length}</i></button>`;
     const caja = (k, inner) => `<div class="rb-caja-oc ${k}" style="margin-top:14px"><div style="display:flex;justify-content:space-between;align-items:baseline"><b>${OC_BLOQUES[k][0]} · ${grupos[k].length}</b><span class="muted" style="font-size:.78rem">${clp(suma(grupos[k]))}</span></div><div class="muted" style="font-size:.72rem;margin-bottom:4px">${OC_BLOQUES[k][1]}</div>${inner}</div>`;
 
     const filaSuelta = (x) => `<div class="rb-card rb-oc-f" style="padding:8px 12px;margin:6px 0"><div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:.86rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.nombre)}</b><span class="rb-oc-tag ${/aceptada/i.test(x.estado) ? "ok" : ""}">${esc(x.estado)}</span></div><div class="muted" style="font-size:.72rem">${esc(x.comprador)} · OC ${esc(x.oc)} · ${esc(x.fecha.slice(0, 10))} · <i>sin oferta en la app</i></div><div class="rb-row" style="margin-top:4px"><a class="btn small" href="${urlOC(x.oc)}" target="_blank" rel="noopener">Ver en MP</a></div></div>`;
@@ -3928,7 +3968,78 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       <div class="rb-marcador" style="margin:8px 0"><div class="rb-m verde"><span>✅ Aceptadas</span><b>${grupos.A.length - grupos.C.length}</b><small>${clp(suma(grupos.A.filter((t) => subOC(t) !== "C")))} · ${grupos.A.filter((t) => subOC(t) === "D").length} en despacho</small></div><div class="rb-m oro"><span>🥇 Concretadas</span><b>${grupos.C.length}</b><small>${clp(suma(grupos.C))} · factoring</small></div><div class="rb-m"><span>📝 Por aceptar</span><b>${grupos.P.length}</b><small>${clp(suma(grupos.P))}</small></div><div class="rb-m"><span>🔭 En opciones</span><b>${grupos.O.length}</b><small>${clp(suma(grupos.O))}</small></div><div class="rb-m" title="No aceptadas o canceladas en el portal: solo estadística, no se trabajan"><span>🚫 No aceptadas</span><b>${grupos.N.length + (portal?.estados ? 0 : 0)}</b><small>${clp(suma(grupos.N))} · solo estadística</small></div></div>
       ${grupos.X.length ? `<div class="muted" style="font-size:.7rem">${grupos.X.length} OC de la app sin estado confirmado por el portal: no se muestran hasta sincronizar.</div>` : ""}
       <div class="rb-rchips">${chips}</div>
-      ${vivas.length || grupos.O.length ? bloques : `<div class="empty">Todavía no hay órdenes de compra${todas ? "" : " de tu empresa"}. Cuando te adjudiquen, aparecen aquí solas.</div>`}</div>`;
+      ${sel === "F" ? facturasHTML(base) : vivas.length || grupos.O.length ? bloques : `<div class="empty">Todavía no hay órdenes de compra${todas ? "" : " de tu empresa"}. Cuando te adjudiquen, aparecen aquí solas.</div>`}</div>`;
+  }
+
+  // 🧾 FACTURAS Y REPARTO: cuánto cobramos, a quién hay que pagar y cuánto queda para la empresa (por período, empresa y estado de cobro)
+  const FR_EST = [["", "Todas"], ["sin facturar", "Sin facturar"], ["factura emitida", "Factura emitida"], ["cobro parcial", "Cobro parcial"], ["factura cobrada", "Factura cobrada"]];
+  const fechaCorta = (f) => (f ? String(f).slice(0, 10).split("-").reverse().slice(0, 2).join("/") : "s/f");
+  function facturasHTML(base) {
+    const per = R.frPer || "todo", rg = rangoPer(per), emp = R.frEmp || "", est = R.frEst || "";
+    const conOC = base.filter((t) => (t.op?.oc_codigo || t.op?.oc) && clasificarOC(t) === "A");
+    const L = conOC.map((t) => ({ t, c: cajaNeg(t) })).filter(({ t, c }) => (!emp || empDe(t) === emp) && (!est || c.estado === est));
+    const enPer = (f) => per === "todo" || enRango(f, rg);
+    // consolidado: suma movimientos reales (facturas y abonos con fecha en el período); el reparto se cuenta una sola vez por negocio
+    const tot = { cobrado: 0, pend: 0, dispo: 0, inv: 0, emp: 0, fact: 0 };
+    for (const { c } of L) { tot.cobrado += sumaM(c.abonos, (a) => a.confirmado !== false && enPer(a.fecha)); tot.fact += sumaM(c.facturas, (f) => enPer(f.fecha)); tot.pend += c.pendCobro; tot.dispo += c.disponible; tot.inv += c.pendInv; tot.emp += c.empresa; }
+    const chip = (k, v, lab, on) => `<button type="button" class="rb-rchip ${on ? "on" : ""}" data-rb="fr-f" data-k="${k}" data-v="${esc(v)}">${lab}</button>`;
+    const emps = [...new Set(conOC.map(empDe))];
+    const tile = (lab, v, sub, cls) => `<div class="rb-m ${cls || ""}"><span>${lab}</span><b>${clp(v)}</b><small>${sub}</small></div>`;
+    const estTag = (c) => { const f = c.flags; return `<span class="rb-oc-tag ${f.cobrada ? "ok" : ""}">${c.estado}</span>${f.provPagado ? `<span class="rb-oc-tag ok">proveedor pagado</span>` : `<span class="rb-oc-tag">proveedor por pagar</span>`}${c.porConfirmar ? `<span class="rb-oc-tag mal" title="falta el aporte o el acuerdo del inversionista">inversionista por confirmar</span>` : ""}`; };
+    const prox = (c) => c.abonos.find((a) => a.confirmado === false && a.fecha);
+    const card = ({ t, c }) => { const o = t.op || {}, ab = R.frAb === t.codigo, f1 = c.facturas[0];
+      return `<div class="rb-card rb-fr ${ab ? "ab" : ""}" style="padding:10px 12px;margin:6px 0">
+        <div data-rb="fr-abrir" data-c="${esc(t.codigo)}" style="cursor:pointer">
+          <div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.nombre || t.codigo)}</b><b style="white-space:nowrap">${clp(c.facturado || c.X.total)}</b></div>
+          <div class="muted" style="font-size:.72rem">OC ${esc(o.oc_codigo || o.oc || "")}${f1 ? " · Factura " + esc(String(f1.folio || "s/n")) + (c.facturas.length > 1 ? " +" + (c.facturas.length - 1) : "") : " · sin factura"} · ${esc(empNom(empDe(t)))}</div>
+          <div style="font-size:.74rem;margin-top:3px;display:flex;gap:5px;flex-wrap:wrap">${estTag(c)}</div>
+          <div class="rb-kv" style="font-size:.76rem;margin-top:4px"><span>facturado <b>${clp(c.facturado)}</b></span><span>cobrado <b>${clp(c.cobrado)}</b></span>${prox(c) ? `<span>próximo abono <b>${clp(prox(c).monto)}</b> ${fechaCorta(prox(c).fecha)}</span>` : ""}</div>
+          <div class="rb-kv" style="font-size:.78rem;margin-top:4px"><span style="color:#f5cf6b">💼 pendiente al inversionista <b>${clp(c.pendInv)}</b></span><span style="color:#5ef0b0">🏢 utilidad proyectada <b>${clp(c.empresa)}</b></span></div>
+        </div>${ab ? flujoHTML(t, c) : ""}</div>`; };
+    return `<div class="rb-rchips" style="margin:6px 0">${ST_PER.map(([k, n]) => chip("per", k, n, per === k)).join("")}</div>
+      ${emps.length > 1 ? `<div class="rb-rchips" style="margin:6px 0">${chip("emp", "", "Todas las empresas", !emp)}${emps.map((e) => chip("emp", e, empNom(e), emp === e)).join("")}</div>` : ""}
+      <div class="rb-rchips" style="margin:6px 0">${FR_EST.map(([k, n]) => chip("est", k, n, est === k)).join("")}</div>
+      <div class="rb-marcador" style="margin:8px 0">${tile("💰 Cobrado", tot.cobrado, per === "todo" ? "abonos confirmados" : "abonos del período", "verde")}${tile("⏳ Pendiente de cobro", tot.pend, "facturado − cobrado")}${tile("🏦 Caja para repartir", tot.dispo, "entradas − egresos − reservas", tot.dispo > 0 ? "oro" : "")}</div>
+      <div class="muted" style="font-size:.7rem">Pendiente al inversionista ${clp(tot.inv)} · utilidad proyectada de la empresa ${clp(tot.emp)} · ${L.length} negocio(s)${per !== "todo" ? " · facturado en el período " + clp(tot.fact) : ""}</div>
+      ${L.length ? L.sort((a, b) => (b.c.pendCobro + b.c.disponible) - (a.c.pendCobro + a.c.disponible)).map(card).join("") : `<div class="empty">Ninguna OC aceptada con ese filtro.</div>`}`;
+  }
+  // flujo hacia abajo: OC → Factura → Abonos → Costos y reservas → Reparto (cada monto dice de dónde sale)
+  function flujoHTML(t, c) {
+    const o = t.op || {}, cod = t.codigo, X = c.X, F = R.frForm?.cod === cod ? R.frForm : null;
+    const fila = (lab, v, src, cls) => `<div class="rb-rep ${cls || ""}"><span></span><div><b>${lab}</b><small>${esc(src || "")}</small></div><div style="text-align:right"><b>${typeof v === "number" ? clp(v) : esc(v)}</b></div></div>`;
+    const sec = (ico, tit, inner) => `<div class="rb-fr-sec"><div class="rb-sec">${ico} ${tit}</div>${inner}</div>`;
+    const btnAdd = (tipo, lab) => `<button class="btn small" type="button" data-rb="fr-add" data-tipo="${tipo}" data-c="${esc(cod)}">＋ ${lab}</button>`;
+    const del = (tipo, i) => `<button class="btn small rb-link" type="button" data-rb="fr-del" data-tipo="${tipo}" data-i="${i}" data-c="${esc(cod)}" title="quitar">✕</button>`;
+    const form = (tipo) => F?.tipo !== tipo ? "" : `<div class="rb-fr-form" data-tipo="${tipo}" data-c="${esc(cod)}">
+        ${tipo === "factura" ? `<input class="rb-in fr-folio" placeholder="Folio" inputmode="numeric">` : ""}
+        <input class="rb-in fr-monto" placeholder="Monto $" inputmode="numeric" value="${tipo === "factura" && !c.facturas.length ? X.total.toLocaleString("es-CL") : ""}">
+        <input class="rb-in fr-fecha" type="date" value="${new Date().toISOString().slice(0, 10)}">
+        ${tipo === "abono" ? `<select class="rb-in fr-origen"><option value="factoring">Factoring (líquido)</option><option value="cliente">Cliente / Tesorería</option></select><label style="font-size:.72rem"><input type="checkbox" class="fr-conf" checked> confirmado (si no, queda previsto)</label>` : ""}
+        ${tipo === "aporte" ? `<input class="rb-in fr-quien" placeholder="Quién aporta" value="${esc(o.inversionista_nombre || "")}">` : ""}
+        <div class="rb-row"><button class="btn small rb-oro" type="button" data-rb="fr-save" data-tipo="${tipo}" data-c="${esc(cod)}">Guardar</button><button class="btn small" type="button" data-rb="fr-cancel" data-c="${esc(cod)}">Cancelar</button></div></div>`;
+    const acuerdo = c.acuerdo ? (c.acuerdo.tipo === "monto" ? "monto fijo " + clp(c.acuerdo.v) : (c.acuerdo.v * 100).toFixed(1) + "% " + (c.acuerdo.tipo === "pct_capital" ? "del capital" : "de la utilidad final")) : "sin acuerdo registrado";
+    return `<div class="rb-fr-flujo">
+      ${sec("📦", "Orden de compra", fila("OC " + (o.oc_codigo || o.oc || ""), X.total, `venta con IVA · neto ${clp(X.neto)} + IVA ${clp(X.iva)} · ${esc(o.oc_estado || "")}`))}
+      ${sec("🧾", "Factura" + (c.facturas.length > 1 ? "s" : ""), (c.facturas.length ? c.facturas.map((f, i) => fila("Factura " + (f.folio || "s/n") + (f.implicita ? " (folio de la etapa)" : ""), Math.round(f.monto), "emitida " + fechaCorta(f.fecha) + (f.implicita ? "" : " · " + "registro manual"), "") + (f.implicita ? "" : del("facturas", i))).join("") : fila("Sin registrar", "—", "registra la factura emitida al organismo")) + form("factura") + `<div class="rb-row">${btnAdd("factura", "Factura")}</div>`)}
+      ${sec("💰", "Abonos recibidos", (c.abonos.length ? c.abonos.map((a, i) => fila((a.confirmado === false ? "Previsto · " : "") + (a.origen === "factoring" ? "Factoring" : "Cliente"), Math.round(a.monto), (a.confirmado === false ? "aún no confirmado · " : "") + fechaCorta(a.fecha) + (a.origen === "factoring" ? " · monto líquido: no se descuenta comisión de nuevo" : ""), a.confirmado === false ? "" : "pagado") + (a.implicito ? "" : del("abonos", i))).join("") : fila("Sin registrar", "—", "anota cada depósito del factoring o del cliente (si paga en tramos, uno por tramo)"))
+        + fila("Pendiente de cobro", c.pendCobro, "facturado − cobrado" + (c.previsto ? ` · previsto ${clp(c.previsto)}` : "")) + form("abono") + `<div class="rb-row">${btnAdd("abono", "Abono")}</div>`)}
+      ${sec("🧮", "Costos y reservas", fila("Compra al proveedor", X.compras, (o.proveedor_pagado ? "pagado ✓ · " : "por pagar · ") + X.fuente + " · IVA crédito " + clp(X.iva_compra), o.proveedor_pagado ? "pagado" : "")
+        + (X.transporte ? fila("Flete / despacho", X.transporte, c.fletePag ? "pagado ✓" : "por pagar", c.fletePag ? "pagado" : "") : "")
+        + fila("Reserva IVA (F29)", X.iva_pagar, "IVA venta − IVA compra", o.rp_sii ? "pagado" : "") + fila("Reserva impuesto (PPM)", X.impuesto, (X.p.impuesto * 100).toFixed(1) + "% de la venta neta", o.rp_sii ? "pagado" : "")
+        + (X.factoring ? fila("Comisión factoring (estimada)", X.factoring, (X.p.factoring * 100).toFixed(1) + "% · solo si el abono no vino líquido") : "")
+        + fila("Utilidad final del negocio", X.final, "ingreso − compra − flete − IVA − PPM − comisión cotizador", "oro"))}
+      ${sec("💼", "Inversionista" + (o.inversionista_nombre ? " · " + esc(o.inversionista_nombre) : ""), (c.aportes.length ? c.aportes.map((a, i) => fila("Aporte " + (a.quien ? esc(a.quien) : ""), Math.round(a.monto), fechaCorta(a.fecha)) + del("aportes", i)).join("") : fila("Aporte", c.capital ? c.capital : "Sin registrar", c.src.capital))
+        + (c.devol.length ? c.devol.map((d, i) => fila("Devolución de capital", -Math.round(d.monto), fechaCorta(d.fecha), "pagado") + del("devoluciones", i)).join("") : "")
+        + fila("Capital por devolver", c.capital, "afecta la caja, no la utilidad (la compra ya es costo)") + fila("Ganancia del inversionista", c.invGan, c.src.invGan, c.porConfirmar ? "" : "")
+        + form("aporte") + form("devolucion") + `<div class="rb-row">${btnAdd("aporte", "Aporte")}${btnAdd("devolucion", "Devolución")}<button class="btn small" type="button" data-rb="fr-acuerdo" data-c="${esc(cod)}">🤝 Acuerdo: ${esc(acuerdo)}</button></div>`)}
+      ${sec("🏦", "Reparto", fila("Caja disponible para repartir", c.disponible, c.src.disponible, c.disponible > 0 ? "oro" : "")
+        + fila("💼 Capital del inversionista", c.capital, c.src.capital, o.rp_inversionista ? "pagado" : "") + fila("💼 Ganancia del inversionista", c.invGan, c.src.invGan + (c.porConfirmar ? " · POR CONFIRMAR" : ""), o.rp_inversionista ? "pagado" : "")
+        + fila("🎮 Comisión del cotizador" + (t.persona ? " · " + esc(t.persona) : ""), c.comision, (X.p.comision * 100).toFixed(1) + "% de la utilidad a repartir", o.rp_jugador ? "pagado" : "")
+        + fila("🚚 Pago del ejecutor" + (o.ejecutor_nombre ? " · " + esc(o.ejecutor_nombre) : ""), c.ejec, (X.p.ejecutador * 100).toFixed(1) + "% de la utilidad final", o.rp_ejecutador ? "pagado" : "")
+        + fila("🏢 Utilidad de la empresa", c.empresa, "utilidad final − ganancia inversionista − ejecutor", "oro")
+        + fila("Queda en caja para la empresa hoy", c.quedaEmpresa, "caja disponible − pendientes a inversionista, cotizador y ejecutor")
+        + `<div class="muted" style="font-size:.66rem;margin-top:4px">Cuadre: ${clp(c.invGan)} + ${clp(c.ejec)} + ${clp(c.empresa)} = ${clp(c.invGan + c.ejec + c.empresa)} = utilidad final ${clp(X.final)} ${c.invGan + c.ejec + c.empresa === X.final ? "✓" : "✗"}</div>
+        <div class="rb-row" style="margin-top:6px"><button class="btn small rb-oro" type="button" data-rb="oc-ir" data-e="cerrado" data-c="${esc(cod)}">💸 Marcar pagos del reparto</button></div>`)}</div>`;
   }
   // 🏟️ ESTADÍSTICAS tipo marcador: hoy / semana / mes · metidas (firmadas en MP), salieron (OC), dieron / no dieron,
   //    vendido, utilidad y a dónde se fue la plata. Por empresa y por cotizador. Fuente: todos los trabajos de la nube.
@@ -5173,6 +5284,32 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "global-cerrar") { R.pantalla = null; return pintarHoja(true); }
     if (a === "oc-estudiar") { R.pantalla = null; R.ejAbierto = cod; R.ejTab = "operacion"; cargarEjecuta(); pintarHoja(true); const t = (R.todos || R.data?.trabajos || []).find((x) => x.codigo === cod); if (t && !t.op?.concrecion) concretarPedir(cod, false, false); return; }
     if (a === "oc-ejecutar") { R.pantalla = null; R.ejAbierto = cod; R.ejTab = "operacion"; cargarEjecuta(); return pintarHoja(true); }
+    if (a === "fr-f") { R["fr" + { per: "Per", emp: "Emp", est: "Est" }[b.dataset.k]] = b.dataset.v; return pintarHoja(true); }
+    if (a === "fr-abrir") { R.frAb = R.frAb === cod ? null : cod; R.frForm = null; return pintarHoja(true); }
+    if (a === "fr-add") { R.frAb = cod; R.frForm = { cod, tipo: b.dataset.tipo }; pintarHoja(true); setTimeout(() => document.querySelector(".rb-fr-form .fr-monto")?.focus(), 80); return; }
+    if (a === "fr-cancel") { R.frForm = null; return pintarHoja(true); }
+    if (a === "fr-save") { const f = document.querySelector(`.rb-fr-form[data-c="${CSS.escape(cod)}"]`); if (!f) return; const tipo = b.dataset.tipo;
+      const monto = +(f.querySelector(".fr-monto")?.value || "").replace(/\D/g, "") || 0; if (!monto) { toast("Escribe el monto"); return; }
+      const reg = { monto, fecha: f.querySelector(".fr-fecha")?.value || new Date().toISOString().slice(0, 10), t: new Date().toISOString() };
+      if (tipo === "factura") reg.folio = (f.querySelector(".fr-folio")?.value || "").trim();
+      if (tipo === "abono") { reg.origen = f.querySelector(".fr-origen")?.value || "factoring"; reg.confirmado = !!f.querySelector(".fr-conf")?.checked; }
+      if (tipo === "aporte") reg.quien = (f.querySelector(".fr-quien")?.value || "").trim();
+      const t = trabajoG(cod), key = { factura: "facturas", abono: "abonos", aporte: "aportes", devolucion: "devoluciones" }[tipo]; const lista = [...(Array.isArray(t?.op?.[key]) ? t.op[key] : [])];
+      if (tipo === "factura" && !lista.length && t?.op?.folio_factura && !reg.folio) reg.folio = t.op.folio_factura;
+      lista.push(reg); const datos = { [key]: lista };
+      if (tipo === "factura" && reg.folio) datos.folio_factura = reg.folio;
+      if (tipo === "abono") { const conf = lista.filter((x) => x.confirmado !== false).reduce((s, x) => s + (Number(x.monto) || 0), 0); datos.cobrado = conf || null; if (reg.confirmado && reg.fecha) datos.fecha_cobro = reg.fecha; }
+      if (tipo === "aporte") datos.transferido = true;
+      R.frForm = null;
+      try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos, dispositivo: dispositivo(false) }) }); toast("✓ Registrado"); await refrescar(); R.ejecT = 0; cargarEjecuta(); } catch (e) { toast(e.message); } return pintarHoja(true); }
+    if (a === "fr-del") { const t = trabajoG(cod), key = b.dataset.tipo, i = +b.dataset.i; const lista = [...(Array.isArray(t?.op?.[key]) ? t.op[key] : [])]; if (!lista[i]) return; lista.splice(i, 1);
+      const datos = { [key]: lista }; if (key === "abonos") datos.cobrado = lista.filter((x) => x.confirmado !== false).reduce((s, x) => s + (Number(x.monto) || 0), 0) || null;
+      try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos, dispositivo: dispositivo(false) }) }); toast("Quitado"); await refrescar(); R.ejecT = 0; cargarEjecuta(); } catch (e) { toast(e.message); } return pintarHoja(true); }
+    if (a === "fr-acuerdo") { const v = (prompt("Acuerdo con el inversionista para este negocio:\n• 15.6%  → % de la utilidad final\n• 13.5% capital → % sobre el capital aportado\n• 808859 → monto fijo en pesos\n(vacío = quitar)", "") || "").trim();
+      let acuerdo = null; const n = parseFloat(v.replace(",", ".").replace(/[^\d.]/g, ""));
+      if (v && !isNaN(n)) acuerdo = /%/.test(v) ? { tipo: /capital/i.test(v) ? "pct_capital" : "pct", v: n / 100 } : { tipo: "monto", v: Math.round(n) };
+      if (!v && !confirm("¿Quitar el acuerdo registrado?")) return;
+      try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos: { inv_acuerdo: acuerdo }, dispositivo: dispositivo(false) }) }); toast(acuerdo ? "🤝 Acuerdo guardado" : "Acuerdo quitado"); await refrescar(); R.ejecT = 0; cargarEjecuta(); } catch (e) { toast(e.message); } return pintarHoja(true); }
     if (a === "oc-ir") { R.pantalla = null; guardar({ portal: "ejecuta" }); R.ejAbierto = cod; R.ejTab = b.dataset.e || "operacion"; cargarEjecuta(); return pintarHoja(true); }
     if (a === "oc-factoring") { R.pantalla = null; guardar({ portal: "ejecuta" }); R.ejAbierto = cod; R.ejTab = "cerrado"; await cargarEjecuta(); const F = factorings();
       if (!F.length) { R.libroEj = true; toast("Agrega los factorings en 📒 Libro y caja para pedir la simulación"); return pintarHoja(true); }

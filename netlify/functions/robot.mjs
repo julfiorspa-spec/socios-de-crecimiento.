@@ -1730,12 +1730,19 @@ async function atender(req) {
       "ejecutor", "ejecutor_nombre", "plazo_proveedor", "fecha_entrega", "banco_proveedor", "negociacion", "plazo_fecha", "plazo_nota", "incidencia",
       "transportista", "transportista_tel", "origen_flete", "patente", "recibio_nombre", "recibio_rut", "fecha_cobro", "inversionista_nombre", "inversionista_tel", "despacho_modo", "proveedor_k", "proveedor_email", "proveedor_tel", "entrega_contacto", "entrega_tel", "vehiculo", "factoring", "nota_cierre", "twitch_canal", "video_prueba", "inversionista_banco", "ejecutor_banco", "jugador_banco"]) if (d[k] !== undefined) op[k] = texto(d[k], 400);
     for (const k of ["precio_acordado", "costo_transporte", "opcion", "km", "cobrado"]) if (d[k] !== undefined) op[k] = d[k] === null ? null : Math.max(0, Math.round(Number(d[k]) || 0));
+    // 🧾 caja real: facturas, abonos, aportes y devoluciones (listas de movimientos en pesos enteros) · acuerdo del inversionista
+    const mov = (xs, extra) => (Array.isArray(xs) ? xs : []).slice(0, 40).map((x) => ({ monto: Math.max(0, Math.round(Number(x?.monto) || 0)), fecha: texto(x?.fecha, 10) || null, t: texto(x?.t, 30) || ahora(), ...extra(x || {}) })).filter((x) => x.monto > 0);
+    if (d.facturas !== undefined) op.facturas = mov(d.facturas, (x) => ({ folio: texto(x.folio, 20) }));
+    if (d.abonos !== undefined) op.abonos = mov(d.abonos, (x) => ({ origen: x.origen === "cliente" ? "cliente" : "factoring", confirmado: x.confirmado !== false }));
+    if (d.aportes !== undefined) op.aportes = mov(d.aportes, (x) => ({ quien: texto(x.quien, 60) }));
+    if (d.devoluciones !== undefined) op.devoluciones = mov(d.devoluciones, () => ({}));
+    if (d.inv_acuerdo !== undefined) op.inv_acuerdo = d.inv_acuerdo && ["pct", "pct_capital", "monto"].includes(d.inv_acuerdo.tipo) && Number(d.inv_acuerdo.v) > 0 ? { tipo: d.inv_acuerdo.tipo, v: Number(d.inv_acuerdo.v) } : null;
     if (Array.isArray(d.pagos)) {                                    // 💸 a quién le compré: nombre + monto neto + factura (varias personas)
       op.pagos = d.pagos.slice(0, 12).map((x) => ({ nombre: texto(x?.nombre, 60) || "", monto: Math.max(0, Math.round(Number(x?.monto) || 0)), factura: x?.factura !== false, ...(Array.isArray(x?.unit) ? { unit: x.unit.slice(0, 8).map((u) => Math.max(0, Math.round(Number(u) || 0))) } : {}), ...(x?.tipo === "neto" || x?.tipo === "bruto" ? { tipo: x.tipo } : {}) })).filter((x) => x.nombre || x.monto);
       op.precio_acordado = Math.round(op.pagos.reduce((s, x) => s + x.monto * (x.factura ? 1.19 : 1), 0)); op.sin_factura = op.pagos.length > 0 && op.pagos.every((x) => !x.factura);
     }
     const yaPedido = !!op.pedido_transferencia, yaTransf = !!op.transferido;
-    for (const k of ["inversion_ok", "compra_ok", "despacho_ok", "guia_firmada", "factura_firmada", "aplica_comision", "nos_da", "proveedor_pagado", "guia_hecha", "factura_hecha", "oc_aceptada", "pedido_transferencia", "transferido", "rp_inversionista", "rp_ejecutador", "rp_jugador", "rp_sii", "sin_factura"]) if (d[k] !== undefined) op[k] = !!d[k];
+    for (const k of ["inversion_ok", "compra_ok", "despacho_ok", "guia_firmada", "factura_firmada", "aplica_comision", "nos_da", "proveedor_pagado", "guia_hecha", "factura_hecha", "oc_aceptada", "pedido_transferencia", "transferido", "flete_pagado", "rp_inversionista", "rp_ejecutador", "rp_jugador", "rp_sii", "sin_factura"]) if (d[k] !== undefined) op[k] = !!d[k];
     if (d.comision !== undefined) op.comision = Math.min(0.10, Math.max(0.01, Number(d.comision) || 0.04));
     // 📨 el juego de los proveedores: a quién le escribiste/llamaste y qué precio te dio cada uno
     if (d.contactado && typeof d.contactado === "object") {
