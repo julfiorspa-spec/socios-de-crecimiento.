@@ -2105,11 +2105,11 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   async function simular(cod, opts = {}) {
     R._sim = R._sim || {}; const S = R._sim[cod] = { fase: "req", msg: "", err: null, ...(R._sim[cod] || {}), corriendo: true }; pintarHoja(true);
     try {
-      let r = await api("simular", { method: "POST", body: JSON.stringify({ codigo: cod, fase: "req", forzar: !!opts.forzar, continuar_sin_adjunto: !!opts.sinAdjunto, req_texto: opts.req_texto || null, req_nombre: opts.req_nombre || null }) });
+      let r = await api("simular-oc", { method: "POST", body: JSON.stringify({ codigo: cod, fase: "req", forzar: !!opts.forzar, continuar_sin_adjunto: !!opts.sinAdjunto, req_texto: opts.req_texto || null, req_nombre: opts.req_nombre || null }) });
       S.req = r.req; if (r.siguiente === "falta_adjunto") { S.fase = "falta_adjunto"; S.corriendo = false; return pintarHoja(true); }
-      S.fase = "partidas"; pintarHoja(true); r = await api("simular", { method: "POST", body: JSON.stringify({ codigo: cod, fase: "partidas" }) }); S.n = r.n; S.msg = r.resumen || "";
-      S.fase = "costeo"; for (let k = 0; k < 30; k++) { pintarHoja(true); r = await api("simular", { method: "POST", body: JSON.stringify({ codigo: cod, fase: "costeo" }) }); S.msg = r.hecha ? "costeada: " + r.hecha + (r.faltan ? " · faltan " + r.faltan : "") : ""; if (r.siguiente !== "costeo") break; }
-      if (r.fase !== "listo") r = await api("simular", { method: "POST", body: JSON.stringify({ codigo: cod, fase: "listo" }) });
+      S.fase = "partidas"; pintarHoja(true); r = await api("simular-oc", { method: "POST", body: JSON.stringify({ codigo: cod, fase: "partidas" }) }); S.n = r.n; S.msg = r.resumen || "";
+      S.fase = "costeo"; for (let k = 0; k < 30; k++) { pintarHoja(true); r = await api("simular-oc", { method: "POST", body: JSON.stringify({ codigo: cod, fase: "costeo" }) }); S.msg = r.hecha ? "costeada: " + r.hecha + (r.faltan ? " · faltan " + r.faltan : "") : ""; if (r.siguiente !== "costeo") break; }
+      if (r.fase !== "listo") r = await api("simular-oc", { method: "POST", body: JSON.stringify({ codigo: cod, fase: "listo" }) });
       S.fase = "listo"; S.corriendo = false; R.ejecT = 0; await cargarEjecuta(); if (R.ocFull?.[cod]) R.ocFull[cod] = null;
     } catch (e) { S.err = e.message; S.corriendo = false; }
     pintarHoja(true);

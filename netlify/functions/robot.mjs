@@ -1393,8 +1393,8 @@ async function siiIngesta(req) {
   }
   if (b.accion === "fotos_ultimo") return new Response(JSON.stringify({ ok: true, u: await store.get("robot/fotos_ultimo", { type: "json" }) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   if (b.accion === "foto") return new Response(JSON.stringify({ ok: true, ...(await buscarFotos(b.q)) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
-  if (b.accion === "simular") {   // diagnóstico temporal: corre la simulación de una OC (misma lógica que /bot/simular)
-    const r2 = await atender(new Request(new URL(req.url).origin + "/bot/simular", { method: "POST", headers: { "x-robot-token": process.env.ROBOT_TOKEN || "", "content-type": "application/json" }, body: JSON.stringify({ codigo: b.codigo, fase: b.fase || "req", forzar: !!b.forzar, continuar_sin_adjunto: !!b.continuar_sin_adjunto, req_texto: b.req_texto || null, req_nombre: b.req_nombre || null }) }));
+  if (b.accion === "simular_oc") {   // diagnóstico temporal: corre la simulación de una OC (misma lógica que /bot/simular)
+    const r2 = await atender(new Request(new URL(req.url).origin + "/bot/simular-oc", { method: "POST", headers: { "x-robot-token": process.env.ROBOT_TOKEN || "", "content-type": "application/json" }, body: JSON.stringify({ codigo: b.codigo, fase: b.fase || "req", forzar: !!b.forzar, continuar_sin_adjunto: !!b.continuar_sin_adjunto, req_texto: b.req_texto || null, req_nombre: b.req_nombre || null }) }));
     const j2 = await r2.json().catch(() => ({})); return new Response(JSON.stringify(j2), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   }
   if (b.accion === "cotejo") {   // diagnóstico temporal: recalcula y guarda el cotejo OC↔oferta de un trabajo (misma regla que el estudio)
@@ -1716,7 +1716,7 @@ async function atender(req) {
     return json({ ok: true, repetido: r.repetido, mov: r.mov, resumen: resumenLibro(r.libro.movs) });
   }
 
-  if (ruta === "simular" && req.method === "POST") {   // 🔵 trabajo de simulación por fases para una OC
+  if (ruta === "simular-oc" && req.method === "POST") {   // 🔵 trabajo de simulación por fases para una OC
     const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return json({ error: "No existe." }, 404);
     t.op = t.op || { etapa: "ganada", historial: [] }; const op = t.op; const fase = String(b.fase || "req");
     if (b.req_texto) { op.req_adjunto = { texto: String(b.req_texto).slice(0, 40000), nombre: texto(b.req_nombre, 120) || "requerimiento adjuntado", t: ahora() }; op.simulacion_tmp = null; }
