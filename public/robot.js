@@ -316,6 +316,8 @@
   .btn.rb-firmar{background:linear-gradient(100deg,#7c4dff,#5a2fd6);border-color:transparent;color:#fff}
   .rb-pasos{margin:10px 0 0;padding-left:18px;font-size:.8rem;color:var(--ink-dim);line-height:1.55}
   .rb-copias{width:100%;border-collapse:collapse;margin-top:8px;font-size:.78rem}
+  .rb-negocia{background:#1a1f14;border:1px solid #5ef0b033;border-radius:10px;padding:6px 8px;margin-top:6px}
+  .rb-ol{margin:4px 0 0 18px;padding:0}.rb-ol li{margin:2px 0}.rb-ul{margin:4px 0 0 16px;padding:0}
   .rb-stiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0}
   .rb-stile{background:var(--bg-soft,#161a20);border:1px solid var(--line-soft,#2a3039);border-radius:14px;padding:10px 12px;min-width:0}
   .rb-stile.mal{border-color:#e5484d55}.rb-stile-l{font-size:.68rem;opacity:.8;text-transform:uppercase;letter-spacing:.04em}
@@ -1757,6 +1759,9 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     try { const [a, b] = await Promise.all([api("ejecuta?todos=1&ejecutor=" + miJug()), api("ejecutores")]); R.ejec = a.negocios || []; R.ejecutores = b.ejecutores || {}; R.ejecT = Date.now(); }
     catch (e) { R.ejec = R.ejec || []; toast(e.message); }
     R._cargEj = false; pintarHoja(true);
+    // 🎯 OC recién llegada sin plan: se arma solo (una por vez) y avisa al ejecutador
+    const pend = (R.ejec || []).find((t) => t.op?.concretar_pendiente && !t.op?.concrecion && !(R._concretando || {})[t.codigo]);
+    if (pend && !R._autoConc) { R._autoConc = true; concretarPedir(pend.codigo, false, true).finally(() => { R._autoConc = false; }); }
   }
   async function cargarEjecutores() { try { R.ejecutores = (await api("ejecutores")).ejecutores || {}; } catch {} pintarHoja(true); }
   const buscarEn = (q) => [["Google", "https://www.google.com/search?tbm=shop&q="], ["Marketplace", "https://www.facebook.com/marketplace/search/?query="], ["MercadoLibre", "https://listado.mercadolibre.cl/"], ["Sodimac", "https://www.sodimac.cl/sodimac-cl/search?Ntt="], ["Lider", "https://www.lider.cl/search?q="]]
@@ -1867,7 +1872,8 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const filas = (c.items || []).map((it) => { const el = it.elegido, k = String(it.i), hecho = conc[k];
       const alt = (it.alternativas || []).filter((a) => a.url && (!el || a.url !== el.url)).slice(0, 3);
       const pu = hecho?.precio_unit_iva || el?.precio_unit_iva || null, costoU = pu ? Math.round(pu / 1.19) : null, gan = costoU != null ? (it.venta_unit_neto - costoU) * it.cantidad : null;
-      const tel = telNum(el?.telefono), wa = waNum(el?.telefono);
+      const tel = telNum(el?.telefono), wa = waNum(el?.telefono), ng = it.negociacion || {};
+      const cierreU = Number((R._cierre || {})[cod + ":" + k]) || 0, cierreN = cierreU ? Math.round(cierreU / 1.19) : 0, ganC = cierreU ? (it.venta_unit_neto - cierreN) * it.cantidad : null;
       return `<div class="rb-op ${hecho ? "on" : ""}"><div class="rb-env"><b>${esc(it.cantidad)} × ${esc(String(it.item).slice(0, 70))}</b><span class="muted" style="font-size:.68rem">vendes ${f(it.venta_unit_neto)} neto c/u</span></div>
         ${el ? `<div style="font-size:.78rem;margin:4px 0"><b>${el.tipo === "proveedor" ? "📞 " : "🛒 "}${esc(el.titulo || el.proveedor || "")}</b>${el.fuente || (el.url ? " · " + esc(String(el.url).replace(/^https?:\/\/(www\.)?/, "").split("/")[0]) : "")}
             ${pu ? ` · <b>${f(pu)}</b> c/u con IVA` : ' · <span style="color:#f5cf6b">sin precio en la página: pídelo</span>'}</div>
@@ -1877,7 +1883,11 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         <div class="rb-row" style="margin-top:4px">${el?.url ? `<a class="btn small rb-oro" href="${esc(el.url)}" target="_blank" rel="noopener">🌐 Abrir y comprar</a>` : ""}
           ${tel ? `<a class="btn small" href="tel:${esc(tel)}">📞 Llamar</a>` : ""}${wa ? `<a class="btn small" href="https://wa.me/${wa}" target="_blank" rel="noopener">💬</a>` : ""}
           ${el ? (hecho ? `<span class="rb-cerraste" style="flex:1"><span>✅ Concretado${hecho.precio_unit_iva ? " a " + f(hecho.precio_unit_iva) + " c/u" : ""}</span><button class="btn small" type="button" data-rb="ej-desconcretar" data-c="${esc(cod)}" data-i="${k}">Quitar</button></span>`
-            : `<button class="btn small rb-firmar" type="button" data-rb="ej-concrete" data-c="${esc(cod)}" data-i="${k}">✅ Concreté aquí</button>`) : ""}</div>
+            : `<button class="btn small" type="button" data-rb="ej-concrete" data-c="${esc(cod)}" data-i="${k}" title="Sin negociar: toma el precio de lista">✅ Concreté al precio de lista</button>`) : ""}</div>
+        ${el && !hecho ? `<div class="rb-negocia"><div style="font-size:.74rem"><b>🎯 Llega a ${f(ng.objetivo_iva)}</b> c/u con IVA · tope <b>${f(ng.maximo_iva)}</b> (bajo eso ganas ≥ 20 %)${pu && pu > ng.maximo_iva ? ' · <span style="color:#f5cf6b">el precio de lista supera el tope: negocia o cambia de proveedor</span>' : ""}</div>
+          ${ng.guion ? `<details class="rb-det" open><summary>🗣️ Qué decir</summary><div class="rb-resp" style="font-size:.74rem">${esc(ng.guion)}</div>${(ng.argumentos || []).length ? `<ul class="rb-ul" style="font-size:.7rem">${ng.argumentos.map((a) => `<li>${esc(a)}</li>`).join("")}</ul>` : ""}</details>` : ""}
+          <div class="rb-row" style="align-items:center;gap:6px;margin-top:4px"><span style="font-size:.74rem">¿A qué precio cerraste?</span><input class="rb-in rb-cierre" inputmode="numeric" placeholder="$ c/u con IVA" data-c="${esc(cod)}" data-i="${k}" value="${cierreU || ""}" style="max-width:130px">
+            ${cierreU ? `<span style="font-size:.74rem">${ganC >= 0 ? `✅ ganas <b class="rb-vivo-t">${f(ganC)}</b>` : `❌ pierdes <b class="rb-neg-t">${f(-ganC)}</b>`}</span><button class="btn small rb-firmar" type="button" data-rb="ej-concrete" data-c="${esc(cod)}" data-i="${k}" data-precio="${cierreU}">${ganC >= 0 ? "Aceptar" : "Aceptar igual"}</button>` : ""}</div></div>` : ""}
         ${alt.length ? `<details class="rb-det"><summary>Otras opciones (${alt.length})</summary>${alt.map((a) => `<div class="rb-resp" style="font-size:.72rem"><a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(String(a.titulo || a.url).slice(0, 70))}</a>${a.precio_unit_iva || a.precio_iva ? ` · ${f(a.precio_unit_iva || a.precio_iva)}` : ""}</div>`).join("")}</details>` : ""}
         ${(it.propios || []).length ? `<div class="muted" style="font-size:.66rem">🧾 Ya le compraste parecido a: ${it.propios.map((p) => `${esc(p.proveedor)} (${esc(String(p.producto).slice(0, 40))} · ${f(p.precio_unit_neto)} neto)`).join(" · ")}</div>` : ""}</div>`; }).join("");
     const T = c.total || {}, hechos = Object.keys(conc).length, n = (c.items || []).length;
@@ -1885,12 +1895,13 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
       <div class="rb-barra"><i style="width:${n ? Math.min(100, hechos / n * 100) : 0}%"></i></div>
       <div style="font-size:.78rem;margin:4px 0">Venta neta <b>${f(T.venta_neto)}</b>${T.ganancia != null ? ` · costo ${f(T.costo_neto)} · <b class="rb-vivo-t">ganancia ${f(T.ganancia)}</b>` : T.ganancia_parcial ? ` · ganancia parcial ${f(T.ganancia_parcial)}` : ""}${T.sin_precio ? ` · <span style="color:#f5cf6b">${T.sin_precio} ítem(s) sin precio aún</span>` : ""}</div>
       ${c.resumen ? `<div class="muted" style="font-size:.7rem">🤖 ${esc(c.resumen)}</div>` : ""}${c.aviso ? `<div class="muted" style="font-size:.66rem">⚠ ${esc(c.aviso)}</div>` : ""}
+      ${(c.pasos || []).length ? `<details class="rb-det" ${hechos ? "" : "open"}><summary>📋 Paso a paso para concretar</summary><ol class="rb-ol" style="font-size:.74rem">${c.pasos.map((p) => `<li>${esc(p)}</li>`).join("")}</ol></details>` : ""}
       ${filas}
       <div class="rb-row"><button class="btn small" type="button" data-rb="ej-concretar" data-c="${esc(cod)}" data-forzar="1" ${cargando ? "disabled" : ""}>${cargando ? '<span class="spinner"></span> buscando…' : "🔄 Buscar de nuevo"}</button><span class="muted" style="font-size:.64rem;align-self:center">${esc(hace(c.t))}</span></div></div>`;
   }
-  async function concretarPedir(cod, forzar) {
+  async function concretarPedir(cod, forzar, auto) {
     R._concretando = { ...(R._concretando || {}), [cod]: true }; pintarHoja(true);
-    try { await api("concretar", { method: "POST", body: JSON.stringify({ codigo: cod, forzar: !!forzar }) }); toast("🎯 Plan listo: dónde comprar y cuánto ganas"); }
+    try { await api("concretar", { method: "POST", body: JSON.stringify({ codigo: cod, forzar: !!forzar, auto: !!auto }) }); toast("🎯 Plan listo: dónde comprar y cuánto ganas"); }
     catch (e) { toast(e.message || "No pude armar el plan"); }
     finally { delete R._concretando[cod]; R.ejecT = 0; await cargarEjecuta(); pintarHoja(true); }
   }
@@ -4908,8 +4919,8 @@ ${empNom}`;
     if (a === "ej-modo") { R.ejModo = b.dataset.m || null; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "ej-concretar") { R.ejAbierto = cod; return concretarPedir(cod, b.dataset.forzar === "1"); }
     if (a === "ej-concrete" || a === "ej-desconcretar") { const t = tEj(); if (!t) return; const op = t.op || {}, c = op.concrecion || {}, conc = { ...(op.concretados || {}) };
-      if (a === "ej-concrete") { const it = (c.items || []).find((x) => String(x.i) === b.dataset.i); if (!it || !it.elegido) return; const el = it.elegido;
-        conc[b.dataset.i] = { titulo: el.titulo || el.proveedor || "", url: el.url || "", fuente: el.fuente || "", proveedor: el.proveedor || "", telefono: el.telefono || "", precio_unit_iva: el.precio_unit_iva || 0, cantidad: it.cantidad }; }
+      if (a === "ej-concrete") { const it = (c.items || []).find((x) => String(x.i) === b.dataset.i); if (!it || !it.elegido) return; const el = it.elegido; const pc = Number(b.dataset.precio) || 0;
+        conc[b.dataset.i] = { titulo: el.titulo || el.proveedor || "", url: el.url || "", fuente: el.fuente || "", proveedor: el.proveedor || "", telefono: el.telefono || "", precio_unit_iva: pc || el.precio_unit_iva || 0, cantidad: it.cantidad }; }
       else delete conc[b.dataset.i];
       const L = Object.values(conc), total = L.reduce((s2, x) => s2 + (x.precio_unit_iva || 0) * (x.cantidad || 0), 0);
       const prov = [...new Set(L.map((x) => x.proveedor || x.fuente || (x.url ? String(x.url).replace(/^https?:\/\/(www\.)?/, "").split("/")[0] : "")).filter(Boolean))].join(" + ");
@@ -5553,6 +5564,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
   sheet.addEventListener("input", (ev) => {            // 🏭 buscar en la base de proveedores del grupo
     if (ev.target.id === "rbProvQ") { R.provQ = ev.target.value; const pos = sheet.scrollTop; pintarHoja(true); sheet.scrollTop = pos; const q = $("#rbProvQ"); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
     if (ev.target.id === "rbProvTodos") { R.provTodos = ev.target.checked; pintarHoja(true); }
+    if (ev.target.classList.contains("rb-cierre")) { R._cierre = { ...(R._cierre || {}), [ev.target.dataset.c + ":" + ev.target.dataset.i]: ev.target.value.replace(/\D/g, "") }; const pos = sheet.scrollTop; pintarHoja(true); sheet.scrollTop = pos; const q = sheet.querySelector(`.rb-cierre[data-c="${ev.target.dataset.c}"][data-i="${ev.target.dataset.i}"]`); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
   });
   sheet.addEventListener("input", (ev) => {            // 🔎 Buscar (modo ejecutivo) en vivo
     if (ev.target.id !== "rbExQ") return; R.exQ = ev.target.value; const pos = sheet.scrollTop; R.toque = 0; pintarHoja(true); sheet.scrollTop = pos; const q = $("#rbExQ"); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); }

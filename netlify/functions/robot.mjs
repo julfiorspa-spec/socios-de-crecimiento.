@@ -480,7 +480,7 @@ async function transicion(store, t, g) {
   if (g.ganada) {
     if (!op || op.etapa === "previa") {
       t.op = { ...(op || {}), etapa: "ganada", historial: [...((op || {}).historial || []), { t: ahora(), etapa: "ganada" }],
-        pedido_informe: (op || {}).pedido_informe || { t: ahora() }, oc: g.oc || (op || {}).oc || null };
+        pedido_informe: (op || {}).pedido_informe || { t: ahora() }, oc: g.oc || (op || {}).oc || null, concretar_pendiente: !(op || {}).concrecion };
       await escribir(store, t);
       await avisarTexto(store, "🏆 ¡Te seleccionaron! " + t.codigo, `${nom} · ${g.oc ? "OC " + g.oc : "proveedor seleccionado (la OC viene en camino)"}. Abre Negocios: proveedores, utilidad y ejecutor listos.`, "sel-" + t.codigo, "/#robot", true).catch(() => {});
     } else if (g.oc && !op.oc) { op.oc = g.oc; await escribir(store, t); }
@@ -566,6 +566,7 @@ async function enlazarOC(store, o) {
   const llego = !op.oc_codigo && !(t && t.op && t.op.oc);          // aviso solo si es la primera noticia de esta OC
   op.oc = op.oc || o.codigo; op.oc_codigo = o.codigo; op.oc_estado = o.estado;
   if (!op.pedido_informe && !op.informe) op.pedido_informe = { t: ahora() };
+  if (!op.concrecion) op.concretar_pendiente = true;   // 🎯 al llegar la OC: plan de concreción (links, teléfonos, precios, guion) para el ejecutador
   x.op = op;
   await escribir(store, x);
   if (llego) await avisarTexto(store, "📦 ¡Orden de compra! " + o.codigo,
@@ -853,10 +854,13 @@ async function concretar(store, t, opts = {}) {
   if (key) {
     const prompt = `Eres el jefe de compras de ${t.empresa_nombre || "PJANIC SpA"} (proveedor del Estado de Chile). Ganamos la compra ágil ${t.codigo} (${t.nombre || ""}) del organismo ${t.oc_compra?.organismo || t.organismo || ""}; OC ${t.op?.oc_codigo || ""}. Entrega: ${t.oc_compra?.direccion || t.op?.informe?.direccion || "(ver OC)"}.
 Para cada ítem cotizado te doy: lo que ofrecimos (texto de nuestra cotización), cantidad, precio unitario NETO de venta, candidatos REALES encontrados en tiendas (título, link, precio con IVA leído de la página; null si no se pudo leer) y PROVEEDORES PROPIOS: empresas a las que el grupo (PJANIC, Julfior, Barasal) ya les compró según facturas del SII, con rubro, lo que se les compró y precio; prefiérelos cuando calcen porque ya hay relación comercial, y en ese caso elegido.tipo="proveedor" con su nombre y teléfono si viene.
+Además, para cada ítem te doy los números de negociación: precio_objetivo_iva (lo que debemos conseguir pidiendo descuento por volumen) y precio_maximo_iva (sobre ese precio el negocio deja de convenir: margen mínimo 20 %). Escribe para cada ítem un "guion" corto de llamada/chat con el proveedor (2–4 frases, tono chileno profesional: quién somos, qué compramos, cantidad, que es para una orden de compra del Estado con pago seguro, pedir precio por volumen, plazo y despacho a la dirección) y 2–3 "argumentos" de negociación (volumen, pago contra factura/OC pública, recompra futura, retiro propio, competencia de otra tienda con precio X).
+Y un "pasos" global: lista ordenada de 4–7 pasos concretos para el ejecutador desde ahora hasta entregar (a quién llamar primero y por qué, qué confirmar, cuándo comprar, cómo despachar, qué documento adjuntar), cada paso una frase.
 Tu trabajo: decir dónde concretar cada ítem. REGLAS: (1) usa SOLO links y proveedores de la lista; jamás inventes tiendas, teléfonos ni precios: si un candidato no trae precio, pon precio_unit_iva null y dilo; (2) el producto elegido debe cumplir lo cotizado (capacidad, medidas, uso médico/industrial si lo dice el texto); si ninguno calza, elegido null y explica qué buscar; (3) explica en una frase por qué calza con lo que cotizamos y por qué cotizamos así (p. ej. "cotizamos caja isotérmica 16 L para cadena de frío: este cooler rígido de 15–16 L lo cumple"); (4) alerta riesgos (stock, plazo, producto chino con envío internacional no sirve para entregar en 3 días).
-Responde SOLO JSON compacto (una línea, sin comentarios, strings cortas sin comillas internas, máximo 2 alternativas por ítem): {"items":[{"i":<índice>,"elegido":{"tipo":"link"|"proveedor","titulo":"","url":"","proveedor":"","telefono":"<solo si el candidato trae telefono>","precio_unit_iva":<número o null>,"porque":"<máx 160 caracteres>"}|null,"alternativas":[{"titulo":"","url":"","precio_unit_iva":<número o null>}],"riesgo":"<máx 120>","buscar":"<máx 120>"}],"resumen":"<2 frases: qué hacer primero y cuánto se gana>"}
+Responde SOLO JSON compacto (una línea, sin comentarios, strings cortas sin comillas internas, máximo 2 alternativas por ítem): {"items":[{"i":<índice>,"elegido":{"tipo":"link"|"proveedor","titulo":"","url":"","proveedor":"","telefono":"<solo si el candidato trae telefono>","precio_unit_iva":<número o null>,"porque":"<máx 160 caracteres>"}|null,"alternativas":[{"titulo":"","url":"","precio_unit_iva":<número o null>}],"riesgo":"<máx 120>","buscar":"<máx 120>","guion":"<máx 400>","argumentos":["<máx 100>"]}],"pasos":["<paso 1>","<paso 2>"],"resumen":"<2 frases: qué hacer primero y cuánto se gana>"}
 
-` + porItem.map((x, i) => `ÍTEM ${i}: "${x.item.d}" · cantidad ${x.item.q} · venta unit. neto $${x.item.p}\n  candidatos: ${JSON.stringify(x.candidatos)}\n  propios: ${JSON.stringify(x.propios)}`).join("\n\n");
+` + porItem.map((x, i) => { const mejor = x.candidatos.filter((c) => c.precio_iva && !c.sin_stock).sort((a, b2) => a.precio_iva - b2.precio_iva)[0]; const maxIva = Math.round(x.item.p * 0.8 * 1.19); const obj = Math.min(maxIva, Math.round((mejor?.precio_iva || maxIva) * 0.9));
+      return `ÍTEM ${i}: "${x.item.d}" · cantidad ${x.item.q} · venta unit. neto $${x.item.p} · precio_objetivo_iva $${obj} · precio_maximo_iva $${maxIva}\n  candidatos: ${JSON.stringify(x.candidatos)}\n  propios: ${JSON.stringify(x.propios)}`; }).join("\n\n");
     try {
       const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
         body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5", max_tokens: 4500, messages: [{ role: "user", content: prompt }] }), signal: AbortSignal.timeout(28000) });
@@ -880,13 +884,16 @@ Responde SOLO JSON compacto (una línea, sin comentarios, strings cortas sin com
     if (el) { const cand = x.candidatos.find((c) => c.url === el.url); el.telefono = cand?.telefono || (x.candidatos.some((c) => c.telefono === el.telefono) ? el.telefono : null); el.fuente = el.fuente || cand?.fuente || null; }
     const costoU = el?.precio_unit_iva ? Math.round(el.precio_unit_iva / 1.19) : null;
     const ventaU = x.item.p, q = x.item.q;
+    const mejor = x.candidatos.filter((c) => c.precio_iva && !c.sin_stock).sort((a, b2) => a.precio_iva - b2.precio_iva)[0];
+    const maximo_iva = Math.round(ventaU * 0.8 * 1.19), objetivo_iva = Math.min(maximo_iva, Math.round((el?.precio_unit_iva || mejor?.precio_iva || maximo_iva) * 0.9));
     return { i, item: x.item.d, cantidad: q, venta_unit_neto: ventaU, venta_neto: ventaU * q, elegido: el, costo_unit_neto: costoU, costo_neto: costoU != null ? costoU * q : null,
-      ganancia: costoU != null ? (ventaU - costoU) * q : null, alternativas: (pj.alternativas || x.candidatos.slice(0, 3)).slice(0, 4), riesgo: pj.riesgo || "", buscar: pj.buscar || "", propios: x.propios, candidatos: x.candidatos, foto: x.candidatos[0]?.foto || null };
+      ganancia: costoU != null ? (ventaU - costoU) * q : null, alternativas: (pj.alternativas || x.candidatos.slice(0, 3)).slice(0, 4), riesgo: pj.riesgo || "", buscar: pj.buscar || "", propios: x.propios, candidatos: x.candidatos, foto: x.candidatos[0]?.foto || null,
+      negociacion: { objetivo_iva, maximo_iva, guion: texto(pj.guion, 500), argumentos: (pj.argumentos || []).slice(0, 4).map((a) => texto(a, 120)) } };
   });
   const tot = { venta_neto: filas.reduce((s, f) => s + f.venta_neto, 0), costo_neto: filas.reduce((s, f) => s + (f.costo_neto || 0), 0), sin_precio: filas.filter((f) => f.costo_neto == null).length };
   tot.ganancia = tot.sin_precio ? null : tot.venta_neto - tot.costo_neto;
   tot.ganancia_parcial = filas.reduce((s2, f) => s2 + (f.ganancia || 0), 0);
-  return { ok: true, codigo: t.codigo, t: ahora(), items: filas, total: tot, resumen: plan?.resumen || "", aviso };
+  return { ok: true, codigo: t.codigo, t: ahora(), items: filas, total: tot, resumen: plan?.resumen || "", pasos: (plan?.pasos || []).slice(0, 8).map((x) => texto(x, 200)), aviso };
 }
 
 // 🏭 BASE ÚNICA DE PROVEEDORES del grupo (PJANIC + Julfior + Barasal): todo lo que ya se compró (catálogos de facturas SII,
@@ -1009,6 +1016,7 @@ ${txt}`;
   return { analisis: an };
 }
 
+const clpS = (v) => "$" + Math.round(Number(v) || 0).toLocaleString("es-CL");
 async function siiIngesta(req) {
   if (req.method === "OPTIONS") return new Response("", { status: 204, headers: corsH });
   const b = req.method === "GET" ? Object.fromEntries(new URL(req.url).searchParams.entries()) : await cuerpo(req);
@@ -1209,7 +1217,9 @@ async function atender(req) {
     const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return json({ error: "No existe." }, 404);
     if (t.op?.concrecion && !b.forzar && Date.now() - new Date(t.op.concrecion.t).getTime() < 6 * 3600e3) return json(t.op.concrecion);
     const r = await concretar(store, t); if (r.error) return json(r, 400);
-    t.op = t.op || { etapa: "ganada", historial: [] }; t.op.concrecion = r; t.actualizado = ahora(); await store.setJSON("trabajo/" + t.codigo, t);
+    t.op = t.op || { etapa: "ganada", historial: [] }; t.op.concrecion = r; t.op.concretar_pendiente = false; t.actualizado = ahora(); await store.setJSON("trabajo/" + t.codigo, t);
+    if (b.auto) { const e0 = (r.items || []).find((x) => x.elegido); const dir = e0?.elegido?.telefono ? "📞 llama al " + e0.elegido.telefono : e0?.elegido?.url ? "🛒 compra en " + String(e0.elegido.url).replace(/^https?:\/\/(www\.)?/, "").split("/")[0] : "revisa el plan";
+      await avisarTexto(store, "🎯 Plan listo · " + t.codigo, `${(t.nombre || "").slice(0, 60)} · ${dir}${r.total?.ganancia != null ? " · ganas " + clpS(r.total.ganancia) : r.total?.ganancia_parcial ? " · ganancia parcial " + clpS(r.total.ganancia_parcial) : ""}. Abre Ejecuta → Concretar.`, "concretar-" + t.codigo, "/#robot", true).catch(() => {}); }
     return json(r);
   }
   if (ruta === "foto" && req.method === "GET") {   // 📷 fotos reales para el robot (deja huella para saber que el parche corre)
@@ -2195,7 +2205,7 @@ async function atender(req) {
           items: (t.oc_compra.items || []).slice(0, 6).map((i) => ({ nombre: corto(i.nombre, 80), especificacion: corto(i.especificacion, 100) })) } : null,
         neto: t.neto || null, llamado: t.llamado || t.op?.informe?.llamado || null, prob: t.prob ?? null, por: t.por || null, envios: t.envios || 0,
         op: t.op ? { etapa: t.op.etapa, oc_codigo: t.op.oc_codigo || null, precio_acordado: t.op.precio_acordado || null, proveedor: corto(t.op.proveedor, 80),
-          costo_transporte: t.op.costo_transporte || 0, cerrado: t.op.cerrado || null, nos_da: t.op.nos_da ?? null, sin_factura: !!t.op.sin_factura,
+          costo_transporte: t.op.costo_transporte || 0, cerrado: t.op.cerrado || null, concretar_pendiente: !!t.op.concretar_pendiente, nos_da: t.op.nos_da ?? null, sin_factura: !!t.op.sin_factura,
           ganada_t: (t.op.historial || []).find((h) => h.etapa === "ganada")?.t || null, historial: (t.op.historial || []).slice(-8).map((h) => ({ t: h.t, etapa: h.etapa })),
           inversionista_nombre: corto(t.op.inversionista_nombre, 40), ejecutor_nombre: corto(t.op.ejecutor_nombre, 40),
           docs: (t.op.docs || []).filter((d) => d.tipo === "oc"),
