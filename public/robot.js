@@ -3824,11 +3824,11 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   const OC_ACEPTADA = /aceptad|recepci[oó]n|en proceso|pagad|facturad|cerrad|entregad/i;
   function clasificarOC(t) {
     const o = t.op || {}, est = String(o.oc_estado || "");
-    if (/no aceptada/i.test(est) || o.oc_aceptada === false && !/cancelad|anulad/i.test(est)) return "N";   // N = no la aceptamos (venció o la rechazamos)
-    if (/cancelad|anulad|rechazad/i.test(est) || o.etapa === "rechazada") return "D";
     if (!(o.oc_codigo || o.oc)) return o.etapa === "previa" ? "O" : null;                 // O = en opciones (vamos 1°, sin OC aún)
-    if (OC_ACEPTADA.test(est) || o.oc_aceptada || o.cerrado || o.cobrado || o.proveedor_pagado || ["pago", "transporte", "despacho", "entrega", "cerrado"].includes(o.etapa)) return "A";
-    return "P";                                                                                // P = por aceptar (OC emitida, aún no aceptada en MP)
+    if (/no aceptada|cancelad|anulad|rechazad/i.test(est) || o.etapa === "rechazada" || o.oc_aceptada === false) return "N";   // solo estadística: ya no sirven
+    if (/^aceptada|recepci[oó]n|en proceso|pagad|facturad|cerrad|entregad/i.test(est) || o.oc_aceptada || o.cerrado || o.cobrado || o.proveedor_pagado || ["pago", "transporte", "despacho", "entrega", "cerrado"].includes(o.etapa)) return "A";
+    if (/enviada a proveedor/i.test(est)) return "P";                                        // P = por aceptar: SOLO si el portal dice "Enviada a proveedor"
+    return "X";                                                                                // X = OC sin estado confirmado por el portal: no se muestra hasta sincronizar
   }
   const OC_BLOQUES = { A: ["✅ OC aceptadas", "las acepté en Mercado Público: se ejecutan (proveedor, compra, despacho, cobro)"],
     P: ["📝 OC por aceptar", "la OC llegó pero aún no la acepto en MP: estudiarla (costo real, plazo, riesgo) y recién aceptar"],
@@ -3853,7 +3853,8 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const base = (R.todos || R.data?.trabajos || []).filter((t) => todas || deMiEmpresa(t));   // las OC son de la empresa, no de un juego
     const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
     const dias = (t) => t.op?.plazo_fecha ? Math.floor((new Date(t.op.plazo_fecha + "T12:00") - hoy) / 86400000) : null;
-    const grupos = { A: [], P: [], O: [], N: [], D: [] };
+    const grupos = { A: [], P: [], O: [], N: [], D: [], X: [] };
+    const portal = R.ocPortal || null, sueltas = (portal?.sin_oferta || []).filter((x) => !/no aceptada|cancelad/i.test(x.estado));
     if (!R.ocPortal && !R._ocPortalCarg) { R._ocPortalCarg = true; api("oc-portal?rut=" + encodeURIComponent((empresaActual().rut || "78493114-5"))).then((r) => { R.ocPortal = r.portal || { lista: [], sin_oferta: [] }; pintarHoja(true); }).catch(() => { R.ocPortal = { lista: [], sin_oferta: [] }; }); }
     for (const t of base) { const k = clasificarOC(t); if (k) grupos[k].push(t); }
     const llego = (t) => t.op?.oc_fecha || (t.op?.historial || []).find((h) => h.etapa === "ganada")?.t || t.actualizado || "";
@@ -3877,12 +3878,11 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
           <div style="font-size:.78rem;margin-top:4px;color:${b === "D" ? "#ff9a9a" : "var(--oro, #f5cf6b)"}">→ ${esc(pasoOC(t, b))}</div>${acciones}
         </div></div>`; };
     const sel = R.ocB || "";
-    const chips = ["A", "P", "N", "D"].map((k) => `<button type="button" class="rb-rchip ${sel === k ? "on" : ""}" data-rb="oc-bloque" data-b="${k}">${OC_BLOQUES[k][0].replace(/^\S+\s/, "")}<i>${k === "P" ? grupos.P.length + grupos.O.length : grupos[k].length}</i></button>`).join("");
+    const chips = ["A", "P"].map((k) => `<button type="button" class="rb-rchip ${sel === k ? "on" : ""}" data-rb="oc-bloque" data-b="${k}">${OC_BLOQUES[k][0].replace(/^\S+\s/, "")}<i>${k === "P" ? grupos.P.length + grupos.O.length : grupos[k].length}</i></button>`).join("");
     const caja = (k, inner) => `<div class="rb-caja-oc ${k}" style="margin-top:14px"><div style="display:flex;justify-content:space-between;align-items:baseline"><b>${OC_BLOQUES[k][0]} · ${grupos[k].length}</b><span class="muted" style="font-size:.78rem">${clp(suma(grupos[k]))}</span></div><div class="muted" style="font-size:.72rem;margin-bottom:4px">${OC_BLOQUES[k][1]}</div>${inner}</div>`;
-    const portal = R.ocPortal || null, sueltas = (portal?.sin_oferta || []).filter((x) => !/no aceptada|cancelad/i.test(x.estado));
+
     const filaSuelta = (x) => `<div class="rb-card rb-oc-f" style="padding:8px 12px;margin:6px 0"><div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:.86rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.nombre)}</b><span class="rb-oc-tag ${/aceptada/i.test(x.estado) ? "ok" : ""}">${esc(x.estado)}</span></div><div class="muted" style="font-size:.72rem">${esc(x.comprador)} · OC ${esc(x.oc)} · ${esc(x.fecha.slice(0, 10))} · <i>sin oferta en la app</i></div><div class="rb-row" style="margin-top:4px"><a class="btn small" href="${urlOC(x.oc)}" target="_blank" rel="noopener">Ver en MP</a></div></div>`;
-    const bloques = ["A", "P", "N", "D"].filter((k) => !sel || sel === k).map((k) => {
-      if (k === "N") return grupos.N.length ? `<details class="rb-det" style="margin-top:14px"><summary><b>${OC_BLOQUES.N[0]} · ${grupos.N.length}</b> <span class="muted" style="font-size:.72rem">${OC_BLOQUES.N[1]}</span></summary>${ordenar(grupos.N).map((t) => fila(t, "N")).join("")}</details>` : "";
+    const bloques = ["A", "P"].filter((k) => !sel || sel === k).map((k) => {
       if (k === "P") { const ps = sueltas.filter((x) => /enviada/i.test(x.estado)); const inner = (grupos.P.length ? ordenar(grupos.P).map((t) => fila(t, "P")).join("") : `<div class="empty" style="padding:8px">No hay OC esperando aceptación.</div>`) + (ps.length ? `<div class="muted" style="font-size:.72rem;margin-top:8px">En el portal, sin oferta en la app:</div>` + ps.map(filaSuelta).join("") : "")
           + `<div class="rb-caja-oc O" style="margin:10px 0 0 10px;padding-left:10px;border-left:2px solid #5ef0b055"><div style="display:flex;justify-content:space-between;align-items:baseline"><b>${OC_BLOQUES.O[0]} · ${grupos.O.length}</b><span class="muted" style="font-size:.78rem">${clp(suma(grupos.O))}</span></div><div class="muted" style="font-size:.72rem;margin-bottom:4px">${OC_BLOQUES.O[1]}</div>${grupos.O.length ? ordenar(grupos.O).map((t) => fila(t, "O")).join("") : `<div class="empty" style="padding:8px">Ninguna compra en 1° lugar esperando adjudicación.</div>`}</div>`;
         return caja("P", inner); }
@@ -3893,7 +3893,8 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">📦 Caja OC</h2><button class="btn small" type="button" data-rb="oc-cerrar">← Volver</button></div>
       <div class="muted" style="font-size:.7rem;margin:4px 0">${portal?.t ? `📡 Estados según Mercado Público (${esc(new Date(portal.t).toLocaleString("es-CL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}: ${Object.entries(portal.estados || {}).map(([e, n]) => `${n} ${esc(e)}`).join(" · ")})` : "📡 Aún sin sincronizar con Mercado Público"} <a class="btn small rb-link" href="https://www.mercadopublico.cl/Portal/Modules/Site/Busquedas/BuscadorAvanzado.aspx?qs=2" target="_blank" rel="noopener">🔄 Sincronizar</a></div>
       <div class="muted rb-sub">Solo órdenes de compra. <b>Aceptadas</b> = las acepté en Mercado Público y se ejecutan. <b>Por aceptar</b> = llegó la OC: estudiar antes de aceptar. Dentro, <b>En opciones</b> = vamos 1° y nos pueden llamar. ${esDueno() ? `<button class="btn small rb-link" type="button" data-rb="oc-todas">${todas ? "Todas las empresas" : "Solo mi empresa"} ▾</button>` : ""}</div>
-      <div class="rb-marcador" style="margin:8px 0"><div class="rb-m verde"><span>✅ Aceptadas</span><b>${grupos.A.length}</b><small>${clp(suma(grupos.A))}</small></div><div class="rb-m oro"><span>📝 Por aceptar</span><b>${grupos.P.length}</b><small>${clp(suma(grupos.P))}</small></div><div class="rb-m"><span>🔭 En opciones</span><b>${grupos.O.length}</b><small>${clp(suma(grupos.O))}</small></div></div>
+      <div class="rb-marcador" style="margin:8px 0"><div class="rb-m verde"><span>✅ Aceptadas</span><b>${grupos.A.length}</b><small>${clp(suma(grupos.A))}</small></div><div class="rb-m oro"><span>📝 Por aceptar</span><b>${grupos.P.length}</b><small>${clp(suma(grupos.P))}</small></div><div class="rb-m"><span>🔭 En opciones</span><b>${grupos.O.length}</b><small>${clp(suma(grupos.O))}</small></div><div class="rb-m" title="No aceptadas o canceladas en el portal: solo estadística, no se trabajan"><span>🚫 No aceptadas</span><b>${grupos.N.length + (portal?.estados ? 0 : 0)}</b><small>${clp(suma(grupos.N))} · solo estadística</small></div></div>
+      ${grupos.X.length ? `<div class="muted" style="font-size:.7rem">${grupos.X.length} OC de la app sin estado confirmado por el portal: no se muestran hasta sincronizar.</div>` : ""}
       <div class="rb-rchips">${chips}</div>
       ${vivas.length || grupos.O.length ? bloques : `<div class="empty">Todavía no hay órdenes de compra${todas ? "" : " de tu empresa"}. Cuando te adjudiquen, aparecen aquí solas.</div>`}</div>`;
   }
