@@ -751,15 +751,104 @@ async function webpayRetorno(req) {                                             
     const j = await r.json().catch(() => ({}));
     const ok = j.response_code === 0 && j.status === "AUTHORIZED";
     const reg = j.buy_order ? (await store.get(`wp/${j.buy_order}`, { type: "json" })) : null;
-    if (ok && reg && reg.estado !== "pagada") {
+    if (ok && reg && reg.inv_id) {                                             // 💼 versión nueva: el abono va al libro del inversionista (un solo efecto por orden)
+      const r2 = await abonoWebpay(store, reg, j);
+      if (r2.error) { reg.estado = "por_conciliar"; reg.motivo = r2.error; reg.t_pago = ahora(); await store.setJSON(`wp/${reg.orden}`, reg); return volver("revision"); }
+      if (reg.estado !== "pagada") { reg.estado = "pagada"; reg.t_pago = ahora(); reg.mov_id = r2.mov.id; await store.setJSON(`wp/${reg.orden}`, reg); }
+      return volver("ok");
+    }
+    if (ok && reg && reg.estado !== "pagada") {                                // versión anterior (orden sin inversionista): crédito local pendiente de conciliar
       reg.estado = "pagada"; reg.t_pago = ahora(); await store.setJSON(`wp/${reg.orden}`, reg);
       const key = `wpcredito/${reg.jug}`, cr = (await store.get(key, { type: "json" })) || { total: 0, items: [] };
       cr.total = (cr.total || 0) + reg.monto; cr.items = [...(cr.items || []), { monto: reg.monto, orden: reg.orden, t: ahora() }].slice(-20);
       await store.setJSON(key, cr);
-      return volver("ok&monto=" + reg.monto);
+      return volver("ok");
     }
     return volver(ok ? "ok" : "rechazado");
   } catch { return volver("error"); }
+}
+
+// ---------- 💼 DÓNDE ESTÁ MI PLATA: libro de movimientos del inversionista (fuente única del saldo) ----------
+//  Identidad: inv/<id> {id, nombre, clave_hash, empresas[]}. El celular manda x-inv-id + x-inv-clave en cada consulta; el token del
+//  robot NO basta para acreditar a un inversionista. Libro: inv/<id>/mov {v, movs[]} con movimientos en pesos enteros:
+//   {id, tipo: abono|asignacion|devolucion|retiro|ajuste, monto, estado: pendiente|confirmado|rechazado|por_conciliar, t, ref, empresa, oc, nota}
+//  Cada ref (orden Webpay, id de solicitud, id de devolución) tiene un solo efecto: repetir la confirmación no duplica.
+//  Escritura condicional (etag) cuando la versión de Blobs la soporta; si no, candado de lectura-verificación (modo prueba).
+const invHash = (clave) => createHmac("sha256", process.env.ROBOT_TOKEN || "sin-token").update("inv:" + String(clave || "")).digest("base64url");
+const invId = () => "inv_" + randomBytes(9).toString("base64url");
+async function invDe(req, store) {
+  const id = texto(req.headers.get("x-inv-id"), 40), clave = req.headers.get("x-inv-clave") || "";
+  if (!id || !clave) return null;
+  const p = await store.get("inv/" + id, { type: "json" }).catch(() => null); if (!p || !p.clave_hash) return null;
+  const a = Buffer.from(p.clave_hash), b = Buffer.from(invHash(clave)); if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  return p;
+}
+async function leerLibro(store, id) {
+  const r = await store.getWithMetadata("inv/" + id + "/mov", { type: "json" }).catch(() => null);
+  return { libro: (r && r.data) || { v: 0, movs: [] }, etag: r && r.etag || null };
+}
+// escribe el libro una sola vez: con etag si Blobs lo soporta; si no, lectura-verificación con sello aleatorio
+async function guardarLibro(store, id, libro, etag) {
+  libro.v = (libro.v || 0) + 1; libro.sello = randomBytes(6).toString("base64url"); libro.t = ahora();
+  const key = "inv/" + id + "/mov";
+  let condicional = null;
+  try { const r = await store.setJSON(key, libro, etag ? { onlyIfMatch: etag } : { onlyIfNew: true }); if (r && typeof r.modified === "boolean") condicional = r.modified; } catch (e) { if (/onlyIf|conditional|412|precondition/i.test(String(e.message || e))) condicional = false; else throw e; }
+  if (condicional === false) return { ok: false, modo: "etag" };
+  if (condicional === true) return { ok: true, modo: "etag" };
+  const back = await store.get(key, { type: "json" }).catch(() => null);       // sin soporte condicional: verificar que quedó nuestro sello
+  return { ok: !!back && back.sello === libro.sello && back.v === libro.v, modo: "verificacion" };
+}
+function resumenLibro(movs) {
+  const ok = (m) => m.estado === "confirmado";
+  const sum = (f) => movs.filter((m) => ok(m) && f(m)).reduce((s2, m) => s2 + (m.monto || 0), 0);
+  const abonos = sum((m) => m.tipo === "abono"), asign = sum((m) => m.tipo === "asignacion"), devol = sum((m) => m.tipo === "devolucion"), retiros = sum((m) => m.tipo === "retiro"), ajustes = sum((m) => m.tipo === "ajuste");
+  const porOC = {};
+  for (const m of movs) { if (!m.oc) continue; const o = porOC[m.oc] = porOC[m.oc] || { oc: m.oc, empresa: m.empresa || null, aportado: 0, devuelto_capital: 0, devuelto_ganancia: 0, ganancia: m.ganancia || 0, pendientes: 0, ultimo: null };
+    if (m.ganancia) o.ganancia = m.ganancia;
+    if (ok(m)) { if (m.tipo === "asignacion") o.aportado += m.monto; if (m.tipo === "devolucion") { o.devuelto_capital += m.imputado_capital || 0; o.devuelto_ganancia += m.imputado_ganancia || 0; } if (!o.ultimo || m.t > o.ultimo.t) o.ultimo = { t: m.t, tipo: m.tipo, monto: m.monto }; }
+    else if (m.estado === "pendiente") o.pendientes += m.monto; }
+  for (const o of Object.values(porOC)) { o.capital_pendiente = Math.max(0, o.aportado - o.devuelto_capital); o.ganancia_pendiente = Math.max(0, (o.ganancia || 0) - o.devuelto_ganancia); o.por_recibir = o.capital_pendiente + o.ganancia_pendiente; }
+  const comprometido = Object.values(porOC).reduce((s2, o) => s2 + o.capital_pendiente, 0);
+  const pendRecibir = Object.values(porOC).reduce((s2, o) => s2 + o.por_recibir, 0);
+  const devueltoTotal = devol;
+  return { disponible: abonos + devol + ajustes - asign - retiros, comprometido, devuelto: devueltoTotal, por_recibir: pendRecibir, en_revision: movs.filter((m) => m.estado === "pendiente" && m.tipo === "abono").reduce((s2, m) => s2 + m.monto, 0),
+    por_conciliar: movs.filter((m) => m.estado === "por_conciliar").reduce((s2, m) => s2 + m.monto, 0), porOC };
+}
+// agrega un movimiento con ref única; si la ref ya existe devuelve el existente (idempotente). Reintenta la escritura condicional hasta 3 veces.
+async function movAgregar(store, id, mov) {
+  const { validar, ...datos } = mov;           // la validación se repite en cada intento sobre el libro recién leído
+  for (let k = 0; k < 3; k++) {
+    const { libro, etag } = await leerLibro(store, id);
+    const ya = datos.ref ? libro.movs.find((m) => m.ref === datos.ref && m.tipo === datos.tipo) : null;
+    if (ya) return { mov: ya, repetido: true, libro };
+    if (validar) { const err = validar(resumenLibro(libro.movs), libro); if (err) return { error: err }; }
+    const nuevo = { id: "m" + Date.now().toString(36) + randomBytes(3).toString("base64url"), t: ahora(), ...datos };
+    libro.movs = [...libro.movs, nuevo].slice(-500);
+    const w = await guardarLibro(store, id, libro, etag);
+    if (w.ok) return { mov: nuevo, repetido: false, libro, modo: w.modo };
+  }
+  return { error: "No pude registrar el movimiento (otra operación en curso). Intenta de nuevo." };
+}
+async function movActualizar(store, id, movId, cambios) {
+  for (let k = 0; k < 3; k++) {
+    const { libro, etag } = await leerLibro(store, id); const m = libro.movs.find((x) => x.id === movId); if (!m) return { error: "Movimiento no encontrado." };
+    if (m.estado === "confirmado" && cambios.estado === "confirmado") return { mov: m, repetido: true, libro };
+    Object.assign(m, cambios, { t_confirmado: cambios.estado === "confirmado" ? ahora() : m.t_confirmado });
+    const w = await guardarLibro(store, id, libro, etag); if (w.ok) return { mov: m, libro };
+  }
+  return { error: "No pude actualizar el movimiento. Intenta de nuevo." };
+}
+// 💳 abono Webpay confirmado por Transbank: un solo efecto por orden (ref = buy_order); valida monto y sesión contra lo registrado
+async function abonoWebpay(store, reg, j) {
+  if (!reg || !reg.inv_id) return { error: "orden sin inversionista (versión anterior)" };
+  if (Math.round(Number(j.amount)) !== reg.monto || (j.session_id && j.session_id !== reg.session)) return { error: "la transacción no coincide con la orden registrada" };
+  return movAgregar(store, reg.inv_id, { tipo: "abono", monto: reg.monto, estado: "confirmado", ref: reg.orden, origen: "webpay", nota: "Webpay " + (j.authorization_code || ""), empresa: reg.empresa || null });
+}
+function ocHabilitada(t) {
+  const op = t?.op; if (!t || !op) return "La OC no existe.";
+  if (["rechazada", "cerrado"].includes(op.etapa) || op.oc_aceptada === false) return "El negocio ya no admite inversión.";
+  if (!(op.oc_codigo || op.oc) && op.etapa !== "previa" && op.etapa !== "ganada") return "El negocio no tiene orden de compra.";
+  return null;
 }
 
 // 📋 Informes públicos para socias (GENSA): la página /informes/<id>.html lee y guarda respuestas Sí/No con una clave
@@ -1431,19 +1520,20 @@ async function atender(req) {
     const b = await cuerpo(req);
     const monto = Math.round(Number(b.monto) || 0);
     if (monto < 50 || monto > 10_000_000) return json({ error: "El monto debe estar entre $50 y $10.000.000." }, 400);
-    const jug = texto(b.jugador, 60) || "inv";
+    const inv = await invDe(req, store); if (!inv) return json({ error: "Identifícate como inversionista para cargar saldo." }, 401);
     const orden = ("SC" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5)).slice(0, 26);
+    const session = ("s" + randomBytes(8).toString("base64url")).slice(0, 61);
     let j = {};
     try {
       const r = await fetch(`${WP_BASE}/rswebpaytransaction/api/webpay/v1.2/transactions`, {
         method: "POST", headers: WP_HEAD(),
-        body: JSON.stringify({ buy_order: orden, session_id: jug.slice(0, 61), amount: monto, return_url: `${WP_SITIO}/bot/webpay-retorno` }),
+        body: JSON.stringify({ buy_order: orden, session_id: session, amount: monto, return_url: `${WP_SITIO}/bot/webpay-retorno` }),
       });
       j = await r.json().catch(() => ({}));
       if (!r.ok || !j.token || !j.url) return json({ error: "WebPay no respondió (" + r.status + ")." }, 502);
     } catch (e) { return json({ error: "No se pudo contactar WebPay." }, 502); }
-    await store.setJSON(`wp/${orden}`, { orden, monto, jug, token: j.token, estado: "creada", t: ahora() });
-    return json({ url: j.url, token: j.token });
+    await store.setJSON(`wp/${orden}`, { orden, monto, inv_id: inv.id, session, empresa: texto(b.empresa, 40) || null, token: j.token, estado: "creada", t: ahora() });
+    return json({ url: j.url, token: j.token, orden });
   }
   if (ruta === "webpay-cobrar" && req.method === "POST") {
     const b = await cuerpo(req);
@@ -1453,6 +1543,70 @@ async function atender(req) {
     return json({ abonado: cr.total || 0, items: cr.items || [] });
   }
 
+
+  // ---------- 💼 inversionista: identidad, libro, asignación a OC, devoluciones (permisos en el servidor) ----------
+  if (ruta === "inv-registrar" && req.method === "POST") {   // crea el perfil (id + clave); la clave solo viaja en el celular que la creó
+    const b = await cuerpo(req); const nombre = texto(b.nombre, 60), clave = String(b.clave || "");
+    if (!nombre || clave.length < 4) return json({ error: "Nombre y clave (mínimo 4 caracteres)." }, 400);
+    const id = invId(); await store.setJSON("inv/" + id, { id, nombre, clave_hash: invHash(clave), creado: ahora(), empresas: [] });
+    return json({ id, nombre });
+  }
+  if (ruta === "inv-estado" && req.method === "GET") {        // solo los movimientos propios
+    const inv = await invDe(req, store); if (!inv) return json({ error: "Inversionista no identificado." }, 401);
+    const { libro } = await leerLibro(store, inv.id); const R2 = resumenLibro(libro.movs);
+    const ocs = {}; for (const oc of Object.keys(R2.porOC)) { const t = await leer(store, oc).catch(() => null); if (t) ocs[oc] = { nombre: t.nombre, organismo: t.oc_compra?.organismo || t.organismo, oc_codigo: t.op?.oc_codigo || null, etapa: t.op?.etapa || null, acuerdo: t.op?.inv_acuerdo || null, cobrado: (t.op?.abonos || []).filter((a) => a.confirmado !== false).reduce((s2, a) => s2 + (a.monto || 0), 0), fecha_cobro: t.op?.fecha_cobro || null, cerrado: t.op?.cerrado || null }; }
+    return json({ inv: { id: inv.id, nombre: inv.nombre }, resumen: R2, movs: libro.movs.slice(-100).reverse(), ocs, v: libro.v || 0 });
+  }
+  if (ruta === "inv-simular-abono" && req.method === "POST") {   // 🧪 modo prueba (Webpay integración): abono confirmado con ref única (idempotente)
+    if ((process.env.WEBPAY_ENV || "integracion") === "produccion") return json({ error: "Simulación no disponible en producción." }, 403);
+    const inv = await invDe(req, store); if (!inv) return json({ error: "Inversionista no identificado." }, 401);
+    const b = await cuerpo(req); const monto = Math.round(Number(b.monto) || 0); if (monto < 50) return json({ error: "Monto inválido." }, 400);
+    const r = await movAgregar(store, inv.id, { tipo: "abono", monto, estado: "confirmado", ref: texto(b.ref, 40) || ("sim" + Date.now().toString(36)), origen: "simulado", nota: "Abono simulado (modo prueba)" });
+    if (r.error) return json({ error: r.error }, 409);
+    return json({ ok: true, repetido: r.repetido, mov: r.mov, resumen: resumenLibro(r.libro.movs) });
+  }
+  if (ruta === "inv-migrar" && req.method === "POST") {   // transición: saldo local y créditos wpcredito/<jugador> de la versión anterior → libro, como «por conciliar»
+    const inv = await invDe(req, store); if (!inv) return json({ error: "Inversionista no identificado." }, 401);
+    const b = await cuerpo(req); const jug = texto(b.jugador, 60); const out = [];
+    if (jug) { const cr = (await store.get(`wpcredito/${jug}`, { type: "json" })) || { items: [] };
+      for (const it of cr.items || []) { const reg = it.orden ? await store.get(`wp/${it.orden}`, { type: "json" }).catch(() => null) : null; const ok = reg && reg.estado === "pagada" && reg.jug === jug && !reg.inv_id;
+        const r = await movAgregar(store, inv.id, { tipo: "abono", monto: Math.round(it.monto || 0), estado: ok ? "confirmado" : "por_conciliar", ref: it.orden || ("legacy" + it.t), origen: "webpay_legacy", nota: ok ? "Webpay (versión anterior) " + it.orden : "crédito local sin transacción respaldada" });
+        if (!r.error) { out.push({ ref: r.mov.ref, estado: r.mov.estado, repetido: r.repetido }); if (ok && reg) { reg.inv_id = inv.id; reg.migrado = ahora(); await store.setJSON(`wp/${reg.orden}`, reg); } } }
+      if ((cr.items || []).length) await store.setJSON(`wpcredito/${jug}`, { total: 0, items: [], migrado: ahora(), inv_id: inv.id }); }
+    const local = Math.round(Number(b.saldo_local) || 0);
+    if (local > 0) { const r = await movAgregar(store, inv.id, { tipo: "ajuste", monto: local, estado: "por_conciliar", ref: "saldo_local_" + (jug || inv.id), origen: "local", nota: "saldo guardado en el celular (versión anterior): sin respaldo de transacción" }); if (!r.error) out.push({ ref: r.mov.ref, estado: r.mov.estado, repetido: r.repetido }); }
+    const { libro } = await leerLibro(store, inv.id); return json({ ok: true, migrados: out, resumen: resumenLibro(libro.movs) });
+  }
+  if (ruta === "inv-asignar" && req.method === "POST") {   // «Invertir desde mi saldo»: descuento del saldo + aporte en la OC, con id de solicitud (reintento sin duplicar)
+    const inv = await invDe(req, store); if (!inv) return json({ error: "Inversionista no identificado." }, 401);
+    const b = await cuerpo(req); const codigo = limpiaCodigo(b.codigo), monto = Math.round(Number(b.monto) || 0), solicitud = texto(b.solicitud, 40);
+    if (!codigo || monto < 1000 || !solicitud) return json({ error: "Faltan datos (negocio, monto, solicitud)." }, 400);
+    const t = await leer(store, codigo); const hab = ocHabilitada(t); if (hab) return json({ error: hab }, 409);
+    const op = t.op; const yaMov = (op.aportes || []).find((a) => a.solicitud === solicitud);
+    const X = { compras: Number(op.precio_acordado) || Number(op.informe?.compras) || 0 }; const capital = Math.round(X.compras * (op.param?.anticipo ?? 1));
+    const aportado = (op.aportes || []).reduce((s2, a) => s2 + (Number(a.monto) || 0), 0), pendFin = Math.max(0, capital - aportado);
+    const r = await movAgregar(store, inv.id, { tipo: "asignacion", monto, estado: "confirmado", ref: solicitud, oc: codigo, empresa: t.empresa || "principal", nota: "Aporte a " + (t.nombre || codigo), ganancia: op.inv_acuerdo?.tipo === "monto" ? Math.round(op.inv_acuerdo.v) : null,
+      validar: (R2) => (yaMov ? null : monto > R2.disponible ? `Saldo insuficiente: disponible ${R2.disponible.toLocaleString("es-CL")}` : capital && monto > pendFin ? `El negocio solo necesita ${pendFin.toLocaleString("es-CL")} más de financiamiento` : null) });
+    if (r.error) return json({ error: r.error }, 409);
+    if (!yaMov && !(op.aportes || []).some((a) => a.mov_id === r.mov.id)) {   // proyección del movimiento en la OC (un solo origen: el libro)
+      op.aportes = [...(op.aportes || []), { monto, fecha: ahora().slice(0, 10), t: ahora(), quien: inv.nombre, inv_id: inv.id, mov_id: r.mov.id, solicitud, origen: "saldo" }].slice(0, 40);
+      op.transferido = true; op.inversionista_nombre = op.inversionista_nombre || inv.nombre; await escribir(store, t);
+      await avisarTexto(store, "💼 Aporte de " + inv.nombre, `${inv.nombre} asignó $${monto.toLocaleString("es-CL")} a ${(t.nombre || codigo).slice(0, 50)}${pendFin - monto > 0 ? " · faltan $" + (pendFin - monto).toLocaleString("es-CL") : ""}`, "inv-" + codigo, "/#robot").catch(() => {});
+    }
+    return json({ ok: true, repetido: r.repetido || !!yaMov, mov: r.mov, resumen: resumenLibro(r.libro.movs), pendiente_financiar: Math.max(0, pendFin - (r.repetido || yaMov ? 0 : monto)), modo: r.modo });
+  }
+  if (ruta === "inv-devolucion-confirmar" && req.method === "POST") {   // el inversionista confirma que recibió su devolución: imputa primero a capital, luego a ganancia
+    const inv = await invDe(req, store); if (!inv) return json({ error: "Inversionista no identificado." }, 401);
+    const b = await cuerpo(req); const movId = texto(b.mov_id, 40); if (!movId) return json({ error: "Falta el movimiento." }, 400);
+    const { libro } = await leerLibro(store, inv.id); const m = libro.movs.find((x) => x.id === movId); if (!m || m.tipo !== "devolucion") return json({ error: "Devolución no encontrada." }, 404);
+    const R2 = resumenLibro(libro.movs); const o = R2.porOC[m.oc] || { capital_pendiente: 0, ganancia_pendiente: 0 };
+    const cap = Math.min(m.monto, o.capital_pendiente), gan = Math.min(m.monto - cap, o.ganancia_pendiente);
+    const r = await movActualizar(store, inv.id, movId, { estado: "confirmado", imputado_capital: cap, imputado_ganancia: gan, imputado_extra: m.monto - cap - gan });
+    if (r.error) return json({ error: r.error }, 409);
+    const t = m.oc ? await leer(store, m.oc).catch(() => null) : null;
+    if (t?.op) { const d = (t.op.devoluciones || []).find((x) => x.mov_id === movId); if (d) { d.confirmado = true; d.t_confirmado = ahora(); await escribir(store, t); } }
+    return json({ ok: true, repetido: r.repetido, mov: r.mov, resumen: resumenLibro(r.libro.movs) });
+  }
   // ---------- celular ----------
   if (ruta === "estado" && req.method === "GET") {
     const robot = (await store.get("robot/latido", { type: "json" })) || null;
@@ -1832,7 +1986,11 @@ async function atender(req) {
     if (d.facturas !== undefined) op.facturas = mov(d.facturas, (x) => ({ folio: texto(x.folio, 20) }));
     if (d.abonos !== undefined) op.abonos = mov(d.abonos, (x) => ({ origen: x.origen === "cliente" ? "cliente" : "factoring", confirmado: x.confirmado !== false }));
     if (d.aportes !== undefined) op.aportes = mov(d.aportes, (x) => ({ quien: texto(x.quien, 60) }));
-    if (d.devoluciones !== undefined) op.devoluciones = mov(d.devoluciones, () => ({}));
+    if (d.devoluciones !== undefined) { const antes = op.devoluciones || []; op.devoluciones = mov(d.devoluciones, (x) => ({ mov_id: texto(x.mov_id, 40), inv_id: texto(x.inv_id, 40), confirmado: !!x.confirmado }));
+      const invId_ = (op.aportes || []).find((a) => a.inv_id)?.inv_id || null;   // devolución nueva → queda «pendiente» en el libro hasta que el inversionista confirme que la recibió
+      if (invId_) for (const dv of op.devoluciones) { if (dv.mov_id || antes.some((a) => a.t === dv.t && a.monto === dv.monto && a.mov_id)) continue;
+        const r = await movAgregar(store, invId_, { tipo: "devolucion", monto: dv.monto, estado: "pendiente", ref: "dev_" + t.codigo + "_" + dv.t, oc: t.codigo, empresa: t.empresa || "principal", nota: "Devolución registrada por la empresa" });
+        if (!r.error) { dv.mov_id = r.mov.id; dv.inv_id = invId_; } } }
     if (d.costo_confirmado && typeof d.costo_confirmado === "object" && d.costo_confirmado.lid) {   // ✅ proveedor y precio neto confirmados para una línea (historial: el original se conserva en versiones/fuentes)
       const c = d.costo_confirmado; op.costos_confirmados = op.costos_confirmados || {};
       if (c.quitar) delete op.costos_confirmados[texto(c.lid, 24)];

@@ -660,7 +660,7 @@
     try {
       r = await fetch("/bot/" + ruta, {
         ...opt,
-        headers: { "x-robot-token": R.token, ...(opt.body ? { "content-type": "application/json" } : {}), ...(opt.headers || {}) },
+        headers: { "x-robot-token": R.token, ...(opt.body ? { "content-type": "application/json" } : {}), ...(invCred() ? { "x-inv-id": invCred().id, "x-inv-clave": invCred().clave } : {}), ...(opt.headers || {}) },
         cache: "no-store", signal: opt.signal || ac.signal,
       });
     } catch (e) { clearTimeout(tmr); throw new Error(e?.name === "AbortError" ? "La nube no respondió en 25 s (" + ruta + "). Revisa tu señal y reintenta." : "Sin conexión con la nube (" + ruta + "): " + (e?.message || e)); }
@@ -2170,7 +2170,7 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
     const previsto = sumaM(abonos, (a) => a.confirmado === false);
     const pendCobro = Math.max(0, facturado - cobrado), estado = !facturado ? (op.oc_codigo || op.oc ? "sin facturar" : "sin OC") : cobrado <= 0 ? "factura emitida" : cobrado < facturado ? "cobro parcial" : "factura cobrada";
     // 💼 inversionista: capital = lo que de verdad aportó − devoluciones ya hechas; ganancia según acuerdo del negocio
-    const aportado = sumaM(aportes), devuelto = sumaM(devol), hayAporte = aportes.length > 0;
+    const aportado = sumaM(aportes), devuelto = sumaM(devol, (d) => !d.inv_id || d.confirmado), hayAporte = aportes.length > 0;   // devolución al inversionista: cuenta cuando él confirma que la recibió
     const capital = hayAporte ? aportado - devuelto : op.transferido ? X.capital - devuelto : 0;
     src.capital = hayAporte ? `aportes ${clp(aportado)} − devuelto ${clp(devuelto)}` : op.transferido ? `estimado = compra ${clp(X.capital)} (aporte sin registrar)` : "Sin registrar";
     const acuerdo = op.inv_acuerdo || null;   // {tipo:"pct", v:0.156} | {tipo:"monto", v:808859} | {tipo:"pct_capital", v:0.135}
@@ -2355,9 +2355,20 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   // 👥 Inversionistas/brokers guardados + 💳 saldo estilo Betano (por dispositivo)
   const BROK = "sdc:brokers";
   const brokers = () => { try { return JSON.parse(localStorage.getItem(BROK)) || []; } catch { return []; } };
-  const SALDO = "sdc:saldo";
-  const saldoInv = () => { try { return Math.max(0, Number(JSON.parse(localStorage.getItem(SALDO))?.disp) || 0); } catch { return 0; } };
-  const setSaldo = (d) => { try { localStorage.setItem(SALDO, JSON.stringify({ disp: Math.max(0, Math.round(d)) })); } catch {} };
+  const SALDO = "sdc:saldo";                       // (versión anterior: saldo local; ahora solo se lee para migrarlo como «por conciliar»)
+  const saldoLocalViejo = () => { try { return Math.max(0, Number(JSON.parse(localStorage.getItem(SALDO))?.disp) || 0); } catch { return 0; } };
+  const invCred = () => { try { const c = JSON.parse(localStorage.getItem("sdc:invcred")); return c && c.id && c.clave ? c : null; } catch { return null; } };
+  const setInvCred = (c) => { try { if (c) localStorage.setItem("sdc:invcred", JSON.stringify(c)); else localStorage.removeItem("sdc:invcred"); } catch {} };
+  // 💼 el saldo, lo comprometido y lo devuelto vienen SIEMPRE del libro del servidor (inv-estado); el celular no suma nada
+  const saldoInv = () => Number(R.invEstado?.resumen?.disponible) || 0;
+  async function cargarInv(forzar) {
+    if (!invCred()) return; if (!forzar && R.invEstadoT && Date.now() - R.invEstadoT < 15000) return; if (R._cargInv) return; R._cargInv = true;
+    try { R.invEstado = await api("inv-estado"); R.invEstadoT = Date.now(); R.invErr = null;
+      // transición única: créditos Webpay de la versión anterior y saldo local → libro, como «por conciliar» salvo que la transacción se pueda respaldar
+      if (!localStorage.getItem("sdc:invmigrado")) { try { const r = await api("inv-migrar", { method: "POST", body: JSON.stringify({ jugador: miJug(), saldo_local: saldoLocalViejo() }) }); localStorage.setItem("sdc:invmigrado", "1"); localStorage.removeItem(SALDO); if ((r.migrados || []).length) { R.invEstado = await api("inv-estado"); toast("Saldo anterior migrado: " + r.migrados.length + " movimiento(s), revisa «por conciliar»"); } } catch {} } }
+    catch (e) { R.invErr = e.message; if (/no identificado|401/.test(e.message)) setInvCred(null); }
+    finally { R._cargInv = false; pintarHojaSiAbierta(); }
+  }
   // 💳 WebPay: redirige a pagar y, al volver, cobra el abono confirmado por el servidor
   function irWebpay(url, token) {
     const f = document.createElement("form"); f.method = "POST"; f.action = url;
@@ -2367,17 +2378,10 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   async function revisarWebpay() {
     const q = new URLSearchParams(location.search), w = q.get("webpay"); if (!w) return;
     try { history.replaceState(null, "", location.pathname + location.hash); } catch {}
-    if (w === "ok") {
-      const montoRet = Math.round(Number(q.get("monto")) || 0);   // el servidor solo lo manda si el pago quedó AUTORIZADO y abonado
-      let ab = 0;
-      try {
-        const r = await api("webpay-cobrar", { method: "POST", body: JSON.stringify({ jugador: miJug() }) });
-        ab = Math.round(Number(r?.abonado) || 0);
-      } catch {}
-      if (!ab && montoRet) ab = montoRet;   // 💳 respaldo: si el jugador no calza (PWA→Safari), usa el monto confirmado en el retorno
-      if (ab > 0) { setSaldo(saldoInv() + ab); guardar({ portal: "inversion" }); toast("💳 Pago aprobado: +" + clp(ab) + " a tu saldo"); }
-      else toast("Pago aprobado. Si no ves el saldo, recarga la app.");
-    } else toast(w === "rechazado" ? "❌ El pago fue rechazado. Intenta de nuevo." : w === "cancelado" ? "Pago cancelado." : "No se pudo confirmar el pago.");
+    guardar({ portal: "inversion" });
+    if (w === "ok") { toast("💳 Pago aprobado: el servidor lo abonó a tu saldo"); await cargarInv(true); }      // el monto nunca viene por la URL: lo dice el libro
+    else if (w === "revision") { toast("💳 Pago recibido · en revisión: no coincide con la orden registrada. Queda «por conciliar»."); await cargarInv(true); }
+    else toast(w === "rechazado" ? "❌ El pago fue rechazado. Intenta de nuevo." : w === "cancelado" ? "Pago cancelado." : "No se pudo confirmar el pago.");
     pintarHoja(true);
   }
   const INVS = "sdc:inversiones";
@@ -2391,20 +2395,20 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   }
   // 💳 panel de saldo (cargar / retirar) — estilo Betano
   function panelSaldo() {
-    const d = saldoInv(), emp = empresaActual() || {};
+    const E = R.invEstado, Rz = E?.resumen || {}, emp = empresaActual() || {};
+    if (!E && !R.invErr) cargarInv();
     const form = R.saldoForm ? `<div style="margin-top:8px;border-top:1px solid rgba(127,127,127,.2);padding-top:8px">
-      <div class="rb-sec">${R.saldoForm === "cargar" ? "➕ Cargar saldo" : "➖ Retirar"}</div>
-      <label class="rb-lab">Monto<input class="rb-in" id="rbSaldoMonto" inputmode="numeric" placeholder="$ 0" value="${R.saldoForm === "cargar" && R.saldoPrefill ? R.saldoPrefill : ""}"></label>
-      ${R.saldoForm === "cargar" ? `<div class="muted" style="font-size:.7rem;line-height:1.5">Paga con tarjeta por <b>WebPay</b> y se abona al tiro a tu saldo. La plata va a la cuenta de <b>${esc(corta(emp.razon_social) || "PJANIC")}</b>.</div>
-      <button class="btn small rb-oro" type="button" data-rb="saldo-simular" style="width:100%;margin-top:6px">🧪 Simular carga (modo prueba, sin WebPay)</button>
-      <div class="rb-row" style="margin-top:6px"><button class="btn small" type="button" data-rb="saldo-webpay">💳 Pagar con WebPay</button><button class="btn small rb-link" type="button" data-rb="saldo-cancelar">Cancelar</button></div>
-      <div class="muted" style="font-size:.64rem;margin-top:5px;opacity:.75">¿Transferiste a mano? <a data-rb="saldo-ok" style="text-decoration:underline;cursor:pointer">Confirmar carga manual</a></div></div>` : `<div class="muted" style="font-size:.7rem">Se descuenta de tu saldo y la empresa te transfiere.</div>
-      <div class="rb-row" style="margin-top:6px"><button class="btn small rb-oro" type="button" data-rb="saldo-ok">Confirmar retiro</button><button class="btn small rb-link" type="button" data-rb="saldo-cancelar">Cancelar</button></div></div>`}` : "";
+      <div class="rb-sec">➕ Cargar saldo</div>
+      <label class="rb-lab">Monto<input class="rb-in" id="rbSaldoMonto" inputmode="numeric" placeholder="$ 0" value="${R.saldoPrefill ? R.saldoPrefill : ""}"></label>
+      <div class="muted" style="font-size:.7rem;line-height:1.5">Pagas con tarjeta por <b>WebPay</b>; el saldo cambia cuando el servidor confirma la transacción con Transbank. La plata va a la cuenta de <b>${esc(corta(emp.razon_social) || "PJANIC")}</b>.</div>
+      <div class="rb-row" style="margin-top:6px"><button class="btn small rb-oro" type="button" data-rb="saldo-webpay">💳 Pagar con WebPay</button><button class="btn small" type="button" data-rb="saldo-simular">🧪 Simular abono (modo prueba)</button><button class="btn small rb-link" type="button" data-rb="saldo-cancelar">Cancelar</button></div></div>` : "";
     return `<div class="rb-card" style="border-color:#5ef0b0;background:rgba(63,220,138,.06)">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
-        <div><div class="muted" style="font-size:.64rem">💳 Tu saldo para invertir</div><b style="font-size:1.3rem">${clp(d)}</b></div>
-        <div class="rb-row"><button class="btn small rb-oro" type="button" data-rb="saldo-cargar">➕ Cargar</button><button class="btn small" type="button" data-rb="saldo-retirar">➖ Retirar</button></div>
-      </div>${form}</div>`;
+      <div class="muted" style="font-size:.64rem">💼 Dónde está mi plata · ${esc(E?.inv?.nombre || "")}${E ? "" : R.invErr ? " · " + esc(R.invErr) : ' · <span class="spinner"></span>'}</div>
+      <div class="rb-marcador" style="margin:6px 0"><div class="rb-m verde"><span>Disponible</span><b>${clp(Rz.disponible || 0)}</b><small>para invertir</small></div><div class="rb-m oro"><span>En negocios</span><b>${clp(Rz.comprometido || 0)}</b><small>capital por devolver</small></div><div class="rb-m"><span>Devuelto</span><b>${clp(Rz.devuelto || 0)}</b><small>confirmado por ti</small></div></div>
+      ${Rz.por_recibir ? `<div class="muted" style="font-size:.7rem">Pendiente de recibir (capital + ganancia): <b>${clp(Rz.por_recibir)}</b></div>` : ""}
+      ${Rz.en_revision ? `<div class="muted" style="font-size:.7rem">💳 En revisión: ${clp(Rz.en_revision)}</div>` : ""}${Rz.por_conciliar ? `<div style="font-size:.7rem;color:#f5cf6b">⚠ Por conciliar: ${clp(Rz.por_conciliar)} (saldo o pagos de la versión anterior sin respaldo de transacción; no se pueden invertir hasta conciliar)</div>` : ""}
+      <div class="rb-row" style="margin-top:6px"><button class="btn small rb-oro" type="button" data-rb="saldo-cargar">➕ Cargar</button><button class="btn small" type="button" data-rb="inv-refrescar">🔄 Actualizar</button><button class="btn small rb-link" type="button" data-rb="inv-cred">🔑 Mi código</button></div>
+      ${R.invCredVer ? `<div class="muted" style="font-size:.68rem;margin-top:4px">Código de inversionista: <b>${esc(invCred()?.id || "")}</b> · con este código y tu clave entras desde otro celular.</div>` : ""}${form}</div>`;
   }
   // 🧮 Liquidación: reparto configurable de la ganancia entre inversionista y broker
   const BROKPCT = "sdc:brokerpct";
@@ -2474,17 +2478,18 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   }
   // --- Portal del inversionista estilo Betano: login → oportunidades → detalle → tracker ---
   const INVSES = "sdc:invsesion";
-  const invSesion = () => { try { return JSON.parse(localStorage.getItem(INVSES)) || null; } catch { return null; } };
+  const invSesion = () => invCred();
   function pantallaInvLogin() {
     return `<div class="rb-paso" style="max-width:420px;margin:0 auto">
       <div style="text-align:center;margin:12px 0"><div style="font-size:2.6rem">💼</div><h2 class="rb-h" style="margin:4px 0">Invertir en negocios</h2><div class="muted" style="font-size:.78rem">Aportas el capital de la compra en un negocio ya adjudicado y recibes capital + ganancia cuando el Estado paga.</div></div>
       <div class="rb-card rb-ej-card"><div class="rb-ej-tag">EJEMPLO · así se ve una inversión</div><div class="rb-fnom">Mobiliario para sala de reuniones · PJANIC SpA</div>
         <table class="rb-copias" style="margin-top:4px"><tr><td>Aporte</td><td class="n"><b>$3.000.000</b></td></tr><tr><td>Ganancia proyectada</td><td class="n">$225.000</td></tr><tr><td>Total estimado a recibir</td><td class="n"><b>$3.225.000</b></td></tr><tr><td>Fecha estimada</td><td class="n">pendiente de confirmar</td></tr><tr><td>Se paga cuando</td><td class="n">el factoring o Tesorería deposite la factura</td></tr></table>
         <div class="rb-kv" style="font-size:.72rem;margin-top:4px"><span class="rb-oc-tag">Aporte confirmado</span><span class="rb-oc-tag">Pendiente de devolución</span><span class="rb-oc-tag">Pago parcial</span><span class="rb-oc-tag ok">Pagado</span></div></div>
-      <label class="rb-lab">Usuario<input class="rb-in" id="rbInvUsr" placeholder="Tu nombre" autocomplete="username"></label>
-      <label class="rb-lab">Clave<input class="rb-in" id="rbInvPwd" type="password" placeholder="••••" autocomplete="current-password"></label>
-      <button class="btn rb-oro rb-big-btn" type="button" data-rb="inv-entrar">Iniciar sesión</button>
-      <div class="muted" style="font-size:.68rem;text-align:center;margin-top:6px">¿Primera vez? Pon un usuario y una clave: quedan registrados en este dispositivo.</div></div>`;
+      <label class="rb-lab">Tu nombre<input class="rb-in" id="rbInvUsr" placeholder="Ej: Nicolás" autocomplete="username"></label>
+      <label class="rb-lab">Clave<input class="rb-in" id="rbInvPwd" type="password" placeholder="mínimo 4 caracteres" autocomplete="current-password"></label>
+      <label class="rb-lab">Código de inversionista <span class="muted">(solo si ya tienes uno de otro celular)</span><input class="rb-in" id="rbInvId" placeholder="inv_…" autocapitalize="off"></label>
+      <button class="btn rb-oro rb-big-btn" type="button" data-rb="inv-entrar">Entrar</button>
+      <div class="muted" style="font-size:.68rem;text-align:center;margin-top:6px">Primera vez: nombre + clave crean tu perfil en el servidor y te dan un código. Tus movimientos solo los ves tú.</div></div>`;
   }
   function pasoDe(cod) {
     const t = (R.ejec || []).find((x) => x.codigo === cod), op = (t && t.op) || {};
@@ -2506,18 +2511,23 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   }
   // 💼 Betano puro: el inversionista solo mete y saca; el seguimiento lo hace el broker
   function misInvSimple() {
-    const trab = inversiones().filter((x) => x.estado === "trabajando");
-    if (!trab.length) return "";
-    return `<div class="rb-sec">💼 Mis inversiones</div>${trab.map((x) => {
-      const cobra = Math.round(x.capital + x.invGan * (1 - brokerPct() / 100));
-      return `<div class="rb-inv activo"><div class="rb-env"><div style="min-width:0"><b>${esc((x.nombre || x.codigo).slice(0, 46))}</b><div class="muted" style="font-size:.68rem">Invertiste ${clp(x.capital)} · 💰 en ~5 días</div></div><div style="text-align:right"><div class="muted" style="font-size:.6rem">COBRAS</div><b class="rb-vivo-t">${clp(cobra)}</b></div></div>
-        <div class="rb-row" style="margin-top:4px"><button class="btn small" type="button" data-rb="inv-ejecutar" data-c="${esc(x.codigo)}">🚀 Ir a ejecutar</button><button class="btn small rb-oro" type="button" data-rb="inv-liquidar" data-id="${esc(x.id)}">💰 Cobrar a mi saldo</button></div></div>`;
-    }).join("")}`;
+    const E = R.invEstado; if (!E) return "";
+    const ocs = Object.values(E.resumen?.porOC || {}); const pend = (E.movs || []).filter((m) => m.tipo === "devolucion" && m.estado === "pendiente");
+    if (!ocs.length && !pend.length) return "";
+    const info = (oc) => E.ocs?.[oc] || {};
+    return `<div class="rb-sec">💼 Mis negocios</div>${ocs.map((o) => { const i = info(o.oc); const acuerdo = i.acuerdo; const ganTxt = acuerdo?.tipo === "monto" ? "ganancia pactada " + clp(acuerdo.v) : o.ganancia ? "ganancia pactada " + clp(o.ganancia) : "ganancia proyectada según Excel en vivo";
+      const dvs = pend.filter((m) => m.oc === o.oc);
+      return `<div class="rb-inv activo"><div class="rb-env"><div style="min-width:0"><b>${esc((i.nombre || o.oc).slice(0, 46))}</b><div class="muted" style="font-size:.68rem">${esc(i.organismo || "")}${i.oc_codigo ? " · OC " + esc(i.oc_codigo) : ""} · ${esc(i.etapa || "")}</div></div><span class="rb-oc-tag ${o.capital_pendiente ? "" : "ok"}">${o.capital_pendiente ? "Pendiente de devolución" : o.aportado ? "Pagado" : "Aporte confirmado"}</span></div>
+        <div class="rb-kv" style="font-size:.76rem;margin-top:4px"><span>aportado <b>${clp(o.aportado)}</b></span><span>capital pendiente <b>${clp(o.capital_pendiente)}</b></span><span>${ganTxt}${o.ganancia_pendiente ? " · pendiente " + clp(o.ganancia_pendiente) : ""}</span></div>
+        <div class="muted" style="font-size:.68rem;margin-top:3px">Último movimiento confirmado: ${o.ultimo ? esc(o.ultimo.tipo) + " " + clp(o.ultimo.monto) + " · " + esc(hace(o.ultimo.t)) : "—"} · Fecha de cobro: ${i.fecha_cobro ? esc(i.fecha_cobro) : i.cobrado ? "cobrado " + clp(i.cobrado) + " · fecha <b>Pendiente de confirmar</b>" : "<b>Pendiente de confirmar</b>"}</div>
+        ${dvs.map((m) => `<div class="rb-sug" style="border-color:#f5cf6b;margin-top:6px">💸 La empresa registró una devolución de <b>${clp(m.monto)}</b> (${esc(hace(m.t))}). ¿Te llegó? <button class="btn small rb-oro" type="button" data-rb="inv-dev-ok" data-id="${esc(m.id)}">✅ Confirmar que la recibí</button></div>`).join("")}</div>`; }).join("")}
+      ${pend.filter((m) => !m.oc).map((m) => `<div class="rb-sug" style="border-color:#f5cf6b">💸 Devolución de ${clp(m.monto)} pendiente de tu confirmación <button class="btn small rb-oro" type="button" data-rb="inv-dev-ok" data-id="${esc(m.id)}">✅ La recibí</button></div>`).join("")}`;
   }
   function invDetalle(cod) {
     const t = (R.ejec || []).find((x) => x.codigo === cod);
     if (!t) { R.invVer = null; return portalInversion(); }
     const X = calcNeg(t), emp = empresaActual() || {}, cap = Math.round(X.capital), rec = Math.round(X.invRecibe), d = saldoInv();
+    const aportado = (t.op?.aportes || []).reduce((s2, a) => s2 + (Number(a.monto) || 0), 0), pendFin = Math.max(0, cap - aportado), sugerido = Math.min(d, pendFin);
     return `<div class="rb-paso">
       <button class="btn small rb-link" type="button" data-rb="inv-volver">← Oportunidades</button>
       <div class="rb-card" style="border-color:#5ef0b0;overflow:hidden;padding:0">
@@ -2527,8 +2537,10 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
           <div class="muted" style="font-size:.72rem">${esc((t.oc_compra?.organismo || t.organismo || "").slice(0, 50))}${t.op?.oc_codigo ? " · OC " + esc(t.op.oc_codigo) : ""}</div>
           <div class="rb-inv-flecha" style="margin:10px 0"><span>Inviertes</span><b>${clp(cap)}</b><span>recibes</span><b class="rb-vivo-t">${clp(rec)}</b><span class="rb-pill verde">+${Math.round(X.invPct * 1000) / 10}%</span></div>
           <div class="muted" style="font-size:.72rem;margin-bottom:8px">Te paga el <b>factoring</b> en ~5 días (no esperas al Estado). Tu plata paga solo los costos reales del proyecto.</div>
-          ${d >= cap ? `<button class="btn rb-oro rb-big-btn" type="button" data-rb="inv-poner" data-c="${esc(cod)}">💸 Invertir ${clp(cap)} desde mi saldo</button>` : `<div class="rb-sug" style="border-color:#f5cf6b">💳 Te faltan ${clp(cap - d)} en tu saldo. Carga tu saldo para invertir en esta oportunidad.</div>
-          <button class="btn rb-oro rb-big-btn" type="button" data-rb="inv-cargar-op" data-c="${esc(cod)}" data-m="${cap}">💳 Cargar mi saldo → transferir a ${esc(corta(emp.razon_social) || "PJANIC")}</button>`}
+          <div class="rb-kv" style="font-size:.76rem;margin:6px 0"><span>tu saldo disponible <b>${clp(d)}</b></span><span>aún por financiar <b>${clp(pendFin)}</b>${aportado ? ` (ya aportado ${clp(aportado)})` : ""}</span></div>
+          ${pendFin <= 0 ? `<div class="rb-sug" style="border-color:#5ef0b0">✅ Este negocio ya está financiado.</div>` : d > 0 ? `<label class="rb-lab">Monto a aportar (puede ser parcial)<input class="rb-in" id="rbInvMonto" inputmode="numeric" value="${sugerido.toLocaleString("es-CL")}"></label>
+          <button class="btn rb-oro rb-big-btn" type="button" data-rb="inv-poner" data-c="${esc(cod)}">💸 Invertir desde mi saldo</button>` : `<div class="rb-sug" style="border-color:#f5cf6b">💳 No tienes saldo disponible. Carga tu saldo para invertir en esta oportunidad.</div>
+          <button class="btn rb-oro rb-big-btn" type="button" data-rb="inv-cargar-op" data-c="${esc(cod)}" data-m="${pendFin}">💳 Cargar mi saldo → transferir a ${esc(corta(emp.razon_social) || "PJANIC")}</button>`}
           ${brokers().length ? `<div class="rb-row" style="flex-wrap:wrap;margin-top:8px"><span class="muted" style="font-size:.66rem;align-self:center">📲 Enviar a:</span>${brokers().map((bk) => `<button class="btn small" type="button" data-rb="inv-enviar" data-c="${esc(t.codigo)}" data-tel="${esc(bk.tel || "")}" data-nom="${esc(bk.nombre)}">${esc(bk.nombre)}</button>`).join("")}<button class="btn small rb-link" type="button" data-rb="broker-nuevo">➕</button></div>` : `<div class="rb-row" style="margin-top:8px"><button class="btn small rb-link" type="button" data-rb="broker-nuevo">📲 Enviar a un inversionista</button></div>`}
           ${R.brokerForm ? `<div class="rb-card" style="padding:12px;margin-top:8px"><div class="rb-sec">➕ Nuevo inversionista</div><label class="rb-lab">Nombre<input class="rb-in" id="rbBkNom" placeholder="Ej: Nicolás"></label><label class="rb-lab">WhatsApp (opcional)<input class="rb-in" id="rbBkTel" inputmode="tel" placeholder="+56 9 ..."></label><div class="rb-row"><button class="btn small rb-oro" type="button" data-rb="broker-add">Guardar</button><button class="btn small rb-link" type="button" data-rb="broker-cancelar">Cancelar</button></div></div>` : ""}
         </div></div></div>`;
@@ -4222,8 +4234,8 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
         + fila("Reserva IVA (F29)", X.iva_pagar, "IVA venta − IVA compra", o.rp_sii ? "pagado" : "") + fila("Reserva impuesto (PPM)", X.impuesto, (X.p.impuesto * 100).toFixed(1) + "% de la venta neta", o.rp_sii ? "pagado" : "")
         + (X.factoring ? fila("Comisión factoring (estimada)", X.factoring, (X.p.factoring * 100).toFixed(1) + "% · solo si el abono no vino líquido") : "")
         + fila("Utilidad final del negocio", X.final, "ingreso − compra − flete − IVA − PPM − comisión cotizador", "oro"))}
-      ${sec("💼", "Inversionista" + (o.inversionista_nombre ? " · " + esc(o.inversionista_nombre) : ""), (c.aportes.length ? c.aportes.map((a, i) => fila("Aporte " + (a.quien ? esc(a.quien) : ""), Math.round(a.monto), fechaCorta(a.fecha)) + del("aportes", i)).join("") : fila("Aporte", c.capital ? c.capital : "Sin registrar", c.src.capital))
-        + (c.devol.length ? c.devol.map((d, i) => fila("Devolución de capital", -Math.round(d.monto), fechaCorta(d.fecha), "pagado") + del("devoluciones", i)).join("") : "")
+      ${sec("💼", "Inversionista" + (o.inversionista_nombre ? " · " + esc(o.inversionista_nombre) : ""), (c.aportes.length ? c.aportes.map((a, i) => fila("Aporte " + (a.quien ? esc(a.quien) : ""), Math.round(a.monto), fechaCorta(a.fecha) + (a.origen === "saldo" ? " · desde su saldo (libro del inversionista, mov " + esc(String(a.mov_id || "").slice(0, 8)) + ")" : " · registro manual")) + (a.origen === "saldo" ? "" : del("aportes", i))).join("") : fila("Aporte", c.capital ? c.capital : "Sin registrar", c.src.capital))
+        + (c.devol.length ? c.devol.map((d, i) => fila("Devolución de capital", -Math.round(d.monto), fechaCorta(d.fecha) + (d.inv_id ? (d.confirmado ? " · confirmada por el inversionista" : " · esperando que el inversionista confirme que la recibió") : ""), d.inv_id && !d.confirmado ? "" : "pagado") + del("devoluciones", i)).join("") : "")
         + fila("Capital por devolver", c.capital, "afecta la caja, no la utilidad (la compra ya es costo)") + fila("Ganancia del inversionista", c.invGan, c.src.invGan, c.porConfirmar ? "" : "")
         + form("aporte") + form("devolucion") + `<div class="rb-row">${btnAdd("aporte", "Aporte")}${btnAdd("devolucion", "Devolución")}<button class="btn small" type="button" data-rb="fr-acuerdo" data-c="${esc(cod)}">🤝 Acuerdo: ${esc(acuerdo)}</button></div>`)}
       ${sec("🏦", "Reparto", fila("Caja disponible para repartir", c.disponible, c.src.disponible, c.disponible > 0 ? "oro" : "")
@@ -5440,21 +5452,29 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       const v = Math.round(Number(($("#rbSaldoMonto")?.value || "").replace(/\D/g, "")) || 0);
       if (v < 50) { toast("Pon un monto (mínimo $50)"); return; }
       toast("Abriendo WebPay…");
-      try { const r = await api("webpay-crear", { method: "POST", body: JSON.stringify({ monto: v, jugador: miJug() }) });
+      try { const r = await api("webpay-crear", { method: "POST", body: JSON.stringify({ monto: v, empresa: leer().empresa || "principal" }) });
         if (r && r.url && r.token) irWebpay(r.url, r.token); else toast(r?.error || "WebPay no disponible ahora"); }
       catch (e) { toast(e.message); }
       return;
     }
-    if (a === "saldo-simular") {   // 🧪 modo prueba: carga el saldo al tiro, sin pasar por WebPay
+    if (a === "saldo-simular") {   // 🧪 modo prueba: abono confirmado en el servidor con referencia única (sin WebPay)
       const v = Math.round(Number(($("#rbSaldoMonto")?.value || "").replace(/\D/g, "")) || 0);
       if (v < 50) { toast("Pon un monto (mínimo $50)"); return; }
-      setSaldo(saldoInv() + v); guardar({ portal: "inversion" }); R.saldoForm = null; R.saldoPrefill = 0;
-      toast("🧪 Carga simulada: +" + clp(v) + " a tu saldo"); return pintarHoja(true);
+      try { const r = await api("inv-simular-abono", { method: "POST", body: JSON.stringify({ monto: v, ref: "sim" + Date.now().toString(36) }) }); R.saldoForm = null; R.saldoPrefill = 0; toast("🧪 Abono simulado: +" + clp(v)); await cargarInv(true); } catch (e) { toast(e.message); }
+      return pintarHoja(true);
     }
+    if (a === "inv-refrescar") { await cargarInv(true); return pintarHoja(true); }
+    if (a === "inv-cred") { R.invCredVer = !R.invCredVer; return pintarHoja(true); }
+    if (a === "inv-dev-ok") { try { const r = await api("inv-devolucion-confirmar", { method: "POST", body: JSON.stringify({ mov_id: b.dataset.id }) }); toast(r.repetido ? "Ya estaba confirmada" : "✅ Devolución confirmada: capital pendiente " + clp(r.resumen?.porOC?.[r.mov?.oc]?.capital_pendiente ?? 0)); await cargarInv(true); } catch (e) { toast(e.message); } return pintarHoja(true); }
     if (a === "saldo-retirar") { R.saldoForm = "retirar"; return pintarHoja(true); }
     if (a === "saldo-cancelar") { R.saldoForm = null; R.saldoPrefill = 0; return pintarHoja(true); }
-    if (a === "inv-entrar") { const u = ($("#rbInvUsr")?.value || "").trim(); if (!u) { toast("Pon tu usuario"); return; } try { localStorage.setItem(INVSES, JSON.stringify({ usuario: u, t: Date.now() })); } catch {} toast("Bienvenido, " + u); return pintarHoja(true); }
-    if (a === "inv-salir") { try { localStorage.removeItem(INVSES); } catch {} R.invVer = null; R.invEmpSel = null; return pintarHoja(true); }
+    if (a === "inv-entrar") { const u = ($("#rbInvUsr")?.value || "").trim(), pw = ($("#rbInvPwd")?.value || ""), idIn = ($("#rbInvId")?.value || "").trim();
+      if (pw.length < 4) { toast("La clave debe tener al menos 4 caracteres"); return; }
+      if (idIn) { setInvCred({ id: idIn, clave: pw, nombre: u }); try { const r = await api("inv-estado"); setInvCred({ id: idIn, clave: pw, nombre: r.inv?.nombre || u }); R.invEstado = r; R.invEstadoT = Date.now(); toast("Bienvenido, " + (r.inv?.nombre || u)); } catch (e) { setInvCred(null); toast("Código o clave incorrectos"); } return pintarHoja(true); }
+      if (!u) { toast("Pon tu nombre"); return; }
+      try { const r = await api("inv-registrar", { method: "POST", body: JSON.stringify({ nombre: u, clave: pw }) }); if (r.error) { toast(r.error); return; } setInvCred({ id: r.id, clave: pw, nombre: r.nombre }); toast("Perfil creado, " + r.nombre + " · guarda tu código: " + r.id); R.invCredVer = true; await cargarInv(true); } catch (e) { toast(e.message); }
+      return pintarHoja(true); }
+    if (a === "inv-salir") { setInvCred(null); R.invEstado = null; R.invVer = null; R.invEmpSel = null; return pintarHoja(true); }
     if (a === "inv-empresa") { R.invEmpSel = b.dataset.e; R.invVer = null; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "inv-cambiar-emp") { R.invEmpSel = null; R.invVer = null; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "inv-ver") { R.invVer = cod; sheet.scrollTop = 0; return pintarHoja(true); }
@@ -5462,12 +5482,19 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "inv-cargar-op") { R.saldoForm = "cargar"; R.saldoPrefill = Number(b.dataset.m) || 0; R.invVer = null; sheet.scrollTop = 0; return pintarHoja(true); }
     if (a === "inv-avanzar") { const L2 = inversiones(); const e = L2.find((x) => x.id === b.dataset.id); if (e) { e.paso = Math.min(2, Math.max(pasoDe(e.codigo), e.paso || 0) + 1); setInversiones(L2); } return pintarHoja(true); }
     if (a === "inv-ejecutar") { guardar({ portal: "ejecuta" }); R.invVer = null; R.ejAbierto = cod; R.ejModo = null; const t = (R.ejec || []).find((x) => x.codigo === cod); if (t) R.ejTab = etEj(t); R.ejecT = 0; sheet.scrollTop = 0; toast("🛠 Vamos a ejecutar este negocio"); return pintarHoja(true); }
-    if (a === "inv-poner") { const tr = (R.ejec || []).find((x) => x.codigo === cod); if (!tr) return; const X = calcNeg(tr); const cap = Math.round(X.capital); if (!cap) { toast("Este negocio aún no tiene monto"); return; } const d = saldoInv(); if (cap > d) { toast("Te falta saldo. Carga primero con ➕ Cargar."); return; } setSaldo(d - cap); const L2 = inversiones(); L2.push({ id: "i" + Date.now(), codigo: tr.codigo, nombre: tr.nombre || tr.codigo, capital: cap, invGan: Math.round(X.invGan), ts: Date.now(), estado: "trabajando" }); setInversiones(L2); R.invVer = null; toast("💸 Invertiste " + clp(cap) + " · tu plata está trabajando"); return pintarHoja(true); }
-    if (a === "inv-liquidar") { const L2 = inversiones(); const e = L2.find((x) => x.id === b.dataset.id); if (!e || e.estado !== "trabajando") return; const bp = brokerPct() / 100; const netInv = Math.round(e.capital + e.invGan * (1 - bp)), com = Math.round(e.invGan * bp); e.estado = "liquidado"; e.ts_liq = Date.now(); e.neto = netInv; e.com = com; setInversiones(L2); setSaldo(saldoInv() + netInv); toast("💰 Pagó el factoring: +" + clp(netInv) + " a tu saldo" + (com ? " · comisión broker " + clp(com) : "")); return pintarHoja(true); }
+    if (a === "inv-poner") { const tr = (R.ejec || []).find((x) => x.codigo === cod); if (!tr) return;
+      const monto = Math.round(Number(($("#rbInvMonto")?.value || "").replace(/\D/g, "")) || 0); if (monto < 1000) { toast("Escribe el monto a aportar"); return; }
+      R.invSolic = R.invSolic || {}; const sol = R.invSolic[cod + ":" + monto] || ("sol" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)); R.invSolic[cod + ":" + monto] = sol;   // misma solicitud al reintentar → sin duplicar
+      try { const r = await api("inv-asignar", { method: "POST", body: JSON.stringify({ codigo: cod, monto, solicitud: sol }) }); if (r.error) { toast(r.error); return pintarHoja(true); }
+        delete R.invSolic[cod + ":" + monto]; R.invVer = null; toast((r.repetido ? "Ya estaba registrado: " : "💸 Aportaste ") + clp(monto) + (r.pendiente_financiar ? " · faltan " + clp(r.pendiente_financiar) : " · negocio financiado")); R.ejecT = 0; cargarEjecuta(); await cargarInv(true); }
+      catch (e) { toast(e.message + " · puedes reintentar: no se duplicará"); }
+      return pintarHoja(true); }
+    if (a === "inv-liquidar") { toast("Las devoluciones se confirman en 💼 Mis negocios cuando la empresa las registra."); return; }
     if (a === "hist-limpiar") { setInversiones(inversiones().filter((x) => x.estado !== "liquidado")); toast("Historial borrado"); return pintarHoja(true); }
     if (a === "liq-mas") { setBrokerPct(brokerPct() + 5); R.liqAbierto = true; return pintarHoja(true); }
     if (a === "liq-menos") { setBrokerPct(brokerPct() - 5); R.liqAbierto = true; return pintarHoja(true); }
-    if (a === "saldo-ok") { const v = Math.round(Number(($("#rbSaldoMonto")?.value || "").replace(/\D/g, "")) || 0); if (!v) { toast("Pon un monto"); return; } const modo = R.saldoForm, d = saldoInv(); if (modo === "retirar" && v > d) { toast("No tienes saldo suficiente"); return; } setSaldo(modo === "cargar" ? d + v : d - v); R.saldoForm = null; R.saldoPrefill = 0; toast(modo === "cargar" ? "💳 Saldo cargado: " + clp(v) : "✅ Retiro registrado: " + clp(v)); return pintarHoja(true); }
+    if (a === "saldo-ok") { toast("Las cargas y retiros manuales ya no se registran en el celular: usa WebPay o pide a la empresa que registre el movimiento."); return; }
+    if (a === "saldo-ok-viejo") { return; }
     if (a === "nube-aprobar" || a === "nube-rechazar") {
       try { await api("nube-aprobar", { method: "POST", body: JSON.stringify({ id: b.dataset.v, rechazar: a === "nube-rechazar" }) }); toast(a === "nube-aprobar" ? "✅ Servidor aprobado: se está instalando" : "Solicitud rechazada"); R.nubeT = 0; await cargarNube(); } catch (e) { toast(e.message); } return; }
     if (a === "robot-mando") { try { await api("robot-mando", { method: "POST", body: JSON.stringify({ preferido: b.dataset.v || null }) }); toast(b.dataset.v ? `🎖 Manda ${b.dataset.v === "nube" ? "la nube" : "el PC"} (cambia en ~10 s)` : "⚙ Automático"); R.nubeT = 0; await cargarNube(); } catch (e) { toast(e.message); } return; }
