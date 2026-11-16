@@ -818,6 +818,9 @@ async function precioPagina(url) {
   } catch (e) { return { error: String(e.message || e).slice(0, 60), productos: [] }; }
 }
 async function concretar(store, t, opts = {}) {
+  // fase 1: candidatos (búsquedas, páginas, base de proveedores) → se guarda en t.op.concrecion_tmp
+  // fase 2: Claude decide + negociación + pasos → t.op.concrecion. Separadas para no pasar el límite de tiempo de la nube.
+  const fase = opts.fase || "ambas";
   const key = process.env.ANTHROPIC_API_KEY || "";
   const items = (Array.isArray(t.items) && t.items.length ? t.items : (t.oc_compra?.items || []).map((i) => ({ d: i.especificacion || i.nombre, q: i.cantidad, p: i.precio })))
     .filter((i) => i && i.d).slice(0, 8).map((i) => ({ d: String(i.d).slice(0, 160), q: Number(i.q) || 1, p: Number(i.p) || 0 }));
@@ -826,7 +829,7 @@ async function concretar(store, t, opts = {}) {
   const catal = base.lista.filter((x) => x.util !== false);
   const kw = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z0-9]+/).filter((w) => w.length > 3 && !["para", "con", "segun", "tipo", "unidad", "requiere"].includes(w));
   // 1) candidatos por ítem, en paralelo: búsqueda web (tiendas chilenas) + páginas de las fotos; cada página se lee y puede traer varios productos
-  const porItem = await Promise.all(items.map(async (it) => {
+  const porItem = (fase === "2" && t.op?.concrecion_tmp?.porItem?.length) ? t.op.concrecion_tmp.porItem : await Promise.all(items.map(async (it) => {
     const q = it.d.replace(/\(c[oó]digo [^)]*\)|seg[uú]n (especificaci[oó]n|eett|ttr).*|o similar/gi, "").replace(/\b(Biotecmed|C[oó]rcega|CD-C\d+|CIP\s?\d+L?|BC\d+L|ADC)\b/g, "").replace(/\s+/g, " ").trim().slice(0, 80);
     const [w1, f1, m1] = await Promise.allSettled([webBuscar(q + " precio chile", 10), buscarFotos(q), mlBuscar(store, q, 8)]);
     const deML = m1.status === "fulfilled" ? (m1.value.fotos || []).filter((x) => x.local !== false) : [];
@@ -849,6 +852,7 @@ async function concretar(store, t, opts = {}) {
       if (w) { const pg = await precioPagina(w.url); const tel = (pg.productos || [])[0]?.telefono || null; propios[0].web = w.url; propios[0].telefono = tel; const R2 = (await store.get("proveedores/_rubros", { type: "json" }).catch(() => null)) || {}; R2[propios[0].rut] = { ...(R2[propios[0].rut] || {}), web: w.url, telefono: tel }; await store.setJSON("proveedores/_rubros", R2); } } catch {} }
     return { item: it, q, candidatos: cands.map((c) => ({ titulo: c.titulo, url: c.url, foto: c.foto, fuente: c.fuente, precio_iva: c.precio_iva || null, sin_stock: c.disponible === false, telefono: c.telefono || null })), propios };
   }));
+  if (fase === "1") { t.op = t.op || { etapa: "ganada", historial: [] }; t.op.concrecion_tmp = { t: ahora(), porItem }; await store.setJSON("trabajo/" + t.codigo, t); return { ok: true, fase: 1, items: porItem.length }; }
   // 2) Claude decide
   let plan = null, aviso = null;
   if (key) {
@@ -863,7 +867,7 @@ Responde SOLO JSON compacto (una línea, sin comentarios, strings cortas sin com
       return `ÍTEM ${i}: "${x.item.d}" · cantidad ${x.item.q} · venta unit. neto $${x.item.p} · precio_objetivo_iva $${obj} · precio_maximo_iva $${maxIva}\n  candidatos: ${JSON.stringify(x.candidatos)}\n  propios: ${JSON.stringify(x.propios)}`; }).join("\n\n");
     try {
       const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-        body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5", max_tokens: 4500, messages: [{ role: "user", content: prompt }] }), signal: AbortSignal.timeout(28000) });
+        body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5", max_tokens: 4000, messages: [{ role: "user", content: prompt }] }), signal: AbortSignal.timeout(24000) });
       const j = await r.json(); const txt = (j.content || []).map((c) => c.text || "").join("");
       const m = txt.match(/\{[\s\S]*\}/); let raw = m ? m[0] : "";
       try { plan = raw ? JSON.parse(raw) : null; } catch {
@@ -965,11 +969,13 @@ async function mlToken(store) {
 // 🧩 Puente PC: cuando no hay API oficial, la búsqueda se encola (ml/cola/<k>) y el PC grande (ml_puente.py, IP de casa)
 //    la resuelve leyendo mercadolibre.cl y deja el resultado en ml/res/<k> (caché 24 h). Concretar espera hasta ~8 s.
 const mlKey = (q) => { let h = 0; for (const ch of String(q).toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h.toString(36); };
-async function mlPuente(store, q, esperaMs = 8000) {
+async function mlPuente(store, q, esperaMs = 6000) {
   const k = mlKey(q);
   const res = await store.get("ml/res/" + k, { type: "json" }).catch(() => null);
   if (res && Date.now() - new Date(res.t).getTime() < 24 * 3600e3) return { fotos: res.fotos || [], origen: "pc", t: res.t, error: res.error || null };
   await store.setJSON("ml/cola/" + k, { k, q, t: ahora() });
+  const visto = await store.get("ml/puente_visto", { type: "json" }).catch(() => null);
+  if (!visto || Date.now() - new Date(visto.t).getTime() > 10 * 60e3) return { fotos: [], error: "ML: el puente del PC no está activo (ML_PUENTE.bat); la búsqueda queda en cola" };
   const fin = Date.now() + esperaMs;
   while (Date.now() < fin) { await new Promise((r) => setTimeout(r, 1500)); const r2 = await store.get("ml/res/" + k, { type: "json" }).catch(() => null); if (r2 && new Date(r2.t).getTime() > Date.now() - 60e3) return { fotos: r2.fotos || [], origen: "pc", t: r2.t, error: r2.error || null }; }
   return { fotos: [], error: "ML: el PC no respondió a tiempo (queda en cola; en la próxima búsqueda estará)" };
@@ -1048,7 +1054,7 @@ async function siiIngesta(req) {
   if (b.accion === "ml_listado") { globalThis.__mlDebug = !!b.debug; try { return new Response(JSON.stringify({ ok: true, r: await mlListado(b.q, b.local !== false) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); } catch (e) { return new Response(JSON.stringify({ error: String(e.message || e) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); } }
   if (b.accion === "prov_base") return new Response(JSON.stringify({ ok: true, ...(await baseProveedores(store, !!b.forzar)) }), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
   if (b.accion === "prov_clasificar") return new Response(JSON.stringify(await clasificarProveedores(store)), { status: 200, headers: { ...corsH, "content-type": "application/json" } });
-  if (b.accion === "concretar") { const t = await leer(store, String(b.codigo || "")); if (!t) return new Response(JSON.stringify({ error: "no existe" }), { status: 404, headers: corsH }); const r = await concretar(store, t); if (r.ok) { t.op = t.op || { etapa: "ganada", historial: [] }; t.op.concrecion = r; await store.setJSON("trabajo/" + t.codigo, t); } return new Response(JSON.stringify(r), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); }
+  if (b.accion === "concretar") { const t = await leer(store, String(b.codigo || "")); if (!t) return new Response(JSON.stringify({ error: "no existe" }), { status: 404, headers: corsH }); const r = await concretar(store, t, { fase: b.fase ? String(b.fase) : "ambas" }); if (r.ok && r.fase !== 1) { t.op = t.op || { etapa: "ganada", historial: [] }; t.op.concrecion = r; await store.setJSON("trabajo/" + t.codigo, t); } return new Response(JSON.stringify(r), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); }
   if (b.accion === "anexo") { const r = await analizarAnexo(store, b); return new Response(JSON.stringify(r), { status: 200, headers: { ...corsH, "content-type": "application/json" } }); }
   if (b.accion === "hoy") {   // diagnóstico: trabajos tocados desde una fecha, con empresa (para ver qué metió cada una y que no se crucen)
     const desde = String(b.desde || new Date(Date.now() - 24 * 3600e3).toISOString()); const L = await todos(store);   // TODOS los trabajos (caché), no solo los últimos por código
@@ -1206,7 +1212,7 @@ async function atender(req) {
     return Response.redirect("https://auth.mercadolibre.cl/authorization?" + new URLSearchParams({ response_type: "code", client_id: app.client_id, redirect_uri: "https://cotizagil.netlify.app/bot/ml-callback" }), 302); }
   if (ruta === "ml-estado" && req.method === "GET") { const app = await mlConfig(store); const tk = await store.get("ml/token", { type: "json" }).catch(() => null); const tok = await mlToken(store).catch(() => null); return json({ app: !!app.client_id, autorizado: !!tk?.refresh_token, token_ok: !!tok, user_id: tk?.user_id || null, error: tk?.error || null }); }
   if (ruta === "anexo" && req.method === "POST") { const b = await cuerpo(req); const r = await analizarAnexo(store, b); return json(r, r.error ? 400 : 200); }   // 📎 anexos → lo que se entrega
-  if (ruta === "ml-pendientes" && req.method === "GET") { const { blobs } = await store.list({ prefix: "ml/cola/" }); const L = []; for (const b2 of blobs.slice(0, 10)) { const x = await store.get(b2.key, { type: "json" }).catch(() => null); if (x) L.push(x); } return json({ ok: true, pendientes: L }); }
+  if (ruta === "ml-pendientes" && req.method === "GET") { try { await store.setJSON("ml/puente_visto", { t: ahora() }); } catch {} const { blobs } = await store.list({ prefix: "ml/cola/" }); const L = []; for (const b2 of blobs.slice(0, 10)) { const x = await store.get(b2.key, { type: "json" }).catch(() => null); if (x) L.push(x); } return json({ ok: true, pendientes: L }); }
   if (ruta === "ml-resultado" && req.method === "POST") { const b = await cuerpo(req); const k = texto(b.k, 20); if (!k) return json({ error: "falta k" }, 400);
     const fotos = (Array.isArray(b.fotos) ? b.fotos : []).slice(0, 15).map((x) => ({ titulo: texto(x.titulo, 160), url: texto(x.url, 400), foto: texto(x.foto, 400) || null, precio_iva: Math.round(Number(x.precio_iva) || 0) || null, fuente: "mercadolibre.cl", disponible: x.disponible !== false, vendedor: texto(x.vendedor, 60) || null, envio_gratis: !!x.envio_gratis, local: x.local !== false, motor: "ml-pc" }));
     await store.setJSON("ml/res/" + k, { k, q: texto(b.q, 120), fotos, error: texto(b.error, 200) || null, t: ahora() }); try { await store.delete("ml/cola/" + k); } catch {} return json({ ok: true, n: fotos.length }); }
@@ -1216,8 +1222,9 @@ async function atender(req) {
   if (ruta === "concretar" && req.method === "POST") {   // 🎯 plan para concretar una OC ganada con proveedores/links reales
     const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return json({ error: "No existe." }, 404);
     if (t.op?.concrecion && !b.forzar && Date.now() - new Date(t.op.concrecion.t).getTime() < 6 * 3600e3) return json(t.op.concrecion);
-    const r = await concretar(store, t); if (r.error) return json(r, 400);
-    t.op = t.op || { etapa: "ganada", historial: [] }; t.op.concrecion = r; t.op.concretar_pendiente = false; t.actualizado = ahora(); await store.setJSON("trabajo/" + t.codigo, t);
+    const r = await concretar(store, t, { fase: b.fase ? String(b.fase) : "ambas" }); if (r.error) return json(r, 400);
+    if (r.fase === 1) return json(r);
+    t.op = t.op || { etapa: "ganada", historial: [] }; t.op.concrecion = r; t.op.concretar_pendiente = false; delete t.op.concrecion_tmp; t.actualizado = ahora(); await store.setJSON("trabajo/" + t.codigo, t);
     if (b.auto) { const e0 = (r.items || []).find((x) => x.elegido); const dir = e0?.elegido?.telefono ? "📞 llama al " + e0.elegido.telefono : e0?.elegido?.url ? "🛒 compra en " + String(e0.elegido.url).replace(/^https?:\/\/(www\.)?/, "").split("/")[0] : "revisa el plan";
       await avisarTexto(store, "🎯 Plan listo · " + t.codigo, `${(t.nombre || "").slice(0, 60)} · ${dir}${r.total?.ganancia != null ? " · ganas " + clpS(r.total.ganancia) : r.total?.ganancia_parcial ? " · ganancia parcial " + clpS(r.total.ganancia_parcial) : ""}. Abre Ejecuta → Concretar.`, "concretar-" + t.codigo, "/#robot", true).catch(() => {}); }
     return json(r);

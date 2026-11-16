@@ -1901,7 +1901,9 @@ ${guia ? `<div class=box><b>ACTA DE RECEPCIÓN CONFORME</b><div class=grid style
   }
   async function concretarPedir(cod, forzar, auto) {
     R._concretando = { ...(R._concretando || {}), [cod]: true }; pintarHoja(true);
-    try { await api("concretar", { method: "POST", body: JSON.stringify({ codigo: cod, forzar: !!forzar, auto: !!auto }) }); toast("🎯 Plan listo: dónde comprar y cuánto ganas"); }
+    try { await api("concretar", { method: "POST", body: JSON.stringify({ codigo: cod, forzar: true, fase: "1" }) });            // 1) buscar proveedores/links/precios
+      await api("concretar", { method: "POST", body: JSON.stringify({ codigo: cod, forzar: true, fase: "2", auto: !!auto }) });  // 2) Claude decide, guion y pasos
+      toast("🎯 Plan listo: dónde comprar, qué decir y cuánto ganas"); }
     catch (e) { toast(e.message || "No pude armar el plan"); }
     finally { delete R._concretando[cod]; R.ejecT = 0; await cargarEjecuta(); pintarHoja(true); }
   }
