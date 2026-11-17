@@ -2076,6 +2076,11 @@ ALTERNATIVA PROPUESTA: ${prop}`;
     t.op = op; return json({ trabajo: await escribir(store, t) });
   }
   // 🚦 EVALUADOR DE OC
+  if (ruta === "evaluar-todas" && req.method === "POST") {   // todas las OC de la empresa quedan evaluadas antes de abrir la caja (y el robot lo llama tras cada pasada)
+    const b = await cuerpo(req); const lista = await todos(store); const emp = texto(b.empresa, 40) || null; const out = []; let n = 0;
+    for (const x of lista) { if (!x?.oc_compra || (emp && (x.empresa || "principal") !== emp)) continue; if (n++ >= 150) break; try { const t = await leer(store, x.codigo); if (!t) continue; const ev = await evaluarYGuardar(store, t, !!b.forzar); if (ev) out.push({ codigo: t.codigo, oc: t.op?.oc_codigo || null, estado: ev.estado, saldo: ev.saldo, motivo: ev.motivo }); } catch (e) { out.push({ codigo: x.codigo, error: e.message }); } }
+    return json({ evaluadas: out.length, resumen: out.reduce((a, o) => { if (o.estado) a[o.estado] = (a[o.estado] || 0) + 1; return a; }, {}), ocs: out });
+  }
   if (ruta === "evaluar" && req.method === "GET") { const t = await leer(store, limpiaCodigo(url.searchParams.get("codigo"))); if (!t) return json({ error: "No existe." }, 404); const ev = await evaluarYGuardar(store, t, true); if (!ev) return json({ error: "Esta compra no tiene orden de compra todavía." }, 400); return json({ evaluacion: ev, escenarios: (t.op?.escenarios || []).map((e) => ({ id: e.id, nombre: e.nombre, t: e.t, activo: !!e.activo, origen: e.origen })), decisiones: t.op?.eval_decisiones || [] }); }
   if (ruta === "evaluar-xlsx" && req.method === "GET") { const t = await leer(store, limpiaCodigo(url.searchParams.get("codigo"))); if (!t) return json({ error: "No existe." }, 404); const ev = await evaluarYGuardar(store, t, false); if (!ev) return json({ error: "Sin OC." }, 400); return new Response(excelOC(t, ev), { headers: { "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "content-disposition": `attachment; filename="Excel_${(t.op?.oc_codigo || t.codigo).replace(/[^\w.-]/g, "_")}.xlsx"` } }); }
   if (ruta === "escenario" && req.method === "POST") {   // Excel en vivo: guarda un escenario (líneas + supuestos), lo activa y recalcula; el anterior queda en el historial
@@ -3101,7 +3106,8 @@ ALTERNATIVA PROPUESTA: ${prop}`;
           mail: t.oc_compra.mail || null, fono: t.oc_compra.fono || null, nombre: corto(t.oc_compra.nombre, 160),
           items: (t.oc_compra.items || []).slice(0, 6).map((i) => ({ nombre: corto(i.nombre, 80), especificacion: corto(i.especificacion, 100) })) } : null,
         neto: t.neto || null, llamado: t.llamado || t.op?.informe?.llamado || null, prob: t.prob ?? null, por: t.por || null, envios: t.envios || 0,
-        op: t.op ? { etapa: t.op.etapa, oc_codigo: t.op.oc_codigo || null, precio_acordado: t.op.precio_acordado || null, proveedor: corto(t.op.proveedor, 80),
+        op: t.op ? { etapa: t.op.etapa, oc_codigo: t.op.oc_codigo || null, precio_acordado: t.op.precio_acordado || null, proveedor: corto(t.op.proveedor, 80), oc_estado: t.op.oc_estado || null,
+          evaluacion: t.op.evaluacion ? { estado: t.op.evaluacion.estado, saldo: t.op.evaluacion.saldo, margenPct: t.op.evaluacion.margenPct, motivo: corto(t.op.evaluacion.motivo, 160), cajaNecesaria: t.op.evaluacion.cajaNecesaria, entrega: t.op.evaluacion.entrega || null, t: t.op.evaluacion.t, faltan: (t.op.evaluacion.faltan || []).length, pendientes: (t.op.evaluacion.pendientes || []).length } : null,
           costo_transporte: t.op.costo_transporte || 0, cerrado: t.op.cerrado || null, concretar_pendiente: !!t.op.concretar_pendiente, nos_da: t.op.nos_da ?? null, sin_factura: !!t.op.sin_factura,
           ganada_t: (t.op.historial || []).find((h) => h.etapa === "ganada")?.t || null, historial: (t.op.historial || []).slice(-8).map((h) => ({ t: h.t, etapa: h.etapa })),
           inversionista_nombre: corto(t.op.inversionista_nombre, 40), ejecutor_nombre: corto(t.op.ejecutor_nombre, 40),
