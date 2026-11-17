@@ -8,6 +8,8 @@ import PROV_SEED from "./proveedores_seed.json";   // 📒 facturas de compra le
 // Seguridad: todas las llamadas exigen el encabezado x-robot-token igual a la variable
 // de entorno ROBOT_TOKEN (configurada en Netlify, nunca en el código ni en index.html).
 import { getStore } from "@netlify/blobs";
+import { evaluarOC, consolidar as evalConsolidar, PARAMS_BASE as EVAL_PARAMS } from "./evaluador.mjs";   // 🚦 evaluador de OC
+import { excelOC } from "./xlsxmin.mjs";
 import { cascada as motorCascada, libros as motorLibros, resumenFondo as motorResumen, REGLAS_BASE as MOTOR_REGLAS } from "./motor.mjs";   // 🧮 motor de caja
 import {
   timingSafeEqual, createHash, createHmac, createECDH, createCipheriv, createPrivateKey,
@@ -911,7 +913,9 @@ async function enlazarOC(store, o) {
   if (!op.concrecion) op.concretar_pendiente = true;   // 🎯 al llegar la OC: plan de concreción (links, teléfonos, precios, guion) para el ejecutador
   x.op = op;
   try { const m = cotejarOC(x); if (m) op.oc_match = m; } catch {}
+  if (t?.oc_compra && JSON.stringify(t.oc_compra.items || []) !== JSON.stringify(o.items || [])) op.oc_versiones = [...(op.oc_versiones || []), { t: ahora(), oc: t.oc_compra }].slice(-5);   // cambió el documento: se conserva la versión anterior
   await escribir(store, x);
+  try { await evaluarYGuardar(store, x, true); } catch {}   // 🚦 al llegar la OC, su evaluación ya queda calculada
   if (llego) await avisarTexto(store, "📦 ¡Orden de compra! " + o.codigo,
     `${(o.organismo || "").slice(0, 50)} · $${Math.round(o.total || 0).toLocaleString("es-CL")} · ${(o.nombre || "").slice(0, 60)}. Abre Negocios: el robot ya busca proveedores y calcula la utilidad.`,
     "oc-" + o.codigo, "/#robot", true).catch(() => {});
@@ -1134,6 +1138,17 @@ function motorSemilla() {
         { id: "tol", codigo: "2484-385-AG26", nombre: "Toldos Quilicura", venta: 4139950, costo: 2700000, ejecutador: "Nicolás", aporte: 2628241, entrega: "vie 21-11", estado: "en ejecución" },
         { id: "gen", codigo: "3000-1114-AG26", nombre: "Generador Monte Patria", venta: 5519994, costo: 4000000, ejecutador: "Felipe", aporte: 0, entrega: "sin fecha", estado: "en ejecución" }], cobros: [] },
     ] };
+}
+
+// 🚦 evalúa una OC con los parámetros de su empresa y el requerimiento capturado; guarda op.evaluacion si cambió el estado o los números clave
+async function evaluarYGuardar(store, t, forzar) {
+  if (!t?.oc_compra && !t?.op?.oc_codigo) return null;
+  const emp = t.empresa || "principal"; const P = { ...EVAL_PARAMS, ...((await store.get("eval-params/" + emp, { type: "json" }).catch(() => null)) || {}) };
+  const RQ = await store.get("req/" + t.codigo, { type: "json" }).catch(() => null); if (RQ?.analisis) t.req_analisis = RQ.analisis;
+  const ev = evaluarOC(t, P, ahora().slice(0, 10)); delete t.req_analisis;
+  const prev = t.op?.evaluacion; const clave = (e) => [e.estado, e.saldo, e.costoDirecto, e.faltan.length, e.pendientes.length, e.escenario?.id || ""].join("|");
+  if (forzar || !prev || clave(prev) !== clave(ev)) { t.op = t.op || { etapa: "ganada", historial: [] }; t.op.evaluacion = ev; if (prev && prev.estado !== ev.estado) t.op.eval_hist = [...(t.op.eval_hist || []), { t: ev.t, de: prev.estado, a: ev.estado, motivo: ev.motivo }].slice(-20); await escribir(store, t); }
+  return ev;
 }
 
 const firmaPublica = (codigo, id) => createHmac("sha256", process.env.ROBOT_TOKEN || "sin-token").update("pub:" + codigo + ":" + id).digest("base64url").slice(0, 22);
@@ -2060,6 +2075,29 @@ ALTERNATIVA PROPUESTA: ${prop}`;
       op.render = { ...(op.render || {}), estado: "listo", archivo_id: id, t: ahora(), fuentes: (Array.isArray(b.fuentes) ? b.fuentes : []).slice(0, 10).map((x) => texto(x, 120)), medidas_usadas: (Array.isArray(b.medidas_usadas) ? b.medidas_usadas : []).slice(0, 10).map((x) => texto(x, 80)), medidas_pendientes: (Array.isArray(b.medidas_pendientes) ? b.medidas_pendientes : []).slice(0, 10).map((x) => texto(x, 80)), nota: texto(b.nota, 300) || "" }; }
     t.op = op; return json({ trabajo: await escribir(store, t) });
   }
+  // 🚦 EVALUADOR DE OC
+  if (ruta === "evaluar" && req.method === "GET") { const t = await leer(store, limpiaCodigo(url.searchParams.get("codigo"))); if (!t) return json({ error: "No existe." }, 404); const ev = await evaluarYGuardar(store, t, true); if (!ev) return json({ error: "Esta compra no tiene orden de compra todavía." }, 400); return json({ evaluacion: ev, escenarios: (t.op?.escenarios || []).map((e) => ({ id: e.id, nombre: e.nombre, t: e.t, activo: !!e.activo, origen: e.origen })), decisiones: t.op?.eval_decisiones || [] }); }
+  if (ruta === "evaluar-xlsx" && req.method === "GET") { const t = await leer(store, limpiaCodigo(url.searchParams.get("codigo"))); if (!t) return json({ error: "No existe." }, 404); const ev = await evaluarYGuardar(store, t, false); if (!ev) return json({ error: "Sin OC." }, 400); return new Response(excelOC(t, ev), { headers: { "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "content-disposition": `attachment; filename="Excel_${(t.op?.oc_codigo || t.codigo).replace(/[^\w.-]/g, "_")}.xlsx"` } }); }
+  if (ruta === "escenario" && req.method === "POST") {   // Excel en vivo: guarda un escenario (líneas + supuestos), lo activa y recalcula; el anterior queda en el historial
+    const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t) return json({ error: "No existe." }, 404); const op = t.op || (t.op = { etapa: "ganada", historial: [] }); op.escenarios = op.escenarios || [];
+    if (b.activar) { for (const e of op.escenarios) e.activo = e.id === b.activar; }
+    else if (b.borrar) { op.escenarios = op.escenarios.filter((e) => e.id !== b.borrar); }
+    else { const E = b.escenario || {}; const lineas = (Array.isArray(E.lineas) ? E.lineas : []).slice(0, 60).map((l) => ({ lid: texto(l.lid, 24), costo_unit: l.costo_unit === "" || l.costo_unit == null ? null : Number(l.costo_unit), costo_total: l.costo_total === "" || l.costo_total == null ? null : Number(l.costo_total), proveedor: texto(l.proveedor, 80), tipo: ["confirmado", "publicado", "estimacion"].includes(l.tipo) ? l.tipo : "estimacion", stock: texto(l.stock, 40), plazo: texto(l.plazo, 40), iva_incl: !!l.iva_incl, despacho: l.despacho === "" || l.despacho == null ? null : Number(l.despacho), respaldo: texto(l.respaldo, 300), fuente: texto(l.fuente, 120) })).filter((l) => l.lid);
+      const S = E.supuestos || {}; const num = (v) => v === "" || v == null ? null : Number(v);
+      const sup = { flete: num(S.flete), otros_directos: num(S.otros_directos), ejecucion: num(S.ejecucion), factoring: num(S.factoring), ppm: num(S.ppm), caja_resuelta: S.caja_resuelta == null ? null : !!S.caja_resuelta, usa_factoring: S.usa_factoring == null ? null : !!S.usa_factoring, fecha_compra: /^\d{4}-\d{2}-\d{2}$/.test(String(S.fecha_compra || "")) ? S.fecha_compra : null, incumplimiento: texto(S.incumplimiento, 200) || null };
+      for (const k of Object.keys(sup)) if (sup[k] == null) delete sup[k];
+      for (const e of op.escenarios) e.activo = false;
+      op.escenarios.push({ id: "es" + Date.now().toString(36), t: ahora(), nombre: texto(E.nombre, 80) || "Escenario " + (op.escenarios.length + 1), origen: texto(E.origen, 60) || texto(b.dispositivo, 60) || "app", activo: true, lineas, supuestos: sup }); op.escenarios = op.escenarios.slice(-15); }
+    await escribir(store, t); const ev = await evaluarYGuardar(store, t, true); return json({ evaluacion: ev, escenarios: op.escenarios.map((e) => ({ id: e.id, nombre: e.nombre, t: e.t, activo: !!e.activo, origen: e.origen, supuestos: e.supuestos, lineas: e.lineas })) });
+  }
+  if (ruta === "eval-decision" && req.method === "POST") { const b = await cuerpo(req); const t = await leer(store, limpiaCodigo(b.codigo)); if (!t?.op) return json({ error: "No existe." }, 404); t.op.eval_decisiones = [...(t.op.eval_decisiones || []), { t: ahora(), usuario: texto(b.dispositivo, 60) || "app", estado: ["FUEGO", "VERDE", "PENDIENTE", "ROJO"].includes(b.estado) ? b.estado : null, motivo: texto(b.motivo, 300) || "" }].slice(-20); await escribir(store, t); return json({ decisiones: t.op.eval_decisiones }); }
+  if (ruta === "eval-params" && req.method === "GET") { const emp = texto(url.searchParams.get("empresa"), 40) || "principal"; return json({ params: { ...EVAL_PARAMS, ...((await store.get("eval-params/" + emp, { type: "json" }).catch(() => null)) || {}) } }); }
+  if (ruta === "eval-params" && req.method === "POST") { const b = await cuerpo(req); const emp = texto(b.empresa, 40) || "principal"; const P = {}; for (const k of Object.keys(EVAL_PARAMS)) if (b.params?.[k] != null && b.params[k] !== "") P[k] = Number(b.params[k]); await store.setJSON("eval-params/" + emp, P); return json({ params: { ...EVAL_PARAMS, ...P } }); }
+  if (ruta === "consolidado" && req.method === "POST") {   // paquete de OC: venta, costo y caja; confirmado vs proyectado; pendientes de cada una
+    const b = await cuerpo(req); const cods = (Array.isArray(b.codigos) ? b.codigos : []).slice(0, 40).map(limpiaCodigo).filter(Boolean); const evals = [];
+    for (const c of cods) { const t = await leer(store, c); if (!t) continue; const ev = await evaluarYGuardar(store, t, false); if (ev) evals.push({ ...ev, codigo: t.codigo, oc: t.op?.oc_codigo || null, nombre: t.nombre, organismo: t.organismo }); }
+    return json({ consolidado: evalConsolidar(evals), ocs: evals.map((e) => ({ codigo: e.codigo, oc: e.oc, nombre: e.nombre, estado: e.estado, ventaTotal: e.ventaTotal, ventaNeta: e.ventaNeta, costoDirecto: e.costoDirecto, saldo: e.saldo, cajaNecesaria: e.cajaNecesaria, entrega: e.entrega, motivo: e.motivo, faltan: e.faltan, pendientes: e.pendientes })) });
+  }
   // 🧮 MOTOR DE CAJA · fondos, negocios, cobros y pagos; cada cobro corre la cascada y deja a cada persona con su libro
   if (ruta === "motor" && (req.method === "GET" || req.method === "POST")) {
     const b = req.method === "POST" ? await cuerpo(req) : {}; const emp = texto(b.empresa || url.searchParams.get("empresa"), 40) || "principal"; const key = "motor/" + emp;
@@ -2904,7 +2942,8 @@ ALTERNATIVA PROPUESTA: ${prop}`;
     const { firma, historial, ...r } = t;
     let match = r.op?.oc_match || null;
     if (r.oc_compra && (!match || match.regla !== REGLA_COTEJO)) { try { match = cotejarOC(t); if (t.op) { t.op.oc_match = match; await escribir(store, t); } } catch {} }   // regla nueva: se recalcula y se guarda
-    return json({ trabajo: { ...r, op: r.op ? { ...r.op, oc_match: match } : r.op, precios: firma?.precios || null, despacho_firma: firma?.despacho || 0, historial: (historial || []).slice(-10) } });
+    let evaluacion = r.op?.evaluacion || null; try { const e = await evaluarYGuardar(store, t, false); if (e) evaluacion = e; } catch {}
+    return json({ trabajo: { ...r, op: r.op ? { ...r.op, oc_match: match, evaluacion } : r.op, precios: firma?.precios || null, despacho_firma: firma?.despacho || 0, historial: (historial || []).slice(-10) } });
   }
   // ---------- 🛠 Ejecuta: socios ejecutadores (compran, negocian, entregan y cierran con guía y factura firmadas) ----------
   // ☁️ robot en la nube: el PC sube su paquete (código + configuración) UNA vez; el servidor lo baja y se borra
