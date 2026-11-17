@@ -1141,11 +1141,31 @@ function motorSemilla() {
 }
 
 // 🚦 evalúa una OC con los parámetros de su empresa y el requerimiento capturado; guarda op.evaluacion si cambió el estado o los números clave
+// 📚 contexto histórico de la empresa para costear: compras anteriores por producto (OC cerradas, asignaciones, escenarios confirmados), fletes por destino y facturas de compra del SII.
+//    Se reconstruye como máximo cada hora (o al pedirlo con forzar) y se guarda en eval-ctx/<empresa>.
+async function contextoEval(store, emp, forzar) {
+  const key = "eval-ctx/" + emp; const prev = await store.get(key, { type: "json" }).catch(() => null);
+  if (prev && !forzar && Date.now() - new Date(prev.t).getTime() < 3600e3) return prev;
+  const lista = await todos(store); const hist = [], fletes = []; let n = 0;
+  for (const x of lista) { if ((x.empresa || "principal") !== emp || !x.oc_compra) continue; if (n++ > 300) break; const t = await leer(store, x.codigo).catch(() => null); if (!t) continue; const op = t.op || {}; const items = (t.oc_compra?.items || []); const lid = (k) => "L" + (k + 1);
+    items.forEach((it, k) => { const c = op.costos_confirmados?.[lid(k)]; if (c?.neto_unit) hist.push({ nombre: it.nombre || it.especificacion, neto_unit: c.neto_unit, proveedor: c.proveedor, fecha: c.t, origen: "OC " + (op.oc_codigo || t.codigo) + " · confirmado", respaldo: c.url || null }); });
+    for (const a of op.asignaciones || []) if (a.estado === "confirmada" && (a.precio_unit_neto || a.total_neto)) for (const l of a.lineas || []) { const k = Number(String(l.lid).replace(/^L/, "")) - 1; const it = items[k]; if (!it) continue; hist.push({ nombre: it.nombre || it.especificacion, neto_unit: a.precio_unit_neto ?? Math.round(a.total_neto / a.lineas.reduce((s2, z) => s2 + z.cantidad, 0)), proveedor: a.proveedor, fecha: a.t_confirmada || a.fecha, origen: "OC " + (op.oc_codigo || t.codigo) + " · asignación", respaldo: a.url || null }); }
+    for (const e of op.escenarios || []) for (const l of e.lineas || []) if (l.tipo === "confirmado" && (l.costo_unit || l.costo_total)) { const k = Number(String(l.lid).replace(/^L/, "")) - 1; const it = items[k]; if (!it) continue; hist.push({ nombre: it.nombre || it.especificacion, neto_unit: l.costo_unit ?? Math.round(l.costo_total / (Number(it.cantidad) || 1)), proveedor: l.proveedor, fecha: e.t, origen: "OC " + (op.oc_codigo || t.codigo) + " · Excel en vivo", respaldo: l.respaldo || null }); }
+    if (op.costo_transporte > 0 && (t.oc_compra?.direccion || op.informe?.direccion)) fletes.push({ destino: t.oc_compra?.direccion || op.informe?.direccion, monto: op.costo_transporte, codigo: op.oc_codigo || t.codigo, fecha: op.despacho?.t || t.actualizado || null }); }
+  const LE = (await store.get("empresas/lista", { type: "json" }).catch(() => null)) || {}; const rutE = String(LE[emp]?.rut || LE.principal?.rut || "78493114-5");
+  const S = await store.get("proveedores/sii/" + String(rutE).replace(/\./g, "").toUpperCase(), { type: "json" }).catch(() => null); const SEED = PROV_SEED?.[String(rutE).replace(/\./g, "")] || null;
+  const facturas = S?.lista ? Object.values(S.lista).flatMap((pv) => Object.values(pv.facturas || {}).map((f) => ({ ...f, nombre: f.nombre || pv.nombre, rut: f.rut || pv.rut }))) : (SEED?.facturas || []);
+  const sii = facturas.filter((f) => f && f.neto).map((f) => ({ compra: f.compra || null, nombre: f.nombre, rut: f.rut, folio: f.folio, fecha: f.fecha, neto: f.neto, total: f.total, detalle: f.detalle || "" })).slice(-400);
+  for (const f of sii) if (f.detalle && f.detalle.length > 6 && !/anulad/i.test(f.detalle)) hist.push({ nombre: f.detalle, neto_unit: f.neto, proveedor: f.nombre, fecha: f.fecha.includes("/") ? f.fecha.split("/").reverse().join("-") : f.fecha, origen: "factura SII N°" + f.folio + " (total, no unitario)", respaldo: null, total_factura: true });
+  const ctx = { t: ahora(), hist_lineas: hist.filter((h) => !h.total_factura).slice(-600), hist_flete: fletes.slice(-200), sii, n_oc: n };
+  await store.setJSON(key, ctx); return ctx;
+}
 async function evaluarYGuardar(store, t, forzar) {
   if (!t?.oc_compra && !t?.op?.oc_codigo) return null;
   const emp = t.empresa || "principal"; const P = { ...EVAL_PARAMS, ...((await store.get("eval-params/" + emp, { type: "json" }).catch(() => null)) || {}) };
   const RQ = await store.get("req/" + t.codigo, { type: "json" }).catch(() => null); if (RQ?.analisis) t.req_analisis = RQ.analisis;
-  const ev = evaluarOC(t, P, ahora().slice(0, 10)); delete t.req_analisis;
+  let ctx = null; try { ctx = await contextoEval(store, emp, false); } catch {}
+  const ev = evaluarOC(t, P, ahora().slice(0, 10), ctx); delete t.req_analisis;
   const prev = t.op?.evaluacion; const clave = (e) => [e.estado, e.saldo, e.costoDirecto, e.faltan.length, e.pendientes.length, e.escenario?.id || ""].join("|");
   if (forzar || !prev || clave(prev) !== clave(ev)) { t.op = t.op || { etapa: "ganada", historial: [] }; t.op.evaluacion = ev; if (prev && prev.estado !== ev.estado) t.op.eval_hist = [...(t.op.eval_hist || []), { t: ev.t, de: prev.estado, a: ev.estado, motivo: ev.motivo }].slice(-20); await escribir(store, t); }
   return ev;
@@ -2078,6 +2098,7 @@ ALTERNATIVA PROPUESTA: ${prop}`;
   // 🚦 EVALUADOR DE OC
   if (ruta === "evaluar-todas" && req.method === "POST") {   // todas las OC de la empresa quedan evaluadas antes de abrir la caja (y el robot lo llama tras cada pasada)
     const b = await cuerpo(req); const lista = await todos(store); const emp = texto(b.empresa, 40) || null; const out = []; let n = 0;
+    try { await contextoEval(store, emp || "principal", true); } catch {}   // 📚 historial fresco antes de evaluar
     for (const x of lista) { if (!x?.oc_compra || (emp && (x.empresa || "principal") !== emp)) continue; if (n++ >= 150) break; try { const t = await leer(store, x.codigo); if (!t) continue; const ev = await evaluarYGuardar(store, t, !!b.forzar); if (ev) out.push({ codigo: t.codigo, oc: t.op?.oc_codigo || null, estado: ev.estado, saldo: ev.saldo, motivo: ev.motivo }); } catch (e) { out.push({ codigo: x.codigo, error: e.message }); } }
     return json({ evaluadas: out.length, resumen: out.reduce((a, o) => { if (o.estado) a[o.estado] = (a[o.estado] || 0) + 1; return a; }, {}), ocs: out });
   }
