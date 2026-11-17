@@ -8,6 +8,7 @@ import PROV_SEED from "./proveedores_seed.json";   // 📒 facturas de compra le
 // Seguridad: todas las llamadas exigen el encabezado x-robot-token igual a la variable
 // de entorno ROBOT_TOKEN (configurada en Netlify, nunca en el código ni en index.html).
 import { getStore } from "@netlify/blobs";
+import { cascada as motorCascada, libros as motorLibros, resumenFondo as motorResumen, REGLAS_BASE as MOTOR_REGLAS } from "./motor.mjs";   // 🧮 motor de caja
 import {
   timingSafeEqual, createHash, createHmac, createECDH, createCipheriv, createPrivateKey,
   generateKeyPairSync, randomBytes, sign,
@@ -1103,6 +1104,38 @@ function ocHabilitada(t) {
 
 // 📋 Informes públicos para socias (GENSA): la página /informes/<id>.html lee y guarda respuestas Sí/No con una clave
 // derivada del código de enlace (nadie puede adivinarla; el dueño la obtiene desde la app con informe-link).
+// 🌱 estado inicial del motor (17-11-2026): reglas, deudas y los dos fondos de Nicolás con el giro 1 ya pagado
+function motorSemilla() {
+  const giro1 = [
+    { id: "s_iva", tipo: "iva", a: "SII", concepto: "IVA facturas 3 y 9 (reservado)", monto: 2034231, estado: "retenido", negocio: "k" },
+    { id: "s_nic", tipo: "capital", a: "Nicolás", concepto: "capital Consolidado 1 (33,97 %) − préstamo 1.520.711", monto: 6824311, estado: "pagado", negocio: "k", comprobante_txt: "Santander 16-11 16:03", t_pago: "2026-11-16T16:03:00-03:00" },
+    { id: "s_fab", tipo: "deuda", a: "Fabián", concepto: "33,97 % de su deuda · acuerdo 16-11", monto: 2089931, estado: "pagado", deuda: "fab", comprobante_txt: "Mercado Pago #189987385518", t_pago: "2026-11-16T16:17:00-03:00" },
+    { id: "s_fe1", tipo: "socio", a: "Felipe", concepto: "ejecutador + socio 51,5 % → Mach · deuda Maca", monto: 264794, estado: "pagado", cuenta: "Mach · deuda Maca", derecho: 264794 },
+    { id: "s_fe2", tipo: "socio", a: "Felipe", concepto: "→ Santander · gastos", monto: 132397, estado: "pagado", cuenta: "Santander · gastos", derecho: 132397 },
+    { id: "s_fe3", tipo: "socio", a: "Felipe", concepto: "→ Cuenta RUT · ahorro", monto: 132396, estado: "pagado", cuenta: "Cuenta RUT · ahorro", derecho: 132396 },
+    { id: "s_chr", tipo: "socio", a: "Christopher", concepto: "ejecutador 129.944 + socio 17 % 131.920", monto: 261864, estado: "pagado", derecho: 261864, comprobante_txt: "BancoEstado 16-11 16:25" },
+    { id: "s_die", tipo: "socio", a: "Diego", concepto: "socio 31,5 %", monto: 244442, estado: "pagado", derecho: 244442, comprobante_txt: "Mercado Pago Julfior 16-11 16:46" },
+    { id: "s_pap", tipo: "deuda", a: "Papá de Diego", concepto: "cuenta deuda · 53,29 % del saldo", monto: 206786, estado: "pagado", deuda: "papa", desde: "cuenta_deuda", comprobante_txt: "Mercado Pago Julfior 16-11 16:49" },
+  ];
+  return { v: 1, t: ahora(), reglas: JSON.parse(JSON.stringify(MOTOR_REGLAS)),
+    deudas: [
+      { id: "fab", nombre: "Fabián", monto: 6152000, pagado_antes: 0, prioridad: true, fondo: "A", origen: "100 % PJANIC · compromiso 16-11: prioridad sobre la utilidad del Consolidado 1" },
+      { id: "papa", nombre: "Papá de Diego", monto: 11500000, pagado_antes: 4480000, prioridad: false, origen: "cuenta deuda, en proporción al saldo" },
+      { id: "nico_prest", nombre: "Nicolás (préstamo 16-11)", monto: 1520711, pagado_antes: 0, prioridad: true, fondo: "A", origen: "dejó hoy para completar a Fabián; cobra en el Consolidado 2 después de Fabián" },
+      { id: "nico_reaj", nombre: "Nicolás (reajuste a $26.000.000)", monto: 1435279, pagado_antes: 0, prioridad: true, fondo: "A", origen: "utilidad y ajuste reconocidos el 16-11" },
+    ],
+    fondos: [
+      { id: "A", nombre: "Fondo A · Consolidado 1", inversor: "Nicolás", modo: "proporcional", condiciones: "Capital + ganancia reconocida $24.564.721 (más préstamo y reajuste como deudas con prioridad). 8 facturas por $36.232.941.", negocios: [{ id: "k", codigo: "Consolidado 1", nombre: "8 facturas (Cascos, Esand, Evento Pipe, Pino, Música, Pasajes, Paine, Viruta)", venta: 36232941, costo: 24564721, ejecutador: "Christopher/Felipe", aporte: 24564721, estado: "en cobro" }],
+        cobros: [{ id: "giro1", t: "2026-11-16T16:00:00-03:00", nombre: "Giro Blanco · facturas 3 y 9", fecha: "2026-11-16", entrada: { negocios: ["k"], facturas_total: 12740710, liquido: 12191152, factoring: 549558 }, manual: true, resultado: { liquido: 12191152, facturas_total: 12740710, factoring: 549558, iva: 2034231, capital: 6824311, prioridad: 2089931, sobra: 23461 }, pagos: giro1 }] },
+      { id: "B", nombre: "Fondo B", inversor: "Nicolás", modo: "por_negocio", condiciones: "Mismas condiciones: capital por negocio, 8,4 % de la utilidad neta al cierre, autorización por negocio. BL 4 %: 50 % día 1, 50 % día 9.", negocios: [
+        { id: "vir", codigo: "3381-208-SE26", nombre: "Viruta · Ejército (OC Julfior)", venta: 9999884, costo: 7200000, ejecutador: "Felipe", aporte: 0, entrega: "entregado 21-11", estado: "entregado" },
+        { id: "bol", codigo: "1057536-3441-AG26", nombre: "Bolsos · S. Salud Reloncaví", venta: 6998961, costo: 3500000, ejecutador: "Diego", aporte: 0, entrega: "vie 21-11", estado: "en ejecución" },
+        { id: "pai", codigo: "2788-991-AG26", nombre: "Arreglos Paine", venta: 7068505, costo: 3400000, ejecutador: "Christopher", aporte: 0, entrega: "mar 25-11", estado: "en ejecución" },
+        { id: "tol", codigo: "2484-385-AG26", nombre: "Toldos Quilicura", venta: 4139950, costo: 2700000, ejecutador: "Nicolás", aporte: 2628241, entrega: "vie 21-11", estado: "en ejecución" },
+        { id: "gen", codigo: "3000-1114-AG26", nombre: "Generador Monte Patria", venta: 5519994, costo: 4000000, ejecutador: "Felipe", aporte: 0, entrega: "sin fecha", estado: "en ejecución" }], cobros: [] },
+    ] };
+}
+
 const firmaPublica = (codigo, id) => createHmac("sha256", process.env.ROBOT_TOKEN || "sin-token").update("pub:" + codigo + ":" + id).digest("base64url").slice(0, 22);
 const informeClave = (id) => createHmac("sha256", process.env.ROBOT_TOKEN || "sin-token").update("informe:" + id).digest("base64url").slice(0, 22);
 async function informePublico(req) {
@@ -2027,6 +2060,39 @@ ALTERNATIVA PROPUESTA: ${prop}`;
       op.render = { ...(op.render || {}), estado: "listo", archivo_id: id, t: ahora(), fuentes: (Array.isArray(b.fuentes) ? b.fuentes : []).slice(0, 10).map((x) => texto(x, 120)), medidas_usadas: (Array.isArray(b.medidas_usadas) ? b.medidas_usadas : []).slice(0, 10).map((x) => texto(x, 80)), medidas_pendientes: (Array.isArray(b.medidas_pendientes) ? b.medidas_pendientes : []).slice(0, 10).map((x) => texto(x, 80)), nota: texto(b.nota, 300) || "" }; }
     t.op = op; return json({ trabajo: await escribir(store, t) });
   }
+  // 🧮 MOTOR DE CAJA · fondos, negocios, cobros y pagos; cada cobro corre la cascada y deja a cada persona con su libro
+  if (ruta === "motor" && (req.method === "GET" || req.method === "POST")) {
+    const b = req.method === "POST" ? await cuerpo(req) : {}; const emp = texto(b.empresa || url.searchParams.get("empresa"), 40) || "principal"; const key = "motor/" + emp;
+    let M = (await store.get(key, { type: "json" })) || null;
+    if (!M) M = motorSemilla();
+    const salida = async (guardar) => { if (guardar) { M.v = (M.v || 0) + 1; M.t = ahora(); await store.setJSON(key, M); } return json({ motor: M, libros: motorLibros(M), fondos: (M.fondos || []).map((f) => motorResumen(M, f)) }); };
+    if (req.method === "GET") return salida(!(await store.get(key, { type: "json" })));
+    const acc = texto(b.accion, 30); const id = () => Math.random().toString(36).slice(2, 8); const fondoDe = (fid) => (M.fondos || []).find((f) => f.id === fid);
+    if (acc === "reglas") { M.reglas = { ...(M.reglas || MOTOR_REGLAS), ...(b.reglas || {}) }; return salida(true); }
+    if (acc === "deuda") { const d = b.deuda || {}; const ex = (M.deudas || []).find((x) => x.id === d.id); const n = { id: ex?.id || id(), nombre: texto(d.nombre, 60) || ex?.nombre || "Deuda", monto: Math.round(Number(d.monto) || ex?.monto || 0), pagado_antes: Math.round(Number(d.pagado_antes ?? ex?.pagado_antes ?? 0)), prioridad: !!(d.prioridad ?? ex?.prioridad), fondo: texto(d.fondo, 10) || ex?.fondo || null, origen: texto(d.origen, 80) || ex?.origen || "" }; M.deudas = [...(M.deudas || []).filter((x) => x.id !== n.id), n]; return salida(true); }
+    if (acc === "fondo") { const f = b.fondo || {}; const ex = fondoDe(f.id); const n = { ...(ex || { negocios: [], cobros: [] }), id: ex?.id || texto(f.id, 10) || id(), nombre: texto(f.nombre, 60) || ex?.nombre || "Fondo", inversor: texto(f.inversor, 60) || ex?.inversor || "Inversionista", modo: ["proporcional", "por_negocio"].includes(f.modo) ? f.modo : ex?.modo || "por_negocio", condiciones: texto(f.condiciones, 400) || ex?.condiciones || "" }; M.fondos = [...(M.fondos || []).filter((x) => x.id !== n.id), n]; return salida(true); }
+    if (acc === "negocio") { const f = fondoDe(b.fondo); if (!f) return json({ error: "Fondo no existe." }, 404); const n = b.negocio || {}; const ex = (f.negocios || []).find((x) => x.id === n.id);
+      if (n.borrar && ex) { f.negocios = f.negocios.filter((x) => x.id !== ex.id); return salida(true); }
+      const nn = { id: ex?.id || id(), codigo: texto(n.codigo, 40) || ex?.codigo || "", nombre: texto(n.nombre, 80) || ex?.nombre || "Negocio", venta: Math.round(Number(n.venta ?? ex?.venta) || 0), costo: Math.round(Number(n.costo ?? ex?.costo) || 0), ejecutador: texto(n.ejecutador, 40) || ex?.ejecutador || "", aporte: Math.round(Number(n.aporte ?? ex?.aporte) || 0), entrega: texto(n.entrega, 40) || ex?.entrega || "", estado: texto(n.estado, 30) || ex?.estado || "en ejecución", nota: texto(n.nota, 200) || ex?.nota || "" };
+      f.negocios = [...(f.negocios || []).filter((x) => x.id !== nn.id), nn]; return salida(true); }
+    if (acc === "simular" || acc === "cobro") { const f = fondoDe(b.fondo); if (!f) return json({ error: "Fondo no existe." }, 404); const c = b.cobro || {};
+      const entrada = { negocios: (Array.isArray(c.negocios) ? c.negocios : []).map((x) => texto(x, 12)), facturas_total: Math.round(Number(c.facturas_total) || 0), liquido: Math.round(Number(c.liquido) || 0), factoring: c.factoring == null ? undefined : Math.round(Number(c.factoring) || 0) };
+      if (!entrada.liquido) return json({ error: "Indica el monto líquido que entró." }, 400);
+      const r = motorCascada(M, f, entrada);
+      if (acc === "simular") return json({ simulacion: r, entrada });
+      const reg = { id: "cb" + Date.now().toString(36), t: ahora(), nombre: texto(c.nombre, 80) || "Cobro", fecha: /^\d{4}-\d{2}-\d{2}$/.test(String(c.fecha || "")) ? c.fecha : ahora().slice(0, 10), comprobante: texto(c.comprobante, 40) || null, nota: texto(c.nota, 300) || "", entrada, resultado: { liquido: r.liquido, facturas_total: r.facturas_total, factoring: r.factoring, iva: r.iva, capital: r.capital, prioridad: r.prioridad, utilidad_derechos: r.utilidad_derechos, proporcion_derechos: r.proporcion_derechos, sobra: r.sobra }, pagos: r.pagos.map((p, i) => ({ id: "p" + i + id(), ...p })) };
+      f.cobros = [...(f.cobros || []), reg]; return salida(true); }
+    if (acc === "pago") { const f = fondoDe(b.fondo); const cb = f?.cobros?.find((x) => x.id === b.cobro); const pg = cb?.pagos?.find((x) => x.id === b.pago); if (!pg) return json({ error: "Pago no existe." }, 404);
+      if (b.anular) pg.estado = "anulado"; else { pg.estado = "pagado"; pg.t_pago = ahora(); pg.comprobante = texto(b.comprobante, 40) || pg.comprobante || null; pg.por = texto(b.dispositivo, 60); if (b.monto) pg.monto = Math.round(Number(b.monto) || pg.monto); }
+      return salida(true); }
+    if (acc === "cobro-borrar") { const f = fondoDe(b.fondo); if (!f) return json({ error: "Fondo no existe." }, 404); f.cobros = (f.cobros || []).filter((x) => x.id !== b.cobro); return salida(true); }
+    return json({ error: "Acción desconocida." }, 400);
+  }
+  if (ruta === "motor-doc" && req.method === "POST") {   // comprobante de un pago o de un cobro (imagen/PDF ≤ 4 MB)
+    const b = await cuerpo(req); const x = Buffer.from(String(b.b64 || ""), "base64"); if (!x.length || x.length > 4_000_000) return json({ error: "Archivo vacío o mayor a 4 MB." }, 400);
+    const id = "md" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); await store.set("motor/doc/" + id, x, { metadata: { nombre: texto(b.nombre, 120) || "comprobante", mime: texto(b.mime, 60) || "application/octet-stream" } }); return json({ id, nombre: texto(b.nombre, 120) || "comprobante" });
+  }
+  if (ruta === "motor-doc" && req.method === "GET") { const id = String(url.searchParams.get("id") || "").replace(/[^a-z0-9]/gi, ""); const r = await store.getWithMetadata("motor/doc/" + id, { type: "arrayBuffer" }).catch(() => null); if (!r?.data) return json({ error: "No está." }, 404); return new Response(r.data, { headers: { "content-type": r.metadata?.mime || "application/octet-stream", "content-disposition": `inline; filename="${String(r.metadata?.nombre || "comprobante").replace(/[^\w.\- ]/g, "_")}"` } }); }
   if (ruta === "factorings" && req.method === "GET") { const emp = texto(url.searchParams.get("empresa"), 40) || "principal"; return json({ factorings: (await store.get("factorings/" + emp, { type: "json" })) || [] }); }
   if (ruta === "factorings" && req.method === "POST") { const b = await cuerpo(req); const emp = texto(b.empresa, 40) || "principal"; const L = (Array.isArray(b.factorings) ? b.factorings : []).slice(0, 12).map((f) => ({ nombre: texto(f.nombre, 60), ejecutivo: texto(f.ejecutivo, 60), telefono: texto(f.telefono, 30), email: texto(f.email, 120) })).filter((f) => f.nombre); await store.setJSON("factorings/" + emp, L); return json({ ok: true, factorings: L }); }
   if (ruta === "doc-borrador" && req.method === "POST") {   // 🧾 borrador de guía/factura con todo lo que ya sabe la OC
