@@ -10,6 +10,9 @@ import PROV_SEED from "./proveedores_seed.json";   // 📒 facturas de compra le
 import { getStore } from "@netlify/blobs";
 import { evaluarOC, consolidar as evalConsolidar, PARAMS_BASE as EVAL_PARAMS } from "./evaluador.mjs";   // 🚦 evaluador de OC
 import { excelOC } from "./xlsxmin.mjs";
+import { correr as licCorrer, correrPaso as licCorrerPaso, iaClaude as licIA, siguientePaso as licSiguiente, SEM as LIC_SEM } from "./licauto.mjs";   // 🏛 licitador automático
+import { PARAMS_LIC, EMPRESA_BASE as LIC_EMPRESA } from "./licitador.mjs";
+import { detalleLicitacion as mpDetalleLic } from "./mp.mjs";
 import { cascada as motorCascada, libros as motorLibros, resumenFondo as motorResumen, REGLAS_BASE as MOTOR_REGLAS } from "./motor.mjs";   // 🧮 motor de caja
 import {
   timingSafeEqual, createHash, createHmac, createECDH, createCipheriv, createPrivateKey,
@@ -1748,6 +1751,30 @@ async function cerebroPrecio(store, codigo, b) {
   return { prob: p, descuento: Math.max(0, Math.round((1 - r) * 1000) / 1000), ratio: r, familia: h?.term || null, pres, motivo };
 }
 
+// 🏛 resumen liviano del licitador para la lista (el detalle completo va por /bot/trabajo y /bot/lic-auto)
+function autoLigero(a) {
+  if (!a || typeof a !== "object") return a; const d = a.decision, L = a.lic;
+  return { v: a.v, etapa: a.etapa, pendiente: a.pendiente || undefined, corriendo: a.corriendo || null, paso_actual: a.paso_actual || null, error: a.error || null, pasos: a.pasos, avisos: a.avisos, creado: a.creado, aprobacion: a.aprobacion || null, precios: a.precios || null, docs: a.docs || null, busqueda: a.busqueda || null,
+    lic: L ? { id: L.id, nombre: L.nombre, comprador: L.comprador, cierre: L.cierre, presupuesto: L.presupuesto, presupuesto_con_iva: L.presupuesto_con_iva, plazo_entrega_dias: L.plazo_entrega_dias, direccion_entrega: L.direccion_entrega, bases_leidas: L.bases_leidas, resumen: L.resumen, items: (L.items || []).map((i) => ({ id: i.id, nombre: i.nombre, cantidad: i.cantidad, unidad: i.unidad, requisitos: (i.requisitos || []).length })), n_documentos: (L.documentos || []).length } : null,
+    seleccion: (a.seleccion || []).map((s) => ({ itemId: s.itemId, k: s.k, producto: { nombre: s.producto?.nombre, marca: s.producto?.marca, foto: s.producto?.foto, url: s.producto?.url }, cotizacion: { proveedor: s.cotizacion?.proveedor, unitNeto: s.cotizacion?.unitNeto, precioIVA: s.cotizacion?.precioIVA, fleteNeto: s.cotizacion?.fleteNeto, stock: s.cotizacion?.stock, cantidadDisponible: s.cotizacion?.cantidadDisponible, plazoDias: s.cotizacion?.plazoDias, evidencia: s.cotizacion?.evidencia }, cantidad: s.cantidad, precioVentaNeto: s.precioVentaNeto })),
+    decision: d ? { estado: d.estado, motivo: d.motivo, etapa: d.etapa, bloqueos: d.bloqueos, pendientes: d.pendientes, numeros: d.numeros, caja: d.caja ? { necesaria: d.caja.necesaria, recupera: d.caja.recupera, n: (d.caja.eventos || []).length } : null, t: d.t, empresa_ok: d.empresa_ok } : null };
+}
+// 🏛 contexto del licitador automático: store + helpers de este módulo (lo usa la ruta lic-auto y la función en segundo plano)
+export function licCtx(store, empresa) {
+  const emp = texto(empresa, 40) || "principal";
+  return {
+    store, ahora, anotar, escribir: (t) => escribir(store, t), leer: (c) => leer(store, c), ia: licIA, mpDetalle: mpDetalleLic,
+    mlToken: () => mlToken(store), contextoEval: (e, f) => contextoEval(store, e || emp, f), empresas: async () => (await store.get("empresas/lista", { type: "json" })) || {},
+    empresaPerfil: async (e) => { const L = (await store.get("empresas/lista", { type: "json" })) || {}; const x = L[e || emp] || L.principal || {}; const si = (v) => /^s[ií]$/i.test(String(v || ""));
+      return { ...LIC_EMPRESA, ...(x.razon_social ? { razon_social: x.razon_social } : {}), ...(x.rut ? { rut: x.rut } : {}), giro: x.giro || "", email: x.email || LIC_EMPRESA.email, telefono: x.telefono || "", direccion: x.direccion || LIC_EMPRESA.direccion, comuna: x.comuna || "", ciudad: x.ciudad || "",
+        representante: x.representante || LIC_EMPRESA.representante, rut_representante: x.rut_representante || LIC_EMPRESA.rut_representante, representante_cargo: x.representante_cargo || "", facultades_ok: si(x.representante_facultades), integridad_ok: si(x.integridad), difusion_integridad_ok: si(x.integridad_difusion) || si(x.integridad), chileproveedores: si(x.chileproveedores_habil) }; },
+    params: null,
+    descuentoLic: async (L) => { const idx = (await store.get("historico/_indice", { type: "json" }).catch(() => null)) || { terms: {} }; const nombre = [L.nombre, ...(L.items || []).map((i) => i.nombre)].join(" ");
+      for (const [term, re] of Object.entries(HIST_KW)) { const h = idx.terms[term]; if (h && h.n >= 8 && h.ratioMed && re.test(nombre)) return Math.min(0.4, Math.max(0.03, Math.round((1 - (h.ratioMed - 0.01)) * 1000) / 1000)); } return null; },
+  };
+}
+export const _licDeps = { getStore, STORE, autorizado, leer, licCorrer };
+
 async function atender(req) {
   if (/^\/bot\/sii-ingesta\/?$/.test(new URL(req.url).pathname)) return siiIngesta(req);
   if (/^\/bot\/informe\/?$/.test(new URL(req.url).pathname)) return informePublico(req);
@@ -2199,9 +2226,9 @@ ALTERNATIVA PROPUESTA: ${prop}`;
       mp: mpl && { ...mpl, conectado: !!mpl.logueado && Date.now() - Date.parse(mpl.visto) < MP_INACTIVO_MS },
       // las 60 más recientes + todas las enviadas (para las cajas «Enviadas» y «Ganadas»)
       trabajos: [...lista.slice(0, 60), ...lista.slice(60).filter(hecha).slice(0, 300)]
-        .map(({ historial, ...t }) => ligero && hecha(t)
+        .map(({ historial, ...t0 }) => { const t = t0.auto ? { ...t0, auto: autoLigero(t0.auto) } : t0; return ligero && hecha(t)
           ? (({ items, detalle, firma, envios, ...r }) => ({ ...r, historial: (historial || []).slice(-2) }))(t)
-          : { ...t, historial: (historial || []).slice(-6) }),
+          : { ...t, historial: (historial || []).slice(-6) }; }),
     };
     // si nada cambió desde la última consulta, responde 304 sin cuerpo (el celular no repinta nada)
     const firma = createHash("sha1").update(JSON.stringify({ ...cuerpoE, robot: robot && { ...robot, visto: undefined, conectado: cuerpoE.robot.conectado },
@@ -2737,7 +2764,8 @@ ALTERNATIVA PROPUESTA: ${prop}`;
     if (!n) return json({ error: "Primero elige los anexos que descargaste del portal." }, 400);
     t.accion = "licitar";
     t.anexos_sube = { t: ahora(), n };                           // señal para el robot: analiza desde estos archivos, no desde el portal
-    anotar(t, "en_cola", `📂 ${n} anexo${n > 1 ? "s" : ""} subido${n > 1 ? "s" : ""} desde el celular: el robot los absorbe y analiza (sin bajar de Mercado Público).`);
+    t.auto = { ...(t.auto || { v: 1, creado: ahora() }), pasos: {}, pendiente: true, forzar_lectura: true, error: null };   // 🏛 el licitador automático vuelve a leer con las bases
+    anotar(t, "lic_analizando", `📂 ${n} documento${n > 1 ? "s" : ""} subido${n > 1 ? "s" : ""}: el licitador automático lee las bases y rehace la evaluación.`);
     return json({ trabajo: await escribir(store, t) });
   }
   if (ruta === "subir" && req.method === "POST") {
@@ -2891,7 +2919,12 @@ ALTERNATIVA PROPUESTA: ${prop}`;
       anotar(t, "firmar", robotOn ? "Lista para firmar con tus precios (el robot agrega el PDF)." : "Lista para firmar con tus precios · el robot está apagado: va sin PDF, tú la ingresas en MP.");
       return json({ trabajo: await escribir(store, t), directo: true });
     }
-    anotar(t, "en_cola", accion === "probar" ? "Prueba sin enviar: el robot la tomará en segundos." : esLic ? "Licitación: el robot bajará la ficha, las bases y los anexos." : "Esperando que el robot la tome.");
+    if (esLic) {   // 🏛 licitador automático en la nube: lee la ficha oficial y las bases que haya, busca productos reales, decide y prepara la oferta
+      t.auto = { v: 1, pasos: {}, pendiente: true, creado: ahora() }; if (previo?.lic_docs) t.lic_docs = previo.lic_docs; if (previo?.zip) t.zip = previo.zip;
+      anotar(t, "lic_analizando", "🤖 Licitador automático: leyendo la ficha oficial y las bases…");
+      return json({ trabajo: await escribir(store, t) });
+    }
+    anotar(t, "en_cola", accion === "probar" ? "Prueba sin enviar: el robot la tomará en segundos." : "Esperando que el robot la tome.");
     return json({ trabajo: await escribir(store, t) });
   }
 
@@ -2955,6 +2988,63 @@ ALTERNATIVA PROPUESTA: ${prop}`;
     anotar(t, t.estado, "Código enviado al robot.");
     return json({ trabajo: await escribir(store, t) });
   }
+  // ---------- 🏛 LICITADOR AUTOMÁTICO: leer → buscar → decidir → preparar → ZIP (sin preguntar; lo que falta queda en pendientes) ----------
+  if (ruta === "lic-auto" && req.method === "GET") {
+    const codigo = limpiaCodigo(url.searchParams.get("codigo")); const t = await leer(store, codigo); if (!t) return json({ error: "No existe." }, 404);
+    const C = (await store.get(`licauto/${codigo}/candidatos`, { type: "json" }).catch(() => null)) || null;
+    return json({ auto: t.auto || null, candidatos: C?.candidatos || {}, fuentes: C?.fuentes || null, lic: t.auto?.lic || null });
+  }
+  if (ruta === "lic-auto" && req.method === "POST") {
+    const b = await cuerpo(req); const codigo = limpiaCodigo(b.codigo); let t = await leer(store, codigo);
+    if (!t && COD_LIC.test(codigo) && !/COT\d{2}$/.test(codigo)) { t = { codigo, accion: "licitar", tipo: "licitacion", descuento: 0.17, nombre: texto(b.nombre, 200), organismo: texto(b.organismo, 200), creado: ahora(), estado: null, historial: [], empresa: texto(b.empresa, 40) || "principal", persona: texto(b.persona, 60) || null, auto: { v: 1, pasos: {}, pendiente: true, creado: ahora() } }; anotar(t, "lic_analizando", "🤖 Licitador automático: leyendo…"); await escribir(store, t); }
+    if (!t) return json({ error: "No existe." }, 404);
+    if (t.tipo !== "licitacion" && !COD_LIC.test(codigo)) return json({ error: "No es una licitación." }, 400);
+    const accion = texto(b.accion, 20) || "correr"; const a = t.auto = t.auto || { v: 1, pasos: {}, creado: ahora() }; const por = texto(b.persona, 60) || texto(b.dispositivo, 60) || "equipo";
+    const ctx = licCtx(store, b.empresa || t.empresa);
+    if (accion === "confirmar") {     // ✅ confirmaciones de un toque: stock, flete, plazo, precio, cumplimiento, elegir/descartar candidato
+      const c = b.confirmacion || {}; const itemId = texto(c.itemId, 12), k = texto(c.k, 20) || "*"; if (!itemId) return json({ error: "Falta el ítem." }, 400);
+      a.confirmaciones = a.confirmaciones || {}; a.confirmaciones[itemId] = a.confirmaciones[itemId] || {}; const prev = a.confirmaciones[itemId][k] || {};
+      const nv = { ...prev, t: ahora(), por }; for (const f of ["stock", "elegir", "descartar"]) if (c[f] !== undefined) nv[f] = !!c[f]; for (const f of ["flete", "plazoDias", "unitNeto", "cantidad"]) if (c[f] !== undefined) nv[f] = c[f] == null ? null : Math.max(0, Math.round(Number(c[f]) || 0));
+      if (c.cumple && typeof c.cumple === "object") nv.cumple = { ...(prev.cumple || {}), ...Object.fromEntries(Object.entries(c.cumple).slice(0, 30).map(([r, v]) => [texto(r, 40), v === true ? true : v === false ? false : null])) };
+      a.confirmaciones[itemId][k] = nv; a.hist = [...(a.hist || []), { t: ahora(), confirmacion: { itemId, k, ...nv } }].slice(-40);
+      if (b.supuestos && typeof b.supuestos === "object") a.supuestos = { ...(a.supuestos || {}), ...Object.fromEntries(Object.entries(b.supuestos).slice(0, 8).map(([x, v]) => [texto(x, 20), v == null ? null : Math.round(Number(v) || 0)])) };
+      if (b.documentos_ok && typeof b.documentos_ok === "object") a.documentos_ok = { ...(a.documentos_ok || {}), ...b.documentos_ok };
+      for (const p of ["decidir", "preparar"]) delete a.pasos[p]; await licCorrer(ctx, t, { presupuestoMs: 20000 }); return json({ trabajo: await leer(store, codigo) });
+    }
+    if (accion === "precio") {        // 💲 ajuste manual del descuento o de un precio por ítem (sigue sin superar el presupuesto: lo revisa decidir)
+      if (b.descuento != null) a.descuento = Math.min(0.6, Math.max(0, Number(b.descuento) || 0)); if (b.descuento === null) delete a.descuento;
+      if (b.precios && typeof b.precios === "object") a.precios_manual = Object.fromEntries(Object.entries(b.precios).slice(0, 30).map(([i, v]) => [texto(i, 12), Math.max(0, Math.round(Number(v) || 0))])); if (b.precios === null) delete a.precios_manual;
+      for (const p of ["decidir", "preparar"]) delete a.pasos[p]; await licCorrer(ctx, t, { presupuestoMs: 20000 }); return json({ trabajo: await leer(store, codigo) });
+    }
+    if (accion === "aprobar") {       // ✍️ aprobación humana del contenido (no es consentimiento para ingresar al portal)
+      if (!a.decision) return json({ error: "Todavía no hay decisión que aprobar." }, 400);
+      if (b.quitar) { delete a.aprobacion; } else a.aprobacion = { usuario: por, t: ahora(), monto: a.decision.numeros?.ventaTotal || 0, estado: a.decision.estado, consentimiento_portal: false, nota: texto(b.nota, 300) || null };
+      delete a.pasos.preparar; await licCorrer(ctx, t, { presupuestoMs: 20000 }); return json({ trabajo: await leer(store, codigo) });
+    }
+    if (accion === "reiniciar") { t.auto = { v: 1, pasos: {}, pendiente: true, creado: ahora(), forzar_lectura: true, confirmaciones: a.confirmaciones || {}, supuestos: a.supuestos || {} }; await escribir(store, t); }
+    const A = t.auto; const desde = ["leer", "buscar", "decidir", "preparar"].includes(b.desde) ? b.desde : null;
+    if (desde) { const PS = ["leer", "buscar", "decidir", "preparar"]; for (const p of PS.slice(PS.indexOf(desde))) delete A.pasos[p]; if (desde === "leer") A.forzar_lectura = true; A.error = null; await escribir(store, t); }
+    if (A.corriendo && Date.now() - Date.parse(A.corriendo) < 4 * 60e3 && !b.forzar) return json({ trabajo: t, corriendo: true });
+    if (!licSiguiente(A) && !A.error) return json({ trabajo: t, listo: true });
+    if (accion === "paso") { await licCorrerPaso(ctx, t, licSiguiente(A)); return json({ trabajo: await leer(store, codigo) }); }
+    // en segundo plano si Netlify lo permite (hasta 15 min); si no, en línea con el tiempo que haya
+    delete A.pendiente; A.error = null; A.corriendo = ahora(); await escribir(store, t);
+    let fondo = false;
+    if (process.env.LICAUTO_FONDO !== "0") { try { const r = await fetch(new URL(req.url).origin + "/.netlify/functions/licauto-background", { method: "POST", headers: { "content-type": "application/json", "x-robot-token": req.headers.get("x-robot-token") || "" }, body: JSON.stringify({ codigo }), signal: AbortSignal.timeout(4000) }); fondo = r.status === 202; } catch { fondo = false; } }
+    if (fondo) return json({ trabajo: t, fondo: true });
+    await licCorrer(ctx, t, { presupuestoMs: Number(process.env.LICAUTO_MS) || 8000 }); return json({ trabajo: await leer(store, codigo), fondo: false });
+  }
+  if (ruta === "lic-auto-zip" && req.method === "GET") {
+    const codigo = limpiaCodigo(url.searchParams.get("codigo")); const data = await store.get(`licauto/${codigo}/oferta.zip`, { type: "arrayBuffer" });
+    if (!data) return json({ error: "La oferta aún no está preparada." }, 404);
+    return new Response(data, { headers: { "content-type": "application/zip", "content-disposition": `attachment; filename="Oferta_${codigo}.zip"`, "cache-control": "no-store" } });
+  }
+  if (ruta === "lic-auto-doc" && req.method === "GET") {
+    const codigo = limpiaCodigo(url.searchParams.get("codigo")); const n = String(url.searchParams.get("n") || "").replace(/[^\w.\-]/g, "").slice(0, 80);
+    const data = await store.get(`licauto/${codigo}/doc/${n}`, { type: "arrayBuffer" }); if (!data) return json({ error: "No está ese documento." }, 404);
+    return new Response(data, { headers: { "content-type": n.endsWith(".xlsx") ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : "application/pdf", "content-disposition": `inline; filename="${n}"`, "cache-control": "no-store" } });
+  }
+
   if (ruta === "lic-zip" && req.method === "GET") {
     const codigo = limpiaCodigo(url.searchParams.get("codigo"));
     const data = await store.get("lic/" + codigo, { type: "arrayBuffer" });
@@ -3217,7 +3307,8 @@ ALTERNATIVA PROPUESTA: ${prop}`;
     const id = (texto(b.id, 40) || "e" + rut).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
     const L = (await store.get("empresas/lista", { type: "json" })) || {};
     if (b.borrar) { delete L[id]; await store.setJSON("empresas/lista", L); return json({ ok: true, empresas: L }); }
-    const campos = ["razon_social", "rut", "giro", "contacto", "email", "telefono", "direccion", "comuna", "ciudad", "representante", "rut_representante", "despacho", "banco"];
+    const campos = ["razon_social", "rut", "giro", "contacto", "email", "telefono", "direccion", "comuna", "ciudad", "representante", "rut_representante", "despacho", "banco",
+      "representante_cargo", "representante_facultades", "chileproveedores_habil", "integridad", "integridad_difusion", "inclusivo", "sello_mujer", "cert_16744"];   // 📑 datos para licitaciones (antes se perdían)
     const e = { ...(L[id] || {}), id, actualizado: ahora() };
     for (const k of campos) if (b[k] !== undefined) e[k] = texto(b[k], 200);
     for (const k of ["descripcion", "web", "region", "nombre_fantasia"]) if (b[k] !== undefined) e[k] = texto(b[k], 400);

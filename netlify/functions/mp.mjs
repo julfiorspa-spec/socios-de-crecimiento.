@@ -310,6 +310,14 @@ function resumenCompraAgil(p) {
 
 const CODIGO = /^[0-9]{1,8}-[0-9]{1,6}-[A-Z0-9]{2,6}$/i;
 
+// 📑 detalle de una licitación (ficha oficial) para el licitador automático; null si no hay ticket
+export async function detalleLicitacion(codigo) {
+  if (!process.env.MP_TICKET) return null;
+  const j = await mp("licitaciones.json", { codigo: String(codigo || "").trim().toUpperCase() });
+  if (!j.Listado?.length) return null;
+  return resumenLicitacion(j.Listado[0]);
+}
+
 export default async (req) => {
   const url = new URL(req.url);
   const ruta = url.pathname.replace(/^\/api\/?/, "").replace(/\/$/, "");

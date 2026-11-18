@@ -324,6 +324,18 @@
 .rb-sem-ROJO{border-color:#ff6b6b!important;box-shadow:inset 0 0 0 1px #ff6b6b33,0 0 14px #ff6b6b22;background:linear-gradient(160deg,rgba(255,107,107,.08),transparent 60%)}.rb-sem-ROJO::before{background:#ff6b6b}
 @keyframes rbFuego{0%,100%{box-shadow:0 0 0 1px #ff8c4233,0 0 14px #ff6a0033}50%{box-shadow:0 0 0 1px #ff8c4288,0 0 26px #ff6a0066}}
 .rb-mt-marc .rb-m b{font-size:.82rem;word-break:break-all}.rb-mt-flujo{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:6px;align-items:center;margin:6px 0}.rb-mt-col{display:flex;flex-direction:column;gap:4px;min-width:0}.rb-mt-fl{color:#8fa3bf;font-size:1.1rem}.rb-mt-nodo{border:1px solid;border-radius:9px;padding:5px 8px;background:rgba(255,255,255,.04);font-size:.72rem;min-width:0}.rb-mt-nodo small{display:block;color:#a9b8d9;font-size:.64rem;letter-spacing:.04em;text-transform:uppercase}.rb-mt-nodo b{display:block;font-variant-numeric:tabular-nums}.rb-mt-nodo span{display:block;font-size:.64rem}@media(max-width:460px){.rb-mt-flujo{grid-template-columns:1fr}.rb-mt-fl{transform:rotate(90deg);text-align:center}}.rb-caja-oc{border:1px solid #2a3039;border-radius:14px;padding:10px}.rb-caja-oc.A{border-color:#5ef0b044}.rb-caja-oc.P{border-color:#f5cf6b55}
+  /* 🏛 licitador automático */
+  .rb-la{border:1px solid #2a3039;border-radius:16px;padding:12px;margin:8px 0 10px;background:linear-gradient(180deg,rgba(124,77,255,.07),transparent 70%)}
+  .rb-la .rb-la-top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}.rb-la-badge{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 11px;font-weight:800;font-size:.8rem;letter-spacing:.02em;border:1px solid}
+  .rb-la-badge.FUEGO{background:#2a1708;border-color:#ff8c42;color:#ffb380}.rb-la-badge.VERDE{background:#0f2419;border-color:#5ef0b0;color:#9af5cf}.rb-la-badge.AMARILLO{background:#2a2410;border-color:#f5cf6b;color:#ffe29a}.rb-la-badge.ROJO{background:#2a1214;border-color:#ff6b6b;color:#ffb3b3}.rb-la-badge.RUN{background:#1b1f2a;border-color:#7c4dff;color:#cbb8ff}
+  .rb-la-q{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:10px 0 8px}.rb-la-q>div{background:#141820;border:1px solid #262c36;border-radius:12px;padding:8px 10px;min-width:0}.rb-la-q small{display:block;color:#9fb0cc;font-size:.64rem;text-transform:uppercase;letter-spacing:.06em}.rb-la-q b{display:block;font-size:.86rem;margin-top:3px;line-height:1.3;word-break:break-word}.rb-la-q span{display:block;color:#a9b8d9;font-size:.68rem;margin-top:2px}
+  .rb-la-q .ok b{color:#9af5cf}.rb-la-q .falta b{color:#ffe29a}.rb-la-q .mal b{color:#ffb3b3}
+  .rb-la-btns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:8px}.rb-la-btns .btn{font-weight:800;letter-spacing:.03em;font-size:.74rem;padding:10px 4px;text-align:center;border-radius:12px}.rb-la-btns .btn.on{border-color:#b78cff;background:#241e3a}.rb-la-btns .btn.oro{border-color:#f5cf6b;background:#2a2410;color:#ffe29a}.rb-la-btns .btn[disabled]{opacity:.45}
+  .rb-la-prog{display:flex;gap:4px;margin-top:8px}.rb-la-prog i{flex:1;height:5px;border-radius:3px;background:#262c36}.rb-la-prog i.ok{background:#5ef0b0}.rb-la-prog i.run{background:#7c4dff;animation:rbLaPulse 1.1s ease-in-out infinite}.rb-la-prog i.err{background:#ff6b6b}@keyframes rbLaPulse{0%,100%{opacity:.5}50%{opacity:1}}
+  .rb-la-det{margin-top:8px;border-top:1px dashed #2a3039;padding-top:8px}.rb-la-prod{display:flex;gap:10px;align-items:flex-start;background:#141820;border:1px solid #262c36;border-radius:12px;padding:8px;margin:6px 0}.rb-la-prod img{width:72px;height:72px;object-fit:cover;border-radius:8px;background:#fff;flex:none}.rb-la-prod.sel{border-color:#5ef0b088}.rb-la-prod.desc{opacity:.55}
+  .rb-la-mini{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}.rb-la-mini .btn{font-size:.66rem;padding:3px 7px}.rb-la-mini input{width:84px;font-size:.72rem;padding:3px 5px;border-radius:7px;border:1px solid #2a3039;background:#0f1217;color:#e9eef7}
+  .rb-la-tab{width:100%;border-collapse:collapse;font-size:.74rem}.rb-la-tab td{padding:3px 4px;border-bottom:1px solid #1f252e}.rb-la-tab td:last-child{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.rb-la-tab tr.tot td{font-weight:800;color:#ffe29a}
+  .rb-la-list{margin:4px 0 0 16px;padding:0;font-size:.74rem}.rb-la-list li{margin:2px 0}.rb-la-list li.mal{color:#ffb3b3}.rb-la-list li.falta{color:#ffe29a}
   .rb-negocia{background:#1a1f14;border:1px solid #5ef0b033;border-radius:10px;padding:6px 8px;margin-top:6px}
   .rb-ol{margin:4px 0 0 18px;padding:0}.rb-ol li{margin:2px 0}.rb-ul{margin:4px 0 0 16px;padding:0}
   .rb-stiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0}
@@ -654,6 +666,7 @@
     const g = deCache("seg"); if (g?.seg) { R.seg = g.seg; R.segT = 0; }
   }
 
+  document.addEventListener("input", (e) => { const r = e.target; if (r?.id?.startsWith("rbLaDesc-")) { const v = $("#rbLaDescV-" + r.id.slice(9).replace(/[^A-Za-z0-9_-]/g, "\\$&")); if (v) v.textContent = r.value + " %"; } });
   async function api(ruta, opt = {}) {
     if (!R.token) throw new Error("Robot sin enlazar");
     if (opt.body && /^(pedir|seleccionar|preguntar|cerebro|oport-descartar|plan-links|nube-aprobar|robot-mando|mp-login|mp-login-resp)$/.test(ruta)) {      // cada pedido viaja con TU empresa, tu celular y tu juego
@@ -1090,6 +1103,97 @@
         <div style="display:flex;gap:4px;align-items:center">${it.val && it.val !== "—" ? `<button class="btn small" type="button" data-rb="cp" data-v="${esc(it.val)}">📋</button>` : ""}<label class="rb-pagado"><input type="checkbox" data-rb-ing="${esc(it.k)}" data-c="${c}" ${done[it.k] ? "checked" : ""}> ✓</label></div></div>`).join("")}
       <div class="rb-row" style="margin-top:6px"><button class="btn small rb-firmar" type="button" data-rb="lic-ir" data-c="${c}">🌐 Abrir portal para ofertar</button>${t.zip ? `<button class="btn small" data-rb="lic-zip" data-c="${c}" type="button">⬇ Anexos (ZIP)</button>` : ""}</div></div>`;
   }
+
+  /* ---------- 🏛 LICITADOR AUTOMÁTICO · pantalla simple: 6 preguntas + VER NÚMEROS | VER PRODUCTO | DESCARGAR OFERTA ---------- */
+  const LA_SEM = { FUEGO: "🔥 MUCHA UTILIDAD", VERDE: "🟢 RENTABLE", AMARILLO: "🟡 REVISAR", ROJO: "🔴 DESCARTAR" };
+  const LA_PASOS = [["leer", "Leer bases"], ["buscar", "Buscar productos"], ["decidir", "Calcular y decidir"], ["preparar", "Preparar oferta"]];
+  const laDom = (u) => { try { return new URL(u).hostname.replace(/^www\./, "").replace(/^articulo\./, ""); } catch { return u || ""; } };
+  async function laCorrer(cod, extra = {}) {
+    R._laRun = R._laRun || {}; const k = cod + JSON.stringify(extra); if (R._laRun[k] && Date.now() - R._laRun[k] < 45000) return; R._laRun[k] = Date.now();
+    try { const r = await api("lic-auto", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "correr", persona: persona()?.nombre || null, ...extra }) });
+      if (r.trabajo) { const i = (R.data?.trabajos || []).findIndex((t) => t.codigo === cod); if (i >= 0) R.data.trabajos[i] = { ...R.data.trabajos[i], ...r.trabajo }; }
+      if (r.fondo) toast("🤖 Licitador trabajando en la nube: lee, busca, calcula y prepara"); pintarHojaSiAbierta(); setTimeout(refrescar, 1500); } catch (e) { toast(e.message); }
+  }
+  async function laAccion(cod, body) { try { const r = await api("lic-auto", { method: "POST", body: JSON.stringify({ codigo: cod, persona: persona()?.nombre || null, ...body }) });
+      if (r.trabajo) { const i = (R.data?.trabajos || []).findIndex((t) => t.codigo === cod); if (i >= 0) R.data.trabajos[i] = { ...R.data.trabajos[i], ...r.trabajo }; delete (R.laDet || {})[cod]; } pintarHojaSiAbierta(); setTimeout(refrescar, 800); return r; } catch (e) { toast(e.message); } }
+  async function laDetalle(cod) { R.laDet = R.laDet || {}; if (R.laDet[cod] && R.laDet[cod] !== "…") return R.laDet[cod]; if (R.laDet[cod] === "…") return null; R.laDet[cod] = "…";
+    try { const r = await api("lic-auto?codigo=" + encodeURIComponent(cod)); R.laDet[cod] = r; pintarHojaSiAbierta(); return r; } catch (e) { delete R.laDet[cod]; toast(e.message); return null; } }
+  function licAutoHTML(t) {
+    const A = t.auto; if (!A) return ""; const cod = t.codigo, c = esc(cod); const D = A.decision, L = A.lic, F = D?.numeros || null, S = A.seleccion || [];
+    const corriendo = A.corriendo && Date.now() - Date.parse(A.corriendo) < 4 * 60e3; const estancado = A.corriendo && !corriendo;
+    if ((A.pendiente || (!A.etapa && !A.corriendo && !A.error)) && !corriendo) setTimeout(() => laCorrer(cod), 400);   // 🤖 arranca solo
+    const paso = A.paso_actual; const txtPaso = { leer: "📖 Leyendo la ficha oficial y las bases…", buscar: "🔎 Buscando productos y precios reales…", decidir: "🧮 Calculando inversión, IVA, flete, factoring y utilidad…", preparar: "📎 Preparando ficha, oferta, anexos y ZIP…" }[paso] || "🤖 Trabajando…";
+    const prog = `<div class="rb-la-prog">${LA_PASOS.map(([k]) => `<i class="${A.pasos?.[k]?.ok ? "ok" : A.pasos?.[k]?.error ? "err" : corriendo && paso === k ? "run" : ""}" title="${k}"></i>`).join("")}</div>`;
+    const badge = corriendo ? `<span class="rb-la-badge RUN"><span class="spinner" style="width:10px;height:10px"></span> ${esc(txtPaso)}</span>` : D ? `<span class="rb-la-badge ${D.estado}">${LA_SEM[D.estado]}</span>` : A.error ? `<span class="rb-la-badge ROJO">⚠ Se detuvo</span>` : `<span class="rb-la-badge RUN">⏳ En cola</span>`;
+    const q = (lab, val, sub, cls) => `<div class="${cls || ""}"><small>${lab}</small><b>${val}</b>${sub ? `<span>${sub}</span>` : ""}</div>`;
+    const pct = A.precios?.descuento != null ? `${Math.round(A.precios.descuento * 1000) / 10} % bajo el presupuesto` : (A.precios?.modo || "");
+    const sinSel = (L?.items || []).filter((i) => !S.some((s) => s.itemId === i.id));
+    const cumple = !D ? ["—", "", ""] : D.bloqueos.length ? ["✖ No", esc(D.bloqueos[0]), "mal"] : D.pendientes.length ? [`⚠ Falta acreditar ${D.pendientes.length}`, esc(D.pendientes[0]), "falta"] : ["✓ Sí, con evidencia", "requisitos, stock, plazo y empresa verificados", "ok"];
+    const preguntas = L ? `<div class="rb-la-q">
+      ${q("¿Qué compramos?", S.length ? S.map((s) => `${esc(s.producto.nombre)} × ${s.cantidad}`).join("<br>") : (corriendo ? "…" : "Nada con precio real todavía"), sinSel.length && S.length ? `faltan ${sinSel.length} ítem${sinSel.length > 1 ? "s" : ""}` : (L.items || []).length + " ítem" + ((L.items || []).length === 1 ? "" : "s") + " en las bases", S.length ? "" : "falta")}
+      ${q("¿Dónde lo compramos?", S.length ? [...new Set(S.map((s) => esc(s.cotizacion.proveedor || "")))].join(" · ") : "—", S.length ? S.map((s) => `${laDom(s.cotizacion.evidencia?.fuente)} · stock ${s.cotizacion.stock === "verificado" ? "confirmado ✓" : s.cotizacion.stock === "publicado" ? "publicado (" + (s.cotizacion.cantidadDisponible ?? "?") + " u.)" : "sin confirmar"}`).join("<br>") : "", S.some((s) => s.cotizacion.stock !== "verificado") ? "falta" : "ok")}
+      ${q("¿Cuánto invertimos?", F ? clp(F.cajaNecesaria) : "—", F ? `compra con IVA ${clp(F.compraTotal)}${F.fleteFalta ? " · flete sin cotizar" : " + flete " + clp(F.flete)}${D.caja?.recupera ? " · vuelve el " + esc(D.caja.recupera) : ""}` : "", F?.fleteFalta ? "falta" : "")}
+      ${q("¿A cuánto vendemos?", F ? clp(F.ventaTotal) : "—", F ? `${clp(F.ventaNeta)} neto · ${esc(pct)}${L.presupuesto != null ? " · presupuesto " + clp(L.presupuesto) + (L.presupuesto_con_iva ? " c/IVA" : L.presupuesto_con_iva === false ? " neto" : "") : ""}` : "")}
+      ${q("¿Cuánto ganamos?", F ? clp(F.utilidad) : "—", F ? `margen ${F.margenPct} % · ya descontados ejecución ${clp(F.ejecucion)}, factoring ${clp(F.factoring)} y PPM ${clp(F.ppm)}` : "", F ? (F.utilidad <= 0 ? "mal" : F.margenPct >= 25 ? "ok" : "") : "")}
+      ${q("¿Cumple las bases?", cumple[0], cumple[1], cumple[2])}</div>` : "";
+    const ver = R.laVer?.[cod];
+    const btns = `<div class="rb-la-btns"><button class="btn ${ver === "numeros" ? "on" : ""}" type="button" data-rb="la-ver" data-c="${c}" data-v="numeros" ${D ? "" : "disabled"}>VER NÚMEROS</button><button class="btn ${ver === "producto" ? "on" : ""}" type="button" data-rb="la-ver" data-c="${c}" data-v="producto" ${A.busqueda || S.length ? "" : "disabled"}>VER PRODUCTO</button><button class="btn oro" type="button" data-rb="la-zip" data-c="${c}" ${A.docs ? "" : "disabled"}>DESCARGAR OFERTA</button></div>`;
+    const avisos = [...(A.avisos || []), ...(A.error ? ["⚠ " + A.error] : []), ...(estancado ? ["⏳ Lleva más de 4 minutos sin señales: toca Reanudar."] : [])];
+    const acciones = `<div class="rb-row" style="margin-top:8px;flex-wrap:wrap;gap:6px">
+      ${!corriendo ? `<button class="btn small" type="button" data-rb="la-correr" data-c="${c}" data-desde="${A.error ? "" : "decidir"}">${A.error || estancado ? "▶ Reanudar" : "↻ Recalcular"}</button>` : ""}
+      ${!corriendo && L && !L.bases_leidas ? `<button class="btn small rb-oro" type="button" data-rb="lic-anexos" data-c="${c}">📎 Subir bases (ZIP del portal)</button>` : !corriendo ? `<button class="btn small" type="button" data-rb="lic-anexos" data-c="${c}">📎 Más documentos</button>` : ""}
+      ${D && !A.aprobacion ? `<button class="btn small rb-firmar" type="button" data-rb="la-aprobar" data-c="${c}">✍️ Apruebo el contenido</button>` : A.aprobacion ? `<span class="muted" style="font-size:.7rem">✍️ aprobado por ${esc(A.aprobacion.usuario)} · ${esc(hace(A.aprobacion.t))} <button class="rb-link-b" type="button" data-rb="la-aprobar" data-c="${c}" data-quitar="1">quitar</button></span>` : ""}
+      ${!corriendo && A.etapa ? `<button class="btn small" type="button" data-rb="la-correr" data-c="${c}" data-desde="leer" title="Vuelve a leer bases y buscar">🔁 Rehacer todo</button>` : ""}
+      ${A.docs ? `<span class="muted" style="font-size:.68rem">📦 ${A.docs.archivos.length} documentos${A.docs.originales ? " + " + A.docs.originales + " anexos originales" : ""} · ${A.docs.zip_kb} KB · ${esc(hace(A.docs.t))}</span>` : ""}</div>`;
+    let det = "";
+    if (ver === "numeros" && D) det = laNumerosHTML(t);
+    else if (ver === "producto") det = laProductoHTML(t);
+    return `<div class="rb-la rb-sem ${D && !corriendo ? "rb-sem-" + (D.estado === "AMARILLO" ? "PENDIENTE" : D.estado) : ""}" id="rbLa-${c}">
+      <div class="rb-la-top"><b style="font-size:.86rem">🏛 Licitador automático</b>${badge}</div>${prog}
+      ${L ? `<div class="muted" style="font-size:.74rem;margin-top:6px">${esc(L.resumen || L.nombre || "")}${L.cierre ? ` · cierra <b>${esc(String(L.cierre).slice(0, 16).replace("T", " "))}</b>` : ""}${L.bases_leidas ? "" : " · <b style='color:#ffe29a'>solo ficha oficial: sin bases</b>"}</div>` : corriendo ? "" : `<div class="muted" style="font-size:.74rem;margin-top:6px">Lee la ficha oficial y las bases, busca productos reales, calcula y decide. No hace preguntas: lo que falte queda en pendientes.</div>`}
+      ${preguntas}${D && !corriendo ? `<div style="font-size:.76rem;margin-top:2px"><b>${esc(D.motivo)}</b></div>` : ""}
+      ${avisos.length ? `<div class="rb-alertas" style="margin-top:6px"><ul style="margin:0;padding:0">${avisos.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+      ${btns}${det}${acciones}</div>`;
+  }
+  function laNumerosHTML(t) {
+    const A = t.auto, D = A.decision, F = D.numeros, cod = t.codigo, c = esc(cod); const det = R.laDet?.[cod]; if (!det || det === "…") setTimeout(() => laDetalle(cod), 0);
+    const full = det && det !== "…" ? det.auto : null; const caja = full?.decision?.caja?.eventos || [];
+    const fila = (k, v, cls) => `<tr class="${cls || ""}"><td>${k}</td><td>${v}</td></tr>`;
+    const desc = A.precios?.descuento != null ? Math.round(A.precios.descuento * 1000) / 10 : null;
+    return `<div class="rb-la-det">
+      <table class="rb-la-tab">${fila("Venta neta", clp(F.ventaNeta))}${fila("IVA 19 %", clp(F.iva))}${fila("Venta total con IVA", clp(F.ventaTotal), "tot")}${fila("Compra neta (" + (A.seleccion || []).length + " productos)", "−" + clp(F.compraNeta))}${fila("Flete", F.fleteFalta ? "<span style='color:#ffe29a'>sin cotizar</span>" : "−" + clp(F.flete))}${F.otros ? fila("Otros directos", "−" + clp(F.otros)) : ""}${fila("Ejecución " + (F.ejecSup ? "(supuesto 10 %)" : "(real)"), "−" + clp(F.ejecucion))}${fila("Factoring " + (F.factSup ? "(supuesto 3 %)" : "(real)"), "−" + clp(F.factoring))}${fila("Reserva PPM 3 %", "−" + clp(F.ppm))}${fila("UTILIDAD", clp(F.utilidad) + " · " + F.margenPct + " %", "tot")}${fila("Caja necesaria (compra con IVA + flete" + (F.garantiaSeriedad ? " + garantía" : "") + ")", clp(F.cajaNecesaria))}${fila("Costo máximo de equilibrio", clp(F.costoMaximo))}</table>
+      <div class="rb-row" style="margin-top:8px;align-items:center;gap:8px"><label class="muted" style="font-size:.72rem">💲 Descuento sobre el presupuesto</label><input type="range" class="rb-rango" id="rbLaDesc-${c}" min="0" max="40" step="0.5" value="${desc ?? 17}" style="flex:1"><b id="rbLaDescV-${c}" style="min-width:48px;text-align:right">${desc ?? "—"} %</b><button class="btn small" type="button" data-rb="la-desc" data-c="${c}">Aplicar</button></div>
+      <div class="muted" style="font-size:.66rem">Modo de precio: ${esc(A.precios?.modo || "")}. Nunca sobre el presupuesto; si el margen cae bajo 12 % queda en amarillo.</div>
+      ${caja.length ? `<div class="rb-sec" style="margin-top:8px">📅 Caja por fecha · necesaria ${clp(full.decision.caja.necesaria)}${full.decision.caja.recupera ? " · recupera el " + esc(full.decision.caja.recupera) : ""}</div><table class="rb-la-tab">${caja.map((e) => `<tr><td>${esc(e.fecha)} · ${esc(e.concepto)}</td><td style="color:${e.monto < 0 ? "#ffb3b3" : "#9af5cf"}">${e.monto < 0 ? "−" : "+"}${clp(Math.abs(e.monto))}</td></tr>`).join("")}</table>` : det === "…" || !det ? `<div class="muted" style="font-size:.7rem;margin-top:6px"><span class="spinner"></span> cargando caja por fecha…</div>` : ""}
+      ${D.bloqueos.length ? `<div class="rb-sec" style="margin-top:8px">⛔ Bloqueos</div><ul class="rb-la-list">${D.bloqueos.map((x) => `<li class="mal">${esc(x)}</li>`).join("")}</ul>` : ""}
+      ${D.pendientes.length ? `<div class="rb-sec" style="margin-top:8px">⚠ Pendientes de acreditar</div><ul class="rb-la-list">${D.pendientes.map((x) => `<li class="falta">${esc(x)}</li>`).join("")}</ul>` : ""}
+      ${A.docs ? `<div class="rb-sec" style="margin-top:8px">📄 Documentos</div><div class="rb-row" style="flex-wrap:wrap;gap:4px">${A.docs.archivos.map((d) => `<button class="btn small" type="button" data-rb="la-doc" data-c="${c}" data-n="${esc(d.nombre)}">${esc(d.nombre.replace(cod + "_", "").replace(/_/g, " "))}</button>`).join("")}</div>` : ""}</div>`;
+  }
+  function laProductoHTML(t) {
+    const A = t.auto, cod = t.codigo, c = esc(cod); const det = R.laDet?.[cod]; if (!det || det === "…") { setTimeout(() => laDetalle(cod), 0); return `<div class="rb-la-det muted" style="font-size:.74rem"><span class="spinner"></span> cargando candidatos…</div>`; }
+    const L = det.lic || A.lic || { items: [] }; const C = det.candidatos || {}; const full = det.auto || A; const sel = full.seleccion || []; const comp = full.decision?.cumplimiento || [];
+    const out = [];
+    for (const it of L.items || []) {
+      const s = sel.find((x) => x.itemId === it.id); const lista = C[it.id] || []; const cf = (A.confirmaciones || {})[it.id] || {};
+      const tarjeta = (cand, esSel) => { const p = cand.producto, q = cand.cotizacion; const k = cand.k || q.id; const conf = cf[k] || cf[q.id] || {}; const juic = cand.juicios || {};
+        const reqs = (it.requisitos || []).map((r) => { const j = esSel ? comp.find((x) => x.itemId === it.id && x.reqId === r.id) : null; const cum = j ? j.cumple : juic[r.id]?.cumple; return `<li class="${cum === false ? "mal" : cum == null ? "falta" : ""}">${cum === true ? "✓" : cum === false ? "✖" : "?"} ${esc(r.label)}${r.obligatorio ? "" : " <span class='muted'>(deseable)</span>"}${(j?.nota || juic[r.id]?.nota) ? ` <span class="muted">· ${esc((j?.nota || juic[r.id]?.nota || "").replace(/^[^:]+:\s*/, "")).slice(0, 90)}</span>` : ""}${r.obligatorio && cum == null ? ` <button class="rb-link-b" type="button" data-rb="la-cumple" data-c="${c}" data-i="${esc(it.id)}" data-k="${esc(k)}" data-r="${esc(r.id)}">lo verifiqué ✓</button>` : ""}</li>`; }).join("");
+        return `<div class="rb-la-prod ${esSel ? "sel" : ""} ${cand.descartado ? "desc" : ""}">${p.foto ? `<img src="${esc(p.foto)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<div style="width:72px;height:72px;border-radius:8px;background:#1f252e;flex:none"></div>`}
+          <div style="flex:1;min-width:0"><b style="font-size:.8rem">${esSel ? "✅ " : ""}${esc(p.nombre)}</b>${cand.nota ? `<div class="muted" style="font-size:.66rem">${esc(cand.nota)}</div>` : ""}
+            <div style="font-size:.74rem;margin-top:3px"><b>${clp(q.unitNeto)}</b> neto/u${q.precioIVA ? ` (${clp(q.precioIVA)} c/IVA)` : ""} · ${esc(q.proveedor || "")} · ${q.evidencia?.fuente && /^https?:/.test(q.evidencia.fuente) ? `<a href="${esc(q.evidencia.fuente)}" target="_blank" rel="noopener noreferrer">${esc(laDom(q.evidencia.fuente))} ↗</a>` : esc(q.evidencia?.fuente || "")} <span class="muted">· ${esc(q.evidencia?.estado || "")} ${q.evidencia?.consultado ? esc(hace(q.evidencia.consultado)) : ""}</span></div>
+            <div style="font-size:.7rem" class="muted">Stock: ${q.stock === "verificado" ? "<b style='color:#9af5cf'>confirmado ✓</b>" : q.stock === "publicado" ? `publica ${q.cantidadDisponible ?? "?"} u. (sin confirmar)` : "sin dato"} · Flete: ${q.fleteNeto == null ? "<b style='color:#ffe29a'>sin cotizar</b>" : q.fleteNeto === 0 ? "incluido" : clp(q.fleteNeto)} · Plazo: ${q.plazoDias != null ? q.plazoDias + " días" : "sin acreditar"}</div>
+            ${reqs ? `<ul class="rb-la-list">${reqs}</ul>` : ""}
+            <div class="rb-la-mini">${q.stock !== "verificado" ? `<button class="btn" type="button" data-rb="la-conf" data-c="${c}" data-i="${esc(it.id)}" data-k="${esc(k)}" data-f="stock">✓ Stock confirmado con el proveedor</button>` : ""}
+              <input type="number" inputmode="numeric" placeholder="flete $" id="rbLaFl-${c}-${esc(k)}" value="${conf.flete ?? ""}"><button class="btn" type="button" data-rb="la-conf" data-c="${c}" data-i="${esc(it.id)}" data-k="${esc(k)}" data-f="flete">flete ✓</button>
+              <input type="number" inputmode="numeric" placeholder="plazo días" id="rbLaPl-${c}-${esc(k)}" value="${conf.plazoDias ?? ""}" style="width:72px"><button class="btn" type="button" data-rb="la-conf" data-c="${c}" data-i="${esc(it.id)}" data-k="${esc(k)}" data-f="plazo">plazo ✓</button>
+              ${!esSel && !cand.descartado ? `<button class="btn" type="button" data-rb="la-conf" data-c="${c}" data-i="${esc(it.id)}" data-k="${esc(k)}" data-f="elegir">Usar este</button>` : ""}${!cand.descartado ? `<button class="btn" type="button" data-rb="la-conf" data-c="${c}" data-i="${esc(it.id)}" data-k="${esc(k)}" data-f="descartar">✖ Descartar</button>` : `<button class="btn" type="button" data-rb="la-conf" data-c="${c}" data-i="${esc(it.id)}" data-k="${esc(k)}" data-f="rescatar">↩ Volver a considerar</button>`}</div></div></div>`; };
+      const selC = s ? { producto: s.producto, cotizacion: s.cotizacion, juicios: s.juicios, k: s.k } : null; const otros = lista.filter((x) => !s || (x.cotizacion.id !== s.k && x.k !== s.k));
+      out.push(`<div class="rb-sec" style="margin-top:8px">${esc(it.nombre)} × ${it.cantidad} ${esc(it.unidad || "")}${(it.requisitos || []).length ? ` · ${(it.requisitos || []).length} requisitos` : " · <span style='color:#ffe29a'>sin requisitos leídos</span>"}</div>${it.descripcion ? `<div class="muted" style="font-size:.68rem">${esc(it.descripcion).slice(0, 220)}</div>` : ""}
+        ${selC ? tarjeta(selC, true) : `<div class="muted" style="font-size:.74rem;margin:4px 0">Sin producto elegido: ${lista.length ? "ninguno cumple con evidencia o todos fueron descartados." : "no se encontró en las fuentes conectadas."}</div>`}
+        ${otros.length ? `<details class="rb-det"><summary>Otros ${otros.length} candidatos encontrados</summary>${otros.map((x) => tarjeta(x, false)).join("")}</details>` : ""}`);
+    }
+    const fu = det.fuentes || A.busqueda?.fuentes; const fuTxt = fu ? `Fuentes: Mercado Libre ${fu.ml} avisos · compras propias ${fu.propias} · catálogo SII ${fu.catalogo}${(fu.errores || []).length ? " · ⚠ " + esc(fu.errores.join(" · ")) : ""}` : "";
+    return `<div class="rb-la-det">${out.join("") || `<div class="muted" style="font-size:.74rem">Todavía no hay ítems leídos.</div>`}<div class="muted" style="font-size:.66rem;margin-top:6px">${fuTxt} · Ningún precio, stock ni cumplimiento es inventado: cada dato lleva su fuente y fecha; lo que no está, queda como pendiente.</div></div>`;
+  }
   function mesaLic(t) {
     const L = t.lic || {}, X = L.experto || {}, c = esc(t.codigo), cod = t.codigo;
     if ((t.lic_docs || []).some((d) => d.tipo === "render")) setTimeout(() => cargarImgsLic(t), 0);
@@ -1106,6 +1210,7 @@
       <div class="rb-env"><span class="rb-cp">📑 ${esc(X.tipo_licitacion || tipoPorMonto(pres))} · ${c}</span>${V.vamos != null ? `<b class="${V.vamos ? "rb-vivo-t" : "rb-neg-t"}">${V.vamos ? "💚 VAMOS" : "✖ NO CONVIENE"}${V.puntaje != null ? " · " + esc(V.puntaje) + "/100" : ""}</b>` : badge(t)}</div>
       <div class="rb-fnom" style="margin:6px 0 2px;font-size:1.02rem">${esc(L.producto || t.nombre || "Licitación")}</div>
       <div class="muted" style="font-size:.74rem">${esc(t.organismo || "")}${L.cierre ? " · cierra " + esc(L.cierre) : ""}</div>
+      ${licAutoHTML(t)}
       ${V.por_que ? `<div class="rb-resp nueva" style="margin-top:6px">${esc(V.por_que)}</div>` : ""}
       ${t.mensaje && !L.resumen ? `<div class="rb-msg">${esc(t.mensaje)}</div>` : ""}
       <div class="rb-comprar"><div class="rb-env"><b>🎯 LO QUE QUIERE EL CLIENTE</b><a class="btn small" href="https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion=${encodeURIComponent(cod)}" target="_blank" rel="noopener">📄 Ficha</a></div>
@@ -1127,7 +1232,7 @@
         ${X.evaluacion?.formula_precio ? `<div class="muted" style="font-size:.68rem">📐 Puntaje precio: ${esc(X.evaluacion.formula_precio)}</div>` : ""}
         ${(() => { const RM = L.referencia_mercado || {}; return (RM.precio_hoy || RM.oferta_sugerida) ? `<div class="rb-sug" style="border-color:#5ef0b0;margin-top:6px;font-size:.72rem">💡 <b>Precios a valor de hoy</b>${RM.precio_hoy ? `<br>Mercado hoy: <b>${clp(RM.precio_hoy)}</b>/u` : ""}${RM.piso_costo ? ` · piso costo: <b>${clp(RM.piso_costo)}</b>/u` : ""}${RM.oferta_sugerida ? `<br>🎯 Ofertar en torno a <b>${clp(RM.oferta_sugerida)}</b>/u` : ""}${RM.comentario ? `<div class="muted" style="font-size:.66rem;margin-top:2px">${esc(RM.comentario)}</div>` : ""}</div>` : ""; })()}
         ${t.estado === "lic_revisar" ? `<button class="btn rb-oro rb-big-btn" type="button" data-rb="lic-firmar" data-c="${c}">✅ Apruebo este precio · firmar anexos</button>` : ""}</div>` : ""}
-      ${(L.alertas || []).length ? `<div class="rb-alertas"><b>⚠ Revisa antes de aprobar</b><ul style="margin:0;padding:0">${L.alertas.map((a) => `<li class="${a.nivel === "rojo" ? "rojo" : ""}">${a.nivel === "rojo" ? "⛔" : "⚠"} ${esc(a.texto)}</li>`).join("")}</ul></div>` : ""}
+      ${(L.alertas || []).length && !t.auto ? `<div class="rb-alertas"><b>⚠ Revisa antes de aprobar</b><ul style="margin:0;padding:0">${L.alertas.map((a) => `<li class="${a.nivel === "rojo" ? "rojo" : ""}">${a.nivel === "rojo" ? "⛔" : "⚠"} ${esc(a.texto)}</li>`).join("")}</ul></div>` : ""}
       ${sec("📋 Para no quedar fuera (admisibilidad)", li(X.habilidad, (h) => `<li>✔ ${esc(h)}</li>`) + li(X.admisibilidad, (a) => `<li><b>${esc(a.requisito || "")}</b>${a.documento ? " · " + esc(a.documento) : ""}${a.firma && !/no/i.test(a.firma) ? " · ✍️ firma" : ""}${a.seccion_portal ? " · " + esc(a.seccion_portal) : ""}${a.subsanable === false ? " <b class='rb-neg-t'>· no subsanable</b>" : ""}</li>`) + li(L.documentos, (d) => `<li>📎 ${esc(d.nombre)} · ${esc(d.estado)}</li>`), true)}
       ${sec("🛡 Garantías", G.seriedad || G.fiel_cumplimiento ? `<div style="font-size:.78rem">Seriedad: <b>${esc(G.seriedad || "—")}</b><br>Fiel cumplimiento: <b>${esc(G.fiel_cumplimiento || "—")}</b>${G.legal === false ? `<div class="rb-neg-t">⛔ ${esc(G.comentario || "Contradice el reglamento: pregúntalo en el foro")}</div>` : G.comentario ? `<div class="muted">${esc(G.comentario)}</div>` : ""}<div class="muted" style="font-size:.66rem">Puedes usar boleta, vale vista, póliza o certificado de fianza (IGR): las bases no pueden exigir uno solo.</div></div>` : "")}
       ${sec("💵 Cómo se ingresa el precio", Oe.neto_o_iva ? `<div style="font-size:.78rem">${esc(Oe.neto_o_iva)} · ${esc(Oe.unitario_o_total || "")}${Oe.lineas ? " · " + esc(Oe.lineas) : ""}${Oe.validez ? " · validez " + esc(Oe.validez) : ""}</div><div class="muted" style="font-size:.66rem">Un error en el precio no se puede corregir después: el robot cuadra el formulario con el anexo.</div>` : "")}
@@ -1187,7 +1292,7 @@
         <img src="data:image/png;base64,${esc(t.captcha)}" alt="Código" style="display:block;margin:8px 0;max-width:100%;background:#fff;border-radius:6px">
         <div class="row" style="gap:6px"><input id="rbCap-${c}" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="send" style="flex:1;min-width:120px;font-size:1.1rem;letter-spacing:.08em" placeholder="Pega el código aquí">
         <button class="btn small rb-firmar" data-rb="lic-captcha" data-c="${c}" type="button">Enviar</button></div></div>` : "";
-    const codigoBox = ["requiere", "error", "cancelada", "lic_bajando", "en_cola", "tomado"].includes(t.estado) ? `<div class="rb-alertas" style="border-color:#7c4dff">
+    const codigoBox = (t.auto ? (t.auto.lic && !t.auto.lic.bases_leidas && !t.auto.corriendo) || (t.auto.error && /Sin fuentes/.test(t.auto.error)) : ["requiere", "error", "cancelada", "lic_bajando", "en_cola", "tomado"].includes(t.estado)) ? `<div class="rb-alertas" style="border-color:#7c4dff">
         <b>📥 Así preparamos esta licitación</b>
         <ol style="margin:6px 0 10px;padding-left:20px;font-size:.74rem;line-height:1.55">
           <li><b>Descarga los documentos</b>: entras como humano, escribes el código de imagen que pide Mercado Público y se te baja el ZIP con las bases y anexos.</li>
@@ -1201,7 +1306,7 @@
         ${L.presupuesto ? `<span>Presupuesto <b>${clp(L.presupuesto)}</b>${L.con_iva ? " c/IVA" : " neto"}</span>` : ""}
         <span>${Math.round((L.descuento || 0) * 100)}% bajo presupuesto</span>${L.cierre ? `<span>Cierra ${esc(L.cierre)}</span>` : ""}</div>` : "";
     const lista = (arr, f) => arr && arr.length ? `<ul style="margin:4px 0 0;padding-left:18px">${arr.map(f).join("")}</ul>` : "";
-    const alertas = (L.alertas || []).length ? `<div class="rb-alertas"><b>Revisa antes de aprobar</b><ul style="margin:0;padding:0">${L.alertas.map((a) =>
+    const alertas = (L.alertas || []).length && !t.auto ? `<div class="rb-alertas"><b>Revisa antes de aprobar</b><ul style="margin:0;padding:0">${L.alertas.map((a) =>
       `<li class="${a.nivel === "rojo" ? "rojo" : ""}">${a.nivel === "rojo" ? "⛔" : "⚠"} ${esc(a.texto)}</li>`).join("")}</ul></div>` : "";
     const aprobar = t.estado === "lic_revisar" ? `<div class="rb-alertas" style="border-color:#7c4dff">
         <b>¿Te parece este precio?</b> Ajusta el descuento si quieres y aprueba: el robot firma los anexos y la deja lista para ofertar.
@@ -1212,7 +1317,8 @@
       <div class="rb-top"><span class="tag ag">${c}</span><span class="tag" style="background:#2a2350;color:#d9c9ff">📑 Licitación</span>${badge(t)}</div>
       <h3>${esc(L.producto || t.nombre || "Licitación")}</h3>
       ${t.organismo ? `<div class="muted">${esc(t.organismo)}</div>` : ""}
-      ${precio}
+      ${licAutoHTML(t)}
+      ${t.auto ? "" : precio}
       ${t.mensaje ? `<div class="rb-msg">${esc(t.mensaje)}</div>` : ""}
       ${captcha}${codigoBox}${aprobar}${alertas}
       ${L.resumen ? `<details class="rb-det" open><summary>Análisis de las bases</summary><div style="font-size:.85rem">${esc(L.resumen)}
@@ -6287,7 +6393,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       const m = v.toUpperCase().replace(/\s+/g, "").match(/\d{1,8}-\d{1,6}-[A-Z][A-Z0-9]{1,2}\d{2}/);
       if (!m) { if (a === "lic-codigo") toast("Ese código no se ve como una licitación (ej: 2585-77-LE26)"); return; }
       try { const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: m[0], accion: "licitar" }) });
-        toast(r._status === 409 ? "Ya está en manos del robot" : "🚀 " + m[0] + ": el robot baja las bases y las lee"); R.licTab = "prep"; R.foco = m[0]; await refrescar(); pintarHoja(true); } catch (e) { toast(e.message); }
+        toast(r._status === 409 ? "Ya está en manos del robot" : "🏛 " + m[0] + ": el licitador automático lee, busca, calcula y decide"); R.licTab = "prep"; R.foco = m[0]; await refrescar(); pintarHoja(true); } catch (e) { toast(e.message); }
       return;
     }
     if (a === "lic-ir") { const ok = await copiar(cod); toast(ok ? "📋 Código copiado: pégalo en el buscador si te lo pide" : cod);
@@ -6295,7 +6401,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "lic-no") { const n = licNo(); n[cod] = Date.now(); try { localStorage.setItem(LIC_NO, JSON.stringify(n)); } catch {} navigator.vibrate?.(8); return pintarHoja(true); }
     if (a === "lic-vamos") {
       try { const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "licitar" }) });
-        toast(r._status === 409 ? "Ya está en manos del robot" : "💚 ¡Vamos! El robot baja las bases y las lee como experto"); R.licTab = "prep"; await refrescar(); pintarHoja(true); } catch (e) { toast(e.message); }
+        toast(r._status === 409 ? "Ya está en manos del robot" : "💚 ¡Vamos! El licitador automático lee la ficha y las bases, busca productos reales y decide"); R.licTab = "prep"; await refrescar(); pintarHoja(true); } catch (e) { toast(e.message); }
       return;
     }
     if (a === "lic-vision") {
@@ -6336,7 +6442,7 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       inp.click(); return;
     }
     if (a === "licitar") {
-      if (!confirm(`¿Participar en la licitación ${cod}?\n\nEl robot baja la ficha y los anexos (te pedirá el código de la imagen), analiza las bases, fija el precio (presupuesto −17%) y llena los papeles. Después te pregunta si te parece el precio.`)) return;
+      if (!confirm(`¿Participar en la licitación ${cod}?\n\nEl licitador automático lee la ficha oficial y las bases, busca productos y precios reales, calcula inversión, IVA, flete, factoring y utilidad, decide (🔥 🟢 🟡 🔴) y prepara la oferta completa en un ZIP. No inventa precios, stock ni cumplimiento.`)) return;
       try { const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "licitar" }) });
         toast(r._status === 409 ? "Ya está en manos del robot" : "El robot empezó con la licitación"); R.vista = "lista"; await refrescar(); }
       catch (e) { toast(e.message); }
@@ -6400,6 +6506,23 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       catch (e) { toast(e.message); }
       return;
     }
+    // 🏛 licitador automático
+    if (a === "la-ver") { R.laVer = R.laVer || {}; R.laVer[cod] = R.laVer[cod] === b.dataset.v ? null : b.dataset.v; pintarHoja(true); const el = $("#rbLa-" + CSS.escape(cod)); if (el && R.laVer[cod]) el.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+    if (a === "la-correr") { delete R._laRun; toast("🤖 Licitador: " + (b.dataset.desde === "leer" ? "vuelve a leer bases, buscar y decidir" : b.dataset.desde ? "recalcula y rehace la oferta" : "reanudando")); await laCorrer(cod, b.dataset.desde ? { desde: b.dataset.desde, forzar: true } : { forzar: true }); return; }
+    if (a === "la-zip") { try { const r = await api("lic-auto-zip?codigo=" + encodeURIComponent(cod)); const u = URL.createObjectURL(await r.blob()); const A = document.createElement("a"); A.href = u; A.download = "Oferta_" + cod + ".zip"; document.body.appendChild(A); A.click(); A.remove(); setTimeout(() => URL.revokeObjectURL(u), 30000); toast("⬇ Oferta completa (ZIP) para revisar, aprobar y firmar"); } catch (e) { toast(e.message); } return; }
+    if (a === "la-doc") { try { const r = await api("lic-auto-doc?codigo=" + encodeURIComponent(cod) + "&n=" + encodeURIComponent(b.dataset.n)); const bl = await r.blob(); const u = URL.createObjectURL(bl); if (/xlsx$/.test(b.dataset.n)) { const A = document.createElement("a"); A.href = u; A.download = b.dataset.n; document.body.appendChild(A); A.click(); A.remove(); } else window.open(u, "_blank"); setTimeout(() => URL.revokeObjectURL(u), 60000); } catch (e) { toast(e.message); } return; }
+    if (a === "la-conf") { const f = b.dataset.f, itemId = b.dataset.i, k = b.dataset.k; const conf = { itemId, k };
+      if (f === "stock") conf.stock = true; else if (f === "flete") { const v = $("#rbLaFl-" + CSS.escape(cod) + "-" + CSS.escape(k))?.value; if (v === "" || v == null) { toast("Escribe el flete cotizado (0 si va incluido)"); return; } conf.flete = Number(v); }
+      else if (f === "plazo") { const v = $("#rbLaPl-" + CSS.escape(cod) + "-" + CSS.escape(k))?.value; if (!v) { toast("Escribe los días de entrega del proveedor"); return; } conf.plazoDias = Number(v); } else if (f === "elegir") { conf.elegir = true; conf.descartar = false; } else if (f === "descartar") { conf.descartar = true; conf.elegir = false; } else if (f === "rescatar") conf.descartar = false;
+      toast("🧮 Recalculando con tu confirmación…"); await laAccion(cod, { accion: "confirmar", confirmacion: conf }); return; }
+    if (a === "la-cumple") { toast("🧮 Recalculando…"); await laAccion(cod, { accion: "confirmar", confirmacion: { itemId: b.dataset.i, k: b.dataset.k, cumple: { [b.dataset.r]: true } } }); return; }
+    if (a === "la-desc") { const v = Number($("#rbLaDesc-" + CSS.escape(cod))?.value); toast("💲 Recalculando con " + v + " % de descuento…"); await laAccion(cod, { accion: "precio", descuento: v / 100, precios: null }); return; }
+    if (a === "la-aprobar") { if (b.dataset.quitar) { await laAccion(cod, { accion: "aprobar", quitar: true }); return; } const t0 = trabajo(cod); const D = t0?.auto?.decision; if (!D) return;
+      if (D.estado === "ROJO" && !confirm("Está en 🔴 DESCARTAR (" + D.motivo + "). ¿Apruebas igual el contenido? No se puede presentar con bloqueos.")) return;
+      if (!confirm(`¿Apruebas el contenido de la oferta por ${clp(D.numeros?.ventaTotal)} con IVA?
+
+Esto NO ingresa nada a Mercado Público: solo deja constancia en el ZIP de que revisaste números, producto y documentos. Los anexos los firma el representante legal.`)) return;
+      await laAccion(cod, { accion: "aprobar" }); toast("✍️ Aprobación registrada en el LEEME del ZIP"); return; }
     if (a === "lic-zip") {
       try {
         const r = await api("lic-zip?codigo=" + encodeURIComponent(cod));
