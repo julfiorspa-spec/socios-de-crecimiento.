@@ -365,7 +365,7 @@ export default async (req) => {
       const q = {};
       const fecha = (url.searchParams.get("fecha") || "").trim(); const codigo = (url.searchParams.get("codigo") || "").trim(); const estado = (url.searchParams.get("estado") || "").trim().toLowerCase();
       if (codigo) { if (!CODIGO.test(codigo)) throw new HttpError(400, "Código no válido."); q.codigo = codigo; }
-      else if (/^\d{8}$/.test(fecha)) { q.fecha = fecha; if (/^[a-z]+$/.test(estado)) q.estado = estado; }
+      else if (/^\d{8}$/.test(fecha)) { q.fecha = fecha; if (/^[a-z]+$/.test(estado)) q.estado = estado; const prov = (url.searchParams.get("proveedor") || "").trim(); if (/^\d{1,10}$/.test(prov)) q.CodigoProveedor = prov; }
       else throw new HttpError(400, "Indica fecha (ddmmaaaa) o código.");
       const j = await mp(tipo, q);
       data = codigo ? { Cantidad: j.Cantidad, Listado: j.Listado } : { Cantidad: j.Cantidad, Listado: (j.Listado || []).map((x) => ({ Codigo: x.Codigo || x.CodigoExterno, Nombre: x.Nombre, CodigoEstado: x.CodigoEstado, Estado: x.Estado, FechaCierre: x.FechaCierre, Comprador: x.Comprador ? { NombreOrganismo: x.Comprador.NombreOrganismo, RegionUnidad: x.Comprador.RegionUnidad } : undefined, Total: x.Total })) };
