@@ -360,6 +360,16 @@ export default async (req) => {
       const j = await mp("Empresas/BuscarProveedor", { rutempresaproveedor: rut });
       data = { empresas: j.listaEmpresas || [] };
       ttl = 86400;
+    } else if (ruta === "mp-crudo") {   // 📦 paso directo (lista por día o detalle) para informes: licitaciones u órdenes de compra
+      const tipo = url.searchParams.get("tipo") === "oc" ? "ordenesdecompra.json" : "licitaciones.json";
+      const q = {};
+      const fecha = (url.searchParams.get("fecha") || "").trim(); const codigo = (url.searchParams.get("codigo") || "").trim(); const estado = (url.searchParams.get("estado") || "").trim().toLowerCase();
+      if (codigo) { if (!CODIGO.test(codigo)) throw new HttpError(400, "Código no válido."); q.codigo = codigo; }
+      else if (/^\d{8}$/.test(fecha)) { q.fecha = fecha; if (/^[a-z]+$/.test(estado)) q.estado = estado; }
+      else throw new HttpError(400, "Indica fecha (ddmmaaaa) o código.");
+      const j = await mp(tipo, q);
+      data = codigo ? { Cantidad: j.Cantidad, Listado: j.Listado } : { Cantidad: j.Cantidad, Listado: (j.Listado || []).map((x) => ({ Codigo: x.Codigo, Nombre: x.Nombre, CodigoEstado: x.CodigoEstado, Estado: x.Estado, FechaCierre: x.FechaCierre, Comprador: x.Comprador ? { NombreOrganismo: x.Comprador.NombreOrganismo, RegionUnidad: x.Comprador.RegionUnidad } : undefined, Total: x.Total })) };
+      ttl = codigo ? 3600 : 1800;
     } else {
       throw new HttpError(404, "Ruta no encontrada.");
     }
