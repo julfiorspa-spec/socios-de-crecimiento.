@@ -368,7 +368,7 @@ export default async (req) => {
       else if (/^\d{8}$/.test(fecha)) { q.fecha = fecha; if (/^[a-z]+$/.test(estado)) q.estado = estado; }
       else throw new HttpError(400, "Indica fecha (ddmmaaaa) o código.");
       const j = await mp(tipo, q);
-      data = codigo ? { Cantidad: j.Cantidad, Listado: j.Listado } : { Cantidad: j.Cantidad, Listado: (j.Listado || []).map((x) => ({ Codigo: x.Codigo, Nombre: x.Nombre, CodigoEstado: x.CodigoEstado, Estado: x.Estado, FechaCierre: x.FechaCierre, Comprador: x.Comprador ? { NombreOrganismo: x.Comprador.NombreOrganismo, RegionUnidad: x.Comprador.RegionUnidad } : undefined, Total: x.Total })) };
+      data = codigo ? { Cantidad: j.Cantidad, Listado: j.Listado } : { Cantidad: j.Cantidad, Listado: (j.Listado || []).map((x) => ({ Codigo: x.Codigo || x.CodigoExterno, Nombre: x.Nombre, CodigoEstado: x.CodigoEstado, Estado: x.Estado, FechaCierre: x.FechaCierre, Comprador: x.Comprador ? { NombreOrganismo: x.Comprador.NombreOrganismo, RegionUnidad: x.Comprador.RegionUnidad } : undefined, Total: x.Total })) };
       ttl = codigo ? 3600 : 1800;
     } else {
       throw new HttpError(404, "Ruta no encontrada.");
