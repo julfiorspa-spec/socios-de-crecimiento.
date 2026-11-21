@@ -9,9 +9,10 @@ import PROV_SEED from "./proveedores_seed.json";   // 📒 facturas de compra le
 // de entorno ROBOT_TOKEN (configurada en Netlify, nunca en el código ni en index.html).
 import { getStore } from "@netlify/blobs";
 import { evaluarOC, consolidar as evalConsolidar, PARAMS_BASE as EVAL_PARAMS } from "./evaluador.mjs";   // 🚦 evaluador de OC
-import { excelOC } from "./xlsxmin.mjs";
+import { excelOC, zipLeer, zipStore } from "./xlsxmin.mjs";
 import { correr as licCorrer, correrPaso as licCorrerPaso, iaClaude as licIA, siguientePaso as licSiguiente, SEM as LIC_SEM } from "./licauto.mjs";   // 🏛 licitador automático
 import { PARAMS_LIC, EMPRESA_BASE as LIC_EMPRESA } from "./licitador.mjs";
+import { simularOferta as licSimular, escenarios as licEscenarios, entradaDesde as licEntrada, huella as licHuella, excelOferta as licExcel, estadoOferta as licEstado, evaluarOferta as licEvaluar } from "./licalc.mjs";   // 🧮 simulador / versión aprobada / paquete
 import { detalleLicitacion as mpDetalleLic } from "./mp.mjs";
 import { cascada as motorCascada, libros as motorLibros, resumenFondo as motorResumen, REGLAS_BASE as MOTOR_REGLAS } from "./motor.mjs";   // 🧮 motor de caja
 import {
@@ -1774,6 +1775,18 @@ export function licCtx(store, empresa) {
   };
 }
 export const _licDeps = { getStore, STORE, autorizado, leer, licCorrer };
+// 🧮 versión actual del precio: huella de supuestos + productos elegidos. Si difiere de la aprobada, la aprobación se revoca sola.
+// lo que el usuario puede tocar fuera del simulador y cambia el precio: descuento manual y precios por ítem
+const licExtra = (a) => ({ d: a.descuento ?? null, pm: a.precios_manual || null });
+function licSellar(t) {
+  const a = t.auto; if (!a) return null;
+  try { const e = licEntrada(t, a.simulador || {}); if (e.faltan.length) { a.version_actual = { hash: null, faltan: e.faltan, t: ahora() }; }
+    else { const p = licSimular(e); a.version_actual = { hash: licHuella(e, p, licExtra(a)), t: ahora(), ventaNeta: p.ventaNeta, ventaBruta: p.ventaBruta, utilidad: p.utilidad, margen: p.margen }; } }
+  catch (err) { a.version_actual = { hash: null, error: String(err.message || err).slice(0, 120), t: ahora() }; }
+  if (a.version_aprobada && a.version_aprobada.hash !== a.version_actual.hash) { a.version_revocada = { ...a.version_aprobada, revocada: ahora(), motivo: "cambió el precio o los supuestos después de aprobar" }; delete a.version_aprobada; }
+  return a.version_actual;
+}
+async function licCorrerSellar(ctx, t, opt) { const r = await licCorrer(ctx, t, opt); licSellar(t); await ctx.escribir(t); return r; }
 
 async function atender(req) {
   if (/^\/bot\/sii-ingesta\/?$/.test(new URL(req.url).pathname)) return siiIngesta(req);
@@ -3009,35 +3022,90 @@ ALTERNATIVA PROPUESTA: ${prop}`;
       a.confirmaciones[itemId][k] = nv; a.hist = [...(a.hist || []), { t: ahora(), confirmacion: { itemId, k, ...nv } }].slice(-40);
       if (b.supuestos && typeof b.supuestos === "object") a.supuestos = { ...(a.supuestos || {}), ...Object.fromEntries(Object.entries(b.supuestos).slice(0, 8).map(([x, v]) => [texto(x, 20), v == null ? null : Math.round(Number(v) || 0)])) };
       if (b.documentos_ok && typeof b.documentos_ok === "object") a.documentos_ok = { ...(a.documentos_ok || {}), ...b.documentos_ok };
-      for (const p of ["decidir", "preparar"]) delete a.pasos[p]; await licCorrer(ctx, t, { presupuestoMs: 20000 }); return json({ trabajo: await leer(store, codigo) });
+      for (const p of ["decidir", "preparar"]) delete a.pasos[p]; await licCorrerSellar(ctx, t, { presupuestoMs: 20000 }); return json({ trabajo: await leer(store, codigo) });
     }
     if (accion === "precio") {        // 💲 ajuste manual del descuento o de un precio por ítem (sigue sin superar el presupuesto: lo revisa decidir)
       if (b.descuento != null) a.descuento = Math.min(0.6, Math.max(0, Number(b.descuento) || 0)); if (b.descuento === null) delete a.descuento;
       if (b.precios && typeof b.precios === "object") a.precios_manual = Object.fromEntries(Object.entries(b.precios).slice(0, 30).map(([i, v]) => [texto(i, 12), Math.max(0, Math.round(Number(v) || 0))])); if (b.precios === null) delete a.precios_manual;
-      for (const p of ["decidir", "preparar"]) delete a.pasos[p]; await licCorrer(ctx, t, { presupuestoMs: 20000 }); return json({ trabajo: await leer(store, codigo) });
+      for (const p of ["decidir", "preparar"]) delete a.pasos[p]; await licCorrerSellar(ctx, t, { presupuestoMs: 20000 }); return json({ trabajo: await leer(store, codigo) });
     }
     if (accion === "aprobar") {       // ✍️ aprobación humana del contenido (no es consentimiento para ingresar al portal)
       if (!a.decision) return json({ error: "Todavía no hay decisión que aprobar." }, 400);
       if (b.quitar) { delete a.aprobacion; } else a.aprobacion = { usuario: por, t: ahora(), monto: a.decision.numeros?.ventaTotal || 0, estado: a.decision.estado, consentimiento_portal: false, nota: texto(b.nota, 300) || null };
-      delete a.pasos.preparar; await licCorrer(ctx, t, { presupuestoMs: 20000 }); return json({ trabajo: await leer(store, codigo) });
+      delete a.pasos.preparar; await licCorrerSellar(ctx, t, { presupuestoMs: 20000 }); return json({ trabajo: await leer(store, codigo) });
+    }
+    // 🧮 simulador: presupuesto bruto editable, barra de descuento, utilidad en vivo, tres escenarios (no escribe nada)
+    if (accion === "simular") {
+      const e = licEntrada(t, b.entrada || {}); if (e.faltan.length) return json({ faltan: e.faltan, entrada: e });
+      try { const p = licSimular(e); return json({ entrada: e, precio: p, hash: licHuella(e, p), ...licEscenarios(e, (Number(process.env.LIC_MARGEN_MIN) || PARAMS_LIC.margen_min) / 100), version_aprobada: a.version_aprobada ? { n: a.version_aprobada.n, hash: a.version_aprobada.hash } : null }); } catch (err) { return json({ error: String(err.message || err) }, 400); }
+    }
+    // ✅ aprobar escenario: versión inmutable en el servidor (supuestos, desglose por línea, evidencias, montos); PDF/Excel/portal leen esa versión
+    if (accion === "aprobar_version") {
+      if (!a.decision) return json({ error: "Todavía no hay decisión que aprobar." }, 400);
+      const sobre = b.entrada || {}; const e = licEntrada(t, sobre); if (e.faltan.length) return json({ error: "Faltan datos para aprobar: " + e.faltan.join(", ") }, 400);
+      let p; try { p = licSimular(e); } catch (err) { return json({ error: String(err.message || err) }, 400); }
+      if (!p.tienePrecioEnTodasLasLineas || p.superaTope) return json({ error: p.superaTope ? "La oferta supera el tope obligatorio." : "Hay líneas sin precio." }, 400);
+      const n = (a.versiones || []).length + 1; const hash = licHuella(e, p, { d: e.descuentoBps / 10000, pm: Object.fromEntries(p.detalle.map((d) => [d.id, d.precioUnitarioNeto])) });
+      const ver = { n, hash, t: ahora(), por, codigo, entrada: e, precio: p, evidencias: (a.seleccion || []).map((s) => ({ itemId: s.itemId, producto: s.producto?.nombre, proveedor: s.cotizacion?.proveedor, unitNeto: s.cotizacion?.unitNeto, fuente: s.cotizacion?.evidencia?.fuente, estado: s.cotizacion?.evidencia?.estado, consultado: s.cotizacion?.evidencia?.consultado, stock: s.cotizacion?.stock })), nota: texto(b.nota, 300) || null };
+      await store.setJSON(`licauto/${codigo}/version/${n}`, ver);     // inmutable: nunca se sobrescribe
+      a.versiones = [...(a.versiones || []), { n, hash, t: ver.t, por, ventaNeta: p.ventaNeta, ventaBruta: p.ventaBruta, utilidad: p.utilidad }].slice(-30);
+      const base = Object.fromEntries(licEntrada(t, {}).lineas.map((l) => [l.id, l.compraUnitariaBruta]));
+      a.simulador = { presupuestoBruto: e.presupuestoBruto, descuentoBps: e.descuentoBps, logisticaNeta: e.logisticaNeta, factoringBps: e.factoringBps, ppmBps: e.ppmBps, costoGarantiaNeto: e.costoGarantiaNeto, topeBrutoObligatorio: e.topeBrutoObligatorio, lineas: e.lineas.map((l) => ({ id: l.id, cantidad: l.cantidad, compraUnitariaBruta: l.compraUnitariaBruta, peso: l.peso, base: base[l.id] ?? l.compraUnitariaBruta })) };
+      a.descuento = e.descuentoBps / 10000; a.precios_manual = Object.fromEntries(p.detalle.map((d) => [d.id, d.precioUnitarioNeto]));
+      a.version_aprobada = { n, hash, t: ver.t, por, precio: { ventaNeta: p.ventaNeta, iva: p.iva, ventaBruta: p.ventaBruta, utilidad: p.utilidad, margen: p.margen, resultadoTrasPpm: p.resultadoTrasPpm, detalle: p.detalle, tienePrecioEnTodasLasLineas: p.tienePrecioEnTodasLasLineas, superaTope: p.superaTope } };
+      a.aprobacion = { usuario: por, t: ver.t, monto: p.ventaBruta, estado: a.decision.estado, consentimiento_portal: false, nota: ver.nota, version: n };
+      for (const q of ["decidir", "preparar"]) delete a.pasos[q]; await licCorrerSellar(ctx, t, { presupuestoMs: 25000 });
+      return json({ trabajo: await leer(store, codigo), version: { n, hash } });
+    }
+    // ✍️ firma del representante sobre un documento de la versión aprobada (el documento firmado lo devuelve él; aquí se registra y verifica la versión)
+    if (accion === "firmar") {
+      const doc = texto(b.documento, 120); if (!doc) return json({ error: "Falta el documento." }, 400);
+      if (b.quitar) { if (a.firmas) delete a.firmas[doc]; await escribir(store, t); return json({ trabajo: t }); }
+      if (!a.version_aprobada) return json({ error: "Primero aprueba una versión: la firma queda ligada a esa versión." }, 400);
+      a.firmas = a.firmas || {}; a.firmas[doc] = { version: a.version_aprobada.hash, n: a.version_aprobada.n, t: ahora(), por, archivo: texto(b.archivo, 120) || null };
+      a.hist = [...(a.hist || []), { t: ahora(), firma: { documento: doc, version: a.version_aprobada.n, por } }].slice(-40); await escribir(store, t); return json({ trabajo: t });
     }
     if (accion === "reiniciar") { t.auto = { v: 1, pasos: {}, pendiente: true, creado: ahora(), forzar_lectura: true, confirmaciones: a.confirmaciones || {}, supuestos: a.supuestos || {} }; await escribir(store, t); }
     const A = t.auto; const desde = ["leer", "buscar", "decidir", "preparar"].includes(b.desde) ? b.desde : null;
     if (desde) { const PS = ["leer", "buscar", "decidir", "preparar"]; for (const p of PS.slice(PS.indexOf(desde))) delete A.pasos[p]; if (desde === "leer") A.forzar_lectura = true; A.error = null; await escribir(store, t); }
     if (A.corriendo && Date.now() - Date.parse(A.corriendo) < 4 * 60e3 && !b.forzar) return json({ trabajo: t, corriendo: true });
     if (!licSiguiente(A) && !A.error) return json({ trabajo: t, listo: true });
-    if (accion === "paso") { await licCorrerPaso(ctx, t, licSiguiente(A)); return json({ trabajo: await leer(store, codigo) }); }
+    if (accion === "paso") { await licCorrerPaso(ctx, t, licSiguiente(A)); licSellar(t); await escribir(store, t); return json({ trabajo: await leer(store, codigo) }); }
     // en segundo plano si Netlify lo permite (hasta 15 min); si no, en línea con el tiempo que haya
     delete A.pendiente; A.error = null; A.corriendo = ahora(); await escribir(store, t);
     let fondo = false;
     if (process.env.LICAUTO_FONDO !== "0") { try { const r = await fetch(new URL(req.url).origin + "/.netlify/functions/licauto-background", { method: "POST", headers: { "content-type": "application/json", "x-robot-token": req.headers.get("x-robot-token") || "" }, body: JSON.stringify({ codigo }), signal: AbortSignal.timeout(4000) }); fondo = r.status === 202; } catch { fondo = false; } }
     if (fondo) return json({ trabajo: t, fondo: true });
-    await licCorrer(ctx, t, { presupuestoMs: Number(process.env.LICAUTO_MS) || 8000 }); return json({ trabajo: await leer(store, codigo), fondo: false });
+    await licCorrerSellar(ctx, t, { presupuestoMs: Number(process.env.LICAUTO_MS) || 8000 }); return json({ trabajo: await leer(store, codigo), fondo: false });
   }
   if (ruta === "lic-auto-zip" && req.method === "GET") {
     const codigo = limpiaCodigo(url.searchParams.get("codigo")); const data = await store.get(`licauto/${codigo}/oferta.zip`, { type: "arrayBuffer" });
     if (!data) return json({ error: "La oferta aún no está preparada." }, 404);
-    return new Response(data, { headers: { "content-type": "application/zip", "content-disposition": `attachment; filename="Oferta_${codigo}.zip"`, "cache-control": "no-store" } });
+    const borrador = url.searchParams.get("borrador") === "1";
+    if (!borrador) {      // 📦 paquete para ofertar: solo con versión aprobada vigente, costos confirmados y firmas de ESA versión
+      const t = await leer(store, codigo); const emp = await licCtx(store, t?.empresa).empresaPerfil(t?.empresa).catch(() => ({}));
+      const ev = licEvaluar(licEstado(t || {}, emp)); if (!ev.listoParaOfertar) return json({ error: "El paquete todavía no se puede descargar.", pendientes: ev.pendientes, firmasPendientes: ev.firmasPendientes, listoParaFirmar: ev.listoParaFirmar }, 409);
+      // el paquete para el portal NO lleva costos internos: fuera el informe interno y el Excel con costos/proveedores; va un índice de carga por sección
+      const v = t.auto.version_aprobada; const docsL = (t.auto.lic?.documentos || []); const todo = zipLeer(Buffer.from(data)).filter((f) => !/Informe_Interno\.pdf$|Oferta_Economica\.xlsx$|^LEEME\.txt$/.test(f.name));
+      const indice = [`PAQUETE DE OFERTA · ${codigo} · versión aprobada v${v.n} (${v.hash}) · ${String(v.t).slice(0, 16).replace("T", " ")} por ${v.por || ""}`, `Neto ${(v.precio?.ventaNeta || 0).toLocaleString("es-CL")} · con IVA ${(v.precio?.ventaBruta || 0).toLocaleString("es-CL")} · unitario(s) neto(s): ${(v.precio?.detalle || []).map((d) => d.id + " = " + d.precioUnitarioNeto.toLocaleString("es-CL")).join(" · ")}`, "",
+        "ÍNDICE DE CARGA (sección del portal → archivo)", ...docsL.map((d) => ` - ${d.obligatorio ? "[OBLIG]" : "[opc]"} ${d.nombre}${d.firma ? " · firmado sobre v" + (t.auto.firmas?.[d.nombre]?.n ?? "?") : ""} → ${/econ/i.test(d.nombre) ? codigo + "_Oferta_Economica.pdf" : /identificaci|anexo n.?°? ?1\b/i.test(d.nombre) ? "Anexos_Oficiales/ (anexo original llenado y firmado) + " + codigo + "_Anexos_Datos.pdf" : /pacto|integridad/i.test(d.nombre) ? codigo + "_Pacto_Integridad.pdf" : /ficha|t[eé]cnic/i.test(d.nombre) ? codigo + "_Ficha_Tecnica.pdf (+ ficha del fabricante)" : "Anexos_Oficiales/ (original llenado y firmado)"}`),
+        " - Anexos complementarios (si las bases los admiten): ficha técnica con fotos, render referencial", "", "Los costos internos, proveedores y el Excel financiero NO van en este paquete. La presentación en el portal es manual: subir cada archivo en su sección y transcribir el valor neto aprobado."].join("\n");
+      const paquete = zipStore([...todo, { name: "INDICE_DE_CARGA.txt", data: Buffer.from(indice, "utf8") }]);
+      return new Response(paquete, { headers: { "content-type": "application/zip", "content-disposition": `attachment; filename="Oferta_${codigo}_v${v.n}.zip"`, "cache-control": "no-store" } });
+    }
+    return new Response(data, { headers: { "content-type": "application/zip", "content-disposition": `attachment; filename="${borrador ? "BORRADOR_" : "Oferta_"}${codigo}.zip"`, "cache-control": "no-store" } });
+  }
+  if (ruta === "lic-auto-estado" && req.method === "GET") {   // 📋 qué falta para ofertar (evaluarOferta en el servidor)
+    const codigo = limpiaCodigo(url.searchParams.get("codigo")); const t = await leer(store, codigo); if (!t) return json({ error: "No existe." }, 404);
+    const emp = await licCtx(store, t.empresa).empresaPerfil(t.empresa).catch(() => ({})); const est = licEstado(t, emp); return json({ estado: est, evaluacion: licEvaluar(est), version_actual: t.auto?.version_actual || null, version_aprobada: t.auto?.version_aprobada ? { n: t.auto.version_aprobada.n, hash: t.auto.version_aprobada.hash, t: t.auto.version_aprobada.t } : null });
+  }
+  if (ruta === "lic-auto-excel" && req.method === "GET") {    // 📊 Excel financiero interno de la versión aprobada (o del escenario actual)
+    const codigo = limpiaCodigo(url.searchParams.get("codigo")); const t = await leer(store, codigo); if (!t?.auto) return json({ error: "No existe." }, 404);
+    const nv = Number(url.searchParams.get("v")) || t.auto.version_aprobada?.n || 0; let e, p, ver = "borrador";
+    if (nv) { const V = await store.get(`licauto/${codigo}/version/${nv}`, { type: "json" }).catch(() => null); if (!V) return json({ error: "No existe esa versión." }, 404); e = V.entrada; p = V.precio; ver = "v" + nv + " · " + V.hash; }
+    else { e = licEntrada(t, t.auto.simulador || {}); if (e.faltan.length) return json({ error: "Faltan datos: " + e.faltan.join(", ") }, 400); p = licSimular(e); }
+    const L = t.auto.lic || {}; const buf = licExcel(e, p, { id: L.id || codigo, nombre: L.nombre, comprador: L.comprador, version: ver, fecha: ahora().slice(0, 16) });
+    return new Response(buf, { headers: { "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "content-disposition": `attachment; filename="Simulador_${codigo}_${ver.replace(/[^\w]+/g, "_")}.xlsx"`, "cache-control": "no-store" } });
   }
   if (ruta === "lic-auto-doc" && req.method === "GET") {
     const codigo = limpiaCodigo(url.searchParams.get("codigo")); const n = String(url.searchParams.get("n") || "").replace(/[^\w.\-]/g, "").slice(0, 80);
