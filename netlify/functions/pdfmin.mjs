@@ -21,6 +21,33 @@ function jpegDims(buf) {
   return null;
 }
 
+// 🖼 PNG (8 bits, sin entrelazado; gris/RGB/paleta, con o sin alfa) → RGB crudo + máscara alfa, para estampar firmas con fondo transparente
+import { inflateSync, deflateSync } from "node:zlib";
+export function pngDecodificar(buf) {
+  if (!(buf && buf.length > 24 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47)) return null;
+  let i = 8, w = 0, h = 0, bits = 8, tipo = 2, inter = 0; const idat = []; let plte = null, trns = null;
+  while (i + 8 <= buf.length) { const len = buf.readUInt32BE(i); const tp = buf.toString("latin1", i + 4, i + 8); const d = buf.subarray(i + 8, i + 8 + len);
+    if (tp === "IHDR") { w = d.readUInt32BE(0); h = d.readUInt32BE(4); bits = d[8]; tipo = d[9]; inter = d[12]; } else if (tp === "IDAT") idat.push(d); else if (tp === "PLTE") plte = d; else if (tp === "tRNS") trns = d; else if (tp === "IEND") break; i += 12 + len; }
+  if (!w || !h || bits !== 8 || inter !== 0 || !idat.length) return null;
+  const canales = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 }[tipo]; if (!canales) return null;
+  let raw; try { raw = inflateSync(Buffer.concat(idat)); } catch { return null; }
+  const bpp = canales, fila = w * bpp; const out = Buffer.alloc(h * fila); let prev = Buffer.alloc(fila);
+  for (let y = 0; y < h; y++) { const f = raw[y * (fila + 1)]; const src = raw.subarray(y * (fila + 1) + 1, (y + 1) * (fila + 1)); const dst = out.subarray(y * fila, (y + 1) * fila);
+    for (let x = 0; x < fila; x++) { const a = x >= bpp ? dst[x - bpp] : 0, b = prev[x], c = x >= bpp ? prev[x - bpp] : 0; let v = src[x];
+      if (f === 1) v += a; else if (f === 2) v += b; else if (f === 3) v += (a + b) >> 1; else if (f === 4) { const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c); v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c; }
+      dst[x] = v & 255; } prev = dst; }
+  const rgb = Buffer.alloc(w * h * 3); let alfa = null; const n = w * h;
+  if (tipo === 2) out.copy(rgb); else if (tipo === 6) { alfa = Buffer.alloc(n); for (let k = 0; k < n; k++) { rgb[k * 3] = out[k * 4]; rgb[k * 3 + 1] = out[k * 4 + 1]; rgb[k * 3 + 2] = out[k * 4 + 2]; alfa[k] = out[k * 4 + 3]; } }
+  else if (tipo === 0) { for (let k = 0; k < n; k++) rgb[k * 3] = rgb[k * 3 + 1] = rgb[k * 3 + 2] = out[k]; }
+  else if (tipo === 4) { alfa = Buffer.alloc(n); for (let k = 0; k < n; k++) { rgb[k * 3] = rgb[k * 3 + 1] = rgb[k * 3 + 2] = out[k * 2]; alfa[k] = out[k * 2 + 1]; } }
+  else if (tipo === 3) { if (!plte) return null; if (trns) alfa = Buffer.alloc(n, 255); for (let k = 0; k < n; k++) { const ix = out[k]; rgb[k * 3] = plte[ix * 3] ?? 0; rgb[k * 3 + 1] = plte[ix * 3 + 1] ?? 0; rgb[k * 3 + 2] = plte[ix * 3 + 2] ?? 0; if (trns) alfa[k] = ix < trns.length ? trns[ix] : 255; } }
+  // firma «limpia»: si el PNG no trae alfa, el blanco casi puro se vuelve transparente para que no tape el texto del anexo
+  if (!alfa) { alfa = Buffer.alloc(n); for (let k = 0; k < n; k++) { const m = Math.min(rgb[k * 3], rgb[k * 3 + 1], rgb[k * 3 + 2]); alfa[k] = m > 235 ? 0 : 255; } }
+  return { w, h, rgb, alfa };
+}
+// cualquier imagen admitida (JPEG o PNG) → descriptor para el PDF
+function imagenDesc(buf) { if (!buf || !buf.length) return null; const j = jpegDims(buf); if (j) return { data: buf, w: j.w, h: j.h, comp: j.comp, dct: true }; const p = pngDecodificar(buf); if (p) return { data: deflateSync(p.rgb), w: p.w, h: p.h, comp: 3, dct: false, alfa: p.alfa ? deflateSync(p.alfa) : null }; return null; }
+
 export function pdf(meta = {}) {
   const paginas = []; const imgs = []; let pg = null, y = 0; const pie = meta.pie || "";
   const nueva = () => { pg = { ops: [], imgs: [] }; paginas.push(pg); y = H - MARGEN; if (meta.cabecera) { texto(meta.cabecera, 8, false, 0.45); y -= 8; } };
@@ -48,15 +75,19 @@ export function pdf(meta = {}) {
         const y0 = y; let x = MARGEN; let yMin = y; celdas.forEach((c, i) => { y = y0 - 2.5; texto(lineasC[i].join("\n"), tam, bold, 0, x + 3, anchos[i] - 6, der.includes(i) ? "der" : "izq"); yMin = Math.min(yMin, y); x += anchos[i]; }); y = y0 - alto; linea(MARGEN, W - MARGEN, 0.85); y += 2; };
       fila(cols, true, 0.92); for (const f of filas || []) fila(f.map((c) => (c == null ? "" : String(c))), false, null); y -= 4; return api;
     },
-    imagen(jpg, op = {}) { const d = jpg && jpegDims(jpg); if (!d) return api; const maxW = op.ancho || 220, maxH = op.alto || 180; const k = Math.min(maxW / d.w, maxH / d.h, 1); const w = d.w * k, h = d.h * k; falta(h + 8);
-      const id = imgs.push({ data: jpg, w: d.w, h: d.h, comp: d.comp }) - 1; const x = op.x ?? MARGEN; pg.imgs.push(id); pg.ops.push(`q ${w.toFixed(2)} 0 0 ${h.toFixed(2)} ${x.toFixed(2)} ${(y - h).toFixed(2)} cm /Im${id} Do Q`); y -= h + 8; if (op.pie) texto(op.pie, 7.5, false, 0.45); return api; },
+    imagen(img, op = {}) { const d = img && imagenDesc(img); if (!d) return api; const maxW = op.ancho || 220, maxH = op.alto || 180; const k = Math.min(maxW / d.w, maxH / d.h, op.ampliar ? 99 : 1); const w = d.w * k, h = d.h * k; falta(h + 8);
+      const id = imgs.push(d) - 1; const x = op.x ?? MARGEN; pg.imgs.push(id); pg.ops.push(`q ${w.toFixed(2)} 0 0 ${h.toFixed(2)} ${x.toFixed(2)} ${(y - h).toFixed(2)} cm /Im${id} Do Q`); y -= h + 8; if (op.pie) texto(op.pie, 7.5, false, 0.45); return api; },
     salto() { nueva(); return api; }, espacio(n = 8) { y -= n; return api; },
-    firma(etiqueta) { falta(60); y -= 28; linea(MARGEN, MARGEN + 230, 0.3); texto(etiqueta, 8.5, false, 0.35, MARGEN, 230); y -= 6; return api; },
+    // ✍️ bloque de firma: línea + etiqueta; con op.img (PNG/JPEG de la firma dibujada) la estampa sobre la línea y anota fecha/lugar
+    firma(etiqueta, op = {}) { const d = op.img && imagenDesc(op.img); falta(d ? 96 : 60);
+      if (d) { const maxW = 170, maxH = 54; const k = Math.min(maxW / d.w, maxH / d.h); const w = d.w * k, h = d.h * k; y -= 10; const id = imgs.push(d) - 1; pg.imgs.push(id); pg.ops.push(`q ${w.toFixed(2)} 0 0 ${h.toFixed(2)} ${(MARGEN + 30).toFixed(2)} ${(y - h).toFixed(2)} cm /Im${id} Do Q`); y -= h + 2; } else y -= 28;
+      linea(MARGEN, MARGEN + 230, 0.3); texto(etiqueta, 8.5, false, 0.35, MARGEN, 230); if (op.nota) texto(op.nota, 7.5, false, 0.45, MARGEN, 300); y -= 6; return api; },
     build() {
       if (!paginas.length) nueva();
       const objs = []; const add = (s) => objs.push(s) - 1 + 1;   // ids desde 1
       const fontIds = [add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"), add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>")];
-      const imgIds = imgs.map((im) => add({ dict: `<< /Type /XObject /Subtype /Image /Width ${im.w} /Height ${im.h} /ColorSpace /${im.comp === 1 ? "DeviceGray" : im.comp === 4 ? "DeviceCMYK" : "DeviceRGB"} /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.data.length} >>`, stream: im.data }));
+      const imgIds = imgs.map((im) => { const sm = im.alfa ? add({ dict: `<< /Type /XObject /Subtype /Image /Width ${im.w} /Height ${im.h} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /Length ${im.alfa.length} >>`, stream: im.alfa }) : null;
+        return add({ dict: `<< /Type /XObject /Subtype /Image /Width ${im.w} /Height ${im.h} /ColorSpace /${im.comp === 1 ? "DeviceGray" : im.comp === 4 ? "DeviceCMYK" : "DeviceRGB"} /BitsPerComponent 8 /Filter /${im.dct === false ? "FlateDecode" : "DCTDecode"}${sm ? ` /SMask ${sm} 0 R` : ""} /Length ${im.data.length} >>`, stream: im.data }); });
       const pagesId = objs.length + 1 + paginas.length * 2;   // se reserva al final
       const pageIds = [];
       paginas.forEach((p, i) => {

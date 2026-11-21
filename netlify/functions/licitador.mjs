@@ -16,8 +16,23 @@ export const clp = (v) => (R0(v) < 0 ? "-$" : "$") + Math.abs(R0(v)).toLocaleStr
 export const COD_LIC = /^\d{1,8}-\d{1,8}-[A-Z][A-Z0-9]{1,2}\d{2}$/i;   // 2736-46-LE26 · 1234-5-LP26 · 99-1-L126 · 1057851-1-L126 · 1233822-17-CO26
 export const PARAMS_LIC = { ...PARAMS_BASE, margen_min: 12, fuego_pct: 25, descuento_lic: 0.17, validez_dias: 60, garantia_seriedad_pct: 0, garantia_fiel_pct: 5 };
 
-export const EMPRESA_BASE = { razon_social: "Sociedad de Inversiones y Gestión PJANIC SpA", rut: "78.493.114-5", email: "pjanicspa@gmail.com", direccion: "Zenteno 1181, Santiago",
-  representante: "Cristopher Antonio Pino Zamora", rut_representante: "19.375.012-5", facultades_ok: false, integridad_ok: false, difusion_integridad_ok: false };
+// 🏢 Perfil oficial de PJANIC SpA (21-11-2026). Lo que está acreditado se escribe en los anexos; lo informado-sin-respaldo va como PENDIENTE y nunca se declara solo.
+export const EMPRESA_BASE = { razon_social: "Sociedad de Inversiones y Gestión PJANIC SpA", nombre_corto: "PJANIC SpA", rut: "78.493.114-5", email: "pjanicspa@gmail.com", telefono: "+56 9 9047 5141",
+  direccion: "Zenteno 1181", comuna: "Santiago", ciudad: "Santiago", region: "Metropolitana", pais: "Chile",
+  representante: "Cristopher Antonio Pino Zamora", rut_representante: "19.375.012-5", representante_cargo: "Representante legal", representante_email: "pjanicspa@gmail.com", representante_telefono: "+56 9 9047 5141",
+  contacto_comercial: "Cristopher Antonio Pino Zamora", actividad: "Comercializadora intermediaria en Mercado Público",
+  facultades_ok: false, integridad_ok: false, difusion_integridad_ok: false,
+  // informado, pendiente de acreditar (se escribe en el anexo marcado PENDIENTE):
+  giro: "", constitucion: "Empresa en un Día, septiembre de 2026 (informada; confirmar acto, fecha exacta y notaría)", accionista: "Cristopher Antonio Pino Zamora, 100 % (informado; verificar con respaldo societario)",
+  banco: "", banco_tipo_cuenta: "", banco_numero_cuenta: "", banco_ciudad: "", contacto_finanzas: "", fax: "",
+  pendientes: [
+    "Giro tributario y código de actividad: verificar con el SII",
+    "Personería del representante: confirmar acto, fecha exacta, notaría y facultades",
+    "Participación y beneficiarios finales: verificar con respaldo societario",
+    "Banco, tipo y número de cuenta y ciudad de apertura: por completar",
+    "Contacto de finanzas, contabilidad o facturación: por completar",
+    "Fax: solo si el formulario lo pide",
+  ] };
 
 // compara el valor informado del producto con lo exigido. null = no hay dato (no se inventa).
 export function comparar(comparador, real, esperado) {

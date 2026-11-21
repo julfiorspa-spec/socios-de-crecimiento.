@@ -12,6 +12,7 @@ import { evaluarOC, consolidar as evalConsolidar, PARAMS_BASE as EVAL_PARAMS } f
 import { excelOC, zipLeer, zipStore } from "./xlsxmin.mjs";
 import { correr as licCorrer, correrPaso as licCorrerPaso, iaClaude as licIA, siguientePaso as licSiguiente, SEM as LIC_SEM } from "./licauto.mjs";   // 🏛 licitador automático
 import { PARAMS_LIC, EMPRESA_BASE as LIC_EMPRESA } from "./licitador.mjs";
+import { firmarAnexos as licFirmarAnexos } from "./licfirma.mjs";   // ✍️ anexos firmados en la nube con el perfil de la empresa
 import { simularOferta as licSimular, escenarios as licEscenarios, entradaDesde as licEntrada, huella as licHuella, excelOferta as licExcel, estadoOferta as licEstado, evaluarOferta as licEvaluar } from "./licalc.mjs";   // 🧮 simulador / versión aprobada / paquete
 import { detalleLicitacion as mpDetalleLic } from "./mp.mjs";
 import { cascada as motorCascada, libros as motorLibros, resumenFondo as motorResumen, REGLAS_BASE as MOTOR_REGLAS } from "./motor.mjs";   // 🧮 motor de caja
@@ -1767,8 +1768,14 @@ export function licCtx(store, empresa) {
     store, ahora, anotar, escribir: (t) => escribir(store, t), leer: (c) => leer(store, c), ia: licIA, mpDetalle: mpDetalleLic,
     mlToken: () => mlToken(store), contextoEval: (e, f) => contextoEval(store, e || emp, f), empresas: async () => (await store.get("empresas/lista", { type: "json" })) || {},
     empresaPerfil: async (e) => { const L = (await store.get("empresas/lista", { type: "json" })) || {}; const x = L[e || emp] || L.principal || {}; const si = (v) => /^s[ií]$/i.test(String(v || ""));
-      return { ...LIC_EMPRESA, ...(x.razon_social ? { razon_social: x.razon_social } : {}), ...(x.rut ? { rut: x.rut } : {}), giro: x.giro || "", email: x.email || LIC_EMPRESA.email, telefono: x.telefono || "", direccion: x.direccion || LIC_EMPRESA.direccion, comuna: x.comuna || "", ciudad: x.ciudad || "",
-        representante: x.representante || LIC_EMPRESA.representante, rut_representante: x.rut_representante || LIC_EMPRESA.rut_representante, representante_cargo: x.representante_cargo || "", facultades_ok: si(x.representante_facultades), integridad_ok: si(x.integridad), difusion_integridad_ok: si(x.integridad_difusion) || si(x.integridad), chileproveedores: si(x.chileproveedores_habil) }; },
+      const esP = !x.rut || String(x.rut).replace(/[^0-9kK]/g, "") === "784931145";   // PJANIC: la ficha guardada completa al perfil base; otra empresa del grupo usa solo lo suyo
+      const B = esP ? LIC_EMPRESA : { facultades_ok: false, integridad_ok: false, difusion_integridad_ok: false, pendientes: [] };
+      // identidad: para PJANIC manda el perfil oficial del código (21-11-2026); la ficha guardada solo completa lo que el perfil no trae
+      const v = (k) => (esP ? B[k] || x[k] : x[k] || B[k]) || "";
+      return { ...B, razon_social: v("razon_social"), rut: v("rut"), giro: x.giro || B.giro || "", email: v("email"), telefono: v("telefono"), direccion: v("direccion"), comuna: v("comuna"), ciudad: v("ciudad"), region: v("region"),
+        representante: v("representante"), rut_representante: v("rut_representante"), representante_cargo: v("representante_cargo") || "Representante legal", banco: x.banco || B.banco || "", contacto: x.contacto || B.contacto_comercial || "",
+        facultades_ok: si(x.representante_facultades), integridad_ok: si(x.integridad), difusion_integridad_ok: si(x.integridad_difusion) || si(x.integridad), chileproveedores: si(x.chileproveedores_habil),
+        pendientes: (B.pendientes || []).filter((pd) => !(x.giro && /giro/i.test(pd)) && !(x.banco && /banco/i.test(pd)) && !(si(x.representante_facultades) && /personer/i.test(pd))) }; },
     params: null,
     descuentoLic: async (L) => { const idx = (await store.get("historico/_indice", { type: "json" }).catch(() => null)) || { terms: {} }; const nombre = [L.nombre, ...(L.items || []).map((i) => i.nombre)].join(" ");
       for (const [term, re] of Object.entries(HIST_KW)) { const h = idx.terms[term]; if (h && h.n >= 8 && h.ratioMed && re.test(nombre)) return Math.min(0.4, Math.max(0.03, Math.round((1 - (h.ratioMed - 0.01)) * 1000) / 1000)); } return null; },
@@ -2874,6 +2881,18 @@ ALTERNATIVA PROPUESTA: ${prop}`;
     return json({ ok: true });
   }
 
+  // ✍️ firma registrada (PNG limpio del PC o la imagen subida por el celular) para estampar en los anexos
+  async function cargarFirma() { const meta = (await store.get("firma/meta", { type: "json" }).catch(() => null)) || null; if (!meta) return { img: null, meta: null };
+    const lista = await store.get("firma/lista", { type: "arrayBuffer" }).catch(() => null); if (lista && lista.byteLength) return { img: Buffer.from(lista), meta };
+    const img = await store.get("firma/img", { type: "arrayBuffer" }).catch(() => null); return { img: img && img.byteLength && /png|jpe?g/i.test(meta.mime || "") ? Buffer.from(img) : null, meta }; }
+  async function firmarEnNube(t, b, por) { const { img, meta } = await cargarFirma(); const emp = await licCtx(store, t.empresa).empresaPerfil(t.empresa).catch(() => ({}));
+    const precioUnit = b.precio_unit != null ? Math.max(0, Math.round(Number(b.precio_unit) || 0)) : null;
+    return licFirmarAnexos({ store, ahora }, t, { por, empresa: emp, firma: img, firmaMeta: meta, precioUnitNeto: precioUnit || null, plazo: texto(b.plazo, 120), garantia: texto(b.garantia, 160), vigencia: texto(b.vigencia, 80) || undefined }); }
+  if (ruta === "lic-auto-zip-firmado" && req.method === "GET") {   // 📦 ZIP con los anexos firmados (Oferta_<ID>_PJANIC.zip)
+    const codigo = limpiaCodigo(url.searchParams.get("codigo")); const t = await leer(store, codigo); const data = await store.get(`licauto/${codigo}/firmado.zip`, { type: "arrayBuffer" });
+    if (!data || !t?.firmado) return json({ error: "Todavía no hay anexos firmados: aprueba el precio primero." }, 404);
+    return new Response(data, { headers: { "content-type": "application/zip", "content-disposition": `attachment; filename="${t.firmado.zip || "Oferta_" + codigo + "_PJANIC.zip"}"`, "cache-control": "no-store" } });
+  }
   if (ruta === "pedir" && req.method === "POST") {
     const b = await cuerpo(req);
     const codigo = limpiaCodigo(b.codigo);
@@ -2892,9 +2911,16 @@ ALTERNATIVA PROPUESTA: ${prop}`;
         const L = (await store.get("empresas/lista", { type: "json" })) || {}; const nom = L[prevE]?.razon_social || prevE;
         return json({ trabajo: previo, error: `Esta compra ya la cotizó ${nom} (${previo.estado}). Una misma compra no se oferta con dos empresas del grupo: elige otra.` }, 409); } }
     if (accion === "lic_firmar" || accion === "lic_ingresar") {   // pasos siguientes: conservan el análisis y los papeles
-      if (!previo?.lic) return json({ error: "Primero el robot debe preparar la licitación." }, 404);
-      previo.accion = accion;
+      if (!previo?.lic && !previo?.auto?.lic) return json({ error: "Primero el robot debe preparar la licitación." }, 404);
       if (b.descuento != null) previo.descuento = Math.min(0.6, Math.max(0, Number(b.descuento) || 0));
+      if (accion === "lic_firmar" && !b.pc) {   // ✍️ en la nube: anexos con el perfil de la empresa + firma registrada → ZIP PJANIC; el portal lo abre el humano
+        if (previo.lic && b.descuento != null) previo.lic.descuento = previo.descuento;
+        try { const f = await firmarEnNube(previo, b, texto(b.por, 60) || "app");
+          anotar(previo, "lic_lista", `✍️ Anexos listos: ${f.firmados.length} firmados con la firma registrada${f.revision.length ? ` · ${f.revision.length} para revisión del representante` : ""} · ${f.zip} · precio neto ${clpS(f.precio.ventaNeta)}. Ofertar en Mercado Público es manual.`);
+          previo.accion = "lic_firmar"; return json({ trabajo: await escribir(store, previo), firmado: f }); }
+        catch (e) { return json({ error: "No pude firmar en la nube: " + String(e.message || e).slice(0, 200) }, 400); }
+      }
+      previo.accion = accion;
       anotar(previo, "en_cola", accion === "lic_firmar" ? "Aprobada: el robot firma los anexos y la deja lista para ofertar."
         : "El robot ingresará la oferta en Mercado Público (tú declaras y envías).");
       return json({ trabajo: await escribir(store, previo) });
@@ -3085,6 +3111,13 @@ ALTERNATIVA PROPUESTA: ${prop}`;
       return json({ trabajo: await leer(store, codigo), version: { n, hash } });
     }
     // ✍️ firma del representante sobre un documento de la versión aprobada (el documento firmado lo devuelve él; aquí se registra y verifica la versión)
+    if (accion === "firmar_anexos") {   // ✍️ genera los anexos reconocidos con el perfil + precio aprobado y la firma registrada → ZIP PJANIC
+      if (!a.version_aprobada) return json({ error: "Primero aprueba una versión en «Ver números»: los anexos llevan ese precio." }, 400);
+      try { const f = await firmarEnNube(t, b, por); a.hist = [...(a.hist || []), { t: ahora(), firmados: f.firmados.length, revision: f.revision.length, version: a.version_aprobada.n }].slice(-40);
+        a.firmas = a.firmas || {}; for (const d of f.firmados) a.firmas[d] = { version: a.version_aprobada.hash, n: a.version_aprobada.n, t: ahora(), por, archivo: "nube" };
+        await escribir(store, t); return json({ trabajo: t, firmado: f }); }
+      catch (e) { return json({ error: String(e.message || e).slice(0, 200) }, 400); }
+    }
     if (accion === "firmar") {
       const doc = texto(b.documento, 120); if (!doc) return json({ error: "Falta el documento." }, 400);
       if (b.quitar) { if (a.firmas) delete a.firmas[doc]; await escribir(store, t); return json({ trabajo: t }); }
