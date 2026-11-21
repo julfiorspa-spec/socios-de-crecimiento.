@@ -12,7 +12,7 @@ import { evaluarOC, consolidar as evalConsolidar, PARAMS_BASE as EVAL_PARAMS } f
 import { excelOC, zipLeer, zipStore } from "./xlsxmin.mjs";
 import { correr as licCorrer, correrPaso as licCorrerPaso, iaClaude as licIA, siguientePaso as licSiguiente, SEM as LIC_SEM } from "./licauto.mjs";   // 🏛 licitador automático
 import { PARAMS_LIC, EMPRESA_BASE as LIC_EMPRESA } from "./licitador.mjs";
-import { firmarAnexos as licFirmarAnexos } from "./licfirma.mjs";   // ✍️ anexos firmados en la nube con el perfil de la empresa
+import { firmarAnexos as licFirmarAnexos, preguntasFirma as licPreguntas, ofertaDesde as licOferta } from "./licfirma.mjs";   // ✍️ anexos firmados en la nube con el perfil de la empresa
 import { simularOferta as licSimular, escenarios as licEscenarios, entradaDesde as licEntrada, huella as licHuella, excelOferta as licExcel, estadoOferta as licEstado, evaluarOferta as licEvaluar } from "./licalc.mjs";   // 🧮 simulador / versión aprobada / paquete
 import { detalleLicitacion as mpDetalleLic } from "./mp.mjs";
 import { cascada as motorCascada, libros as motorLibros, resumenFondo as motorResumen, REGLAS_BASE as MOTOR_REGLAS } from "./motor.mjs";   // 🧮 motor de caja
@@ -2885,9 +2885,16 @@ ALTERNATIVA PROPUESTA: ${prop}`;
   async function cargarFirma() { const meta = (await store.get("firma/meta", { type: "json" }).catch(() => null)) || null; if (!meta) return { img: null, meta: null };
     const lista = await store.get("firma/lista", { type: "arrayBuffer" }).catch(() => null); if (lista && lista.byteLength) return { img: Buffer.from(lista), meta };
     const img = await store.get("firma/img", { type: "arrayBuffer" }).catch(() => null); return { img: img && img.byteLength && /png|jpe?g/i.test(meta.mime || "") ? Buffer.from(img) : null, meta }; }
+  // 🧩 Antes de firmar se le pregunta al humano lo que los anexos no saben (plazo, garantía, proveedor, traslado, recinto, equipos, campos sueltos).
+  //    Sin `respuestas` devuelve el cuestionario; con ellas las guarda en el trabajo (y giro/banco en el perfil) y firma.
   async function firmarEnNube(t, b, por) { const { img, meta } = await cargarFirma(); const emp = await licCtx(store, t.empresa).empresaPerfil(t.empresa).catch(() => ({}));
-    const precioUnit = b.precio_unit != null ? Math.max(0, Math.round(Number(b.precio_unit) || 0)) : null;
-    return licFirmarAnexos({ store, ahora }, t, { por, empresa: emp, firma: img, firmaMeta: meta, precioUnitNeto: precioUnit || null, plazo: texto(b.plazo, 120), garantia: texto(b.garantia, 160), vigencia: texto(b.vigencia, 80) || undefined }); }
+    const precioUnit = b.precio_unit != null ? Math.max(0, Math.round(Number(b.precio_unit) || 0)) : null; const opBase = { por, empresa: emp, firma: img, firmaMeta: meta, precioUnitNeto: precioUnit || null };
+    const previas = t.firmado_respuestas || {}; const E = { ...LIC_EMPRESA, ...emp }; const O = licOferta(t, opBase);
+    if (!b.respuestas || typeof b.respuestas !== "object") { const Q = licPreguntas(t, E, O, previas); if (Q.length) return { cuestionario: Q }; }
+    const R = { ...previas }; for (const [k, v] of Object.entries(b.respuestas || {}).slice(0, 60)) { const kk = texto(k, 80); const vv = texto(v, 600); if (kk) { if (vv) R[kk] = vv; else delete R[kk]; } }
+    t.firmado_respuestas = R;
+    if (R.giro || R.banco) { try { const L = (await store.get("empresas/lista", { type: "json" })) || {}; const id = t.empresa || "principal"; const e = L[id] || L.principal || { id: "principal", razon_social: E.razon_social, rut: E.rut }; if (R.giro && !e.giro) e.giro = R.giro; if (R.banco && !e.banco) e.banco = R.banco; e.actualizado = ahora(); L[e.id || id] = e; await store.setJSON("empresas/lista", L); if (R.giro) emp.giro = emp.giro || R.giro; if (R.banco) emp.banco = emp.banco || R.banco; } catch {} }
+    return licFirmarAnexos({ store, ahora }, t, { ...opBase, empresa: emp, respuestas: R }); }
   if (ruta === "lic-auto-zip-firmado" && req.method === "GET") {   // 📦 ZIP con los anexos firmados (Oferta_<ID>_PJANIC.zip)
     const codigo = limpiaCodigo(url.searchParams.get("codigo")); const t = await leer(store, codigo); const data = await store.get(`licauto/${codigo}/firmado.zip`, { type: "arrayBuffer" });
     if (!data || !t?.firmado) return json({ error: "Todavía no hay anexos firmados: aprueba el precio primero." }, 404);
@@ -2916,6 +2923,7 @@ ALTERNATIVA PROPUESTA: ${prop}`;
       if (accion === "lic_firmar" && !b.pc) {   // ✍️ en la nube: anexos con el perfil de la empresa + firma registrada → ZIP PJANIC; el portal lo abre el humano
         if (previo.lic && b.descuento != null) previo.lic.descuento = previo.descuento;
         try { const f = await firmarEnNube(previo, b, texto(b.por, 60) || "app");
+          if (f.cuestionario) return json({ trabajo: previo, cuestionario: f.cuestionario });
           anotar(previo, "lic_lista", `✍️ Anexos listos: ${f.firmados.length} firmados con la firma registrada${f.revision.length ? ` · ${f.revision.length} para revisión del representante` : ""} · ${f.zip} · precio neto ${clpS(f.precio.ventaNeta)}. Ofertar en Mercado Público es manual.`);
           previo.accion = "lic_firmar"; return json({ trabajo: await escribir(store, previo), firmado: f }); }
         catch (e) { return json({ error: "No pude firmar en la nube: " + String(e.message || e).slice(0, 200) }, 400); }
@@ -3113,7 +3121,8 @@ ALTERNATIVA PROPUESTA: ${prop}`;
     // ✍️ firma del representante sobre un documento de la versión aprobada (el documento firmado lo devuelve él; aquí se registra y verifica la versión)
     if (accion === "firmar_anexos") {   // ✍️ genera los anexos reconocidos con el perfil + precio aprobado y la firma registrada → ZIP PJANIC
       if (!a.version_aprobada) return json({ error: "Primero aprueba una versión en «Ver números»: los anexos llevan ese precio." }, 400);
-      try { const f = await firmarEnNube(t, b, por); a.hist = [...(a.hist || []), { t: ahora(), firmados: f.firmados.length, revision: f.revision.length, version: a.version_aprobada.n }].slice(-40);
+      try { const f = await firmarEnNube(t, b, por); if (f.cuestionario) return json({ trabajo: t, cuestionario: f.cuestionario });
+        a.hist = [...(a.hist || []), { t: ahora(), firmados: f.firmados.length, revision: f.revision.length, version: a.version_aprobada.n }].slice(-40);
         a.firmas = a.firmas || {}; for (const d of f.firmados) a.firmas[d] = { version: a.version_aprobada.hash, n: a.version_aprobada.n, t: ahora(), por, archivo: "nube" };
         await escribir(store, t); return json({ trabajo: t, firmado: f }); }
       catch (e) { return json({ error: String(e.message || e).slice(0, 200) }, 400); }

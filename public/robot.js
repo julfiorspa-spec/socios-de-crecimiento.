@@ -1195,10 +1195,34 @@
       <div id="rbSimOut-${c}"></div>
       <div class="rb-row" style="flex-wrap:wrap;gap:4px;margin-top:8px"><button class="btn small rb-firmar" type="button" id="rbSimAprobar-${c}" data-rb="la-sim-aprobar" data-c="${c}">✅ Aprobar este escenario</button><button class="btn small" type="button" data-rb="la-sim-excel" data-c="${c}">📊 Excel interno</button><button class="btn small" type="button" data-rb="la-sim-copiar" data-c="${c}" data-q="unit">📋 Copiar unitario neto</button><button class="btn small" type="button" data-rb="la-sim-copiar" data-c="${c}" data-q="neto">📋 Copiar total neto</button><button class="btn small" type="button" data-rb="la-sim-copiar" data-c="${c}" data-q="bruto">📋 Copiar total con IVA</button></div>
       <div class="muted" style="font-size:.68rem;margin-top:4px">${vA ? `✅ Versión aprobada <b>v${vA.n}</b> · ${esc(vA.hash)} · ${esc(hace(vA.t))} por ${esc(vA.por || "")} · neto ${clp(vA.precio?.ventaNeta)} · utilidad ${clp(vA.precio?.utilidad)}. PDF, Excel y el valor para el portal leen esta versión.` : vR ? `⚠ La versión v${vR.n} fue <b>revocada</b>: ${esc(vR.motivo || "")}. Aprueba de nuevo y vuelve a firmar.` : "Sin versión aprobada: el paquete no se puede descargar hasta aprobar un escenario y firmar sus documentos."}${vC?.hash && vA && vC.hash !== vA.hash ? " · <span style='color:#ffe29a'>el precio actual difiere de la aprobada</span>" : ""}</div>`; }
+  // 🧩 cuestionario previo a la firma: una pregunta a la vez, con contexto de las bases; lo respondido va a los anexos
+  function cuestionarioFirma(cod, Q, enviar) {
+    document.querySelector(".rb-cuest")?.remove(); const Rsp = {}; let i = 0;
+    const ov = document.createElement("div"); ov.className = "rb-cuest"; ov.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(8,6,20,.72);display:flex;align-items:flex-end;justify-content:center;padding:0;";
+    const paso = () => { const q = Q[i]; const ult = i === Q.length - 1;
+      ov.innerHTML = `<div style="background:#1b1737;color:#f3efff;border-radius:18px 18px 0 0;width:100%;max-width:560px;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));box-shadow:0 -8px 30px rgba(0,0,0,.5);max-height:88vh;overflow:auto">
+        <div class="rb-row" style="justify-content:space-between;align-items:center"><b style="font-size:.78rem;letter-spacing:.04em;color:#c9b8ff">🧩 ANTES DE FIRMAR · ${i + 1} / ${Q.length}</b><button class="btn small" type="button" data-q="cerrar">✕</button></div>
+        <div style="height:4px;background:#2d2850;border-radius:4px;margin:8px 0 12px"><div style="height:4px;width:${Math.round(((i + 1) / Q.length) * 100)}%;background:#f5cf6b;border-radius:4px"></div></div>
+        <div style="font-size:.74rem;color:#c9b8ff">${esc(q.titulo || "")}${q.doc ? " · " + esc(q.doc) : ""}${q.obligatoria ? "" : ' <span class="muted">(opcional)</span>'}</div>
+        <div style="font-size:1.02rem;font-weight:700;margin:4px 0 6px">${esc(q.pregunta)}</div>
+        ${q.ayuda ? `<div class="muted" style="font-size:.76rem;margin-bottom:8px">💡 ${esc(q.ayuda)}</div>` : ""}
+        <textarea data-q="v" rows="3" style="width:100%;box-sizing:border-box;background:#120f26;color:#fff;border:1px solid #4a4280;border-radius:10px;padding:10px;font-size:1rem" placeholder="${esc(q.ejemplo || "Escríbelo con tus palabras")}">${esc(Rsp[q.id] ?? q.valor ?? "")}</textarea>
+        <div class="rb-row" style="gap:6px;margin-top:10px;flex-wrap:wrap">${i ? '<button class="btn small" type="button" data-q="atras">← Atrás</button>' : ""}${q.obligatoria ? "" : '<button class="btn small" type="button" data-q="saltar">Saltar</button>'}<span style="flex:1"></span><button class="btn small oro" type="button" data-q="sig">${ult ? "✍️ Listo, firmar" : "Siguiente →"}</button></div>
+        <div class="muted" style="font-size:.64rem;margin-top:6px">Lo que respondes se escribe tal cual en los anexos y en el plan de logística; nada se inventa por ti.</div></div>`;
+      const ta = ov.querySelector("[data-q=v]"); setTimeout(() => ta?.focus(), 50);
+      ov.querySelectorAll("[data-q]").forEach((b) => b.addEventListener("click", (ev) => { const a = b.dataset.q; if (a === "v") return; ev.preventDefault();
+        if (a === "cerrar") { ov.remove(); toast("Cuestionario cerrado: no se firmó nada"); return; }
+        if (a === "atras") { Rsp[q.id] = ta.value.trim(); i--; paso(); return; }
+        if (a === "saltar") { Rsp[q.id] = ""; i++; if (i >= Q.length) fin(); else paso(); return; }
+        const v = ta.value.trim(); if (q.obligatoria && !v) { toast("Esta sí la necesito para el anexo 🙏"); ta.focus(); return; } Rsp[q.id] = v; i++; if (i >= Q.length) fin(); else paso(); })); };
+    const fin = () => { ov.remove(); enviar(Rsp); };
+    document.body.appendChild(ov); paso();
+  }
   // ✍️ resultado de «firmar anexos» en la nube: qué quedó firmado, qué revisa el representante, ZIP PJANIC y botón al portal
   function licFirmadoHTML(t) { const F = t.firmado; if (!F) return ""; const c = esc(t.codigo);
     return `<div class="rb-alertas" style="border-color:#5ef0b0;margin-top:8px"><b>✍️ Anexos listos · ${esc(F.zip)}</b> <span class="muted">(${esc(String(F.t).slice(0, 16).replace("T", " "))}${F.por ? " · " + esc(F.por) : ""})</span>
       <div style="font-size:.76rem;margin-top:4px">💲 Precio aprobado: neto <b>${clp(F.precio?.ventaNeta)}</b> · con IVA <b>${clp(F.precio?.ventaTotal)}</b>${(F.precio?.lineas || []).map((l) => `<div class="muted">· ${esc(l.nombre)}: ${clp(l.unitNeto)} × ${esc(l.cantidad)}</div>`).join("")}</div>
+      ${F.condiciones ? `<div style="font-size:.76rem;margin-top:3px">🗓️ Plazo <b>${esc(F.condiciones.plazo || "pendiente")}</b> · 🛡 Garantía <b>${esc(F.condiciones.garantia || "pendiente")}</b>${F.respuestas?.traslado ? `<div class="muted">🚚 ${esc(F.respuestas.proveedor || "")}${F.respuestas.proveedor ? " → " : ""}${esc(F.respuestas.traslado)}</div>` : ""}</div>` : ""}
       ${F.firmados?.length ? `<div style="font-size:.76rem;margin-top:4px">✅ Firmados con la firma registrada: ${F.firmados.map(esc).join(" · ")}</div>` : `<div style="font-size:.76rem;margin-top:4px;color:#ffe29a">⚠ ${F.con_firma ? "Ningún anexo requería firma." : "No hay firma registrada: sube la firma del representante (✍️ Firma) y vuelve a aprobar."}</div>`}
       ${F.revision?.length ? `<div style="font-size:.76rem;margin-top:3px;color:#ffe29a">📝 Para revisión y firma del representante: ${F.revision.map(esc).join(" · ")}</div>` : ""}
       ${F.pendientes?.length ? `<details class="rb-det"><summary>Pendientes de acreditar (${F.pendientes.length})</summary><ul class="rb-ul">${F.pendientes.map((p) => `<li>${esc(p)}</li>`).join("")}</ul></details>` : ""}
@@ -6553,18 +6577,23 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
       const box = b.closest(".rb-precio-lic"); let precio_unit = null;
       if (box) { const pres = +box.dataset.pres || 0, cant = +box.dataset.cant || 1; const nm = box.dataset.coniva === "1" ? pres / 1.19 : pres; precio_unit = Math.floor(nm * (1 - d) / cant / 10) * 10 || null; }
       if (!confirm(`¿Apruebas el precio (${Math.round(d * 1000) / 10}% bajo el presupuesto${precio_unit ? " · " + clp(precio_unit) + " neto por unidad" : ""})?\n\nSe generan los anexos con los datos de la empresa y la firma registrada del representante; las declaraciones juradas quedan para su revisión. Ofertar en Mercado Público sigue siendo manual.`)) return;
-      b.disabled = true; toast("✍️ Generando y firmando los anexos…");
-      try { const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "lic_firmar", descuento: d, precio_unit, por: persona()?.nombre || "app" }) });
-        const f = r.firmado; toast(f ? `✅ ${f.firmados.length} anexos firmados · ${f.zip}${f.revision.length ? " · " + f.revision.length + " para revisión" : ""}` : "Aprobada"); await refrescar(); }
-      catch (e) { toast(e.message); b.disabled = false; }
+      b.disabled = true; toast("🧩 Preparando las preguntas…");
+      const mandar = async (respuestas) => { toast("✍️ Generando y firmando los anexos…");
+        try { const r = await api("pedir", { method: "POST", body: JSON.stringify({ codigo: cod, accion: "lic_firmar", descuento: d, precio_unit, por: persona()?.nombre || "app", respuestas }) });
+          if (r.cuestionario) { cuestionarioFirma(cod, r.cuestionario, mandar); return; }
+          const f = r.firmado; toast(f ? `✅ ${f.firmados.length} anexos firmados · ${f.zip}${f.revision.length ? " · " + f.revision.length + " para revisión" : ""}` : "Aprobada"); await refrescar(); }
+        catch (e) { toast(e.message); b.disabled = false; } };
+      await mandar(undefined);
       return;
     }
     if (a === "la-firmar-anexos") {
       if (!confirm("¿Generar los anexos reconocidos con el perfil de la empresa y el precio de la versión aprobada, firmados con la firma registrada?\n\nLas declaraciones juradas quedan para revisión del representante. Nada se envía al portal.")) return;
-      b.disabled = true; toast("✍️ Generando y firmando los anexos…");
-      try { const r = await laAccion(cod, { accion: "firmar_anexos" }); if (!r) { b.disabled = false; return; } if (r.error) throw new Error(r.error);
-        const f = r.firmado; toast(`✅ ${f.firmados.length} anexos firmados · ${f.zip}${f.revision.length ? " · " + f.revision.length + " para revisión" : ""}`); }
-      catch (e) { toast(e.message); b.disabled = false; }
+      b.disabled = true; toast("🧩 Preparando las preguntas…");
+      const mandar = async (respuestas) => { try { const r = await laAccion(cod, { accion: "firmar_anexos", respuestas }); if (!r) { b.disabled = false; return; } if (r.error) throw new Error(r.error);
+          if (r.cuestionario) { cuestionarioFirma(cod, r.cuestionario, mandar); return; }
+          const f = r.firmado; toast(`✅ ${f.firmados.length} anexos firmados · ${f.zip}${f.revision.length ? " · " + f.revision.length + " para revisión" : ""}`); }
+        catch (e) { toast(e.message); b.disabled = false; } };
+      await mandar(undefined);
       return;
     }
     if (a === "la-zip-firmado") { try { const r = await api("lic-auto-zip-firmado?codigo=" + encodeURIComponent(cod)); if (!r.blob) { toast(r.error || "Todavía no hay anexos firmados"); return; } const u = URL.createObjectURL(await r.blob()); const A = document.createElement("a"); A.href = u; A.download = (trabajo(cod)?.firmado?.zip) || ("Oferta_" + cod + "_PJANIC.zip"); document.body.appendChild(A); A.click(); A.remove(); setTimeout(() => URL.revokeObjectURL(u), 30000); toast("📦 ZIP con los anexos firmados: súbelos en el portal"); } catch (e) { toast(e.message); } return; }
