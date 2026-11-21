@@ -32,8 +32,24 @@ export async function iaClaude({ prompt, docs = [], maxTok = 4000, ms = 110000, 
   return (j.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
 }
 export function extraerJSON(txt) {
-  const s = String(txt || ""); const i = s.indexOf("{"), k = s.lastIndexOf("}"); if (i < 0 || k <= i) throw new Error("La IA no devolvió JSON");
-  try { return JSON.parse(s.slice(i, k + 1)); } catch { const limpio = s.slice(i, k + 1).replace(/,\s*([}\]])/g, "$1").replace(/[“”]/g, '"'); return JSON.parse(limpio); }
+  const s = String(txt || ""); const i = s.indexOf("{"); if (i < 0) throw new Error("La IA no devolvió JSON");
+  const k = s.lastIndexOf("}"); const cuerpo = k > i ? s.slice(i, k + 1) : s.slice(i);
+  try { return JSON.parse(cuerpo); } catch {}
+  try { return JSON.parse(cuerpo.replace(/,\s*([}\]])/g, "$1").replace(/[“”]/g, '"')); } catch {}
+  const r = repararJSON(s.slice(i)); if (r) return r;
+  throw new Error("La IA devolvió un JSON incompleto (respuesta cortada)");
+}
+// JSON cortado a mitad (la IA se quedó sin espacio): se corta en el último valor completo y se cierran las llaves/corchetes abiertos.
+export function repararJSON(s) {
+  const cortes = []; let str = false, esc = false, pila = [];
+  for (let n = 0; n < s.length; n++) { const c = s[n];
+    if (str) { if (esc) esc = false; else if (c === "\\") esc = true; else if (c === '"') { str = false; cortes.push({ n: n + 1, pila: pila.slice() }); } continue; }
+    if (c === '"') str = true; else if (c === "{" || c === "[") pila.push(c); else if (c === "}" || c === "]") { pila.pop(); cortes.push({ n: n + 1, pila: pila.slice() }); } else if (/[0-9el]/.test(c) && !/[0-9.eE+\-a-z]/.test(s[n + 1] || " ")) cortes.push({ n: n + 1, pila: pila.slice() }); }
+  for (let q = cortes.length - 1, intentos = 0; q >= 0 && intentos < 400; q--, intentos++) { const { n, pila: p } = cortes[q]; if (!p.length) continue;
+    let pre = s.slice(0, n).replace(/,\s*$/, ""); if (/:\s*$/.test(pre)) continue;
+    const cierre = p.slice().reverse().map((c) => (c === "{" ? "}" : "]")).join("");
+    try { const j = JSON.parse(pre.replace(/,\s*([}\]])/g, "$1") + cierre); if (j && typeof j === "object") { j._reparado = true; return j; } } catch {} }
+  return null;
 }
 
 // ---------- documentos: ZIP del portal, anexos subidos; DOCX/XLSX → texto; PDF/imagen → bloques ----------
@@ -98,8 +114,12 @@ async function pasoLeer(ctx, t) {
     // tamaño para Claude: PDFs hasta ~18 MB en total, 6 archivos; el resto se lista como no leído
     let presup = 18e6; const enviar = [], noLeidos = [];
     for (const d of legibles) { const peso = d.tipo === "pdf" ? d.data.length : d.tipo === "imagen" ? d.data.length : d.texto.length; if (enviar.length < 6 && peso <= presup) { enviar.push(d); presup -= peso; } else noLeidos.push(d.nombre); }
-    const txt = await ctx.ia({ prompt: PROMPT_LEER(t, ficha), docs: enviar, maxTok: 7000, ms: 170000 });
-    const j = extraerJSON(txt);
+    let j; try { const txt = await ctx.ia({ prompt: PROMPT_LEER(t, ficha), docs: enviar, maxTok: 16000, ms: 170000 }); j = extraerJSON(txt); }
+    catch (e1) {   // JSON cortado o inválido: segundo intento pidiendo la respuesta compacta
+      a.avisos = [...new Set([...(a.avisos || []), "Lectura: primer intento devolvió JSON incompleto; se repitió en modo compacto."])];
+      const txt2 = await ctx.ia({ prompt: PROMPT_LEER(t, ficha) + "\n\nIMPORTANTE: responde SOLO el JSON, compacto (sin saltos de línea decorativos), citas de máximo 120 caracteres, máximo 5 riesgos, 5 preguntas del foro y 12 requisitos por ítem. No cortes la respuesta.", docs: enviar, maxTok: 16000, ms: 170000 });
+      j = extraerJSON(txt2); }
+    if (j._reparado) { a.avisos = [...new Set([...(a.avisos || []), "Lectura: la respuesta de la IA venía cortada; se recuperó la parte completa. Revisa documentos y garantías."])]; delete j._reparado; }
     L = normalizarLic(t, j, ficha, enviar.map((d) => d.nombre), noLeidos.concat(docs.filter((d) => d.tipo === "no_legible").map((d) => d.nombre + " (formato no legible)")));
     await store.setJSON(`licauto/${t.codigo}/bases`, { t: ctx.ahora(), firma, lic: L, ficha, crudo: j });
   }
