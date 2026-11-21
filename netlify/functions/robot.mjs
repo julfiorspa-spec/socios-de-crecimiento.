@@ -1786,6 +1786,21 @@ function licSellar(t) {
   if (a.version_aprobada && a.version_aprobada.hash !== a.version_actual.hash) { a.version_revocada = { ...a.version_aprobada, revocada: ahora(), motivo: "cambió el precio o los supuestos después de aprobar" }; delete a.version_aprobada; }
   return a.version_actual;
 }
+// 🏷 producto propio: el usuario declara su proveedor y costo para un ítem (sin inventar evidencia: queda como «estimado/declarado» y pendiente de confirmar)
+async function licProductoPropio(store, t, por, { itemId, nombre, proveedor, unitNeto, precioIVA, flete, plazoDias, stock, cantidad }) {
+  const a = t.auto; const L = a.lic || {}; const it = (L.items || []).find((i) => i.id === itemId); if (!it) throw new Error("Ítem no encontrado: " + itemId);
+  const neto = Math.round(Number(unitNeto) || (Number(precioIVA) || 0) / 1.19); if (!(neto > 0)) throw new Error("Falta el costo unitario del producto propio.");
+  const CJ = (await store.get(`licauto/${t.codigo}/candidatos`, { type: "json" }).catch(() => null)) || { candidatos: {} }; CJ.candidatos = CJ.candidatos || {};
+  const k = "propio-" + itemId; const lista = (CJ.candidatos[itemId] || []).filter((c) => c.k !== k);
+  lista.unshift({ k, propio: true, es_el_producto: true, nota: "producto declarado por " + (por || "el equipo"),
+    producto: { id: k, nombre: texto(nombre, 160) || it.nombre, atributos: {}, foto: null, url: null, evidencia: [{ fuente: "declarado por " + (por || "el equipo"), consultado: ahora(), estado: "estimado" }] },
+    cotizacion: { id: k, proveedor: texto(proveedor, 120) || "Proveedor propio (por confirmar)", productoId: k, unitNeto: neto, precioIVA: Math.round(neto * 1.19), fleteNeto: flete != null ? Math.round(Number(flete) || 0) : null, stock: stock === true ? "verificado" : "falta", cantidadDisponible: stock === true ? (Math.round(Number(cantidad)) || it.cantidad) : null, plazoDias: plazoDias != null ? Math.round(Number(plazoDias)) : null,
+      evidencia: { fuente: "simulador / proveedor propio", consultado: ahora(), estado: "estimado", detalle: `costo declarado por ${por || "el equipo"}; confirmar con cotización del proveedor` } }, juicios: {} });
+  CJ.candidatos[itemId] = lista; await store.setJSON(`licauto/${t.codigo}/candidatos`, CJ);
+  a.confirmaciones = a.confirmaciones || {}; a.confirmaciones[itemId] = a.confirmaciones[itemId] || {}; a.confirmaciones[itemId][k] = { elegir: true, por, t: ahora() };
+  a.hist = [...(a.hist || []), { t: ahora(), producto_propio: { itemId, proveedor: proveedor || null, unitNeto: neto, por } }].slice(-40);
+  return k;
+}
 async function licCorrerSellar(ctx, t, opt) { const r = await licCorrer(ctx, t, opt); licSellar(t); await ctx.escribir(t); return r; }
 
 async function atender(req) {
@@ -3034,6 +3049,11 @@ ALTERNATIVA PROPUESTA: ${prop}`;
       if (b.quitar) { delete a.aprobacion; } else a.aprobacion = { usuario: por, t: ahora(), monto: a.decision.numeros?.ventaTotal || 0, estado: a.decision.estado, consentimiento_portal: false, nota: texto(b.nota, 300) || null };
       delete a.pasos.preparar; await licCorrerSellar(ctx, t, { presupuestoMs: 20000 }); return json({ trabajo: await leer(store, codigo) });
     }
+    // 🏷 producto propio (tu proveedor, tu costo) para un ítem sin producto con precio real
+    if (accion === "producto_propio") {
+      try { await licProductoPropio(store, t, por, b); } catch (err) { return json({ error: String(err.message || err) }, 400); }
+      for (const q of ["decidir", "preparar"]) delete a.pasos[q]; await licCorrerSellar(ctx, t, { presupuestoMs: 25000 }); return json({ trabajo: await leer(store, codigo) });
+    }
     // 🧮 simulador: presupuesto bruto editable, barra de descuento, utilidad en vivo, tres escenarios (no escribe nada)
     if (accion === "simular") {
       const e = licEntrada(t, b.entrada || {}); if (e.faltan.length) return json({ faltan: e.faltan, entrada: e });
@@ -3045,6 +3065,13 @@ ALTERNATIVA PROPUESTA: ${prop}`;
       const sobre = b.entrada || {}; const e = licEntrada(t, sobre); if (e.faltan.length) return json({ error: "Faltan datos para aprobar: " + e.faltan.join(", ") }, 400);
       let p; try { p = licSimular(e); } catch (err) { return json({ error: String(err.message || err) }, 400); }
       if (!p.tienePrecioEnTodasLasLineas || p.superaTope) return json({ error: p.superaTope ? "La oferta supera el tope obligatorio." : "Hay líneas sin precio." }, 400);
+      // líneas sin producto con precio real: el costo que escribió el usuario pasa a ser su «producto propio» para que los documentos se llenen
+      const selIds = new Set((a.seleccion || []).map((s) => s.itemId)); let creoPropio = false;
+      for (const l of e.lineas) if (!selIds.has(l.id) && l.compraUnitariaBruta > 0) { const lb = (sobre.lineas || []).find((x) => x.id === l.id) || {}; await licProductoPropio(store, t, por, { itemId: l.id, nombre: lb.nombre, proveedor: lb.proveedor, precioIVA: l.compraUnitariaBruta, flete: e.lineas.length === 1 ? e.logisticaNeta : null, stock: lb.stock === true, cantidad: l.cantidad }); creoPropio = true; }
+      // los supuestos de la decisión pasan a ser los del simulador aprobado (misma utilidad en pantalla, PDF y decisión)
+      const fleteSel = (a.seleccion || []).reduce((acc, s0) => acc + (s0.cotizacion?.fleteNeto || 0), 0);
+      a.supuestos = { ...(a.supuestos || {}), ejecucion: 0, factoring: p.factoring, ppm: p.reservaPpm, garantia_costo: e.costoGarantiaNeto || 0, otros_directos: creoPropio && e.lineas.length === 1 ? 0 : Math.max(0, e.logisticaNeta - fleteSel) };
+      if (creoPropio) { for (const q of ["decidir", "preparar"]) delete a.pasos[q]; await licCorrer(ctx, t, { presupuestoMs: 20000 }); }
       const n = (a.versiones || []).length + 1; const hash = licHuella(e, p, { d: e.descuentoBps / 10000, pm: Object.fromEntries(p.detalle.map((d) => [d.id, d.precioUnitarioNeto])) });
       const ver = { n, hash, t: ahora(), por, codigo, entrada: e, precio: p, evidencias: (a.seleccion || []).map((s) => ({ itemId: s.itemId, producto: s.producto?.nombre, proveedor: s.cotizacion?.proveedor, unitNeto: s.cotizacion?.unitNeto, fuente: s.cotizacion?.evidencia?.fuente, estado: s.cotizacion?.evidencia?.estado, consultado: s.cotizacion?.evidencia?.consultado, stock: s.cotizacion?.stock })), nota: texto(b.nota, 300) || null };
       await store.setJSON(`licauto/${codigo}/version/${n}`, ver);     // inmutable: nunca se sobrescribe
