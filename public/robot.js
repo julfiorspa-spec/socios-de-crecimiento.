@@ -901,7 +901,8 @@
   async function ejOpVivo(cod, datos, msg) {
     try { await api("operacion", { method: "POST", body: JSON.stringify({ codigo: cod, datos, dispositivo: dispositivo(false) }) }); if (msg) toast(msg); R.ejecT = 0; await cargarEjecuta(); pintarHoja(true); } catch (e) { toast(e.message); }
   }
-  function pintarHojaSiAbierta() { if (sheet?.classList.contains("on")) pintarHoja(); }
+  function pintarHojaSiAbierta() { if (document.activeElement?.dataset?.rbSim != null) return;   // 🧮 no redibujar mientras se escribe en el simulador
+    if (sheet?.classList.contains("on")) pintarHoja(); }
 
   /* ---------------- ciclo de consulta ---------------- */
   async function refrescar() {
@@ -1168,6 +1169,7 @@
   function laSimEntrada(cod) { const S = laSim[cod]; if (!S || S === "…" || !S.entrada) return null; const c = CSS.escape(cod); const num = (id, def) => { const el = $("#" + id + "-" + c); const v = el ? Number(String(el.value).replace(/\./g, "").replace(",", ".")) : NaN; return isNaN(v) ? def : v; };
     const e = S.entrada; return { ...e, presupuestoBruto: Math.round(num("rbSimPres", e.presupuestoBruto)), descuentoBps: Math.round(num("rbSimDesc", e.descuentoBps / 100) * 100), logisticaNeta: Math.round(num("rbSimLog", e.logisticaNeta)), factoringBps: Math.round(num("rbSimFac", e.factoringBps / 100) * 100), ppmBps: Math.round(num("rbSimPpm", e.ppmBps / 100) * 100), costoGarantiaNeto: Math.round(num("rbSimGar", e.costoGarantiaNeto || 0)), topeBrutoObligatorio: Math.round(num("rbSimTope", e.topeBrutoObligatorio || 0)) || null, lineas: e.lineas.map((l) => ({ ...l, compraUnitariaBruta: Math.round(num("rbSimCu-" + l.id, l.compraUnitariaBruta)) || l.compraUnitariaBruta, peso: Math.max(1, Math.round((Math.round(num("rbSimCu-" + l.id, l.compraUnitariaBruta)) || l.compraUnitariaBruta) * l.cantidad / 1.19)) })) }; }
   function laSimCalc(cod) { const S = laSim[cod]; if (!S || S === "…" || !window.LICALC) return; const e = laSimEntrada(cod); if (!e) return; const c = CSS.escape(cod); const out = $("#rbSimOut-" + c); if (!out) return;
+    S.edit = e;                                                        // lo que escribió el usuario sobrevive a los redibujos
     let p = null, err = null; try { p = LICALC.simularOferta(e); } catch (x) { err = x.message; }
     const esc3 = p ? LICALC.escenarios(e, S.piso) : null; S.vivo = { entrada: e, precio: p, esc: esc3 };
     $("#rbSimDescV-" + c).textContent = pct1(e.descuentoBps);
@@ -1180,7 +1182,7 @@
       ${esc3 && !esc3.hayViable ? `<div class="muted" style="color:#ffe29a;font-size:.7rem;margin-top:4px">⚠ Con estos costos no hay un precio viable dentro del presupuesto (margen bajo el piso en todo el rango). Baja el costo de compra o la logística, o no ofertes.</div>` : ""}`;
     const ap = S.aprobada; const btn = $("#rbSimAprobar-" + c); if (btn) btn.textContent = ap ? `✅ Aprobar nueva versión (v${ap.n + 1})` : "✅ Aprobar este escenario (v1)"; }
   function laSimHTML(t) { const cod = t.codigo, c = esc(cod); const S = laSim[cod]; if (!S || S === "…") { setTimeout(() => laSimInit(cod), 0); return `<div class="rb-sec" style="margin-top:10px">🧮 Simulador</div><div class="muted" style="font-size:.72rem"><span class="spinner"></span> armando el simulador con los productos elegidos…</div>`; }
-    const A = t.auto; const e = S.entrada; const vA = A.version_aprobada, vR = A.version_revocada, vC = A.version_actual;
+    const A = t.auto; const e = S.edit || S.entrada; const vA = A.version_aprobada, vR = A.version_revocada, vC = A.version_actual;
     const soloCostos = (S.faltan || []).every((f) => /^costo de /.test(f));
     if (!e || !e.lineas?.length || !soloCostos) return `<div class="rb-sec" style="margin-top:10px">🧮 Simulador</div><div class="muted" style="font-size:.72rem;color:#ffe29a">Falta para simular: ${esc((S.faltan || ["datos de las bases"]).join(", "))}. Sube el ZIP de las bases y reanuda.</div>`;
     const aviso = S.faltan?.length ? `<div class="muted" style="font-size:.7rem;color:#ffe29a;margin:4px 0">Sin producto con precio real todavía: escribe el <b>costo de compra con IVA por unidad</b> (lo que te cobra tu proveedor) y juega. Para ofertar en serio el costo debe quedar confirmado en VER PRODUCTO.</div>` : "";
