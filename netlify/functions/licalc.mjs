@@ -130,7 +130,10 @@ export function entradaDesde(t, sobre = {}) {
         ? lineasSel.map((x) => { const o = sobre.lineas.find((l) => l.id === x.id); return o && o.base === x.compraUnitariaBruta && R0(o.cantidad || x.cantidad) === x.cantidad ? { ...x, compraUnitariaBruta: R0(o.compraUnitariaBruta), peso: Math.max(1, R0(o.peso ?? (x.cantidad * R0(o.compraUnitariaBruta)))) } : x; })
         : sobre.lineas.map((l, i) => ({ ...(lineasSel.find((x) => x.id === l.id) || {}), id: String(l.id || "L" + (i + 1)), nombre: l.nombre || lineasSel.find((x) => x.id === l.id)?.nombre || String(l.id), cantidad: R0(l.cantidad), compraUnitariaBruta: R0(l.compraUnitariaBruta), peso: Math.max(1, R0(l.peso ?? (R0(l.cantidad) * R0(l.compraUnitariaBruta)))) })))
     : lineasSel;
-  if (!lineas.length) faltan.push("productos con precio real");
+  // sin producto con precio real todavía: se puede jugar igual con los ítems de las bases y el costo que escriba el usuario
+  const lineasBase = !lineas.length && !(Array.isArray(sobre.lineas) && sobre.lineas.length) ? (L.items || []).map((it) => ({ id: it.id, nombre: it.nombre || it.id, cantidad: R0(it.cantidad) || 1, compraUnitariaBruta: 0, peso: Math.max(1, R0(it.cantidad) || 1), confirmado: false, stockOk: false, sinProducto: true })) : [];
+  if (lineasBase.length) lineas.push(...lineasBase);
+  if (!lineas.length) faltan.push("ítems de las bases");
   for (const l of lineas) if (!l.compraUnitariaBruta) faltan.push("costo de " + l.nombre);
   return { presupuestoBruto, descuentoBps, ivaBps: 1900, factoringBps, ppmBps, logisticaNeta, costoGarantiaNeto, topeBrutoObligatorio, lineas, faltan };
 }

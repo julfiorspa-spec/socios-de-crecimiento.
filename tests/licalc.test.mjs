@@ -44,7 +44,9 @@ test("entradaDesde arma la entrada con los productos elegidos y marca lo que fal
     seleccion: [{ itemId: "I1", cantidad: 11000, cotizacion: { unitNeto: 4782, evidencia: { estado: "verificado" }, stock: "verificado" } }] } };
   const e = entradaDesde(t); assert.equal(e.presupuestoBruto, 95_000_000); assert.equal(e.descuentoBps, 500); assert.equal(e.logisticaNeta, 12_000_000);
   assert.equal(e.lineas[0].compraUnitariaBruta, 5691); assert.deepEqual(e.faltan, []);
-  const sin = entradaDesde({ auto: { lic: {}, seleccion: [] } }); assert.ok(sin.faltan.includes("presupuesto") && sin.faltan.includes("productos con precio real"));
+  const sin = entradaDesde({ auto: { lic: {}, seleccion: [] } }); assert.ok(sin.faltan.includes("presupuesto") && sin.faltan.includes("ítems de las bases"));
+  const soloBases = entradaDesde({ auto: { lic: { presupuesto: 95_000_000, items: [{ id: "I1", nombre: "Cemento", cantidad: 11000 }] }, seleccion: [] } }); assert.equal(soloBases.lineas[0].cantidad, 11000); assert.deepEqual(soloBases.faltan, ["costo de Cemento"]);
+  const jugando = entradaDesde({ auto: { lic: { presupuesto: 95_000_000, items: [{ id: "I1", nombre: "Cemento", cantidad: 11000 }] }, seleccion: [] } }, { descuentoBps: 500, logisticaNeta: 12_000_000, lineas: [{ id: "I1", cantidad: 11000, compraUnitariaBruta: 5690 }] }); assert.equal(simularOferta(jugando).utilidad, 8962341);
   const est = estadoOferta({ auto: { ...t.auto, lic: { ...t.auto.lic, bases_leidas: true, documentos: [{ nombre: "Anexo 1", obligatorio: true, firma: true }] }, version_actual: { hash: "a" }, version_aprobada: { hash: "a", precio }, firmas: { "Anexo 1": { version: "a" } }, docs: { archivos: [{ nombre: "x.pdf" }] } } }, { facultades_ok: true });
   assert.equal(evaluarOferta(est).listoParaOfertar, true);
   const ev = evaluarOferta({ ...est, firmas: null, documentos: est.documentos.map((d) => ({ ...d, versionFirmada: "viejo" })) }); assert.equal(ev.listoParaOfertar, false); assert.deepEqual(ev.firmasPendientes, ["Anexo 1"]);
