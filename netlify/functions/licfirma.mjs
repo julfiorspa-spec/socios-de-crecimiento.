@@ -79,7 +79,7 @@ export async function firmarAnexos(ctx, t, op = {}) {
   if (!O.lineas.length || !O.ventaNeta) throw new Error("No hay precio aprobado para esta licitación: revisa la lectura o el simulador antes de firmar.");
   const firmaImg = op.firma || null; const meta = op.firmaMeta || {}; const firmante = E.representante || meta.nombre || "Representante legal"; const rutF = E.rut_representante || meta.rut || "";
   const hoy = fechaCL(ctx.ahora()); const lugar = `${E.ciudad || "Santiago"}, ${hoy}`; const domicilio = [E.direccion, E.comuna, E.ciudad, E.region ? "Región " + E.region : ""].filter(Boolean).flatMap((p) => String(p).split(/\s*,\s*/)).filter((p, i, a) => p && a.findIndex((q) => q.toLowerCase() === p.toLowerCase()) === i).join(", ");
-  const pie = `${E.razon_social} · RUT ${E.rut} · Licitación ${O.id} · preparado con CotizÁgil el ${hoy}`; const cab = `Licitación ${O.id} · ${O.comprador}`;
+  const pie = `${E.razon_social} · RUT ${E.rut} · Licitación ${O.id} · Oferta preparada con CotizÁgil (cotizagil.netlify.app) el ${hoy}`; const cab = `Licitación ${O.id} · ${O.comprador}`;
   const PEND = (v, que) => (v ? String(v) : `PENDIENTE · ${que}`);
   const firmaBloque = (d, firmar) => (firmar && firmaImg ? d.firma(`${firmante} · RUT ${rutF} · ${E.representante_cargo || "Representante legal"} · ${E.razon_social}`, { img: firmaImg, nota: `Firmado en ${lugar} con la firma registrada en CotizÁgil (aprobación de ${op.por || "la empresa"}).` })
     : d.firma(`${firmante} · RUT ${rutF} · ${E.representante_cargo || "Representante legal"} · ${E.razon_social}`, { nota: firmar ? "Sin firma registrada: firmar a mano." : "PARA REVISIÓN Y FIRMA DEL REPRESENTANTE · no se firma automáticamente." }));

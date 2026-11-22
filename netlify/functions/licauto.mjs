@@ -240,7 +240,7 @@ const SEMT = { FUEGO: "FUEGO - mucha utilidad", VERDE: "VERDE - rentable", AMARI
 async function pasoPreparar(ctx, t) {
   const { store } = ctx; const a = t.auto; const L = a.lic, D = a.decision; if (!L || !D) throw new Error("Primero hay que decidir");
   const emp = await (ctx.empresaPerfil ? ctx.empresaPerfil(t.empresa || "principal") : Promise.resolve(EMPRESA_BASE)).catch(() => EMPRESA_BASE); const E = { ...EMPRESA_BASE, ...emp };
-  const hoy = fechaCL(ctx.ahora()); const pie = `CotizÁgil · ${E.razon_social} · ${E.rut} · generado ${hoy} · BORRADOR para revisión y firma autorizada`; const cab = `Licitación ${L.id} · ${L.comprador}`; const F = D.numeros;
+  const hoy = fechaCL(ctx.ahora()); const pie = `Oferta preparada con CotizÁgil (cotizagil.netlify.app) · ${E.razon_social} · ${E.rut} · generado ${hoy} · BORRADOR para revisión y firma autorizada`; const cab = `Licitación ${L.id} · ${L.comprador}`; const F = D.numeros;
   const archivos = []; const guardar = async (nombre, data) => { archivos.push({ nombre, data }); await store.set(`licauto/${t.codigo}/doc/${nombre}`, data).catch(() => {}); };
   const sel = a.seleccion || []; const itemDe = (id) => L.items.find((i) => i.id === id) || {};
   // 1) Ficha técnica con foto y fuente
