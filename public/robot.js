@@ -4934,6 +4934,27 @@ Te comparto la factura y la guía. Indícame cuánto se puede anticipar, el cost
       <div class="muted" style="font-size:.66rem;margin-top:8px">Fuente: la nube (${L0.length} compras). La lista oficial es "Mis cotizaciones" de Mercado Público; el robot la cruzará a diario.</div>
     </div>`;
   }
+  // ⚔️ Radar de competencia: dónde se meten los rivales, cómo cotizan y qué compras abiertas hoy son su territorio (para llegar primero)
+  async function cargarCompetencia() { try { R.compT = Date.now(); R.comp = await api("competencia"); } catch (e) { R.comp = { error: e.message }; } pintarHojaSiAbierta(); }
+  function pantallaCompetencia() {
+    if (!R.comp || (!R.comp.error && Date.now() - (R.compT || 0) > 120000)) setTimeout(cargarCompetencia, 0);
+    const C = R.comp; if (!C) return `<div class="empty"><span class="spinner"></span> Leyendo el histórico y las compras abiertas…</div>`;
+    if (C.error) return `<div class="rb-paso"><button class="btn small" type="button" data-rb="comp-cerrar">← Volver</button><div class="empty">${esc(C.error)}</div></div>`;
+    const sel = R.compSel || Object.keys(C.rivales)[0]; const r = C.rivales[sel];
+    const pct = (v) => (v == null ? "—" : Math.round(v * 100) + " %");
+    const fila = (o) => `<div class="rb-op"><div class="rb-env"><b>${esc(o.nombre)}</b><span class="muted" style="font-size:.7rem">${esc((o.cierre || "").slice(0, 16).replace("T", " "))}</span></div><div class="muted" style="font-size:.74rem">${esc(o.organismo || o.org || "")} · ${clp(o.monto || o.pres || 0)}${o.ofertas != null ? " · " + o.ofertas + " of." : ""} · <span style="color:#f5cf6b">${esc(o.por || "")}</span></div><div class="rb-row" style="gap:4px;margin-top:4px"><button class="btn small oro" type="button" data-rb="comp-ir" data-c="${esc(o.codigo)}">🎯 Ir a prepararla</button><a class="btn small" href="https://www.mercadopublico.cl/CompraAgil/Modules/Cotizacion/DetallesCotizacion.aspx?idcotizacion=${encodeURIComponent(o.codigo)}" target="_blank" rel="noopener">🌐 Ver</a></div></div>`;
+    return `<div class="rb-paso"><div class="rb-env"><h2 class="rb-h" style="margin:0">⚔️ Competencia</h2><button class="btn small" type="button" data-rb="comp-cerrar">← Volver</button></div>
+      <div class="muted rb-sub">${C.compras_historico} compras adjudicadas analizadas (${C.terms.length} rubros) + las compras donde cotizaron contra nosotros. Compras abiertas al ${esc(String(C.oportunidades_fecha || "").slice(0, 16).replace("T", " "))}.</div>
+      <div class="rb-row" style="flex-wrap:wrap;gap:4px;margin:6px 0">${Object.entries(C.rivales).map(([k, v]) => `<button class="btn small ${k === sel ? "oro" : ""}" type="button" data-rb="comp-sel" data-v="${esc(k)}">${esc(v.nombre)} <span class="muted">${v.ofertas}/${v.ganadas}</span></button>`).join("")}</div>
+      ${r ? `<div class="rb-tira"><span>📤 <b>${r.ofertas}</b> ofertas</span><span>🏆 <b>${r.ganadas}</b> ganadas</span><span>💰 <b>${cortoG(r.monto_ganado)}</b></span><span>📏 precio/presup. <b>${r.ratio_med == null ? "—" : r.ratio_med.toFixed(2)}</b></span><span>⬆️ sobre presup. <b>${pct(r.sobre_presupuesto == null ? null : r.sobre_presupuesto / 100)}</b></span></div>
+      <div class="muted" style="font-size:.74rem;margin:4px 0">${r.ratio_med > 1.15 ? "🤖 Cotiza sobre el presupuesto casi siempre: oferta masiva sin costo real; pierde, pero ocupa el mercado." : r.ratio_med != null && r.ratio_med < 1 ? "⚠️ Cotiza con precio real bajo el presupuesto: rival de verdad." : "Sin precios suficientes para leerlo."} Nombres: ${r.nombres.map(esc).join(" · ") || "—"}</div>
+      <div class="rb-sec">📍 Dónde se mete</div><div class="muted" style="font-size:.76rem">Rubros: ${r.terms.map(([k, n]) => `<b>${esc(k)}</b> ${n}`).join(" · ") || "—"}<br>Organismos: ${r.orgs.map(([k, n]) => `${esc(k)} (${n})`).join(" · ") || "—"}<br>Regiones: ${r.regiones.map(([k, n]) => `${esc(k)} (${n})`).join(" · ") || "—"}</div>
+      ${r.cruces.length ? `<div class="rb-sec">🥊 Contra nosotros (${r.cruces.length})</div>${r.cruces.map((c) => `<div class="rb-op"><b>${esc(c.nombre)}</b> <span class="muted" style="font-size:.72rem">${esc(c.org)} · ${esc(String(c.cierre || "").slice(0, 16))}</span><div style="font-size:.76rem">Nosotros ${clp(c.mi_total)}${c.mi_lugar ? " (" + c.mi_lugar + "°)" : ""} · Ellos ${clp(c.su_total)} ${c.su_adj ? "🏆 ganaron" : c.ganada ? "· 🏆 ganamos" : ""}</div></div>`).join("")}` : ""}
+      <div class="rb-sec">🎯 Su territorio, abierto hoy (${r.cazar.length}) · llegar primero</div>${r.cazar.length ? r.cazar.map(fila).join("") : `<div class="empty">Nada abierto hoy en sus organismos o rubros.</div>`}
+      <details class="rb-det"><summary>Últimas ofertas de ${esc(r.nombre)} (${r.ultimas.length})</summary>${r.ultimas.map((u) => `<div class="rb-op" style="font-size:.76rem"><b>${esc(u.nombre)}</b> · ${esc(u.org)} · ${esc(u.cierre || "")}<br>${clp(u.total)} vs presup. ${clp(u.pres)} ${u.adj ? "🏆" : u.ganador ? "· ganó " + esc(u.ganador) : ""}</div>`).join("")}</details>` : ""}
+      <div class="rb-sec">🏆 Quién gana de verdad en nuestros rubros</div>${C.ganadores.map((g) => `<div class="rb-op" style="font-size:.76rem"><b>${esc(g.nombre)}</b> · ${g.ganadas} ganadas · ${cortoG(g.monto)} · ${g.terms.map(esc).join(", ")}</div>`).join("")}
+      <div class="muted" style="font-size:.66rem;margin-top:6px">Fuente: histórico de Compra Ágil cargado por el robot (sep–oct) y RadarPúblico. Los rivales se editan en el servidor (ruta competencia).</div></div>`;
+  }
   function pantallaGlobal() {
     if (!R.global || Date.now() - (R.globalT || 0) > 60000) setTimeout(cargarGlobal, 0);
     const G = R.global; if (!G) return `<div class="empty"><span class="spinner"></span> Juntando todo lo de la app…</div>`;
@@ -5581,7 +5602,7 @@ Te comparto la factura y la guía. Indícame cuánto se puede anticipar, el cost
     if (R.vista === "oport") {
       const mp = R.data?.mp, emp = empresaActual();
       if (!R.empresas) cargarEmpresas();
-      const iconos = `<button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button><button class="rb-ico" type="button" data-rb="stats" aria-label="Marcador" title="Marcador: hoy, semana, mes — enviadas, OC, utilidad y reparto">🏟️</button><button class="rb-ico" type="button" data-rb="analizador" aria-label="Analizador de proyectos" title="Analizador de proyectos — Excel en vivo">📊</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico" type="button" data-rb="oc" aria-label="Órdenes de compra" title="Solo las órdenes de compra: operadas, en operación, nuevas">📦</button><button class="rb-ico rb-claude" type="button" data-rb="claude" aria-label="Chatear con Claude" title="Chatea con Claude, el cerebro de la app">💬</button><button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>`;
+      const iconos = `<button class="rb-ico" type="button" data-rb="planes" aria-label="Planes" title="Planes">💎</button><button class="rb-ico" type="button" data-rb="stats" aria-label="Marcador" title="Marcador: hoy, semana, mes — enviadas, OC, utilidad y reparto">🏟️</button><button class="rb-ico" type="button" data-rb="competencia" aria-label="Competencia" title="Competencia: dónde se meten los rivales y qué compras abiertas son su territorio">⚔️</button><button class="rb-ico" type="button" data-rb="analizador" aria-label="Analizador de proyectos" title="Analizador de proyectos — Excel en vivo">📊</button>${tienePlan("medio") ? `<button class="rb-ico" type="button" data-rb="global" aria-label="Informe global" title="Todo lo que se ha hecho en la app">🌍</button>` : ""}${mailChip()}<button class="rb-ico" type="button" data-rb="oc" aria-label="Órdenes de compra" title="Solo las órdenes de compra: operadas, en operación, nuevas">📦</button><button class="rb-ico rb-claude" type="button" data-rb="claude" aria-label="Chatear con Claude" title="Chatea con Claude, el cerebro de la app">💬</button><button class="rb-ico rb-tel" type="button" data-rb="llamada" aria-label="Me llamaron">📞</button>`;
       // ◧ modo ejecutivo: una sola línea limpia (empresa · quién · robot/MP · ⋯ · ✕); los íconos viven en el menú ⋯
       const cab = execOn() ? `<div class="rb-top2 rb-top-ex">
         <button class="rb-emp" type="button" data-rb="empresa-editar">🏢 <span>${esc(corta(emp?.razon_social) || "Mi empresa")}</span> ▾</button>
@@ -5607,6 +5628,7 @@ Te comparto la factura y la guía. Indícame cuánto se puede anticipar, el cost
       else if (R.pantalla === "analizador") cuerpo = pantallaAnalizador();
       else if (R.pantalla === "correos") cuerpo = pantallaCorreos();
       else if (R.pantalla === "global") cuerpo = pantallaGlobal();
+      else if (R.pantalla === "competencia") cuerpo = pantallaCompetencia();
       else if (R.pantalla === "stats") cuerpo = pantallaStats();
       else if (R.pantalla === "oc") cuerpo = pantallaOC();
       else if (R.pantalla === "docs") cuerpo = pantallaDocs(R.docsCod);
@@ -6286,6 +6308,10 @@ Somos ${e.razon_social || ""}${e.rut ? " (RUT " + e.rut + ")" : ""}. Queremos un
     if (a === "oc-aceptada") { R.ejAbierto = cod; return ejOp({ oc_aceptada: true, oc_estado: "Aceptada" }, null, "✅ OC marcada como aceptada: pasa a Ejecutar"); }
     if (a === "oc-rechazar") { R.ejAbierto = cod; return ejOp({}, "rechazada", "OC rechazada: queda fuera de la caja"); }
     if (a === "stats") { R.pantalla = "stats"; sheet.scrollTop = 0; cargarGlobal(); if (!R.ejecutores) cargarEjecuta(); return pintarHoja(true); }
+    if (a === "competencia") { R.pantalla = "competencia"; sheet.scrollTop = 0; cargarCompetencia(); return pintarHoja(true); }
+    if (a === "comp-cerrar") { R.pantalla = null; return pintarHoja(true); }
+    if (a === "comp-sel") { R.compSel = b.dataset.v; return pintarHoja(true); }
+    if (a === "comp-ir") { R.pantalla = null; R.oportQ = cod; R.oportTab = "nuevas"; guardar({ portal: "juego" }); toast("Búscala en 👆 Por preparar: " + cod); return pintarHoja(true); }
     if (a === "st-per") { R.stPer = b.dataset.v; return pintarHoja(true); }
     if (a === "st-emp") { R.stEmp = b.dataset.v; return pintarHoja(true); }
     if (a === "st-jug") { R.stJug = b.dataset.v || ""; return pintarHoja(true); }

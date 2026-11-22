@@ -450,6 +450,8 @@ async function revisarSeguimiento(store, forzar) {
         cierre: (p.fechas || {}).fecha_cierre || null, motivo: texto((p.motivos || {}).motivo_cancelacion || (p.motivos || {}).motivo_desierta, 200),
         presupuesto: (p.presupuesto || {}).monto_disponible_clp || null, llamado: (p.convocatoria || {}).descripcion || null,
         siguiente: pc.filter((x) => x !== yo && x.activo !== 0).map((x) => x.monto_total || 0).sort((a, b) => a - b)[0] ?? null,
+        // ⚔️ quiénes cotizaron contra nosotros (para el radar de competencia)
+        rivales: pc.filter((x) => x !== yo).slice(0, 20).map((x) => ({ n: texto(x.razon_social, 90), rut: rut(x).slice(0, 12), total: x.monto_total || 0, adj: !!x.proveedor_seleccionado, inad: !!x.justificacion_inadmisibilidad })),
       };
       const g = res[t.codigo];          // lo que se pudo cobrar: hasta el presupuesto o justo bajo el siguiente competidor
       const techo = Math.min(...[g.presupuesto, g.siguiente ? g.siguiente - 1 : null].filter(Boolean));
@@ -2537,6 +2539,45 @@ ALTERNATIVA PROPUESTA: ${prop}`;
     return json({ ok: true });
   }
   if (ruta === "ocs" && req.method === "GET") return json(await revisarOCs(store, url.searchParams.get("forzar") === "1"));
+  // ⚔️ Radar de competencia: dónde se meten los rivales (histórico de adjudicaciones + compras donde cotizaron contra nosotros),
+  //    cómo cotizan (precio vs. presupuesto), cuánto ganan, y qué compras abiertas hoy calzan con su territorio para llegar primero.
+  const RIVALES_BASE = [
+    { id: "salazar-pino", nombre: "Salazar y Pino SpA", re: "salazar\\s*(y|&)\\s*pino" }, { id: "tavo", nombre: "Tavo SpA", re: "\\btavo\\b" }, { id: "ryc", nombre: "RyC / R&C", re: "\\br\\s*(y|&)\\s*c\\b|\\bryc\\b" },
+    { id: "ortiz", nombre: "Inversiones Ortiz", re: "inversiones\\s+ortiz" }, { id: "fbs", nombre: "FBS", re: "\\bf\\.?b\\.?s\\b" } ];
+  async function rivalesLista() { const L = (await store.get("competencia/lista", { type: "json" })) || null; return Array.isArray(L?.rivales) && L.rivales.length ? L.rivales : RIVALES_BASE; }
+  if (ruta === "competencia" && req.method === "POST") {   // editar la lista de rivales {rivales:[{id,nombre,re}]}
+    const b = await cuerpo(req); const riv = (Array.isArray(b.rivales) ? b.rivales : []).slice(0, 30).map((r) => ({ id: texto(r.id, 30) || texto(r.nombre, 30).toLowerCase().replace(/[^a-z0-9]+/g, "-"), nombre: texto(r.nombre, 60), re: texto(r.re, 120) || texto(r.nombre, 60).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") })).filter((r) => r.nombre);
+    await store.setJSON("competencia/lista", { rivales: riv, t: ahora() }); return json({ ok: true, rivales: riv });
+  }
+  if (ruta === "competencia" && req.method === "GET") {
+    const riv = (await rivalesLista()).map((r) => { let re; try { re = new RegExp(r.re, "i"); } catch { re = new RegExp(r.nombre.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"); } return { ...r, rx: re }; });
+    const idx = (await store.get("historico/_indice", { type: "json" })) || { terms: {} };
+    const terms = Object.keys(idx.terms || {}).slice(0, 40);
+    const H = await Promise.all(terms.map((t) => store.get("historico/" + t, { type: "json" }).catch(() => null)));
+    const seg = (await store.get("seguimiento/cache", { type: "json" })) || {}; const lista = await todos(store); const porCod = new Map(lista.map((t) => [t.codigo, t]));
+    const mk = () => ({ ofertas: 0, ganadas: 0, monto_ganado: 0, ratios: [], terms: {}, orgs: {}, regiones: {}, nombres: {}, ultimas: [], cruces: [] });
+    const S = {}; for (const r of riv) S[r.id] = mk();
+    const ganadores = {}; const vistos = new Set();
+    for (let i = 0; i < H.length; i++) { const h = H[i]; if (!h?.compras) continue; for (const c of Object.values(h.compras)) { if (vistos.has(c.codigo)) continue; vistos.add(c.codigo);
+      if (c.ganador?.nombre) { const g = ganadores[c.ganador.nombre] = ganadores[c.ganador.nombre] || { n: 0, monto: 0, terms: {} }; g.n++; g.monto += c.ganador.total || 0; g.terms[terms[i]] = (g.terms[terms[i]] || 0) + 1; }
+      for (const o of c.ofertas || []) for (const r of riv) if (r.rx.test(o.n || "")) { const x = S[r.id]; x.ofertas++; if (o.adj) { x.ganadas++; x.monto_ganado += o.total || 0; }
+        x.terms[terms[i]] = (x.terms[terms[i]] || 0) + 1; if (c.org) x.orgs[c.org] = (x.orgs[c.org] || 0) + 1; if (c.region) x.regiones[c.region.trim()] = (x.regiones[c.region.trim()] || 0) + 1; x.nombres[o.n] = 1;
+        if (c.pres > 0 && o.total > 0) x.ratios.push(o.total / c.pres); x.ultimas.push({ codigo: c.codigo, nombre: texto(c.nombre, 90), org: texto(c.org, 70), cierre: c.cierre, term: terms[i], adj: !!o.adj, total: o.total, pres: c.pres, ganador: c.ganador?.nombre || null }); } } }
+    // compras donde cotizaron contra nosotros (seguimiento en vivo)
+    for (const [cod, g] of Object.entries(seg)) for (const o of g.rivales || []) for (const r of riv) if (r.rx.test(o.n || "")) { const x = S[r.id]; const t = porCod.get(cod) || {}; x.cruces.push({ codigo: cod, nombre: texto(t.nombre, 90), org: texto(t.organismo, 70), cierre: g.cierre, mi_total: g.mi_total, su_total: o.total, su_adj: o.adj, mi_lugar: g.mi_lugar, ganada: !!g.ganada, estado: g.estado }); x.nombres[o.n] = 1; if (t.organismo) x.orgs[t.organismo] = (x.orgs[t.organismo] || 0) + 1; }
+    const med = (a) => { if (!a.length) return null; const s2 = [...a].sort((p, q) => p - q); return s2[Math.floor(s2.length / 2)]; };
+    const top = (o, n) => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, n);
+    // 🎯 cazar: compras abiertas hoy en el territorio de cada rival (mismo organismo donde ya cotizó o rubro donde más se mete), que no hemos tocado
+    const OP = (await store.get("oportunidades/lista", { type: "json" })) || { lista: [] }; const nz = (x) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\b(ilustre|i\.?|municipalidad|de|del|la|el|los|las)\b/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+    const TERM_RX = { hormigon: /hormig|cemento|solerilla|solera/i, pendones: /pend[oó]n|lienzo|gr[aá]fica/i, pintura: /pintura|esmalte/i, "elementos-proteccion-personal": /epp|protecci[oó]n personal|guante|zapato de seg/i, acero: /acero|fierro|perfil/i, impresion: /impresi[oó]n|imprenta|folleto/i, mobiliario: /mobiliario|silla|mesa|escritorio/i, herramientas: /herramienta/i, "bolsas-plasticas": /bolsa/i, "bolsas-basura": /bolsa.*basura/i, madera: /madera|terciado|poste/i, viruta: /viruta|aserr[ií]n/i, aridos: /[aá]rido|grava|maicillo|gravilla/i, "cascos-seguridad": /casco/i, "insumos-aseo": /aseo|limpieza|toalla|papel hig/i, "alimento-perros": /alimento.*(perro|mascota|animal)/i, terciado: /terciado/i, fierro: /fierro/i, aserrin: /aserr[ií]n/i, pletina: /pletina/i };
+    const ahoraMs = Date.now(); const out = {};
+    for (const r of riv) { const x = S[r.id]; const orgsN = new Set(Object.keys(x.orgs).map(nz)); const termsTop = top(x.terms, 4).map((e) => e[0]);
+      const cazar = (OP.lista || []).filter((o) => !porCod.has(o.codigo) && (!o.cierre || Date.parse(o.cierre) > ahoraMs)).map((o) => { const org = orgsN.has(nz(o.organismo)); const tm = termsTop.find((t) => TERM_RX[t]?.test(o.nombre || "")); return org || tm ? { codigo: o.codigo, nombre: texto(o.nombre, 90), organismo: texto(o.organismo, 60), monto: o.monto, cierre: o.cierre, ofertas: o.ofertas, por: org ? "organismo" : "rubro " + tm } : null; }).filter(Boolean).sort((a, b) => (a.por === "organismo" ? 0 : 1) - (b.por === "organismo" ? 0 : 1) || (b.monto || 0) - (a.monto || 0)).slice(0, 25);
+      out[r.id] = { nombre: r.nombre, nombres: Object.keys(x.nombres).slice(0, 6), ofertas: x.ofertas, ganadas: x.ganadas, monto_ganado: x.monto_ganado, ratio_med: med(x.ratios), sobre_presupuesto: x.ratios.length ? Math.round(100 * x.ratios.filter((v) => v > 1).length / x.ratios.length) : null,
+        terms: top(x.terms, 8), orgs: top(x.orgs, 8), regiones: top(x.regiones, 5), ultimas: x.ultimas.sort((a, b) => String(b.cierre || "").split(" ")[0].split("-").reverse().join("").localeCompare(String(a.cierre || "").split(" ")[0].split("-").reverse().join(""))).slice(0, 10), cruces: x.cruces.slice(0, 20), cazar }; }
+    const topGan = Object.entries(ganadores).sort((a, b) => b[1].n - a[1].n).slice(0, 20).map(([n, g]) => ({ nombre: n, ganadas: g.n, monto: g.monto, terms: top(g.terms, 3).map((e) => e[0]) }));
+    return json({ t: ahora(), compras_historico: vistos.size, terms, rivales: out, ganadores: topGan, oportunidades_fecha: OP.fecha || null });
+  }
   if (ruta === "seguimiento" && req.method === "GET") {
     const { res, miRut } = await revisarSeguimiento(store, url.searchParams.get("forzar") === "1");
     return json({ seguimiento: res, rut: miRut || null });
