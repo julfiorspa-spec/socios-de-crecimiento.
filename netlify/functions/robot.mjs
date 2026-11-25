@@ -2995,14 +2995,19 @@ ALTERNATIVA PROPUESTA: ${prop}`;
     // 🤖 MODO AUTOMÁTICO (el robot pide sin descuento): Claude decide con el histórico de mercado por familia.
     //    Certeza < 40 % → la deja pasar (200 + saltada:true, el robot la marca hecha y sigue); si no, fija el descuento del ganador real.
     let cerebro = null;
+    // 🛡️ descuento 0 sin confirmación explícita (slider en el presupuesto, campo vacío) = "sin descuento": lo decide el cerebro,
+    //    nunca se oferta al 100 % del presupuesto por accidente (25-11-2026: 27 compras de NS Comex salieron al tope).
+    const sinDesc = !esLic && accion === "firmar" && b.descuento != null && Math.abs(Number(b.descuento) || 0) <= 0.005 && !b.descuento_fijo;
+    if (sinDesc) b.descuento = null;
     if (!esLic && b.descuento == null && !["verificar", "probar", "editar"].includes(accion)) {
       try { cerebro = await cerebroPrecio(store, codigo, b); } catch { cerebro = null; }
-      if (cerebro && cerebro.prob < CERTEZA_MIN) {
+      if (cerebro && sinDesc && cerebro.prob < CERTEZA_MIN) cerebro = { ...cerebro, descuento: Math.max(cerebro.descuento, 0.08) };   // la pidió una persona: se prepara igual, con precio de mercado
+      else if (cerebro && cerebro.prob < CERTEZA_MIN) {
         return json({ trabajo: null, saltada: true, aviso: `🤖 Claude la deja pasar: certeza ${Math.round(cerebro.prob * 100)} % < ${Math.round(CERTEZA_MIN * 100)} % (${cerebro.motivo})` });
       }
     }
     // Compra Ágil: se puede ofertar sobre el presupuesto (descuento negativo) hasta el tope de 100 UTM que controla la app
-    const descuento = Math.min(0.6, Math.max(esLic ? 0 : -9, b.descuento != null ? Number(b.descuento) || 0 : cerebro ? cerebro.descuento : esLic ? 0.17 : 0.08));
+    const descuento = Math.min(0.6, Math.max(esLic ? 0 : -9, b.descuento != null ? Number(b.descuento) || 0 : cerebro ? Math.max(cerebro.descuento, sinDesc ? 0.08 : 0) : esLic ? 0.17 : 0.08));
     const t = {
       codigo, accion, descuento,
       nombre: texto(b.nombre, 200), organismo: texto(b.organismo, 200), monto: Number(b.monto) || null,
